@@ -1,5 +1,7 @@
 # Integrations (Jellyfin, Seerr, Authentik, ntfy/Discord)
 
+> **FriendFlix for Plex (preview):** the Jellyfin steps on this page (webhook plugin, API key) do **not** apply. Use [plex.md](plex.md) for the media-server setup ([Deutsch](de/plex.md)). Request service, Authentik, ntfy/Discord and web push below apply unchanged.
+
 Webhook URLs use the **internal Docker network** (`http://backend:3000`, Jellyfin/Seerr share the `media` network with the backend), never the public host. NPM answers `/internal/*` with 404.
 `WEBHOOK_SECRET` is the shared secret (`.env`).
 

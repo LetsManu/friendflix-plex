@@ -1,5 +1,7 @@
 # Betrieb: Backup, Restore, Firewall, Updates
 
+> **FriendFlix for Plex (Preview):** Backups, Restore, Firewall und Updates gelten unverändert. Jellyfin-spezifische Teile (Jellyfin-Health-Check, „Plan B“) entfallen bzw. werden mit Plex **nicht unterstützt**; die Plex-Einrichtung steht in [de/plex.md](de/plex.md).
+
 ## Backups & Wiederherstellung
 **Aktivieren** (opt-in, Compose-Profil `backup`; gilt für `compose.yaml` und `compose.prod.yaml`):
 ```bash

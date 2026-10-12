@@ -1,5 +1,7 @@
 # Suche & Entdecken – API
 
+> **FriendFlix for Plex (Preview):** Statt des Jellyfin-Tokens gilt bei Plex die Zugriffsprüfung von FriendFlix (Profil, Rolle, Altersgrenze). Einrichtung: [de/plex.md](de/plex.md).
+
 Alle Endpunkte brauchen eine Sitzung, laufen mit dem Jellyfin-Token des aktiven Profils und zeigen deshalb nur Titel, die dieses Profil sehen darf.
 
 ## `GET /api/search?q=`

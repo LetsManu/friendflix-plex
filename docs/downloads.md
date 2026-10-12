@@ -1,5 +1,7 @@
 # Offline-Downloads
 
+> **FriendFlix for Plex (Preview):** Wo hier „Jellyfin“ steht, liefert bei Plex der Plex-Transcoder die Quelle (Remux zu MP4 durch FriendFlix). Einrichtung: [de/plex.md](de/plex.md).
+
 Mitglieder mit der Rolle-Berechtigung „Downloads erlauben“ können Filme und Folgen auf ein Gerät laden und dort ohne Verbindung ansehen (Menü → Downloads).
 
 ## So funktioniert es
