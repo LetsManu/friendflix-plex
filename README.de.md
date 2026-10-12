@@ -127,7 +127,11 @@ Die FriendFlix-Oberfläche ist dieselbe; unterschiedlich ist, was Plex liefern k
 | Profile, Kinderprofile, Altersgrenzen, PIN | Funktioniert | Liegt in FriendFlix und wird dort durchgesetzt (Kinder-Altersgrenzen 0/6/12 bei jeder Liste, Suche, jedem Titel und jeder Medienanfrage); Altersfreigaben kommen von Plex (`contentRating`), unbekannte Freigaben sind für Profile mit Altersgrenze und Kinderprofile gesperrt |
 | Bibliothekszugriff pro Rolle | Funktioniert | Über den Plex-Bibliotheksnamen (nach Umbenennen in Plex Rolle anpassen) |
 | Bibliothek, Suche, Detailseiten, Bilder | Funktioniert | Titel-Logos hängen davon ab, was Plex liefert; sonst erscheint der Titel als Text |
-| Besetzung | Eingeschränkt | Namen und Rollen, keine Personenbilder |
+| „Besetzung & Infos“ | Eingeschränkt | Rollennamen, Regie, Drehbuch, Studio, Labels, Gaststars bei Folgen; keine Personenbilder |
+| Kapitel („Szenen“-Panel) | Funktioniert | Kapitelmarken aus den Dateien; Kapitelbilder nur, wenn Plex Kapitel-Vorschaubilder erzeugt |
+| Qualitäts-Chips, Filter 4K / HDR | Funktioniert | Aus Plex' Stream-Angaben (Auflösung, Dolby Vision / HDR10 / HDR10+ / HLG, Kanäle, Atmos) |
+| Neu-Labels („Neue Folge“, „Staffelfinale“ …) | Eingeschränkt | Plex kennt keinen Serienstatus, deshalb erscheint „Staffelfinale“ nur bei Serien, deren letzte Folge vor mehr als 60 Tagen lief |
+| Bald nicht mehr verfügbar, „Bisher geschah“, Themenlisten, ruhiger Modus, klare Stimmen, Handy-Kurzbefehle, Admin-Seiten | Funktioniert | FriendFlix-Funktionen; „Live-Streams“ zeigt nur FriendFlix-Wiedergaben, „Beenden“ stoppt den Plex-Transcode |
 | „Mehr davon“ | Eingeschränkt | Von FriendFlix aus gemeinsamen Genres und Besetzung berechnet |
 | Marken-Hubs, „Weil du … gesehen hast“-Reihen, Folgenkommentare, Willkommen | Funktioniert | FriendFlix-Funktionen; Hubs entstehen aus Plex-Sammlungen/Genres/Tags |
 | Extras-Tab (Trailer, Bonusmaterial) | Eingeschränkt | Nur, was Plex als lokale Extras hat |

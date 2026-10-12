@@ -12,6 +12,8 @@
  *   trickplay (BIF)       /media/Videos/<item>/<part id32>/Trickplay/<interval ms>/{n}.jpg?sig=<mac('tp', item, part)>
  *                         (own signature domain: a trickplay sig never unlocks the original file and vice versa)
  *   images                /media/Items/<item>/Images/<Primary|Backdrop|Logo|Thumb|Banner>  (the web builds these itself)
+ *   chapter stills        /media/Items/<item>/Images/Chapter/<index>?media=<Plex media id>&sig=<mac('ch', item, media)>
+ *                         (Plex keeps chapter images per media version: /library/media/<media id>/chapterImages/<index>)
  *
  * The gateway keeps its own copy of the verification (gateway/src/upstream/plex.ts); both are checked against
  * test-vectors/media-paths.plex.json. Never put the Plex token into any of these.
@@ -28,6 +30,10 @@ export const verifyPartSig = (secret: string, itemId: string, partId: string, si
 export const tpSig = (secret: string, itemId: string, partId: string) => mac(secret, `tp|${itemId}|${partId}`).slice(0, 32);
 export const verifyTpSig = (secret: string, itemId: string, partId: string, sig: string) => /^[0-9a-f]{32}$/.test(sig) && same(tpSig(secret, itemId, partId), sig);
 
+/** sig binding a Plex media version (decimal media id) to an item for its chapter stills: 32 hex, own domain */
+export const chSig = (secret: string, itemId: string, mediaId: string) => mac(secret, `ch|${itemId}|${mediaId}`).slice(0, 32);
+export const verifyChSig = (secret: string, itemId: string, mediaId: string, sig: string) => /^[0-9a-f]{32}$/.test(sig) && same(chSig(secret, itemId, mediaId), sig);
+
 export const SESSION_RE = /^[0-9a-f]{16}-[0-9a-f]{24}$/;
 /** Plex transcode session id bound to an item (no 32-hex run, so the gateway's cast scope check sees the item id only). */
 export function sessionFor(secret: string, itemId: string, nonce = randomBytes(8).toString('hex')): string {
@@ -43,6 +49,8 @@ export const directUrl = (secret: string, itemId: string, partId: string) =>
   `/media/Videos/${itemId}/stream?${new URLSearchParams({ MediaSourceId: partId, sig: partSig(secret, itemId, partId) })}`;
 export const trickplayUrl = (secret: string, itemId: string, partId: string, intervalMs: number) =>
   `/media/Videos/${itemId}/${partId}/Trickplay/${intervalMs}/{n}.jpg?sig=${tpSig(secret, itemId, partId)}`;
+export const chapterImageUrl = (secret: string, itemId: string, mediaId: string, index: number) =>
+  `/media/Items/${itemId}/Images/Chapter/${index}?${new URLSearchParams({ media: mediaId, sig: chSig(secret, itemId, mediaId), maxWidth: '320' })}`;
 /** Served by the backend itself (capabilities.subtitleExtract): GET /api/items/:id/subtitle/:ms/:index/stream.vtt */
 export const subtitleUrl = (itemId: string, partId: string, index: number) => `/api/items/${itemId}/subtitle/${partId}/${index}/stream.vtt`;
 

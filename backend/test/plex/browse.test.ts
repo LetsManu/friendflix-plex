@@ -185,6 +185,7 @@ describe('Plex browse + user data over the mirror', () => {
   it('capabilities follow the library: markers -> intro/outro, BIF index -> trickplay; never upcoming / search / Plan B', async () => {
     expect(publicCapabilities(e.ms.capabilities)).toEqual({
       segments: ['intro', 'outro'], trickplay: true, upcoming: false, subtitleSearch: false, webhooks: false, changeFeed: true, planB: false, subtitleExtract: true,
+      chapters: false, // no chapter marks in this library (see depth.test.ts)
     });
     delete e.fake.items.get('5')!.Marker;
     e.fake.touch(5);

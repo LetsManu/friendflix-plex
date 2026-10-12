@@ -25,11 +25,23 @@ test.describe('fork branding: "FriendFlix for Plex" (desktop)', () => {
     expect(html).toContain('property="og:title" content="FriendFlix for Plex"');
   });
 
-  test('PWA manifest name and short_name', async ({ request }) => {
+  test('PWA manifest name and short_name (localized manifest route, every language)', async ({ request }) => {
     const res = await request.get('/manifest.webmanifest');
     expect(res.ok()).toBe(true);
+    expect(res.headers()['content-type']).toContain('application/manifest+json');
     const m = await res.json();
     expect(m.name).toBe('FriendFlix for Plex');
     expect(m.short_name).toBe('FriendFlix');
+    for (const lang of ['de', 'en', 'es', 'fr', 'it', 'pl', 'tr']) {
+      const l = await (await request.get(`/manifest.webmanifest?lang=${lang}`)).json();
+      expect(l.lang, lang).toBe(lang);
+      expect(l.name, lang).toBe('FriendFlix for Plex');
+      expect(l.short_name, lang).toBe('FriendFlix');
+    }
+  });
+
+  test('the page links the localized manifest', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', /^\/manifest\.webmanifest\?lang=[a-z]{2}$/);
   });
 });

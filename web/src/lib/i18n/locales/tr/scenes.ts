@@ -1,0 +1,68 @@
+import type de from '../de/scenes';
+import type { Translation } from '../../types';
+
+const dict: Translation<typeof de> = {
+  info: {
+    title: 'Oyuncular ve bilgiler',
+    open: 'Oyuncular ve bilgiler',
+    openKey: 'Oyuncular ve bilgiler (I)',
+    close: 'Oyuncular ve bilgileri kapat',
+    cast: 'Oyuncular',
+    guests: 'Konuk oyuncular',
+    facts: 'Arka plan',
+    as: '{role} rolünde',
+    directors: 'Yönetmen',
+    writers: 'Senaryo',
+    creators: 'Yaratıcı',
+    studio: 'Stüdyo',
+    year: 'Yıl',
+    rating: 'Yaş sınırı',
+    score: 'Puan',
+    genres: 'Türler',
+    tags: 'Etiketler',
+    loading: 'Oyuncular yükleniyor…',
+    failed: 'Oyuncular ve bilgiler yüklenemedi.',
+    none: 'Bu yapım için oyuncu bilgisi yok.',
+    person: '{name}, diğer yapımları göster',
+  },
+  peek: {
+    label: 'Oyunculara hızlı bakış',
+    more: 'Tüm bilgiler',
+    hintKey: 'Daha fazlası: {key}',
+    hintTv: 'Daha fazlası: OK',
+  },
+  person: {
+    role: '{role} rolünde',
+    more: '{name} ile daha fazlası',
+    loading: 'Yapımlar yükleniyor…',
+    none: 'Kitaplığında başka yapım yok.',
+    failed: 'Yapımlar yüklenemedi.',
+    page: 'Tüm yapımlar ve bilgiler',
+    back: 'Oyunculara dön',
+  },
+  chapters: {
+    title: 'Sahneler',
+    open: 'Sahneler',
+    close: 'Sahneleri kapat',
+    chapter: 'Bölüm {n}',
+    current: 'Şu an oynatılıyor',
+    jump: '{name}, {t} itibarıyla',
+    count: { one: '{n} sahne', other: '{n} sahne' },
+  },
+  audio: {
+    title: 'Ses',
+    voice: 'Net sesler',
+    voiceHint: 'Diyalogları öne çıkar',
+    night: 'Gece modu',
+    nightHint: 'Yüksek sesler kısılır, alçak sesler yükselir',
+    on: '{name} açık',
+    off: '{name} kapalı',
+    unsupported: 'Bu cihazda kullanılamıyor',
+    casting: 'Başka bir cihaza yayın yaparken kullanılamıyor',
+    needsTap: 'Görüntüye bir kez dokun ya da bir tuşa bas, “{name}” devreye girsin.',
+  },
+  shortcuts: {
+    peek: 'Oyunculara hızlıca göz at',
+  },
+};
+export default dict;

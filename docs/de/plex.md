@@ -104,6 +104,8 @@ Vorschau beim Spulen braucht Plex' **Video-Vorschaubilder** (BIF-Dateien). Sie f
 
 Ohne sie zeigt FriendFlix keine Vorschaubilder beim Spulen. Mit ihnen zeigt es Einzelbilder (etwa alle 2 s), kein durchgehendes Sprite-Bild.
 
+**Kapitelbilder** im „Szenen“-Panel des Players kommen aus Plex' Kapitel-Vorschaubildern: **Einstellungen → Bibliothek → „Kapitel-Vorschaubilder erstellen“** (*als geplante Aufgabe* oder *so schnell wie möglich*), dann analysieren oder abwarten. Die Kapitelmarken selbst (Namen, Marken auf der Zeitleiste) brauchen nichts: Sie stehen in den Dateien.
+
 ## 7. Plex Pass (optional)
 
 Du brauchst **kein** Plex Pass für FriendFlix. Plex Pass bringt nur zusätzliche Dinge, die FriendFlix dann nutzen kann:
@@ -128,7 +130,12 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | Bibliothekszugriff pro Rolle | Funktioniert | Über den Bibliotheksnamen, siehe Abschnitt 4 |
 | Bibliothek, Suche, Detailseiten, Sammlungen, Genres, Studios | Funktioniert | Aus FriendFlix' Spiegel der Plex-Bibliothek |
 | Bilder | Funktioniert | Poster, Hintergründe, Logos (falls Plex eins hat) über Plex' Bild-Transcoder. Sammlungen ohne eigenes Poster zeigen ihren Titel: Plex' zusammengesetztes Poster wird nie benutzt, weil es Titel zeigen kann, die ein Profil nicht sehen darf |
-| Besetzung | Eingeschränkt | Namen und Rollen, **keine Personenbilder** |
+| „Besetzung & Infos“ | Eingeschränkt | Darsteller mit Rollennamen, Regie, Drehbuch, Produktion, Studio und Plex-Labels; bei Folgen ist jeder Gaststar, der bei der Folge, aber nicht bei der Serie steht; **keine Personenbilder** |
+| Kapitel („Szenen“-Panel, Marken auf der Zeitleiste) | Funktioniert | Kapitelmarken der Datei (Plex `includeChapters`); Bilder nur, wenn Plex Kapitel-Vorschaubilder erzeugt (Abschnitt 6); unbenannte Kapitel („Chapter 3“) heißen übersetzt „Kapitel 3“ |
+| Qualitäts-Chips, Filter 4K / HDR | Funktioniert | Aus Plex' Stream-Angaben: Auflösung, Dolby Vision, HDR10 / HDR10+ / HLG, Kanäle, Atmos (aus dem Spurtitel). Vor dieser Version gespiegelte Bibliotheken werden beim nächsten Sync automatisch neu gelesen |
+| Neu-Labels (neu, neue Staffel, neue Folge, Staffelfinale) | Eingeschränkt | „Staffelfinale“ braucht eine sicher beendete Serie; Plex kennt keinen Serienstatus, deshalb gilt eine Serie nur als beendet, wenn jede Folge ein Ausstrahlungsdatum hat und die neueste älter als 60 Tage ist. Sonst steht „Neue Folge“ |
+| Bald nicht mehr verfügbar, „Bisher geschah“, Themenlisten, ruhiger Modus, klare Stimmen, Handy-Kurzbefehle und Badge | Funktioniert | FriendFlix-Funktionen; „Bisher geschah“ nutzt die Staffel- und Folgenbeschreibungen aus Plex (ohne Metadaten-Agent gibt es keine) |
+| Admin-Seiten (Übersicht, Personen, Inhalte, Live-Streams, Vorschauen, Bald nicht mehr verfügbar) | Funktioniert | „Live-Streams“ zeigt nur Wiedergaben über FriendFlix; „Beenden“ stoppt die Plex-Transcode-Sitzung, eine Direct-Play-Datei lässt sich nicht unterbrechen |
 | „Mehr davon“ | Eingeschränkt | Von FriendFlix aus gemeinsamen Genres und Besetzung berechnet, nicht Plex' eigene Empfehlungen |
 | Weiterschauen, Meine Liste, Favoriten, Bewertungen, Verlauf | Funktioniert | In FriendFlix; nichts wird in Plex geschrieben |
 | Direct Play | Funktioniert | Browser-taugliche Dateien (MP4/WebM, H.264/VP9/AV1, AAC/MP3/Opus/FLAC) innerhalb der Rollengrenzen |
@@ -173,6 +180,8 @@ Plex kennt nur ein Token, also setzt FriendFlix die Rolleneinstellungen selbst d
 | Freigaben-Änderung in Plex erscheint nicht | Plex ändert bei Metadaten-Bearbeitung keine Zeitstempel; nächsten Durchlauf abwarten (einige Minuten). |
 | Kein „Intro überspringen“ | Keine Marker (braucht Plex Pass) oder noch nicht erkannt. |
 | Keine Vorschaubilder beim Spulen | Vorschaubilder in Plex nicht aktiviert/erzeugt, siehe Abschnitt 6. |
+| „Szenen“-Panel ohne Bilder | Kapitel-Vorschaubilder in Plex nicht aktiviert/erzeugt, siehe Abschnitt 6. Dateien ohne Kapitel haben gar keine „Szenen“. |
+| Direkt nach einem Update keine 4K-/HDR-Chips | Der erste Sync nach dem Update liest die Stream-Angaben aller Titel neu; abwarten (bei großen Bibliotheken einige Minuten). |
 | Falsche Tonsprache oder sie wechselt, während andere schauen | Eine andere App nutzt dasselbe Plex-Konto. Eigenes Token nehmen, siehe [Tonspuren](#tonspuren). |
 | Stream startet nicht / hängt am Anfang | Der Plex-Transcoder braucht einige Sekunden für das erste Segment; Platz im Transcoder-Temp, CPU-Last und Plex-Logs prüfen. |
 | Untertitel fehlen | Es gibt nur Text-Untertitel; bildbasierte (PGS) nicht. |
@@ -201,7 +210,7 @@ Ergebnisse (was ging, was nicht, Logs ohne Token) bitte als Issue in [LetsManu/f
 
 ## Abgleich mit dem Original (für Maintainer)
 
-Sicherheitshinweise zum Plex-Adapter: Altersgrenzen schlagen im Zweifel zu (ein neu eingestufter Titel ist für begrenzte Profile versteckt, bis sein Alter neu berechnet ist, auch wenn ein Sync abbricht); Direct-Stream- und Trickplay-URLs sind in getrennten Domänen signiert; das Gateway merkt sich die Sichtbarkeit pro Sitzungs-ID 5 s lang, genau wie seinen Credential-Cache bei Jellyfin – ein Profilwechsel vergibt eine neue Sitzungs-ID, der Cache des vorherigen Profils gilt also nie für das neue.
+Sicherheitshinweise zum Plex-Adapter: Altersgrenzen schlagen im Zweifel zu (ein neu eingestufter Titel ist für begrenzte Profile versteckt, bis sein Alter neu berechnet ist, auch wenn ein Sync abbricht); Direct-Stream-, Trickplay- und Kapitelbild-URLs sind in getrennten Domänen signiert (ein Kapitelbild bindet die Plex-Medienversion an den Titel); das Gateway merkt sich die Sichtbarkeit pro Sitzungs-ID 5 s lang, genau wie seinen Credential-Cache bei Jellyfin – ein Profilwechsel vergibt eine neue Sitzungs-ID, der Cache des vorherigen Profils gilt also nie für das neue.
 
 
 Dieses Repository ist ein Fork von [LetsManu/friendflix](https://github.com/LetsManu/friendflix). So bleiben Merges klein:
@@ -215,6 +224,7 @@ git switch main && git merge upstream/main          # regelmäßig, z. B. wöche
 - Plex-Code liegt in `backend/src/plex/` und im Upstream-Adapter des Gateways; gemeinsamer Code bekommt nur die nötigsten Änderungen (die Medienserver-Schnittstelle). Lieber Dateien hinzufügen als Upstream-Dateien ändern.
 - Jellyfin-spezifische Doku (`docs/integrations.md`, `docs/operations.md`, `docs/monitoring.md`, `docs/downloads.md`, `docs/discovery.md`, `docs/setup.md`, `docs/authentik.md` and their `docs/de/` twins) bekommt oben nur einen kurzen Hinweis hierher, damit Upstream-Änderungen sauber mergen. Nicht in diesem Fork umschreiben.
 - README, `docs/plex.md`, `docs/de/plex.md` und Branding gibt es nur im Fork; Konflikte entstehen höchstens in der README: Fork-Text behalten und sachliche Änderungen des Originals (neue Variablen, Funktionen) nachziehen.
+- PWA-Manifest: Die übersetzte Route des Originals (`web/src/routes/manifest.webmanifest`) nimmt den Namen aus `common.appName` (= `{brand}`, `web/src/lib/brand.ts`); der Fork ändert nur eine Zeile in `web/src/lib/manifest.ts` (`short_name: BRAND_SHORT`) und die Erwartung in `manifest.test.ts`. Ein statisches `web/static/manifest.webmanifest` gibt es nicht mehr.
 - Nach jedem Merge Lint, Typecheck und Tests laufen lassen, auch die Plex-Tests gegen den Fake-Plex-Server.
 - Neue Upstream-Funktionen, die von Jellyfin abhängen, brauchen ein Plex-Pendant oder einen Eintrag in der Vergleichstabelle oben.
 

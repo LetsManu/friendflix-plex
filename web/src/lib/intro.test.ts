@@ -16,6 +16,11 @@ describe('shouldPlayIntro', () => {
     expect(shouldPlayIntro({ ...base, reducedMotion: true })).toBe(true);
     expect(shouldPlayIntro({ ...base, reducedMotion: true, cold: true })).toBe(false);
   });
+  it('calm mode: no cold-start intro (a user-triggered one still shows, as the calm fade)', () => {
+    expect(shouldPlayIntro({ ...base, cold: true, calm: true })).toBe(false);
+    expect(shouldPlayIntro({ ...base, cold: true, calm: false })).toBe(true);
+    expect(shouldPlayIntro({ ...base, calm: true })).toBe(true);
+  });
 });
 
 describe('shouldPlayIntroSound', () => {

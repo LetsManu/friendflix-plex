@@ -9,7 +9,7 @@
   import Logo from '#lib/Logo.svelte';
   import Footer from '#lib/Footer.svelte';
   import { avatarBg, initial } from '#lib/avatars';
-  import { loadList, loadPrefs } from '#lib/stores';
+  import { cachedCalm, loadList, loadPrefs, prefs } from '#lib/stores';
   import { kidsMode } from '#lib/kids';
   import type ItemModalType from '#lib/ItemModal.svelte';
   import { loadModal, prefetchModal } from '#lib/lazy';
@@ -28,9 +28,12 @@
   import { canRenderEarly, clearReloadFlag, earlyProfile, gateHref, hintOf, kidsRedirect, needsProfileGate, needsWelcome, readActive, readHint, readPicked, readReloading, welcomeHref, writeActive, writeHint } from '#lib/gate';
   import MobilePreviewSheet from '#lib/MobilePreviewSheet.svelte';
   import { closePreview, previewSheet } from '#lib/previewSheet';
-  import { isLocale, pageEpoch, pickLocale, ready, setLocale, t, type Locale } from '#lib/i18n';
+  import { isLocale, locale, pageEpoch, pickLocale, ready, setLocale, t, type Locale } from '#lib/i18n';
   import Rich from '#lib/i18n/Rich.svelte';
   import LanguageGate from '#lib/LanguageGate.svelte';
+  import ToastHost from '#lib/ui/ToastHost.svelte';
+  import { flushDeferred } from '#lib/ui/action';
+  import ConfirmHost from '#lib/ui/ConfirmHost.svelte';
   import { saveLanguage } from '#lib/stores';
 
   let me: Me | null = null;
@@ -103,6 +106,8 @@
     document.documentElement.classList.toggle('m-chips', chips && !watchPage && !profilesPage);
     document.documentElement.style.overflow = catOpen ? 'hidden' : ($previewSheet ? 'hidden' : ''); // no page scroll behind the overlay / sheet
   }
+  // the web app manifest (name, shortcuts) follows the UI language
+  $: if (typeof document !== 'undefined') document.querySelector('link[rel="manifest"]')?.setAttribute('href', `/manifest.webmanifest?lang=${$locale}`);
   $: if (!$mobile) { catOpen = false; closePreview(); }
   $: if ($mobile) cats = false;
   $: if (!publicPage) document.documentElement.classList.toggle('tv', tv);
@@ -207,6 +212,12 @@
     else window.dispatchEvent(new CustomEvent('ff-remote', { detail: m })); // the player listens
   }
 
+  // deferred actions (decline/revoke with an Undo window) commit right away when the person leaves the page (other route,
+  // reload, closing the tab: willUnload sends keepalive requests); a pagehide listener in lib/ui/action.ts covers the rest
+  beforeNavigate(({ from, to, willUnload }) => {
+    if (willUnload || from?.url.pathname !== to?.url.pathname) flushDeferred(willUnload);
+  });
+
   // ---- TV focus memory: coming back (Back key) puts the focus on the card you left, a new page focuses its first element ----
   const memo = new Map<string, { href: string; nth: number }>();
   beforeNavigate(({ from }) => {
@@ -249,10 +260,13 @@
   });
 
   /** First load in this browser session: the brand intro without sound (no user gesture yet). Honours the per-profile setting. */
+  // no copy yet (first visit on this device) and the loaded prefs say calm: stop the running intro at once
+  $: if (intro && $prefs.calm) intro = false;
   function maybeColdIntro(profileId: string | undefined) {
     if (location.pathname === '/profiles') return;
     const s = loadIntroSettings(profileId);
-    const ok = shouldPlayIntro({ setting: s.show, reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches, route: location.pathname, sessionSeen: readSessionSeen(), tv, cold: true });
+    // calm mode: the server prefs arrive later, so the fast-start copy of this profile's flag decides (see cachedCalm)
+    const ok = shouldPlayIntro({ setting: s.show, reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches, route: location.pathname, sessionSeen: readSessionSeen(), tv, cold: true, calm: cachedCalm(profileId) });
     if (ok) { markSessionSeen(); intro = true; }
   }
 
@@ -522,6 +536,9 @@
 {:else}
   <main id="main" class="boot"><span class="logo"><Logo wordmark size={44} /></span><div class="spin" aria-label={$t('shell.booting')} role="status"></div></main>
 {/if}
+<!-- app-wide toasts + confirm dialog (lib/ui); mounted once, outside the page so they survive navigation -->
+<ToastHost />
+<ConfirmHost />
 
 <style>
   .offbar { position: fixed; z-index: 80; left: 0; right: 0; bottom: calc(56px + env(safe-area-inset-bottom)); background: #2a2a2a; padding: .6rem var(--pad-x); text-align: center; font-size: .9rem; }

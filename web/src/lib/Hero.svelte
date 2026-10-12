@@ -7,7 +7,7 @@
   import Logo from '#lib/Logo.svelte';
   import { openModal } from '#lib/modal';
   import { listIds, prefs, toggleList } from '#lib/stores';
-  import { billboardHeld, playPreview, previewOwner, stopPreview, toggleSound } from '#lib/preview';
+  import { autoplayAllowed, billboardHeld, playPreview, previewOwner, stopPreview, toggleSound } from '#lib/preview';
   import { mobile } from '#lib/viewport';
   import { openPreview, previewSheet } from '#lib/previewSheet';
   import { genreLine } from '#lib/mobile';
@@ -45,7 +45,7 @@
   $: syncHold(hold);
   function eligible() {
     const nav = navigator as Navigator & { connection?: { saveData?: boolean } };
-    return $prefs.hoverTrailers && !document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches && !document.documentElement.classList.contains('tv') && !nav.connection?.saveData;
+    return $prefs.hoverTrailers && autoplayAllowed() && !document.hidden && !document.documentElement.classList.contains('tv') && !nav.connection?.saveData;
   }
   function schedule(id: string) {
     scheduledFor = id;

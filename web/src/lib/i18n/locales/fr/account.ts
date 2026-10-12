@@ -152,7 +152,10 @@ const fr: Translation<typeof de> = {
   },
   listSaveFailed: 'Enregistrement impossible.',
   logout: {
-    confirmDownloads: 'Supprimer aussi les téléchargements sur cet appareil ?\n\nOK : supprimer (recommandé, p. ex. sur un appareil partagé). Annuler : conserver.',
+    downloadsTitle: 'Supprimer aussi les téléchargements sur cet appareil ?',
+    downloadsBody: 'Recommandé sur un appareil partagé. Si tu les conserves, ils restent sur cet appareil et occupent toujours de l’espace.',
+    deleteDownloads: 'Supprimer les téléchargements',
+    keepDownloads: 'Conserver',
   },
   downloads: {
     pageTitle: 'Téléchargements',

@@ -42,3 +42,40 @@ describe('isNewTitle', () => {
     expect(isNewTitle({ type: 'Series', lastAdded: ago(2), unplayedCount: 8, childCount: 8 }, now)).toBe(true);
   });
 });
+
+// ---- Block 17 D1: one tag per card ----
+import { cardTag, qualityChips } from './badges';
+
+describe('cardTag', () => {
+  const series = { type: 'Series', lastAdded: ago(3), unplayedCount: 2, childCount: 10, playedPercentage: undefined as number | undefined };
+  it('nothing until the server answered (no flicker), old hints when it failed', () => {
+    expect(cardTag(undefined, series, now)).toBeNull();
+    expect(cardTag(null, series, now)).toMatchObject({ kind: 'legacy', label: 'newEpisodes' });
+    expect(cardTag(null, { type: 'Movie', lastAdded: ago(5) }, now)).toMatchObject({ kind: 'legacy', label: 'new' });
+    expect(cardTag(null, { type: 'Movie' }, now)).toBeNull();
+  });
+  it('server badge: fresh label, one at most', () => {
+    expect(cardTag({ fresh: 'finale' }, series, now)).toMatchObject({ kind: 'fresh', key: 'fresh.label.finale' });
+    expect(cardTag({}, series, now)).toBeNull();
+  });
+  it('a removal date within two weeks wins over a fresh label; further away it is ignored', () => {
+    expect(cardTag({ fresh: 'new', daysLeft: 5 }, series, now)).toEqual({ kind: 'leaving', key: 'fresh.leaving.days', n: 5 });
+    expect(cardTag({ daysLeft: 0 }, series, now)).toEqual({ kind: 'leaving', key: 'fresh.leaving.today', n: 0 });
+    expect(cardTag({ fresh: 'new', daysLeft: 15 }, series, now)).toMatchObject({ kind: 'fresh' });
+    expect(cardTag({ daysLeft: 14 }, series, now)).toMatchObject({ kind: 'leaving' });
+  });
+  it('episodes get the removal date of their series but never a fresh label', () => {
+    expect(cardTag({ fresh: 'newEpisode' }, { type: 'Episode' }, now)).toBeNull();
+    expect(cardTag({ daysLeft: 3 }, { type: 'Episode' }, now)).toMatchObject({ kind: 'leaving', n: 3 });
+  });
+});
+
+describe('qualityChips', () => {
+  it('stable order resolution, HDR, audio', () => {
+    expect(qualityChips({ resolution: '4k', hdr: 'dolbyvision', audio: 'atmos' }).map((c) => c.id)).toEqual(['4k', 'dv', 'atmos']);
+    expect(qualityChips({ resolution: 'hd', hdr: 'hdr10', audio: 'surround' }).map((c) => c.id)).toEqual(['hd', 'hdr', 'surround']);
+    expect(qualityChips({ resolution: 'hd', hdr: 'hdr10plus', audio: 'stereo' }).map((c) => c.id)).toEqual(['hd', 'hdr10plus', 'stereo']);
+    expect(qualityChips({ resolution: 'sd', hdr: null, audio: 'mono' })).toEqual([]);
+    expect(qualityChips(null)).toEqual([]);
+  });
+});

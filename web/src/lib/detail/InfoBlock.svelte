@@ -3,9 +3,13 @@
   import { ageText, byType, moodTags, type Person } from '#lib/detail/format';
   import { t } from '#lib/i18n';
   import Rich from '#lib/i18n/Rich.svelte';
+  import type { Facts } from '#lib/fresh';
+  import QualityChips from '#lib/QualityChips.svelte';
 
   export let item: Item;
   export let people: Person[] = [];
+  /** facts of the title (quality chips); optional */
+  export let facts: Facts | null = null;
 
   $: directors = byType(people, 'Director');
   $: writers = byType(people, 'Writer');
@@ -22,6 +26,7 @@
     {#if writers.length}<div><dt>{$t('detail.info.writer')}</dt><dd>{#each writers as p, n (p.id + n)}{#if n}{', '}{/if}<a href="/person/{p.id}">{p.name}</a>{/each}</dd></div>{/if}
     {#if item.genres.length}<div><dt>{$t('detail.info.genres')}</dt><dd>{item.genres.join(', ')}</dd></div>{/if}
     {#if moods.length}<div><dt>{$t('detail.info.moods')}</dt><dd>{moods.join(', ')}</dd></div>{/if}
+    {#if facts?.traits}<div><dt>{$t('fresh.q.label')}</dt><dd class="qd"><QualityChips traits={facts.traits} /></dd></div>{/if}
     {#if item.rating}<div><dt>{$t('detail.info.age')}</dt><dd><span class="age">{item.rating}</span>{#if age} <span>{age}</span>{/if}</dd></div>{/if}
   </dl>
 </section>
@@ -37,6 +42,7 @@
   dd a { text-decoration: underline; text-decoration-color: transparent; transition: text-decoration-color var(--t-fast); }
   dd a:hover, dd a:focus-visible { text-decoration-color: currentColor; }
   @media (pointer: coarse) { dd a { display: inline-flex; align-items: center; min-height: 44px; } }
+  .qd :global(.qc) { margin: 0; }
   .age { border: 1px solid rgba(255, 255, 255, .45); padding: 0 .4rem; margin-right: .4rem; }
   @media (max-width: 520px) { dl > div { grid-template-columns: 1fr; gap: .1rem; } }
 </style>

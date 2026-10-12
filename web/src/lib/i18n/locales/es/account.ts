@@ -152,7 +152,10 @@ const es: Translation<typeof de> = {
   },
   listSaveFailed: 'No se pudo guardar.',
   logout: {
-    confirmDownloads: '¿Eliminar también las descargas de este dispositivo?\n\nAceptar: eliminar (recomendado, p. ej. en dispositivos compartidos). Cancelar: conservarlas.',
+    downloadsTitle: '¿Eliminar también las descargas de este dispositivo?',
+    downloadsBody: 'Recomendado en dispositivos compartidos. Si las conservas, se quedan en este dispositivo y siguen ocupando espacio.',
+    deleteDownloads: 'Eliminar descargas',
+    keepDownloads: 'Conservar',
   },
   downloads: {
     pageTitle: 'Descargas',

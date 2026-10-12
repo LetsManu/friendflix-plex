@@ -1,5 +1,6 @@
 <script lang="ts">
   import { fmtDateTime, t, tr } from '#lib/i18n';
+  import { confirm } from '#lib/ui/confirm';
   import Rich from '#lib/i18n/Rich.svelte';
   import { onMount } from 'svelte';
   import { api, ApiError } from '#lib/api';
@@ -24,7 +25,7 @@
     } finally { busy = ''; await load(); }
   }
   async function revokeOthers() { const r = await api('/api/sessions/revoke-others', { method: 'POST' }); msg = tr('account.devices.revoked', { n: Number(r.revoked) }); }
-  async function remove(d: Dev) { if (!confirm(tr('account.devices.confirmRemove', { name: d.label }))) return; await api(`/api/devices/${d.id}`, { method: 'DELETE' }); await load(); }
+  async function remove(d: Dev) { if (!(await confirm({ title: tr('account.devices.confirmRemove', { name: d.label }), danger: true, confirmLabel: tr('account.devices.remove') }))) return; await api(`/api/devices/${d.id}`, { method: 'DELETE' }); await load(); }
 </script>
 
 <svelte:head><title>{$t('common.pageTitle', { page: $t('account.devices.pageTitle') })}</title></svelte:head>

@@ -1,5 +1,6 @@
 /** Jellyfin JSON -> the server-neutral DTOs of ../media/types.ts (re-exported here for existing imports). */
-import { DOWNLOAD_PRESETS, maxWidthFor, type DownloadQuality, type DownloadSourceDto, type ImageTags, type ItemDto, type PlaybackDto, type TrickplayDto } from '../media/types.js';
+import { DOWNLOAD_PRESETS, maxWidthFor, type DownloadQuality, type DownloadSourceDto, type ImageTags, type ItemDto, type MediaTraits, type PlaybackDto, type TrickplayDto } from '../media/types.js';
+import type { ChapterDto, ItemCreditsDto } from '../media/types.js'; // Block 17 P1
 
 export { DOWNLOAD_PRESETS, maxWidthFor };
 export type { DownloadQuality, DownloadSourceDto, ImageTags, ItemDto, PlaybackDto, TrickplayDto };
@@ -204,5 +205,79 @@ export function toDownloadSource(args: {
         url: `/media/Videos/${itemId}/${src.Id}/Subtitles/${s.Index}/0/Stream.vtt`,
       })),
     masterPath,
+  };
+}
+
+// ---- Block 17 D1: media traits ---------------------------------------------------------------------------------------------------
+/** Jellyfin MediaStreams (of one file) -> the neutral MediaTraits; null when there is no video stream. */
+export function toMediaTraits(streams: Array<Record<string, any>> | undefined): MediaTraits | null {
+  const list = Array.isArray(streams) ? streams : [];
+  const video = list.find((s) => s?.Type === 'Video');
+  if (!video) return null;
+  const w = Number(video.Width ?? 0);
+  const h = Number(video.Height ?? 0);
+  // widescreen films are cropped (3840x1600 is still "4K"): judge by whichever side is large enough
+  const resolution: MediaTraits['resolution'] = h >= 1800 || w >= 3200 ? '4k' : h >= 700 || w >= 1200 ? 'hd' : 'sd';
+  const range = String(video.VideoRangeType ?? '').toLowerCase();
+  const hdr: MediaTraits['hdr'] = range.startsWith('dovi') && range !== 'doviinvalid' ? 'dolbyvision'
+    : range === 'hdr10plus' ? 'hdr10plus'
+    : range === 'hdr10' ? 'hdr10'
+    : range === 'hlg' ? 'hlg'
+    : !range && String(video.VideoRange ?? '').toUpperCase() === 'HDR' ? 'hdr10'
+    : null;
+  const audioStreams = list.filter((s) => s?.Type === 'Audio');
+  const best = audioStreams.reduce<Record<string, any> | undefined>((a, s) => (!a || Number(s.Channels ?? 0) > Number(a.Channels ?? 0) ? s : a), undefined);
+  const atmos = audioStreams.some((s) => String(s.AudioSpatialFormat ?? '').toLowerCase() === 'dolbyatmos' || /atmos/i.test(`${s.Profile ?? ''} ${s.DisplayTitle ?? ''} ${s.Title ?? ''}`));
+  const ch = Number(best?.Channels ?? 0);
+  const audio: MediaTraits['audio'] = atmos ? 'atmos' : ch >= 6 ? 'surround' : ch === 2 ? 'stereo' : ch === 1 ? 'mono' : ch > 2 ? 'surround' : null;
+  return { resolution, hdr, audio };
+}
+const RES_RANK = { sd: 0, hd: 1, '4k': 2 } as const;
+const AUDIO_RANK = { mono: 0, stereo: 1, surround: 2, atmos: 3 } as const;
+/** Best of two trait sets (a series reports its best episode). */
+export function bestTraits(a: MediaTraits | null, b: MediaTraits | null): MediaTraits | null {
+  if (!a || !b) return a ?? b;
+  return {
+    resolution: RES_RANK[b.resolution] > RES_RANK[a.resolution] ? b.resolution : a.resolution,
+    hdr: a.hdr ?? b.hdr, // any HDR flavour beats none; Dolby Vision is only kept when it is the first one seen
+    audio: !a.audio ? b.audio : !b.audio ? a.audio : AUDIO_RANK[b.audio] > AUDIO_RANK[a.audio] ? b.audio : a.audio,
+  };
+}
+
+// ---- Block 17 P1: chapters + credits ---------------------------------------------------------------------------------------------
+/**
+ * Jellyfin `Chapters` (fields=Chapters) -> ChapterDto, sorted, duplicates by start dropped. Stills: /Items/<id>/Images/Chapter/<index>
+ * (the index is the position in Jellyfin's own list, so it is taken before sorting). Generic names Jellyfin invents for files without
+ * chapters ("Chapter 1", "Kapitel 01") become '' so the web shows its own localized "Kapitel 1".
+ */
+export function toChapters(itemId: string, raw: Array<Record<string, any>> | undefined): ChapterDto[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<number>();
+  return raw
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => c && Number.isFinite(Number(c.StartPositionTicks)) && Number(c.StartPositionTicks) >= 0)
+    .map(({ c, i }): ChapterDto => {
+      const name = typeof c.Name === 'string' ? c.Name.trim().slice(0, 120) : '';
+      return {
+        start: Math.round(Number(c.StartPositionTicks) / 1e6) / 10, // 0.1 s precision
+        name: /^(chapter|kapitel|chapitre|cap[ií]tulo|capitolo|b[öo]l[üu]m|rozdzia[łl])\s*\d+$/i.test(name) ? '' : name,
+        ...(typeof c.ImageTag === 'string' && c.ImageTag ? { image: `/media/Items/${itemId}/Images/Chapter/${i}?tag=${encodeURIComponent(c.ImageTag)}&maxWidth=320&quality=80` } : {}),
+      };
+    })
+    .sort((a, b) => a.start - b.start)
+    .filter((c) => (seen.has(c.start) ? false : (seen.add(c.start), true)))
+    .slice(0, 200);
+}
+
+/** Jellyfin People / Studios / Tags (fields=People,Studios,Tags) -> ItemCreditsDto. */
+export function toCredits(raw: Record<string, any> | undefined): ItemCreditsDto {
+  const people = (Array.isArray(raw?.People) ? raw!.People : []) as Array<Record<string, any>>;
+  return {
+    people: people
+      .filter((p) => typeof p?.Id === 'string' && typeof p?.Name === 'string')
+      .slice(0, 80)
+      .map((p) => ({ id: p.Id, name: p.Name, ...(p.Role ? { role: String(p.Role) } : {}), type: String(p.Type ?? 'Actor'), image: Boolean(p.PrimaryImageTag) })),
+    studios: (Array.isArray(raw?.Studios) ? raw!.Studios : []).map((s: any) => (typeof s === 'string' ? s : s?.Name)).filter((s: unknown): s is string => typeof s === 'string' && Boolean(s)).slice(0, 6),
+    tags: (Array.isArray(raw?.Tags) ? raw!.Tags : []).filter((s: unknown): s is string => typeof s === 'string' && Boolean(s)).slice(0, 20),
   };
 }

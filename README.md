@@ -127,7 +127,11 @@ The FriendFlix interface is the same; what differs is what Plex can deliver. Sta
 | Profiles, kids profiles, age limits, PIN | Works | Stored and enforced by FriendFlix (kids age caps 0/6/12 on every list, search, title and media request); age ratings come from Plex (`contentRating`), unknown ratings are blocked for capped and kids profiles |
 | Library access per role | Works | By Plex library name (renaming a library in Plex needs a role update) |
 | Library, search, detail pages, images | Works | Title logos depend on what Plex provides; falls back to the title text |
-| Cast | Limited | Names and roles, no person images |
+| Cast & info panel | Limited | Character names, directors, writers, studio, labels, guest stars on episodes; no person images |
+| Chapters ("Scenes" panel) | Works | Chapter marks from the files; chapter stills only if Plex generates chapter thumbnails |
+| Quality chips, 4K / HDR filter | Works | From Plex's stream details (resolution, Dolby Vision / HDR10 / HDR10+ / HLG, channels, Atmos) |
+| Fresh labels ("New episode", "Season finale" …) | Limited | Plex has no series status, so "Season finale" only appears for series whose last episode aired more than 60 days ago |
+| Leaving soon, story so far, themed lists, calm mode, clear voices, phone shortcuts, admin pages | Works | FriendFlix features; "Live streams" lists FriendFlix playback only, "Stop" ends the Plex transcode |
 | "More like this" | Limited | Computed by FriendFlix from shared genres and cast |
 | Brand hubs, "Because you watched …" rows, episode comments, onboarding | Works | FriendFlix features; hubs are built from Plex collections/genres/tags |
 | Extras tab (trailers, special features) | Limited | Only what Plex has as local extras |

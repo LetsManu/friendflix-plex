@@ -13,6 +13,13 @@ import { notify } from '../notify.js';
 import type { JfUser } from '../types.js';
 import { itemsByIds } from './discover.js';
 
+/** open party sockets per account (session id + close), so a revoked session/device loses its socket at once */
+const sockets = new Map<string, Set<{ sid: string; close: () => void }>>();
+/** Closes the party sockets of these sessions (revokeSessions: device removed/unapproved, account locked, sign-out elsewhere). */
+export function dropPartyPeers(userId: string, sids: Set<string>) {
+  for (const p of [...(sockets.get(userId) ?? [])]) if (sids.has(p.sid)) p.close();
+}
+
 export const parties = new PartyRegistry();
 
 export async function partyRoutes(app: FastifyInstance, ctx: Ctx) {
@@ -87,6 +94,9 @@ export async function partyRoutes(app: FastifyInstance, ctx: Ctx) {
     const user = req.user!;
     if (!req.jfUser || !(await visibleRooms(req.jfUser, user.id, [room])).length) return socket.close(4404, 'room not found'); // joiner must be able to see the item
     const send = (m: unknown) => socket.readyState === 1 && socket.send(JSON.stringify(m));
+    const peer = { sid: req.sid!, close: () => socket.close(4401, 'revoked') };
+    if (!sockets.has(user.id)) sockets.set(user.id, new Set());
+    sockets.get(user.id)!.add(peer);
     room.join(user.id, user.name, send);
     bus.emitT('party.join', { userId: user.id, roomId: room.id });
 
@@ -111,6 +121,9 @@ export async function partyRoutes(app: FastifyInstance, ctx: Ctx) {
     });
     socket.on('close', () => {
       clearInterval(hb);
+      const mine = sockets.get(user.id);
+      mine?.delete(peer);
+      if (mine && !mine.size) sockets.delete(user.id);
       // only remove if this socket is still the current one for the member
       const m = room.members.get(user.id);
       if (m && m.send === send) room.leave(user.id);

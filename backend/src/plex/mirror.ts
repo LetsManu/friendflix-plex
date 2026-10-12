@@ -183,7 +183,9 @@ export function tagRows(m: Record<string, any>): TagRow[] {
 }
 
 const STREAM_KEYS = ['id', 'streamType', 'codec', 'index', 'language', 'languageCode', 'languageTag', 'title', 'displayTitle', 'extendedDisplayTitle',
-  'default', 'selected', 'forced', 'key', 'format', 'channels', 'bitDepth', 'height', 'width', 'profile', 'level', 'bitrate', 'hearingImpaired'] as const;
+  'default', 'selected', 'forced', 'key', 'format', 'channels', 'bitDepth', 'height', 'width', 'profile', 'level', 'bitrate', 'hearingImpaired',
+  // quality traits (traits.ts): dynamic range (PQ / HLG transfer, Dolby Vision) and the audio layout
+  'DOVIPresent', 'DOVIProfile', 'colorTrc', 'colorPrimaries', 'audioChannelLayout'] as const;
 const MEDIA_KEYS = ['id', 'container', 'videoCodec', 'audioCodec', 'width', 'height', 'bitrate', 'duration', 'videoResolution', 'audioChannels', 'videoProfile'] as const;
 const PART_KEYS = ['id', 'key', 'size', 'container', 'duration', 'indexes'] as const;
 const pick = (o: Record<string, any>, ks: readonly string[]) => Object.fromEntries(ks.filter((k) => o?.[k] !== undefined).map((k) => [k, o[k]]));
@@ -200,6 +202,21 @@ export function trimMedia(m: Record<string, any>): Array<Record<string, any>> | 
   }));
 }
 
+/**
+ * `Chapter: [{id, tag, index, startTimeOffset, endTimeOffset, thumb?}]` (ms; `includeChapters=1`, verified on PMS 1.43). `thumb`
+ * (`/library/media/<media id>/chapterImages/<index>`) exists only when PMS generated chapter thumbnails (GenerateChapterThumbBehavior).
+ * null = the answer had no Chapter array.
+ */
+export function chaptersOf(m: Record<string, any>): Array<{ start: number; name: string; media?: string; index?: number }> | null {
+  if (!Array.isArray(m.Chapter)) return null;
+  return m.Chapter.slice(0, 300).flatMap((c: Record<string, any>) => {
+    const start = Number(c?.startTimeOffset);
+    if (!Number.isFinite(start) || start < 0) return [];
+    const th = /^\/library\/media\/(\d{1,18})\/chapterImages\/(\d{1,4})$/.exec(String(c?.thumb ?? ''));
+    return [{ start: Math.round(start), name: typeof c?.tag === 'string' ? c.tag.trim().slice(0, 120) : '', ...(th ? { media: th[1]!, index: Number(th[2]) } : {}) }];
+  });
+}
+
 /** `Marker: [{type: intro|credits, startTimeOffset, endTimeOffset}]` (ms). */
 export function markersOf(m: Record<string, any>): Array<{ type: string; start: number; end: number }> | null {
   if (!Array.isArray(m.Marker)) return null;
@@ -213,6 +230,7 @@ export interface DetailRow {
   logo: string | null;
   media: Array<Record<string, any>> | null;
   markers: Array<{ type: string; start: number; end: number }> | null;
+  chapters: Array<{ start: number; name: string; media?: string; index?: number }> | null;
   extra_type: string | null;
 }
 
@@ -220,7 +238,7 @@ export function detailRow(m: Record<string, any>): DetailRow | null {
   const rk = key(m.ratingKey);
   if (!rk) return null;
   const logo = (Array.isArray(m.Image) ? m.Image : []).find((i: Record<string, any>) => i?.type === 'clearLogo');
-  return { rating_key: rk, logo: relPath(logo?.url), media: trimMedia(m), markers: markersOf(m), extra_type: str(m.subtype) };
+  return { rating_key: rk, logo: relPath(logo?.url), media: trimMedia(m), markers: markersOf(m), chapters: chaptersOf(m), extra_type: str(m.subtype) };
 }
 
 /** Writes the detail columns + tags of fully fetched items (tags are replaced). */
@@ -228,8 +246,8 @@ export async function writeDetails(db: Db, details: DetailRow[], tags: TagRow[])
   if (!details.length) return;
   const keys = details.map((d) => d.rating_key);
   await db.query(
-    `update plex_items i set logo = x.logo, media = x.media, markers = x.markers, extra_type = coalesce(x.extra_type, i.extra_type), detail_at = now()
-     from jsonb_to_recordset($1::jsonb) as x(rating_key bigint, logo text, media jsonb, markers jsonb, extra_type text)
+    `update plex_items i set logo = x.logo, media = x.media, markers = x.markers, chapters = x.chapters, extra_type = coalesce(x.extra_type, i.extra_type), detail_at = now()
+     from jsonb_to_recordset($1::jsonb) as x(rating_key bigint, logo text, media jsonb, markers jsonb, chapters jsonb, extra_type text)
      where i.rating_key = x.rating_key`,
     [JSON.stringify(details)],
   );

@@ -3,13 +3,15 @@ import { stat } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
-import { MediaError, type ItemDto } from '../media/types.js';
+import { MediaError, type ItemDto, type MediaTraits } from '../media/types.js';
+import { audit } from '../audit.js';
+import { badgesFor, instanceToday, leavingFor, LEAVING_ROW_DAYS, storySoFar } from '../fresh.js';
 import { m } from '../i18n.js';
 import { notify } from '../notify.js';
 import { clipPath, previews } from '../previews.js';
 import { loadPrefs } from './prefs.js';
 import { requireGrownUp } from '../kids.js';
-import { requireUser } from '../session.js';
+import { requireAdmin, requireUser } from '../session.js';
 import { portalStatus } from '../seerr/client.js';
 import type { JfUser, UserRow } from '../types.js';
 import { id32, wrap as sharedWrap } from './_shared.js';
@@ -24,16 +26,23 @@ const wrap = <T extends (...a: any[]) => Promise<any>>(fn: T): T => sharedWrap(f
 export async function itemsByIds(ctx: Ctx, user: JfUser, ids: string[], strict = false): Promise<ItemDto[]> {
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += 40) chunks.push(ids.slice(i, i + 40));
-  const parts: ItemDto[][] = new Array(chunks.length);
-  let next = 0;
-  await Promise.all(Array.from({ length: Math.min(4, chunks.length) }, async () => {
-    while (next < chunks.length) {
-      const n = next++;
-      parts[n] = (await ctx.jf.items(user, { ids: chunks[n], types: 'Movie,Series,Episode,BoxSet', limit: 40 }).catch((e) => { if (strict) throw e; return { items: [] as ItemDto[] }; })).items;
-    }
-  }));
+  const parts = await inPool(chunks, 4, async (c) =>
+    (await ctx.jf.items(user, { ids: c, types: 'Movie,Series,Episode,BoxSet', limit: 40 }).catch((e) => { if (strict) throw e; return { items: [] as ItemDto[] }; })).items);
   const byId = new Map(parts.flat().map((i) => [i.id, i]));
   return ids.map((i) => byId.get(i)).filter((x): x is ItemDto => Boolean(x));
+}
+
+/** Runs `fn` over `xs` with at most `n` calls in flight; results keep the input order. The first error rejects. */
+export async function inPool<T, R>(xs: T[], n: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(xs.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(n, xs.length) }, async () => {
+    while (next < xs.length) {
+      const i = next++;
+      out[i] = await fn(xs[i]!, i);
+    }
+  }));
+  return out;
 }
 
 /** "Weil du ... gesehen hast" cache lifetime (seconds). */
@@ -138,6 +147,7 @@ export async function libraryBecauseMore(ctx: Ctx, jfUser: JfUser, profileId: st
 export function discoverRoutes(app: FastifyInstance, ctx: Ctx) {
   const pre = { preHandler: requireUser(ctx) };
   const grown = { preHandler: requireGrownUp(ctx) }; // friends, matching, recommendations, Seerr: not on kids profiles
+  freshRoutes(app, ctx);
 
   // ---- Group matcher: "what has none of us watched yet?" (opt-in per participant) ----
   app.get('/api/friends', grown, async (req) => {
@@ -329,5 +339,172 @@ export function discoverRoutes(app: FastifyInstance, ctx: Ctx) {
         status: portalStatus(x.mediaInfo?.status, x.mediaInfo?.requests?.[0]?.status),
       })),
     };
+  }));
+}
+
+
+// ---------------------------------------------------------------- Block 17 D1: fresh labels, leaving soon, quality, story
+
+/** Traits cache lifetime (seconds): library data, not viewer specific, but only ever read after the viewer's own visibility check. */
+const TRAITS_TTL = 6 * 3600;
+const QUALITY_CAP = 5000;
+const QUALITY_CHUNK = 80;
+/** chunks of the quality browse in flight at once (5000 candidates = 63 chunks) */
+const QUALITY_PARALLEL = 4;
+/** the viewer's visible, sorted id list of one quality browse is kept this long (seconds): paging does not re-scan */
+const QUALITY_LIST_TTL = 180;
+/** per session (cookie) limits of the two heavier Block 17 routes; IP as the fallback for cookie-less callers (they get 401 anyway) */
+const perSession = (max: number) => ({ rateLimit: { max, timeWindow: '1 minute', keyGenerator: (req: { cookies?: Record<string, string | undefined>; ip: string }) => `s:${req.cookies?.ff_sid ?? req.ip}` } });
+const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => {
+  const t = Date.parse(`${v}T00:00:00Z`);
+  return Number.isFinite(t) && new Date(t).toISOString().startsWith(v); // 2026-02-30 rolls over: refused
+}, 'invalid date');
+
+const qualityQuery = z.object({
+  quality: z.string().regex(/^(4k|hdr)(,(4k|hdr))?$/),
+  types: z.enum(['Movie', 'Series']).default('Movie'),
+  sort: z.enum(['SortName', 'DateCreated', 'PremiereDate', 'CommunityRating']).default('SortName'),
+  desc: z.enum(['true', 'false']).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(60),
+  start: z.coerce.number().int().min(0).default(0),
+  filter: z.enum(['favorites', 'unplayed', 'played']).optional(),
+  genre: z.string().max(300).optional(),
+  studio: z.string().max(80).optional(),
+  decade: z.coerce.number().int().min(1900).max(2090).refine((n) => n % 10 === 0).optional(),
+  year: z.coerce.number().int().min(1900).max(2100).optional(),
+  minRating: z.coerce.number().min(0).max(10).optional(),
+  person: id32.optional(),
+  audio: z.string().regex(/^[a-z]{3}$/).optional(),
+  subs: z.string().regex(/^[a-z]{3}$/).optional(),
+});
+
+function freshRoutes(app: FastifyInstance, ctx: Ctx) {
+  const pre = { preHandler: requireUser(ctx) };
+  const admin = { preHandler: requireAdmin(ctx) };
+  /** the series a leaving date belongs to (an episode's date is its series') */
+  const subject = (i: ItemDto) => (i.type === 'Episode' && i.seriesId ? i.seriesId : i.id);
+
+  // ---- card badges: fresh label + "Nur noch N Tage" for a batch of ids. Only ids the viewer can see come back (itemsByIds uses the viewer's token). ----
+  app.post('/api/discover/badges', { ...pre, config: perSession(60) }, wrap(async (req) => {
+    const { ids } = z.object({ ids: z.array(id32).min(1).max(80) }).parse(req.body);
+    const items = await itemsByIds(ctx, req.jfUser!, [...new Set(ids)]);
+    return { badges: await badgesFor(ctx, req.jfUser!, items) };
+  }));
+
+  // ---- detail / hover facts: fresh label, leaving date and quality chips of ONE title ----
+  app.get('/api/items/:id/facts', pre, wrap(async (req) => {
+    const id = id32.parse((req.params as { id: string }).id);
+    const item = await ctx.jf.item(req.jfUser!, id); // 404/403 when the viewer cannot see it
+    const [badges, leaving, traits] = await Promise.all([
+      badgesFor(ctx, req.jfUser!, [item]),
+      ctx.db.query<{ leaves_at: string; days: number; note: string | null }>(
+        'select leaves_at::text, (leaves_at - $2::date)::int as days, note from leaving_soon where item_id = $1 and leaves_at >= $2::date', [subject(item), instanceToday()]),
+      (async () => {
+        if (!ctx.jf.mediaTraits || (item.type !== 'Movie' && item.type !== 'Series' && item.type !== 'Episode')) return null;
+        const key = `traits:${id}`;
+        const hit = await ctx.kv.get(key).catch(() => null);
+        if (hit) { try { return JSON.parse(hit) as MediaTraits | null; } catch { /* recompute */ } }
+        const t = await ctx.jf.mediaTraits(req.jfUser!, id).catch(() => null);
+        await ctx.kv.set(key, JSON.stringify(t), TRAITS_TTL).catch(() => undefined);
+        return t;
+      })(),
+    ]);
+    const l = leaving.rows[0];
+    return {
+      fresh: badges[id]?.fresh ?? null,
+      leaving: l ? { leavesAt: l.leaves_at, days: l.days, ...(req.user!.role === 'admin' && req.profile!.is_owner && l.note ? { note: l.note } : {}) } : null,
+      traits,
+      admin: req.user!.role === 'admin' && Boolean(req.profile?.is_owner),
+    };
+  }));
+
+  // ---- home row "Bald nicht mehr verfügbar": only titles the viewer can see ----
+  app.get('/api/library/leaving', pre, wrap(async (req) => {
+    const days = await leavingFor(ctx, (await ctx.db.query<{ item_id: string }>('select item_id from leaving_soon where leaves_at >= $2::date and leaves_at - $2::date <= $1 order by leaves_at limit 60', [LEAVING_ROW_DAYS, instanceToday()])).rows.map((r) => r.item_id), LEAVING_ROW_DAYS);
+    const items = await itemsByIds(ctx, req.jfUser!, [...days.keys()]);
+    return { items: items.map((i) => ({ ...i, daysLeft: days.get(i.id) ?? 0 })).sort((a, b) => a.daysLeft - b.daysLeft || a.name.localeCompare(b.name, 'de')).slice(0, 30) };
+  }));
+
+  // ---- admin: list / set / clear removal dates (nothing is deleted on the media server) ----
+  app.get('/api/admin/leaving', admin, wrap(async (req) => {
+    const rows = (await ctx.db.query<{ item_id: string; leaves_at: string; days: number; note: string | null; by: string | null }>(
+      `select l.item_id, l.leaves_at::text, (l.leaves_at - $1::date)::int as days, l.note, u.name as by
+         from leaving_soon l left join users u on u.id = l.set_by where l.leaves_at >= $1::date order by l.leaves_at, l.item_id`, [instanceToday()])).rows;
+    const items = new Map((await itemsByIds(ctx, req.jfUser!, rows.map((r) => r.item_id))).map((i) => [i.id, i]));
+    return { items: rows.map((r) => ({ itemId: r.item_id, name: items.get(r.item_id)?.name ?? null, type: items.get(r.item_id)?.type ?? null, year: items.get(r.item_id)?.year ?? null, leavesAt: r.leaves_at, days: r.days, note: r.note, setBy: r.by })) };
+  }));
+  app.put('/api/admin/leaving/:id', admin, wrap(async (req, reply) => {
+    const id = id32.parse((req.params as { id: string }).id);
+    const b = z.object({ leavesAt: dateOnly, note: z.string().trim().max(200).nullish() }).parse(req.body);
+    const item = await ctx.jf.item(req.jfUser!, id);
+    if (item.type !== 'Movie' && item.type !== 'Series' && item.type !== 'BoxSet') return reply.code(400).send({ error: 'not_a_title' });
+    const ok = await ctx.db.query<{ ok: boolean }>('select ($1::date >= $2::date and $1::date <= $2::date + 730) as ok', [b.leavesAt, instanceToday()]);
+    if (!ok.rows[0]?.ok) return reply.code(400).send({ error: 'date_out_of_range' });
+    await ctx.db.query(
+      `insert into leaving_soon(item_id, leaves_at, note, set_by) values ($1, $2, $3, $4)
+       on conflict (item_id) do update set leaves_at = excluded.leaves_at, note = excluded.note, set_by = excluded.set_by`,
+      [id, b.leavesAt, b.note || null, req.user!.id],
+    );
+    await audit(ctx, req.user!.id, 'leaving.set', id, { name: item.name, leavesAt: b.leavesAt });
+    return { itemId: id, leavesAt: b.leavesAt, note: b.note || null };
+  }));
+  app.delete('/api/admin/leaving/:id', admin, async (req) => {
+    const id = id32.parse((req.params as { id: string }).id);
+    const r = await ctx.db.query('delete from leaving_soon where item_id = $1', [id]);
+    if (r.rowCount) await audit(ctx, req.user!.id, 'leaving.clear', id);
+    return { ok: true };
+  });
+
+  // ---- browse filter 4K / HDR: candidate ids from the quality index, details (visibility, every other filter) from the media server ----
+  app.get('/api/library/quality', { ...pre, config: perSession(60) }, wrap(async (req) => {
+    const q = qualityQuery.parse(req.query);
+    if (!ctx.jf.libraryMediaTraits) return { items: [], total: 0, unsupported: true };
+    const { quality: _q, audio: _a, subs: _s, start, limit, desc: d, types, ...rest } = q;
+    // The sorted list of ids THIS viewer can see is cached briefly per media-server identity (a kids profile has its own, so its
+    // parental limits apply) + every filter; played / favourite filters also carry the user-data version (a new play re-scans).
+    const { start: _st, limit: _l, ...shape } = q;
+    const ver = q.filter ? await ctx.jf.userDataVersion(req.jfUser!).catch(() => String(Date.now())) : '';
+    const key = `qlist:${req.jfUser!.jellyfin_user_id}:${ver}:${JSON.stringify(Object.entries(shape).sort(([a], [b]) => a.localeCompare(b)))}`;
+    let cached: { ids: string[]; capped: boolean } | null = null;
+    try { cached = JSON.parse((await ctx.kv.get(key).catch(() => null)) ?? 'null'); } catch { /* broken entry: recompute */ }
+    if (cached && Array.isArray(cached.ids)) { // a page = one or a few id lookups, still with the viewer's own identity
+      const page = await itemsByIds(ctx, req.jfUser!, cached.ids.slice(start, start + limit), true);
+      return { items: page, total: cached.ids.length, ...(cached.capped ? { capped: true } : {}) };
+    }
+    const want = q.quality.split(',');
+    const where = ['q.type = $1'];
+    const params: unknown[] = [q.types];
+    if (want.includes('4k')) where.push("q.res = '4k'");
+    if (want.includes('hdr')) where.push('q.hdr is not null');
+    let from = 'item_quality q';
+    if (q.audio || q.subs) {
+      from += ' join item_langs l on l.item_id = q.item_id';
+      if (q.audio) { params.push([q.audio]); where.push(`l.audio @> $${params.length}::text[]`); }
+      if (q.subs) { params.push([q.subs]); where.push(`l.subs @> $${params.length}::text[]`); }
+    }
+    const ids = (await ctx.db.query<{ item_id: string }>(`select q.item_id from ${from} where ${where.join(' and ')} order by q.item_id limit ${QUALITY_CAP}`, params)).rows.map((r) => r.item_id);
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += QUALITY_CHUNK) chunks.push(ids.slice(i, i + QUALITY_CHUNK));
+    const parts = await inPool(chunks, QUALITY_PARALLEL, async (c) =>
+      (await ctx.jf.items(req.jfUser!, { ...rest, types, desc: false, ids: c, limit: QUALITY_CHUNK, start: 0 })).items);
+    const items = parts.flat();
+    const date = (v?: string) => (v ? Date.parse(v) || 0 : 0);
+    const desc = d === 'true';
+    const cmp = q.sort === 'CommunityRating' ? (a: ItemDto, b: ItemDto) => (a.communityRating ?? 0) - (b.communityRating ?? 0)
+      : q.sort === 'DateCreated' ? (a: ItemDto, b: ItemDto) => (date(a.dateCreated) || date(a.premiereDate)) - (date(b.dateCreated) || date(b.premiereDate))
+      : q.sort === 'PremiereDate' ? (a: ItemDto, b: ItemDto) => date(a.premiereDate) - date(b.premiereDate)
+      : (a: ItemDto, b: ItemDto) => a.name.localeCompare(b.name, 'de');
+    items.sort((a, b) => (desc ? -1 : 1) * (cmp(a, b) || a.name.localeCompare(b.name, 'de')));
+    const capped = ids.length >= QUALITY_CAP;
+    await ctx.kv.set(key, JSON.stringify({ ids: items.map((i) => i.id), capped }), QUALITY_LIST_TTL).catch(() => undefined);
+    return { items: items.slice(start, start + limit), total: items.length, ...(capped ? { capped: true } : {}) };
+  }));
+
+  // ---- "Story so far" for a series: metadata only; null when nothing applies ----
+  app.get('/api/items/:id/story', pre, wrap(async (req) => {
+    const id = id32.parse((req.params as { id: string }).id);
+    const item = await ctx.jf.item(req.jfUser!, id);
+    if (item.type !== 'Series') return { story: null };
+    return { story: await storySoFar(ctx, req.jfUser!, id) };
   }));
 }

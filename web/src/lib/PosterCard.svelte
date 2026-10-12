@@ -2,7 +2,8 @@
   import { createEventDispatcher, tick } from 'svelte';
   import { api, backdrop, img, srcset, type Item } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
-  import { hasNewEpisodes } from '#lib/badges';
+  import { cardTag } from '#lib/badges';
+  import { badges, wantBadge } from '#lib/fresh';
   import { isSpoiler } from '#lib/spoiler';
   import { listIds, prefs, toggleList } from '#lib/stores';
   import { dialogKeys } from '#lib/actions';
@@ -23,7 +24,9 @@
   $: wideKind = (item.backdrop ? 'Backdrop' : 'Primary') as 'Backdrop' | 'Primary';
   $: src = landscape ? (item.backdrop ? backdrop(item.id, 480) : item.image ? img(item.id, 480) : '') : hasPoster ? img(posterId, 320) : '';
   $: srcs = !src ? '' : landscape ? srcset(wideKind, item.id, [320, 480, 780]) : srcset('Primary', posterId, POSTER_WIDTHS);
-  $: fresh = hasNewEpisodes(item, Date.now());
+  $: badgeId = item.type === 'Episode' ? item.seriesId : item.id;
+  $: wantBadge(badgeId);
+  $: tag = cardTag(badgeId ? $badges[badgeId] : undefined, item, Date.now());
   $: pct = item.positionTicks && item.runtimeTicks ? Math.min(100, (item.positionTicks / item.runtimeTicks) * 100) : 0;
   $: sub = item.type === 'Episode' ? `${item.seriesName ?? ''} · S${item.parentIndexNumber ?? '?'}:E${item.indexNumber ?? '?'}` : '';
   $: label = item.name + (sub ? ', ' + sub : '');
@@ -53,7 +56,7 @@
     {#if src}
       <img class:spoil={isSpoiler(item, $prefs)} loading="lazy" decoding="async" {src} srcset={srcs} sizes={landscape ? '45vw' : '32vw'} alt="" width={landscape ? 320 : 200} height={landscape ? 180 : 300} />
     {:else}<span class="noimg">{item.name}</span>{/if}
-    {#if fresh}<span class="newep">{$t('home.card.newEpisodes')}</span>{/if}
+    {#if tag}<span class="newep" class:leave={tag.kind === 'leaving'}>{$t(tag.key, { n: tag.kind === 'leaving' ? tag.n : 0 })}</span>{/if}
     {#if landscape}<span class="playi" aria-hidden="true"><Icon name="play" size={20} /></span>{/if}
     {#if pct}<span class="progress"><i style="width:{pct}%"></i></span>{/if}
   </a>
@@ -90,6 +93,7 @@
   .spoil { filter: blur(14px) saturate(.7); transform: scale(1.1); }
   .noimg { position: absolute; inset: 0; display: grid; place-items: center; padding: .5rem; text-align: center; font-weight: 700; font-size: .85rem; background: linear-gradient(160deg, #2c2c2c, #181818); overflow: hidden; }
   .newep { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); background: var(--acc); color: #fff; font-size: .62rem; font-weight: 700; padding: .1rem .45rem; border-radius: 3px; white-space: nowrap; }
+  .newep.leave { background: #b3261e; }
   .landscape .newep { left: 6px; transform: none; bottom: 10px; }
   .playi { position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); background: rgba(0,0,0,.5); display: grid; place-items: center; padding-left: 2px; }
   .progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.3); }

@@ -1,0 +1,67 @@
+/**
+ * Block 17 area 'fresh': Neu-Labels, "Bald nicht mehr verfügbar", Bild-/Ton-Chips, "Die Geschichte bisher", Admin-Seite (German source).
+ */
+export default {
+  /** one label per card (server-computed) */
+  label: {
+    newEpisode: 'Neue Folge',
+    newSeason: 'Neue Staffel',
+    finale: 'Staffelfinale',
+    newSeries: 'Neue Serie',
+    new: 'Neu',
+  },
+  leaving: {
+    days: { one: 'Nur noch {n} Tag', other: 'Nur noch {n} Tage' },
+    today: 'Letzter Tag',
+    until: 'Verfügbar bis {date}',
+  },
+  row: { leaving: 'Bald nicht mehr verfügbar' },
+  /** quality chips on the detail view and the hover card */
+  q: {
+    label: 'Bild und Ton',
+    '4k': '4K',
+    hd: 'HD',
+    dolbyvision: 'Dolby Vision',
+    hdr10plus: 'HDR10+',
+    hdr: 'HDR',
+    atmos: 'Dolby Atmos',
+    surround: '5.1 Surround',
+    stereo: 'Stereo',
+  },
+  browse: { quality: 'Bildqualität' },
+  story: {
+    title: 'Die Geschichte bisher',
+    newSeason: 'Staffel {n} beginnt – das war bisher.',
+    longBreak: { one: 'Du hast seit {n} Woche nicht weitergeschaut – eine kurze Erinnerung.', other: 'Du hast seit {n} Wochen nicht weitergeschaut – eine kurze Erinnerung.' },
+    season: 'Staffel {n}',
+    lastEpisode: 'Zuletzt gesehen: S{s}:E{e} „{name}“',
+    dismiss: 'Karte ausblenden',
+  },
+  admin: {
+    tab: 'Bald weg',
+    title: 'Bald nicht mehr verfügbar',
+    intro: 'Für diese Titel ist ein Datum gesetzt, an dem sie die Mediathek verlassen. Zwei Wochen vorher erscheint ein Hinweis auf den Karten, eine Woche und einen Tag vorher bekommen alle, die den Titel in „Meine Liste“ oder „Weiterschauen“ haben, eine Benachrichtigung. Es wird nichts gelöscht – das Datum ist nur eine Ankündigung; abgelaufene Einträge verschwinden von selbst.',
+    addTitle: 'Titel hinzufügen',
+    search: 'Titel suchen',
+    searchPlaceholder: 'Film oder Serie …',
+    results: 'Suchergebnisse',
+    noHits: 'Nichts gefunden.',
+    change: 'Anderen Titel wählen',
+    date: 'Verlässt uns am',
+    note: 'Notiz (nur für Admins)',
+    notePlaceholder: 'z. B. Lizenz läuft aus',
+    hint: 'Nichts wird gelöscht. Die Leute sehen nur „Nur noch N Tage“.',
+    save: 'Speichern',
+    clear: 'Datum entfernen',
+    saved: 'Gespeichert.',
+    cleared: 'Datum entfernt.',
+    saveFailed: 'Konnte nicht gespeichert werden.',
+    loadFailed: 'Die Liste konnte nicht geladen werden.',
+    dateRange: 'Das Datum muss heute oder später liegen (höchstens zwei Jahre voraus).',
+    empty: 'Aktuell ist für keinen Titel ein Datum gesetzt.',
+    colTitle: 'Titel',
+    colSetBy: 'Gesetzt von',
+    menu: 'Entfernungsdatum setzen …',
+    dialogTitle: 'Nicht mehr verfügbar ab',
+  },
+} as const;

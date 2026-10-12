@@ -35,6 +35,8 @@ export const verifyPartSig = (secret: string, item: string, part: string, sig: s
   /^[0-9a-f]{32}$/.test(sig) && same(mac(secret, `part|${item}|${part}`).slice(0, 32), sig);
 export const verifyTpSig = (secret: string, item: string, part: string, sig: string) =>
   /^[0-9a-f]{32}$/.test(sig) && same(mac(secret, `tp|${item}|${part}`).slice(0, 32), sig);
+export const verifyChSig = (secret: string, item: string, media: string, sig: string) =>
+  /^[0-9a-f]{32}$/.test(sig) && /^\d{1,18}$/.test(media) && same(mac(secret, `ch|${item}|${media}`).slice(0, 32), sig);
 export const verifySession = (secret: string, item: string, s: string) =>
   /^[0-9a-f]{16}-[0-9a-f]{24}$/.test(s) && same(`${s.slice(0, 16)}-${mac(secret, `hls|${item}|${s.slice(0, 16)}`).slice(0, 24)}`, s);
 
@@ -46,6 +48,8 @@ const HLS = new RegExp(`^/Videos/(${ITEM})/hls/(${SESS})/(index\\.m3u8|\\d{5,6}\
 const STREAM = new RegExp(`^/Videos/(${ITEM})/stream(\\.\\w{2,5})?$`);
 const TRICKPLAY = new RegExp(`^/Videos/(${ITEM})/(${PART})/Trickplay/(\\d{3,6})/(\\d{1,6})\\.jpg$`);
 const IMAGE = new RegExp(`^/Items/(${ITEM})/Images/(Primary|Backdrop|Logo|Thumb|Banner)(?:/\\d{1,3})?$`);
+/** chapter stills: Plex keeps them per media version (/library/media/<media>/chapterImages/<n>), bound to the item by `sig` */
+const CHAPTER_IMAGE = new RegExp(`^/Items/(${ITEM})/Images/Chapter/(\\d{1,4})$`);
 const CAST_IMAGE = new RegExp(`^/Items/(${ITEM})/Images/(Primary|Backdrop)$`);
 
 const IMAGE_SOURCE: Record<string, string> = { Primary: 'thumb', Backdrop: 'art', Thumb: 'thumb', Logo: 'clearLogo', Banner: 'banner' };
@@ -146,6 +150,16 @@ export interface PlexUpstreamOptions {
   secret?: () => string;
 }
 
+/** Plex photo transcoder query for a server-relative image path; only size + quality are taken from the client. */
+function photoQuery(src: string, query: URLSearchParams): URLSearchParams {
+  const w = intIn(one(query, 'maxwidth') ?? one(query, 'width'), 16, 3840);
+  const h = intIn(one(query, 'maxheight') ?? one(query, 'height'), 16, 3840);
+  const q = new URLSearchParams({ url: src, width: String(w ?? (h ? h * 4 : 1920)), height: String(h ?? (w ? w * 4 : 1920)), minSize: '0', upscale: '0' });
+  const quality = intIn(one(query, 'quality'), 1, 100);
+  if (quality) q.set('quality', String(quality));
+  return q;
+}
+
 export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
   const token = o.token ?? envSecret('PLEX_TOKEN');
   const secret = o.secret ?? envSecret('INTERNAL_SECRET');
@@ -166,6 +180,12 @@ export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
       const sig = one(c.query, 'sig');
       if (!sig || !verifyTpSig(secret(), m[1]!, m[2]!, sig)) return false;
       return c.checkItem(m[1]!, 'media');
+    }
+    if ((m = CHAPTER_IMAGE.exec(c.path))) {
+      const media = one(c.query, 'media');
+      const sig = one(c.query, 'sig');
+      if (!media || !sig || !verifyChSig(secret(), m[1]!, media, sig)) return false;
+      return c.checkItem(m[1]!, 'image');
     }
     if ((m = IMAGE.exec(c.path))) {
       // a collection's poster may name one of its members (tag m<item id32>): the viewer must be allowed to see that member too
@@ -190,6 +210,11 @@ export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
       const part = keyOf(m[2]!, 'part')!;
       return { path: `/library/parts/${part}/indexes/sd/${Number(m[3]) * Number(m[4])}`, query: none };
     }
+    if ((m = CHAPTER_IMAGE.exec(path))) {
+      const media = one(query, 'media');
+      if (!media || !/^\d{1,18}$/.test(media)) throw new Error('plex: chapter image without media');
+      return { path: '/photo/:/transcode', query: photoQuery(`/library/media/${media}/chapterImages/${Number(m[2])}`, query) };
+    }
     if ((m = IMAGE.exec(path))) {
       const rk = keyOf(m[1]!, 'item')!;
       const tag = one(query, 'tag') ?? '';
@@ -197,12 +222,7 @@ export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
       // collection composites (/library/collections/<rk>/composite/…) are never served: they show members the viewer may not see
       let src = member ? `/library/metadata/${keyOf(member, 'item')}/thumb` : `/library/metadata/${rk}/${IMAGE_SOURCE[m[2]!]}`;
       if (!member && /^\d{1,12}$/.test(tag)) src += `/${tag}`;
-      const w = intIn(one(query, 'maxwidth') ?? one(query, 'width'), 16, 3840);
-      const h = intIn(one(query, 'maxheight') ?? one(query, 'height'), 16, 3840);
-      const q = new URLSearchParams({ url: src, width: String(w ?? (h ? h * 4 : 1920)), height: String(h ?? (w ? w * 4 : 1920)), minSize: '0', upscale: '0' });
-      const quality = intIn(one(query, 'quality'), 1, 100);
-      if (quality) q.set('quality', String(quality));
-      return { path: '/photo/:/transcode', query: q };
+      return { path: '/photo/:/transcode', query: photoQuery(src, query) };
     }
     throw new Error('plex: no rewrite for path'); // unreachable for allowlisted paths
   }
@@ -210,7 +230,7 @@ export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
   return {
     kind: 'plex',
     urlEnv: 'PLEX_URL',
-    paths: [HLS, STREAM, TRICKPLAY, IMAGE],
+    paths: [HLS, STREAM, TRICKPLAY, IMAGE, CHAPTER_IMAGE],
     // Chromecast: HLS + poster/backdrop only (no direct streams, no trickplay); subtitles are served by the backend
     castPaths: [HLS, CAST_IMAGE],
     directStream: STREAM,

@@ -1,13 +1,15 @@
 import { decrypt, encrypt } from '../crypto.js';
 import type { KV } from '../kv.js';
 import type {
-  ClipTranscode, ExternalSession, IdentityPolicy, ItemDto, ItemQuery, ItemStreams, ItemTraits, MediaAdmin, MediaCapabilities, MediaCredentials, MediaServer,
+  ClipTranscode, ExternalSession, IdentityPolicy, ItemDto, ItemMediaTraits, ItemQuery, ItemStreams, ItemTraits, MediaAdmin, MediaTraits, MediaCapabilities, MediaCredentials, MediaServer,
   MediaEvent, PersonDto, PlaybackDto, PlaybackReport, SegmentType,
 } from '../media/types.js';
 import type { JfUser } from '../types.js';
 import { JellyfinClient, JellyfinError, mediaBrowserHeader, policyFromTemplate } from './client.js';
 import { jellyfinWebhookEvents } from './webhook.js';
-import { maxWidthFor, toDownloadSource, toItemDto, toPlaybackDto, toTrickplayDto, type DownloadQuality, type DownloadSourceDto } from './dto.js';
+import { bestTraits, maxWidthFor, toDownloadSource, toItemDto, toMediaTraits, toPlaybackDto, toTrickplayDto, type DownloadQuality, type DownloadSourceDto } from './dto.js';
+import { toChapters, toCredits } from './dto.js'; // Block 17 P1
+import type { ChapterDto, ItemCreditsDto } from '../media/types.js'; // Block 17 P1
 
 const TOKEN_TTL = 6 * 3600;
 /** item() memo: one detail page fires ~8 parallel requests that each load the same item (access check / data). */
@@ -27,6 +29,7 @@ const traitsOf = (i: Record<string, any>): ItemTraits => ({
 export const JELLYFIN_CAPABILITIES: MediaCapabilities = {
   segments: new Set<SegmentType>(['intro', 'outro', 'recap', 'preview']),
   trickplay: true, upcoming: true, subtitleSearch: true, webhooks: true, changeFeed: false, planB: true, subtitleExtract: false,
+  chapters: true, // Block 17 P1
   requestUsers: 'jellyfin-import',
 };
 
@@ -656,6 +659,65 @@ export class JellyfinService implements MediaServer {
       const langs = (kind: string) => streams.filter((s) => s?.Type === kind && s.Language != null).map((s) => s.Language);
       return { id: item?.Id, seriesId: item?.SeriesId, audio: langs('Audio'), subtitles: langs('Subtitle') };
     });
+  }
+
+  // ---- Block 17 D1: media traits (quality chips, 4K / HDR filter) ----
+  /** Best video / audio of a title as the viewer sees it; a series reports its best (first few) episodes. null = not visible / no video. */
+  async mediaTraits(user: JfUser, id: string): Promise<MediaTraits | null> {
+    const p = new URLSearchParams({ userId: user.jellyfin_user_id, ids: id, fields: 'MediaStreams', enableImages: 'false', enableUserData: 'false' });
+    const r = await this.json<{ Items?: any[] }>(user, `/Items?${p}`);
+    const it = (r.Items ?? []).find((x) => nid(x.Id) === id);
+    if (!it) return null;
+    const own = (x: any) => toMediaTraits(Array.isArray(x?.MediaStreams) && x.MediaStreams.length ? x.MediaStreams : x?.MediaSources?.[0]?.MediaStreams);
+    if (it.Type !== 'Series') return own(it);
+    // a series has no streams of its own: look at its first episodes (cheap, and the first ones are usually representative)
+    const ep = new URLSearchParams({ userId: user.jellyfin_user_id, limit: '3', fields: 'MediaStreams', enableImages: 'false', enableUserData: 'false', isMissing: 'false' });
+    const e = await this.json<{ Items?: any[] }>(user, `/Shows/${id}/Episodes?${ep}`);
+    return (e.Items ?? []).reduce<MediaTraits | null>((acc, x) => bestTraits(acc, own(x)), null);
+  }
+
+  async libraryMediaTraits(type: 'Movie' | 'Episode', start: number, limit: number): Promise<ItemMediaTraits[]> {
+    const fields = type === 'Episode' ? 'MediaStreams,SeriesId' : 'MediaStreams';
+    const r = await this.client.adminJson<{ Items?: any[] }>(
+      // stable order (SortName, then Id as tie-breaker): pages taken while the library changes must not skip / repeat items
+      `/Items?recursive=true&includeItemTypes=${type}&fields=${fields}&enableImages=false&enableUserData=false&sortBy=SortName,Id&sortOrder=Ascending&startIndex=${start}&limit=${limit}`,
+    );
+    const out: ItemMediaTraits[] = [];
+    for (const item of r?.Items ?? []) {
+      const traits = toMediaTraits(Array.isArray(item?.MediaStreams) && item.MediaStreams.length ? item.MediaStreams : item?.MediaSources?.[0]?.MediaStreams);
+      if (item?.Id && traits) out.push({ id: item.Id, seriesId: item.SeriesId, traits });
+      else if (item?.Id) out.push({ id: item.Id, seriesId: item.SeriesId, traits: { resolution: 'sd', hdr: null, audio: null } }); // keeps page lengths honest (short page = end)
+    }
+    return out;
+  }
+
+  /** One page of ALL continuing series ids (admin key: library-wide, independent of any viewer's parental limits); short page = end. */
+  async libraryContinuingSeriesIds(start: number, limit: number): Promise<string[]> {
+    const p = new URLSearchParams({
+      recursive: 'true', includeItemTypes: 'Series', seriesStatus: 'Continuing', sortBy: 'SortName,Id', sortOrder: 'Ascending',
+      startIndex: String(start), limit: String(limit), enableImages: 'false', enableUserData: 'false', enableTotalRecordCount: 'false',
+    });
+    const r = await this.client.adminJson<{ Items?: Array<{ Id?: string }> }>(`/Items?${p}`);
+    return (r?.Items ?? []).flatMap((i) => (i?.Id ? [nid(i.Id)] : []));
+  }
+
+  // ---- Block 17 P1: chapters + credits (player "Szenen" panel, "Besetzung & Infos") ----
+  /** Chapter marks (+ stills) as the viewer sees the item; 404 when it is not visible to them. */
+  async chapters(user: JfUser, id: string): Promise<ChapterDto[]> {
+    const p = new URLSearchParams({ userId: user.jellyfin_user_id, ids: id, fields: 'Chapters', enableImages: 'false', enableUserData: 'false' });
+    const r = await this.json<{ Items?: any[] }>(user, `/Items?${p}`);
+    const it = (r.Items ?? []).find((x) => nid(x.Id) === id);
+    if (!it) throw new JellyfinError(404, 'Jellyfin: item not visible');
+    return toChapters(id, it.Chapters);
+  }
+
+  /** People (with character names and guest stars), studios and tags of one item; 404 when it is not visible. */
+  async credits(user: JfUser, id: string): Promise<ItemCreditsDto> {
+    const p = new URLSearchParams({ userId: user.jellyfin_user_id, ids: id, fields: 'People,Studios,Tags', enableImages: 'false', enableUserData: 'false' });
+    const r = await this.json<{ Items?: any[] }>(user, `/Items?${p}`);
+    const it = (r.Items ?? []).find((x) => nid(x.Id) === id);
+    if (!it) throw new JellyfinError(404, 'Jellyfin: item not visible');
+    return toCredits(it);
   }
 
   private makeAdmin(): MediaAdmin {

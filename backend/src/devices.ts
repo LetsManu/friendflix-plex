@@ -6,6 +6,8 @@ import { revokeDownloads } from './downloads.js';
 import { m, msg, userLanguage, type Language } from './i18n.js';
 import { notify } from './notify.js';
 import { deletePushSubscriptions } from './push.js';
+import { forgetAuth } from './routes/internal.js';
+import { dropPartyPeers } from './routes/party.js';
 import { dropRemotePeers } from './routes/tv.js';
 
 export const DEVICE_COOKIE = 'ff_dev';
@@ -58,7 +60,11 @@ export async function revokeSessions(ctx: Ctx, userId: string, deviceId?: string
       n++;
     }
   }
-  if (gone.size) dropRemotePeers(userId, gone);
+  if (gone.size) {
+    dropRemotePeers(userId, gone);
+    dropPartyPeers(userId, gone);
+    for (const sid of gone) forgetAuth(sid); // the media gateway must not keep serving a memoised identity
+  }
   if (!(deviceId && deviceId === keepDevice)) {
     await revokeCasts(ctx, userId, deviceId, keepDevice);
     await deletePushSubscriptions(ctx, userId, deviceId, keepDevice);

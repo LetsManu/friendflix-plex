@@ -157,7 +157,10 @@ const pl: Translation<typeof de> = {
   },
   listSaveFailed: 'Nie udało się zapisać.',
   logout: {
-    confirmDownloads: 'Usunąć także pobrane pliki z tego urządzenia?\n\nOK: usuń (zalecane, np. na wspólnych urządzeniach). Anuluj: zachowaj.',
+    downloadsTitle: 'Usunąć także pobrane pliki z tego urządzenia?',
+    downloadsBody: 'Zalecane na wspólnych urządzeniach. Jeśli je zachowasz, zostaną na tym urządzeniu i nadal będą zajmować miejsce.',
+    deleteDownloads: 'Usuń pobrane',
+    keepDownloads: 'Zachowaj',
   },
   downloads: {
     pageTitle: 'Pobrane',

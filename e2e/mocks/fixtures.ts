@@ -126,6 +126,11 @@ export const ME = {
 };
 
 export interface MockList {
+  /** Block 17 S1: themed list look (optional) and home-page pin */
+  themed?: boolean;
+  emoji?: string | null;
+  coverColor?: string | null;
+  pinned?: boolean;
   id: string;
   name: string;
   description: string | null;

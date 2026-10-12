@@ -555,6 +555,35 @@ export const MIGRATIONS: string[] = [
   insert into profile_prefs(profile_id, data) select id, '{"onboarded": true}'::jsonb from profiles
     on conflict (profile_id) do update set data = profile_prefs.data || '{"onboarded": true}'::jsonb;
   `,
+  // 32: Block 17 D1 – "leaving soon" dates set by admins (nothing is deleted on the media server) + quality index (4K / HDR browse filter)
+  `
+  create table leaving_soon (
+    item_id text primary key,
+    leaves_at date not null,
+    note text,
+    set_by uuid references users(id) on delete set null,
+    created_at timestamptz not null default now()
+  );
+  create index leaving_soon_at on leaving_soon(leaves_at);
+  create table item_quality (
+    item_id text primary key,
+    type text not null,
+    res text not null,
+    hdr text,
+    audio text,
+    indexed_at timestamptz not null default now()
+  );
+  create index item_quality_res on item_quality(res);
+  `,
+  // 33: Block 17 S1: themed lists ("Themenliste": the owner marks a list as editorial, optional emoji + cover colour; featured themed
+  // lists are ordered on the home page by featured_pos). Calm mode is a profile pref (profile_prefs.data), no column needed.
+  `
+  alter table lists add column themed boolean not null default false;
+  alter table lists add column emoji text check (emoji is null or char_length(emoji) <= 16);
+  alter table lists add column cover_color text check (cover_color is null or cover_color ~ '^#[0-9a-fA-F]{6}$');
+  alter table lists add column featured_pos int;
+  create index lists_themed on lists(themed) where themed;
+  `,
 ];
 
 export async function migrate(pool: pg.Pool): Promise<void> {

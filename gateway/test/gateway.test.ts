@@ -203,6 +203,13 @@ describe('gateway', () => {
   it('never follows upstream redirects', async () => {
     expect((await get(`/media/Videos/${ID}/master.m3u8?redirect=1`)).status).toBe(502);
   });
+  it('serves chapter stills (player "Szenen" panel) like other item images', async () => {
+    const r = await get(`/media/Items/${ID}/Images/Chapter/3?tag=c1&maxWidth=320`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toBe('image/jpeg');
+    expect(r.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
+    expect((await get(`/media/Items/${ID}/Images/Chapter/1000`)).status).toBe(403);
+  });
   it('makes images browser-cacheable but private; media stays uncacheable', async () => {
     const img = await get(`/media/Items/${ID}/Images/Backdrop?maxWidth=480&tag=t1`);
     expect(img.status).toBe(200);

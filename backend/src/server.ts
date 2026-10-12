@@ -23,6 +23,7 @@ import { parties } from './routes/party.js';
 import { calendarNotifications, pollTick } from './routes/polls.js';
 import { resolveRequestedPolls } from './polls.js';
 import { reminderTick } from './reminders.js';
+import { leavingTick, qualityIndexTick } from './fresh.js';
 import { langIndexTick } from './langindex.js';
 import type { Ctx } from './ctx.js';
 
@@ -77,6 +78,9 @@ if (cfg.BACKGROUND_JOBS === 'true') {
   }
   timers.push(setInterval(() => void langIndexTick(ctx), 1800_000)); // self-limits to every 12 h, never throws
   void langIndexTick(ctx);
+  timers.push(setInterval(() => void qualityIndexTick(ctx), 1800_000)); // 4K / HDR browse filter; self-limits to every 12 h, never throws
+  void qualityIndexTick(ctx);
+  timers.push(setInterval(() => void leavingTick(ctx).catch((e) => app.log.warn({ e }, 'leaving-soon tick failed')), 1800_000)); // expired dates + 7-day / last-day notices
   timers.push(setInterval(() => void pollJellyfinSessions(ctx).catch((e) => app.log.warn({ e }, 'session poll failed')), 10_000));
 }
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {

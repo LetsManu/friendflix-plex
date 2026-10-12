@@ -6,11 +6,11 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { blocksDirectStream, createGateway, normalizeCastPath, normalizePath } from '../src/gateway.js';
 import { checkUpstreamConfig, selectUpstream, UPSTREAMS } from '../src/upstream/index.js';
-import { createPlexUpstream, decodePlexId, plexUpstream, verifyPartSig, verifySession, verifyTpSig } from '../src/upstream/plex.js';
+import { createPlexUpstream, decodePlexId, plexUpstream, verifyChSig, verifyPartSig, verifySession, verifyTpSig } from '../src/upstream/plex.js';
 
 interface Vectors {
   secret: string; token: string; allow: string[]; deny: string[]; direct: string[]; cast: { allow: string[]; deny: string[] };
-  signatures: { part: Array<{ item: string; part: string; sig: string }>; trickplay: Array<{ item: string; part: string; sig: string }>; session: Array<{ item: string; nonce: string; session: string }> };
+  signatures: { part: Array<{ item: string; part: string; sig: string }>; trickplay: Array<{ item: string; part: string; sig: string }>; session: Array<{ item: string; nonce: string; session: string }>; chapter: Array<{ item: string; media: string; sig: string }> };
   authorize: Array<{ path: string; query: string; allow: boolean }>;
   rewrite: Array<{ path: string; query: string; upstream: string }>;
 }
@@ -62,6 +62,16 @@ describe('shared vectors (test-vectors/media-paths.plex.json, plex-ids.json)', (
   it.each(V.signatures.trickplay)('trickplay signature %# (own domain)', (s) => {
     expect(verifyTpSig(V.secret, s.item, s.part, s.sig)).toBe(true);
     expect(verifyPartSig(V.secret, s.item, s.part, s.sig)).toBe(false);
+  });
+  it.each(V.signatures.chapter)('chapter still signature %# (own domain)', (s) => {
+    expect(verifyChSig(V.secret, s.item, s.media, s.sig)).toBe(true);
+    expect(verifyChSig(V.secret, s.item, `${s.media}1`, s.sig)).toBe(false);
+    expect(verifyChSig(V.secret, s.item === I ? I2 : I, s.media, s.sig)).toBe(false);
+    expect(verifyPartSig(V.secret, s.item, s.media, s.sig)).toBe(false);
+  });
+  it('a chapter still without media never reaches Plex', () => {
+    expect(() => up.rewrite!(`/Items/${I}/Images/Chapter/1`, new URLSearchParams())).toThrow();
+    expect(() => up.rewrite!(`/Items/${I}/Images/Chapter/1`, new URLSearchParams('media=../1'))).toThrow();
   });
   it.each(V.signatures.session)('session %#', (s) => {
     expect(verifySession(V.secret, s.item, s.session)).toBe(true);
@@ -181,6 +191,26 @@ describe('end to end through createGateway', () => {
     await get(`/media/Items/${I}/Images/Primary?maxWidth=300&url=%2Flibrary%2Fparts%2F1&X-Plex-Token=LEAK`);
     expect(last().url).toBe('/photo/:/transcode?url=%2Flibrary%2Fmetadata%2F1%2Fthumb&width=300&height=1200&minSize=0&upscale=0');
     expect(seen.some((s) => s.url.includes('LEAK'))).toBe(false);
+  });
+
+  it('chapter stills: signed media version -> Plex chapterImages via the photo transcoder; unsigned / foreign / hidden -> 403', async () => {
+    const ch = V.signatures.chapter[0]!; // I + media 11
+    const r = await get(`/media/Items/${I}/Images/Chapter/2?media=${ch.media}&sig=${ch.sig}&maxWidth=320&X-Plex-Token=LEAK`);
+    expect(r.status).toBe(200);
+    expect(await clean(r)).toBe('JPEG');
+    expect(last().url).toBe('/photo/:/transcode?url=%2Flibrary%2Fmedia%2F11%2FchapterImages%2F2&width=320&height=1280&minSize=0&upscale=0');
+    const n = seen.length;
+    expect((await get(`/media/Items/${I}/Images/Chapter/2?media=12&sig=${ch.sig}`)).status).toBe(403);
+    expect((await get(`/media/Items/${I}/Images/Chapter/2?media=${ch.media}`)).status).toBe(403);
+    expect((await get(`/media/Items/${I2}/Images/Chapter/2?media=${ch.media}&sig=${ch.sig}`)).status).toBe(403);
+    const ch2 = V.signatures.chapter[1]!; // I2 + media 11, valid signature but the item is hidden from this viewer
+    visible.delete(I2);
+    try {
+      expect((await get(`/media/Items/${I2}/Images/Chapter/2?media=${ch2.media}&sig=${ch2.sig}`)).status).toBe(403);
+    } finally {
+      visible.add(I2);
+    }
+    expect(seen.length).toBe(n);
   });
 
   it('denied items: 403 for every path kind, nothing forwarded', async () => {

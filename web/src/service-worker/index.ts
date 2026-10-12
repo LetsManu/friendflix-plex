@@ -11,7 +11,7 @@ import { META_CACHE, offlineLocale } from '#lib/sw/locale';
 
 // Never HTML besides the prerendered /offline hub (the app shell is always fetched fresh).
 const abs = (p: string) => (p.startsWith('/') ? p : `/${p}`);
-const staticFiles = assets.map((a) => abs(a.path)).filter((f) => /^\/(icon-.*\.png|apple-touch-icon\.png|favicon\.(svg|ico)|logo-icon\.svg|manifest\.webmanifest)$/.test(f));
+const staticFiles = assets.map((a) => abs(a.path)).filter((f) => /^\/(icon-.*\.png|apple-touch-icon\.png|favicon\.(svg|ico)|logo-icon\.svg)$/.test(f));
 const IMMUTABLE = immutable.map((a) => abs(a.path));
 const PRERENDERED = prerendered.map((a) => abs(a.path));
 /** cache-first (filled on first use): every immutable file of this version and the icons */

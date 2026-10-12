@@ -29,6 +29,7 @@ export function createPlexMediaServer(d: MediaDeps, opts: { playback?: (svc: Ple
     db: d.db,
     kv: d.kv,
     migrate: () => migratePlex(d.db),
+    secret: d.cfg.INTERNAL_SECRET,
     playback: opts.playback ?? plexPlayback({ kv: d.kv, secret: d.cfg.INTERNAL_SECRET }),
   });
 }

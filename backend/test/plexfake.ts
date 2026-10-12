@@ -15,6 +15,8 @@ import { PlexMediaServer, type PlexPlayback } from '../src/plex/service.js';
 
 export const PLEX_URL = 'http://plex.test:32400';
 export const PLEX_TOKEN = 'plex-admin-token-SECRET-1234';
+/** INTERNAL_SECRET of the fake setups (signs chapter still URLs) */
+export const PLEX_TEST_SECRET = 'x'.repeat(32); // fixed HMAC key for tests only
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), 'plex', 'fixtures');
 export const fixture = (name: string): any => JSON.parse(readFileSync(join(FIX, `${name}.json`), 'utf8'));
@@ -66,7 +68,7 @@ export class PlexFake {
   }
 
   /** a movie in section 1 (or another movie section) */
-  addMovie(o: { title: string; rating?: string; year?: number; genres?: string[]; actors?: Array<{ id: number; tag: string; role?: string }>; sectionId?: number; guids?: string[]; addedAt?: number; summary?: string; audienceRating?: number; studio?: string }): string {
+  addMovie(o: { title: string; rating?: string; year?: number; genres?: string[]; actors?: Array<{ id: number; tag: string; role?: string }>; directors?: Array<{ id: number; tag: string }>; writers?: Array<{ id: number; tag: string }>; labels?: string[]; sectionId?: number; guids?: string[]; addedAt?: number; summary?: string; audienceRating?: number; studio?: string }): string {
     const rk = String(this.nextKey++);
     const base = clone(this.items.get('1')!);
     const m: Record<string, any> = {
@@ -79,6 +81,9 @@ export class PlexFake {
     delete m.Collection;
     if (o.genres) m.Genre = o.genres.map((g, i) => ({ id: 1000 + i + Number(rk) * 10, filter: `genre=${1000 + i}`, tag: g }));
     if (o.actors) m.Role = o.actors.map((a) => ({ id: a.id, filter: `actor=${a.id}`, tag: a.tag, role: a.role ?? '' }));
+    if (o.directors) m.Director = o.directors.map((a) => ({ id: a.id, filter: `director=${a.id}`, tag: a.tag }));
+    if (o.writers) m.Writer = o.writers.map((a) => ({ id: a.id, filter: `writer=${a.id}`, tag: a.tag }));
+    if (o.labels) m.Label = o.labels.map((t, i) => ({ id: 2000 + i + Number(rk) * 10, tag: t }));
     if (o.guids) m.Guid = o.guids.map((id) => ({ id }));
     if (o.audienceRating !== undefined) m.audienceRating = o.audienceRating;
     if (o.studio) m.studio = o.studio;
@@ -113,6 +118,29 @@ export class PlexFake {
     return { show, season, episodes };
   }
 
+  /**
+   * The REAL movie with chapters (fixture movie_chapters_detail: PMS 1.43, includeChapters=1, chapter thumbnails generated:
+   * Chapter[{tag, index, startTimeOffset, thumb: /library/media/11/chapterImages/N}]). ratingKey 15, media 11.
+   */
+  addChapterMovie(o: { thumbs?: boolean } = {}): string {
+    const m = clone(meta('movie_chapters_detail')[0]!);
+    m.librarySectionID = 1;
+    if (o.thumbs === false) for (const c of m.Chapter) delete c.thumb;
+    this.items.set(String(m.ratingKey), m);
+    return String(m.ratingKey);
+  }
+
+  /**
+   * Overrides the first video / audio streams of an item's first media version (stream keys as PMS sends them: width, height,
+   * DOVIPresent, colorTrc, channels, displayTitle …). Not recorded: the spike media were SD stereo / mono only.
+   */
+  setStreams(rk: string | number, video: Record<string, unknown> | null, audio: Array<Record<string, unknown>> = []) {
+    const m = this.items.get(String(rk))!;
+    const part = m.Media[0].Part[0];
+    const others = (part.Stream ?? []).filter((s: Record<string, any>) => s.streamType !== 1 && s.streamType !== 2);
+    part.Stream = [...(video ? [{ id: 9000, streamType: 1, codec: 'hevc', ...video }] : []), ...audio.map((a, i) => ({ id: 9001 + i, streamType: 2, codec: 'eac3', ...a })), ...others];
+  }
+
   addSection(title: string, type: 'movie' | 'show'): number {
     const id = Math.max(...this.sections.map((s) => Number(s.key))) + 1;
     this.sections.push({ ...clone(this.sections[0]!), key: String(id), type, title, uuid: `uuid-${id}` });
@@ -141,6 +169,7 @@ export class PlexFake {
     if (!guids) delete o.Guid;
     delete o.Extras;
     delete o.Marker;
+    delete o.Chapter;
     delete o.Field;
     delete o.Location;
     return o;
@@ -150,6 +179,7 @@ export class PlexFake {
     const o = clone(m);
     if (q.get('includeGuids') !== '1') delete o.Guid;
     if (q.get('includeMarkers') !== '1') delete o.Marker;
+    if (q.get('includeChapters') !== '1') delete o.Chapter;
     const ex = this.extras.get(String(m.ratingKey)) ?? [];
     if (q.get('includeExtras') === '1') o.Extras = ex.length ? { size: ex.length, Metadata: clone(ex) } : { size: 0 };
     return o;
@@ -221,10 +251,10 @@ function pick(o: Record<string, any> | undefined, keys: string[]) {
 }
 
 /** A PlexMediaServer against the fake, on the test pool (fork migrations run on first use). */
-export function plexServer(pool: pg.Pool, kv: KV, fake = new PlexFake(), opts: { playback?: (svc: PlexMediaServer) => PlexPlayback } = {}): { ms: PlexMediaServer; fake: PlexFake } {
+export function plexServer(pool: pg.Pool, kv: KV, fake = new PlexFake(), opts: { playback?: (svc: PlexMediaServer) => PlexPlayback; secret?: string } = {}): { ms: PlexMediaServer; fake: PlexFake } {
   const ms = new PlexMediaServer({
     client: new PlexClient(PLEX_URL, PLEX_TOKEN, fake.fetch),
-    db: pool, kv, migrate: () => migratePlex(pool), websocket: false,
+    db: pool, kv, migrate: () => migratePlex(pool), websocket: false, secret: opts.secret ?? PLEX_TEST_SECRET,
     ...(opts.playback ? { playback: opts.playback } : {}),
   });
   return { ms, fake };

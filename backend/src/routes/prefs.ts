@@ -44,6 +44,16 @@ export const prefsSchema = z.object({
   weeklyDigest: z.boolean().default(true),
   /** own ntfy topic for personal push messages ('' = off), account level */
   ntfyTopic: z.string().regex(/^[A-Za-z0-9_-]{0,64}$/).default(''),
+  /**
+   * Calm mode (per profile): nothing plays or moves by itself – no billboard trailer, hover-card preview or detail auto-start
+   * preview (and no sound with them), no animation; the web app checks one shared helper (`calmMode()` in lib/preview.ts).
+   */
+  calm: z.boolean().default(false),
+  /**
+   * Player sound processing (per profile): 'voices' = "Klare Stimmen", 'night' = "Nachtmodus", 'both' = both chains. Like `language`
+   * it has its own endpoint (PUT /api/prefs/audiofx, the player's toggle) and a full PUT /api/prefs keeps the stored value.
+   */
+  audioFx: z.enum(['off', 'voices', 'night', 'both']).default('off'),
   /** UI language of the profile ('' = never chosen: instance default applies and the first-login picker is shown) */
   language: z.enum(['', ...LANGUAGES]).default(''),
 });
@@ -101,7 +111,9 @@ export function prefsRoutes(app: FastifyInstance, ctx: Ctx) {
     let prefs: Prefs = stored ? { ...input, ...pickAccount(stored) } : input;
     // the language has its own endpoint (PUT /api/prefs/language): a full PUT without it (the web app never sends it) or
     // with '' must not reset or revert a choice made elsewhere (other tab/device, footer, first-login picker)
-    if (!input.language) prefs = { ...prefs, language: (stored ?? await loadPrefs(ctx, req.user!.id, req.profile!.id)).language };
+    const current = stored ?? await loadPrefs(ctx, req.user!.id, req.profile!.id);
+    if (!input.language) prefs = { ...prefs, language: current.language };
+    prefs = { ...prefs, audioFx: current.audioFx }; // set by the player only (PUT /api/prefs/audiofx): a settings form never reverts it
     const viewing: Record<string, unknown> = { ...prefs };
     for (const k of ACCOUNT_KEYS) delete viewing[k];
     // `onboarded` (stored next to the viewing prefs, not part of them) survives a full save: a settings form never brings /welcome back
@@ -130,6 +142,16 @@ export function prefsRoutes(app: FastifyInstance, ctx: Ctx) {
       [req.profile!.id, language],
     );
     return { language };
+  });
+  /** Sets only the player's sound processing of the active profile (the toggle in the player's audio menu). */
+  app.put('/api/prefs/audiofx', { ...pre, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
+    const { audioFx } = z.object({ audioFx: prefsSchema.shape.audioFx.removeDefault() }).parse(req.body);
+    await ctx.db.query(
+      `insert into profile_prefs(profile_id, data) values ($1, jsonb_build_object('audioFx', $2::text))
+       on conflict (profile_id) do update set data = profile_prefs.data || jsonb_build_object('audioFx', $2::text), updated_at = now()`,
+      [req.profile!.id, audioFx],
+    );
+    return { audioFx };
   });
   /** /welcome finished or skipped: the onboarding never shows again for this profile (kids profiles included). */
   app.put('/api/prefs/onboarded', { ...pre, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {

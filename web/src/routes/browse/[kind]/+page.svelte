@@ -19,19 +19,26 @@
 
   $: kind = $page.params.kind === 'series' ? 'Series' : 'Movie';
   $: s = parseBrowse($page.url.searchParams);
-  $: key = kind + '?' + browseQuery(s, kind, 0, PAGE).toString();
+  // Block 17: quality filter chips 4K / HDR (?quality=4k,hdr), answered from the quality index (GET /api/library/quality)
+  const QUALITIES = ['4k', 'hdr'] as const;
+  $: qlist = QUALITIES.filter((q) => ($page.url.searchParams.get('quality') ?? '').split(',').includes(q));
+  $: qparam = qlist.join(',');
+  const qLabel = (q: string) => (q === '4k' ? $t('fresh.q.4k') : $t('fresh.q.hdr'));
+  function toggleQuality(q: (typeof QUALITIES)[number]) { set('quality', (qlist.includes(q) ? qlist.filter((x) => x !== q) : [...qlist, q]).join(',')); }
+  $: key = kind + '?' + browseQuery(s, kind, 0, PAGE).toString() + '|' + qparam;
   // Netflix-like: rows per genre while nothing is filtered (or the grid when the viewer prefers it); filters always show the grid
   const VIEW_KEY = 'ff_browse_view';
   let view: 'rows' | 'grid' = 'rows';
   try { if (typeof localStorage !== 'undefined' && localStorage.getItem(VIEW_KEY) === 'grid') view = 'grid'; } catch { /* storage blocked */ }
   function setView(v: 'rows' | 'grid') { view = v; try { localStorage.setItem(VIEW_KEY, v); } catch { /* storage blocked */ } }
-  $: plain = !activeChips(s).length && !s.person && s.sort === 'SortName';
+  $: plain = !activeChips(s).length && !s.person && s.sort === 'SortName' && !qlist.length;
   $: showGrid = view === 'grid' || !plain;
   $: if (showGrid && key !== lastKey) { lastKey = key; void load(true); }
   $: if (!showGrid) lastKey = '';
   $: rowsQ = (extra: Record<string, string>) => () => api(`/api/library/items?${new URLSearchParams({ types: kind, limit: '24', ...extra })}`).then((r) => r.items as Item[]);
   $: decades = s.decade !== null && !DECADES.includes(s.decade) ? [...DECADES, s.decade].sort((a, b) => b - a) : DECADES;
-  $: chips = activeChips(s, { person: s.person ? personName[s.person] : undefined });
+  $: chips = [...activeChips(s, { person: s.person ? personName[s.person] : undefined }), ...qlist.map((q) => ({ key: `quality:${q}`, label: qLabel(q) }))];
+  const dropChip = (k: string) => (k.startsWith('quality:') ? toggleQuality(k.slice(8) as (typeof QUALITIES)[number]) : set(k, ''));
   $: if (s.person && personName[s.person] === undefined) void fetchPerson(s.person);
 
   async function load(reset: boolean) {
@@ -39,7 +46,9 @@
     busy = true; failed = false;
     if (reset) { start = 0; items = null; total = 0; }
     try {
-      const r = await api(`/api/library/items?${browseQuery(s, kind, start, PAGE)}`);
+      const qp = browseQuery(s, kind, start, PAGE);
+      if (qparam) qp.set('quality', qparam);
+      const r = await api(`${qparam ? '/api/library/quality' : '/api/library/items'}?${qp}`);
       if (my !== seq) return;
       items = [...(reset ? [] : items ?? []), ...r.items]; total = r.total; start += PAGE;
     } catch {
@@ -71,7 +80,7 @@
 
   // ---- phones: the row of selects becomes one "Filter" button + bottom sheet (same pattern as the "Mehr" sheet in +layout) ----
   let fsheet = false, draft: FilterDraft = { genre: '', decade: '', minRating: '', sort: 'SortName', filter: '', audio: '', subs: '' }, fbtn: HTMLButtonElement, dragY = 0, dragging = false, dragStart = 0;
-  $: fcount = filterCount(s);
+  $: fcount = filterCount(s) + qlist.length;
   const portal = (node: HTMLElement) => { document.body.appendChild(node); return { destroy() { node.remove(); } }; };
   $: if (typeof document !== 'undefined') document.documentElement.style.overflow = fsheet ? 'hidden' : ''; // no page scroll behind the sheet
   onDestroy(() => { if (typeof document !== 'undefined') document.documentElement.style.overflow = ''; });
@@ -97,6 +106,9 @@
 </div>
 <div class="flex filters">
   <button type="button" class="fbtn" bind:this={fbtn} aria-haspopup="dialog" aria-expanded={fsheet} on:click={openFilters}>{$t('home.browse.filter')}{#if fcount}<span class="cnt" aria-hidden="true">{fcount}</span><span class="sr-only"> {$t('home.browse.activeCount', { n: fcount })}</span>{/if}</button>
+  <span class="qgrp" role="group" aria-label={$t('fresh.browse.quality')}>
+    {#each QUALITIES as q (q)}<button type="button" class="chip quick" aria-pressed={qlist.includes(q)} on:click={() => toggleQuality(q)}>{qLabel(q)}</button>{/each}
+  </span>
   {#if audioCodes.includes('deu')}
     <button type="button" class="chip quick" aria-pressed={s.audio === 'deu'} on:click={() => set('audio', s.audio === 'deu' ? '' : 'deu')}>{$t('home.browse.germanAudio')}</button>
   {/if}
@@ -124,7 +136,7 @@
 {/if}
 {#if chips.length}
   <ul class="flex chips" aria-label={$t('home.browse.activeFilters')}>
-    {#each chips as c (c.key)}<li><button type="button" class="chip" aria-label={$t('home.browse.removeFilter', { label: c.label })} on:click={() => set(c.key, '')}>{c.label}<span aria-hidden="true"> ✕</span></button></li>{/each}
+    {#each chips as c (c.key)}<li><button type="button" class="chip" aria-label={$t('home.browse.removeFilter', { label: c.label })} on:click={() => dropChip(c.key)}>{c.label}<span aria-hidden="true"> ✕</span></button></li>{/each}
     <li><button type="button" class="sec" on:click={reset}>{$t('home.browse.resetAll')}</button></li>
   </ul>
 {/if}
@@ -166,6 +178,7 @@
   .sheet { display: flex; }
   @media (max-width: 720px) { .genres, .views { display: none; } }
   .quick[aria-pressed='true'] { background: #fff; color: #000; }
+  .qgrp { display: inline-flex; gap: .5rem; }
   .chips { list-style: none; padding: 0; margin: 0 0 1.2rem; }
   .chip { background: var(--surface-2); border-radius: 99px; padding: 0 1rem; font-weight: 500; }
   .chip:hover:not(:disabled) { background: #3a3a3a; }

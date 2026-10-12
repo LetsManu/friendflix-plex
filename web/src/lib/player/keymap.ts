@@ -5,7 +5,9 @@ export type KeyAction =
   | { type: 'seek'; by: number } | { type: 'seekPct'; pct: number }
   | { type: 'volume'; delta: number } | { type: 'mute' } | { type: 'fullscreen' }
   | { type: 'subtitles' } | { type: 'skip' } | { type: 'next' } | { type: 'help' } | { type: 'escape' }
-  | { type: 'tvControls' } | { type: 'pip' };
+  | { type: 'tvControls' } | { type: 'pip' }
+  /** "Besetzung & Infos": quick peek while playing (I, TV: up, remote Info) / the full panel from an open peek (OK, I) */
+  | { type: 'peek' } | { type: 'castInfo' };
 
 export interface KeyInput { key: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean }
 export interface KeyContext {
@@ -19,6 +21,8 @@ export interface KeyContext {
   hasNext: boolean;
   /** menu, dialog or shortcut overlay is open */
   overlayOpen: boolean;
+  /** the cast quick peek is showing (OK / I then open the full "Besetzung & Infos" panel) */
+  peekOpen?: boolean;
 }
 
 /** keys typed into these belong to the field */
@@ -29,6 +33,8 @@ export function resolveKey(e: KeyInput, c: KeyContext): KeyAction | null {
   if (e.ctrlKey || e.metaKey || e.altKey) return null;
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase(); // 'Escape' -> 'escape'
   if (k === 'enter' && c.onBody && c.hasSkip && c.tv) return { type: 'skip' }; // TV: OK skips the intro while its button is showing
+  if (c.peekOpen && !c.overlayOpen && ((k === 'enter' && c.onBody) || k === 'i' || k === 'info')) return { type: 'castInfo' };
+  if (k === 'info') return c.overlayOpen ? null : { type: 'peek' }; // remote "Info" button
   if (k === ' ' || k === 'k' || k === 'mediaplaypause' || (k === 'enter' && c.onBody)) return { type: 'toggle' };
   if (k === 'mediaplay') return { type: 'play' };
   if (k === 'mediapause') return { type: 'pause' };
@@ -37,6 +43,8 @@ export function resolveKey(e: KeyInput, c: KeyContext): KeyAction | null {
   if (k === 'mediatracknext') return c.hasNext ? { type: 'next' } : null;
   if (k === 'arrowleft' || k === 'j') return { type: 'seek', by: -10 };
   if (k === 'arrowright' || k === 'l') return { type: 'seek', by: 10 };
+  // TV: up (bar hidden, nothing focused) peeks at the cast without pausing; down brings the control bar
+  if (k === 'arrowup' && c.tv && c.onBody && !c.overlayOpen) return { type: 'peek' };
   if (k === 'arrowup' || k === 'arrowdown') return c.tv ? { type: 'tvControls' } : { type: 'volume', delta: k === 'arrowup' ? 0.1 : -0.1 };
   if (k === 'm') return { type: 'mute' };
   if (k === 'f') return { type: 'fullscreen' };
@@ -46,6 +54,7 @@ export function resolveKey(e: KeyInput, c: KeyContext): KeyAction | null {
   if (k === 's') return c.hasSkip ? { type: 'skip' } : null;
   if (k === 'n') return c.hasNext ? { type: 'next' } : null;
   if (k === 'p') return { type: 'pip' };
+  if (k === 'i') return c.overlayOpen ? null : { type: 'peek' };
   if (k === '?') return { type: 'help' };
   if (/^[0-9]$/.test(k)) return { type: 'seekPct', pct: Number(k) * 10 };
   return null;
@@ -73,6 +82,7 @@ export const SHORTCUTS: Array<{ k: string; kKey?: TKey; d: TKey }> = [
   { k: 'S', d: 'player.shortcuts.skip' },
   { k: 'N', d: 'player.shortcuts.next' },
   { k: 'P', d: 'player.shortcuts.pip' },
+  { k: 'I', d: 'scenes.shortcuts.peek' },
   { k: '0 – 9', d: 'player.shortcuts.jump' },
   { k: 'Esc', d: 'player.shortcuts.escape' },
   { k: '?', d: 'player.shortcuts.help' },

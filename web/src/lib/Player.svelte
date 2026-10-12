@@ -1,10 +1,10 @@
 <script lang="ts">
   import type Hls from 'hls.js';
   import { createEventDispatcher, onDestroy, onMount, tick as tickDom } from 'svelte';
-  import { api, ApiError, fmtClock, secToTicks } from '#lib/api';
+  import { api, ApiError, fmtClock, getActiveProfile, secToTicks } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
   import { get } from 'svelte/store';
-  import { prefs } from '#lib/stores';
+  import { prefs, prefsLoaded, saveAudioFx } from '#lib/stores';
   import { segmentShown, serverCaps } from '#lib/capabilities';
   import { subClasses } from '#lib/substyle';
   import { noteInteraction } from '#lib/stillwatching';
@@ -18,6 +18,12 @@
   import { hlsConfig, loadHls } from '#lib/player/hls';
   import { firstInfoBody, speedLabel, SPEEDS } from '#lib/player/bar';
   import EpisodesPanel from '#lib/player/EpisodesPanel.svelte';
+  import CastInfoPanel from '#lib/player/CastInfoPanel.svelte';
+  import CastPeek from '#lib/player/CastPeek.svelte';
+  import ScenesPanel from '#lib/player/ScenesPanel.svelte';
+  import { hasPeople, loadCastInfo, type CastInfoData } from '#lib/player/castinfo';
+  import { chapterIndexAt, chapterLabel, chapterMarks, normalizeChapters, trickFrame, usefulChapters, type Chapter } from '#lib/player/chapters';
+  import { AudioFxEngine, fxActive, fxBlocked, fxFromPref, fxToPref, loadFx, saveFx, type AudioFx } from '#lib/player/audiofx';
   import { fmtDuration, getLocale, t, tr, type TFn, type TKey } from '#lib/i18n';
   import { animeAudio, animeDefaultApplies, animeSubtitle } from '#lib/player/anime';
   import { castPause, castPlay, castPlayPause, castSeek, castSetSubtitle, castSetVolume, castState, castStop, castToggleMute, initCast, loadOnCast, onCastEvent, requestCastSession, type CastInfo, type CastState } from '#lib/cast';
@@ -74,11 +80,10 @@
 
   // ---- UI state ----
   let paused = true, current = 0, duration = 0, buffered = 0, volume = 1, muted = false, rate = 1, waiting = true, fullscreen = false;
-  let menu: '' | 'tracks' | 'settings' | 'scenes' | 'more' | 'speed' | 'episodes' = '', toast = '', toastTimer: ReturnType<typeof setTimeout>;
+  let menu: '' | 'tracks' | 'settings' | 'scenes' | 'more' | 'speed' | 'episodes' | 'chapters' = '', toast = '', toastTimer: ReturnType<typeof setTimeout>;
   let lastActive = Date.now(), tick = Date.now(), activityTimer: ReturnType<typeof setInterval>;
   type Bookmark = { id: string; position: number; note: string | null };
-  type Person = { id: string; name: string; role?: string; type: string; image: boolean };
-  let bookmarks: Bookmark[] = [], noteText = '', people: Person[] | null = null, xray = false, pausedLong = false, pauseT: ReturnType<typeof setTimeout>;
+  let bookmarks: Bookmark[] = [], noteText = '', xray = false, pausedLong = false, pauseT: ReturnType<typeof setTimeout>;
   const SUB_LANGS = ['ger', 'eng', 'fre', 'spa', 'ita'] as const;
   let subDlg = false, subLang = 'ger', subResults: Array<{ id: string; name: string; provider: string; downloads?: number }> | null = null, subMsg = '', subBusy = false;
   let quality = 0, sleepMin = 0, sleepAt = 0, sleepLeft = '', prefsApplied = false, autoSkipped = new Set<number>(), pipOk = false, inPip = false;
@@ -427,10 +432,83 @@
     try { await navigator.clipboard.writeText(url); flash(tr('player.bookmark.linkCopied', { t: fmtClock(video?.currentTime ?? 0) }), 1800); } catch { flash(url, 4000); }
   }
 
-  // ---- X-Ray: cast & crew while paused ----
-  async function ensurePeople() { if (people === null) people = await api(`/api/items/${itemId}/people`).then((r) => r.people).catch(() => []); }
-  $: if (paused && started) { clearTimeout(pauseT); pauseT = setTimeout(() => { pausedLong = true; ensurePeople(); }, 1200); } else { clearTimeout(pauseT); pausedLong = false; }
-  $: showXray = (xray || pausedLong) && Boolean(people?.length) && menu === '' && !subDlg;
+  // ---- "Besetzung & Infos": side panel while paused (as before) or opened explicitly; quick peek while playing ----
+  let castData: CastInfoData | null = null, castFailed = false, infoDismissed = false, infoFocus = false, peek = false, peekT: ReturnType<typeof setTimeout>;
+  function ensureInfo() {
+    if (castData) return;
+    castFailed = false;
+    loadCastInfo(itemId).then((d) => (castData = d)).catch(() => (castFailed = true));
+  }
+  $: if (paused && started) { clearTimeout(pauseT); pauseT = setTimeout(() => { pausedLong = true; ensureInfo(); }, 1200); } else { clearTimeout(pauseT); pausedLong = false; infoDismissed = false; }
+  // automatic (pause): only with something to show; explicit: also while loading / after an error
+  $: showXray = (xray || (pausedLong && !infoDismissed && Boolean(castData && (hasPeople(castData) || castData.studios.length || castData.genres.length)))) && menu === '' && !subDlg && !help && !error && !locked;
+  $: if (showXray) peek = false;
+  /** quick peek: does not pause, hides by itself after a few seconds */
+  function openPeek() {
+    if (showXray || locked) return;
+    ensureInfo(); wake(); peek = true;
+    clearTimeout(peekT); peekT = setTimeout(() => (peek = false), 6000);
+    announce(tr('scenes.peek.label'));
+  }
+  function openCastInfo(focus: boolean) { clearTimeout(peekT); peek = false; menu = ''; ensureInfo(); infoFocus = focus; xray = true; wake(); }
+  function closeCastInfo() {
+    const had = stage?.querySelector('.ci')?.contains(document.activeElement);
+    xray = false; infoDismissed = true; infoFocus = false;
+    if (had) tickDom().then(() => castBtn?.focus());
+  }
+  /** the cast button in the bar: panel open -> close; paused -> panel; playing -> peek (a second press opens the panel) */
+  function castButton() { if (showXray) closeCastInfo(); else if (paused || peek) openCastInfo(tvMode()); else openPeek(); }
+  let castBtn: HTMLButtonElement | undefined;
+
+  // ---- chapters ("Szenen"): marks on the seek bar, names while hovering / scrubbing, the scenes panel ----
+  let chapters: Chapter[] = [], scBtn: HTMLButtonElement | undefined;
+  $: marks = chapterMarks(chapters, duration);
+  $: showScenes = usefulChapters(chapters, duration);
+  const chapterAt = (sec: number) => { const i = chapterIndexAt(chapters, sec); return chapters.length > 1 && i >= 0 ? chapterLabel(chapters[i]!, i) : ''; };
+  function closeScenes() { menu = ''; void tickDom().then(() => scBtn?.focus()); }
+
+  // ---- sound: "Klare Stimmen" / "Nachtmodus" (Web Audio on the local <video>; the profile's server pref `audioFx`, with a
+  //      localStorage copy so the player starts with the right mode before /api/prefs answered) ----
+  let fx: AudioFx = loadFx(getActiveProfile()), fxEngine: AudioFxEngine | null = null, fxNote: '' | 'unsupported' | 'suspended' = '';
+  const fxBlockFor = (isCasting: boolean, m: string, h: Hls | null) => video ? fxBlocked({
+    casting: isCasting, nativeHls: m === 'hls' && !h, src: video.currentSrc || video.src || '', crossOrigin: video.crossOrigin, origin: location.origin,
+    hasWebAudio: typeof window !== 'undefined' && ('AudioContext' in window || 'webkitAudioContext' in window),
+  }) : 'unsupported';
+  $: fxDisabled = menu === 'tracks' ? (casting ? 'casting' : fxNote === 'unsupported' ? 'unsupported' : fxBlockFor(casting, mode, hls)) : null;
+  async function applyFx(quiet = false) {
+    if (!video || (!fxActive(fx) && !fxEngine)) return;
+    const b = fxBlockFor(casting, mode, hls);
+    if (b) { if (b === 'unsupported') fxNote = 'unsupported'; return; }
+    fxEngine ??= new AudioFxEngine(video);
+    const r = await fxEngine.apply(fx);
+    fxNote = r === 'unsupported' ? 'unsupported' : r === 'suspended' ? 'suspended' : '';
+    if (r === 'unsupported' && !quiet) flash(tr('scenes.audio.unsupported'), 2500);
+  }
+  const FX_OPTS = [
+    { k: 'voice', label: 'scenes.audio.voice', hint: 'scenes.audio.voiceHint' },
+    { k: 'night', label: 'scenes.audio.night', hint: 'scenes.audio.nightHint' },
+  ] as const;
+  /** the server pref wins once it is known (another device may have changed it); never after a toggle made here */
+  let fxTouched = false;
+  $: if ($prefsLoaded && !fxTouched) adoptFxPref($prefs.audioFx);
+  function adoptFxPref(p: unknown) {
+    const n = fxFromPref(p);
+    if (n.voice === fx.voice && n.night === fx.night) return;
+    fx = n;
+    saveFx(getActiveProfile(), fx);
+    void applyFx(true);
+  }
+  function toggleFx(k: keyof AudioFx) {
+    fxTouched = true;
+    fx = { ...fx, [k]: !fx[k] };
+    saveFx(getActiveProfile(), fx);
+    saveAudioFx(fxToPref(fx)).catch(() => undefined); // offline / failed: still remembered in this browser
+    const name = tr(k === 'voice' ? 'scenes.audio.voice' : 'scenes.audio.night');
+    flash(tr(fx[k] ? 'scenes.audio.on' : 'scenes.audio.off', { name }), 1400);
+    void applyFx();
+  }
+  /** a remembered mode needs a running AudioContext: the first key / tap after an autoplayed start switches it on */
+  function fxGesture() { if (fxNote === 'suspended' && fxActive(fx)) void applyFx(true); }
 
   // ---- find subtitles (Jellyfin remote providers) ----
   async function searchSubs() {
@@ -477,16 +555,8 @@
   /** keep the preview inside the timeline at both ends */
   $: previewW = info?.trickplay ? 168 : 0;
   $: tipLeft = Math.max(previewW / 2, Math.min(trackW - previewW / 2, (hoverX / 100) * trackW));
-  $: thumb = (() => {
-    const t = info?.trickplay;
-    if (!t || hoverX < 0 || !duration) return null;
-    const time = scrubbing ? scrubTime : hoverTime;
-    const idx = Math.max(0, Math.min(t.count - 1, Math.floor((time * 1000) / t.interval)));
-    const per = t.tileWidth * t.tileHeight, sheet = Math.floor(idx / per), within = idx % per;
-    const k = 168 / t.width;
-    return { url: t.url.replace('{n}', String(sheet)), w: 168, h: Math.round(t.height * k), sw: t.width, sh: t.height, k,
-      bw: t.tileWidth * t.width, bh: t.tileHeight * t.height, x: (within % t.tileWidth) * t.width, y: Math.floor(within / t.tileWidth) * t.height };
-  })();
+  $: thumb = hoverX < 0 || !duration ? null : trickFrame(info?.trickplay, scrubbing ? scrubTime : hoverTime, 168);
+  $: tipChapter = hoverX >= 0 && duration ? chapterAt(scrubbing ? scrubTime : hoverTime) : '';
   function onTrackDown(e: PointerEvent) {
     if (!allowed()) return;
     scrubbing = true; scrubTime = fracAt(e) * duration; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -499,7 +569,7 @@
 
   // ---- activity / keyboard / touch ----
   function wake() { lastActive = Date.now(); tick = lastActive; }
-  const overlayOpen = () => Boolean(menu || subDlg || help);
+  const overlayOpen = () => Boolean(menu || subDlg || help || (xray && showXray));
   function act(a: KeyAction) {
     switch (a.type) {
       case 'toggle': togglePlay(); break;
@@ -516,7 +586,9 @@
       case 'help': help = !help; break;
       case 'pip': if (pipOk && !casting) void pip(); break;
       case 'tvControls': focusControls(); break;
-      case 'escape': menu = ''; subDlg = false; help = false; break;
+      case 'escape': menu = ''; subDlg = false; help = false; if (showXray) closeCastInfo(); peek = false; break;
+      case 'peek': if (peek) openCastInfo(true); else openPeek(); break;
+      case 'castInfo': openCastInfo(true); break;
     }
   }
   function cycleSubtitles() {
@@ -529,7 +601,7 @@
     const t = e.target as HTMLElement;
     if (!video || isTypingTarget(t)) return;
     if ((t.tagName === 'BUTTON' || t.tagName === 'A') && (e.key === ' ' || e.key === 'Enter')) return; // the focused control keeps Space/Enter
-    const a = resolveKey(e, { tv: tvMode(), onBody: t === document.body || t === stage, hasSkip: Boolean(skip), hasNext, overlayOpen: overlayOpen() });
+    const a = resolveKey(e, { tv: tvMode(), onBody: t === document.body || t === stage, hasSkip: Boolean(skip), hasNext, overlayOpen: overlayOpen(), peekOpen: peek });
     wake();
     if (!a) return;
     e.preventDefault();
@@ -541,9 +613,16 @@
     const opener = stage?.querySelector<HTMLElement>('.ctl [aria-expanded="true"]');
     if (menu || subDlg || help) {
       e.preventDefault(); e.stopImmediatePropagation();
-      const wasEpisodes = menu === 'episodes';
+      const panelBtn = menu === 'episodes' ? epBtn : menu === 'chapters' ? scBtn : undefined;
       menu = ''; subDlg = false; help = false;
-      if (tvMode() || wasEpisodes) tickDom().then(() => (wasEpisodes ? epBtn : opener)?.focus());
+      if (tvMode() || panelBtn) tickDom().then(() => (panelBtn ?? opener)?.focus());
+    } else if (showXray && (xray || stage?.querySelector('.ci')?.contains(document.activeElement))) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      const sheetBack = stage?.querySelector<HTMLButtonElement>('.ci [data-back]');
+      if (sheetBack) sheetBack.click(); else closeCastInfo(); // person sheet open: back to the cast list first
+    } else if (peek) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      clearTimeout(peekT); peek = false;
     } else if (tvMode() && stage?.querySelector('.ctl')?.contains(document.activeElement)) {
       e.preventDefault(); e.stopImmediatePropagation();
       (document.activeElement as HTMLElement).blur(); lastActive = 0; // hide the bar, the next Back leaves the player
@@ -598,7 +677,8 @@
     if (g.axis === 'scrub') {
       g.target = scrubTarget(g.startTime, dx, g.w, duration);
       const d = g.target - g.startTime;
-      showHud({ icon: d < 0 ? 'rewind10' : 'forward10', text: `${fmtClock(g.target)}  (${d < 0 ? '−' : '+'}${fmtClock(Math.abs(d))})`, pct: duration ? (g.target / duration) * 100 : 0 });
+      const ch = chapterAt(g.target);
+      showHud({ icon: d < 0 ? 'rewind10' : 'forward10', text: `${ch ? ch + ' · ' : ''}${fmtClock(g.target)}  (${d < 0 ? '−' : '+'}${fmtClock(Math.abs(d))})`, pct: duration ? (g.target / duration) * 100 : 0 });
     } else if (g.axis === 'volume') {
       const v = Math.round(levelFromDrag(g.startVol, dy, g.h) * 20) / 20;
       setVolume(v); showHud({ icon: v === 0 ? 'volume-off' : v < 0.5 ? 'volume-low' : 'volume', text: tr('player.volume.level', { n: Math.round(v * 100) }), pct: v * 100 });
@@ -643,7 +723,7 @@
   };
   /** progress report that does not depend on timers (those are throttled in background tabs / Picture-in-Picture) */
   const reportTick = () => { if (started && !stopped && !casting && Date.now() - lastSent >= 10_000) send('progress'); };
-  const onPlay = () => { paused = false; if (stopped) { stopped = false; started = false; } if (!started) { started = true; send('start'); } else send('progress'); };
+  const onPlay = () => { fxEngine?.resume(); if (fxActive(fx) && !fxEngine?.routed) void applyFx(true); paused = false; if (stopped) { stopped = false; started = false; } if (!started) { started = true; send('start'); } else send('progress'); };
 
   onMount(() => {
     if (video) volOk = volumeSettable(video); // iOS cannot set the volume: no volume swipe there
@@ -655,6 +735,7 @@
     castOff = onCastEvent(handleCast);
     if (!partyMode) void initCast();
     loadBookmarks();
+    if ($serverCaps.chapters) api(`/api/items/${itemId}/chapters`).then((r) => (chapters = r?.supported ? normalizeChapters(r.chapters) : [])).catch(() => undefined);
     if ($serverCaps.segments.length) api(`/api/items/${itemId}/segments`).then((r) => (segments = (r.segments as typeof segments).map((x) => ({ ...x, type: String(x.type).toLowerCase() })).filter((x) => segmentShown($serverCaps, x.type)))).catch(() => undefined);
     progressTimer = setInterval(() => { if (started && !stopped) send('progress'); }, 10_000);
     pipOk = Boolean(document.pictureInPictureEnabled) && !video?.disablePictureInPicture;
@@ -678,7 +759,7 @@
     window.addEventListener('pagehide', bye);
     document.addEventListener('fullscreenchange', fs);
     window.addEventListener('ff-remote', onRemote);
-    const touched = () => noteInteraction();
+    const touched = () => { noteInteraction(); fxGesture(); };
     window.addEventListener('pointerdown', touched, true); window.addEventListener('keydown', touched, true); window.addEventListener('ff-remote', touched);
     window.addEventListener('keydown', unmuteOnGesture, true);
     window.addEventListener('pointerdown', unmuteOnGesture, true);
@@ -692,6 +773,7 @@
     };
   });
   onDestroy(() => {
+    clearTimeout(peekT); fxEngine?.destroy();
     clearInterval(progressTimer); clearInterval(activityTimer); clearTimeout(toastTimer); clearTimeout(retryT); clearTimeout(spinT); clearTimeout(pendingTap); clearTimeout(hudT); clearTimeout(rippleT); clearTimeout(lockT); clearTimeout(unlockT); nowPlaying.set(null);
     if (started && !stopped) { stopped = true; send('stop'); }
     if (casting) { castRevoke(castInfo); castStop(); casting = false; } // leaving the page ends the cast session and revokes its token
@@ -762,12 +844,10 @@
 
   {#if skip && !locked}<button class="skipbtn light" aria-keyshortcuts="S" on:click|stopPropagation={doSkip}>{segText($t, skip.type, 'skip')}{tvMode() ? $t('player.skipOk') : ''}</button>{/if}
 
-  {#if showXray && people}
-    <aside class="xray ui" class:hide={!showUi && !xray} aria-label={$t('player.controls.cast')}>
-      <h3>{$t('player.controls.castCrew')}</h3>
-      <ul>{#each people.slice(0, 14) as pr (pr.id)}
-        <li>{#if pr.image}<img loading="lazy" src="/media/Items/{pr.id}/Images/Primary?maxWidth=160&quality=85" alt="" />{:else}<span class="ph2"><Icon name="user" size={28} /></span>{/if}<b>{pr.name}</b><span class="muted">{pr.role || (pr.type === 'Actor' ? '' : pr.type)}</span></li>{/each}</ul>
-    </aside>
+  {#if showXray}
+    <div class="cihost" class:hide={!showUi && !xray}><CastInfoPanel data={castData} failed={castFailed} autofocus={infoFocus} on:close={closeCastInfo} /></div>
+  {:else if peek && !locked && menu === '' && !casting}
+    <CastPeek data={castData} hint={tvMode() ? 'tv' : coarse ? 'none' : 'key'} on:more={() => openCastInfo(false)} />
   {/if}
   {#if subDlg}
     <div class="dlg ui" data-nav data-scope role="dialog" tabindex="-1" aria-modal="true" aria-label={$t('player.subs.search')} on:click|stopPropagation on:keydown|stopPropagation>
@@ -786,10 +866,12 @@
         <div class="buf" style="width:{bufPct}%"></div>
         {#each segments as sg}{#if duration && sg.end > sg.start}<span class="seg {sg.type}" style="left:{(sg.start / duration) * 100}%;width:{((sg.end - sg.start) / duration) * 100}%" title={segText($t, sg.type, 'segment')} aria-hidden="true"></span>{/if}{/each}
         <div class="played" style="width:{pct}%"></div>
+        {#each marks as m (m.i)}<span class="chap" style="left:{m.pct}%" aria-hidden="true"></span>{/each}
         {#each bookmarks as bm}{#if duration}<span class="mark" style="left:{(bm.position / duration) * 100}%" title="{fmtClock(bm.position)}{bm.note ? ' – ' + bm.note : ''}"></span>{/if}{/each}
         <div class="knob" style="left:{pct}%"></div>
         {#if hoverX >= 0}
           <div class="tip" style="left:{tipLeft}px">
+            {#if tipChapter}<span class="chn">{tipChapter}</span>{/if}
             {#if thumb}<div class="thumb" style="width:{thumb.w}px;height:{thumb.h}px"><div style="width:{thumb.sw}px;height:{thumb.sh}px;background-image:url({thumb.url});background-size:{thumb.bw}px {thumb.bh}px;background-position:-{thumb.x}px -{thumb.y}px;transform:scale({thumb.k});transform-origin:0 0"></div></div>{/if}
             {fmtClock(scrubbing ? scrubTime : hoverTime)}
           </div>
@@ -818,6 +900,13 @@
             {#if menu === 'episodes'}<div class="menu bare"><EpisodesPanel {seriesId} {seasonId} currentId={itemId} on:pick={pickEpisode} on:close={closeEpisodes} /></div>{/if}
           </div>
         {/if}
+        {#if showScenes}
+          <div class="mwrap">
+            <button class="ic" bind:this={scBtn} aria-label={$t('scenes.chapters.open')} title={$t('scenes.chapters.open')} aria-expanded={menu === 'chapters'} on:click={() => toggleMenu('chapters')}><Icon name="film" size={ICON} /></button>
+            {#if menu === 'chapters'}<div class="menu bare"><ScenesPanel {chapters} current={shown} {duration} trickplay={info?.trickplay} on:seek={(e) => { seekTo(e.detail.time); closeScenes(); }} on:close={closeScenes} /></div>{/if}
+          </div>
+        {/if}
+        <button class="ic" class:on={showXray || peek} bind:this={castBtn} aria-label={$t('scenes.info.open')} title={$t(coarse ? 'scenes.info.open' : 'scenes.info.openKey')} aria-pressed={showXray} on:click={castButton}><Icon name="users" size={ICON} /></button>
         {#if info}
           <div class="mwrap">
             <button class="ic" aria-label={$t('player.controls.tracks')} title={$t('player.controls.tracksKey')} aria-expanded={menu === 'tracks'} on:click={() => toggleMenu('tracks')}><Icon name="subtitles" size={ICON} /></button>
@@ -832,6 +921,11 @@
                   <button class="mi" class:on={subIndex === -1} on:click={() => { setSubtitle(-1); menu = ''; }}>{#if subIndex === -1}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{$t('common.off')}</button>
                   {#if $serverCaps.subtitleSearch}<button class="mi" on:click={() => { menu = ''; subDlg = true; subResults = null; subMsg = ''; }}><Icon name="search" size={16} />{$t('player.subs.searchMenu')}</button>{/if}
                   {#each info.subtitles as s}<button class="mi" class:on={subIndex === s.index} on:click={() => { setSubtitle(s.index); menu = ''; }}>{#if subIndex === s.index}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{s.title}</button>{/each}
+                </div>
+                <div class="fxcol"><h3>{$t('scenes.audio.title')}</h3>
+                  {#each FX_OPTS as o (o.k)}<button class="mi fx" class:on={fx[o.k] && !fxDisabled} role="switch" aria-checked={fx[o.k]} disabled={Boolean(fxDisabled)} on:click={() => toggleFx(o.k)}>{#if fx[o.k] && !fxDisabled}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}<span class="fxl">{$t(o.label)}<small>{$t(o.hint)}</small></span></button>{/each}
+                  {#if fxDisabled}<p class="fxnote">{$t(fxDisabled === 'casting' ? 'scenes.audio.casting' : 'scenes.audio.unsupported')}</p>
+                  {:else if fxNote === 'suspended' && fxActive(fx)}<p class="fxnote">{$t('scenes.audio.needsTap', { name: $t(fx.voice ? 'scenes.audio.voice' : 'scenes.audio.night') })}</p>{/if}
                 </div>
               </div>
             {/if}
@@ -858,7 +952,7 @@
           {#if menu === 'more'}
             <div class="menu more" data-nav data-scope role="dialog" aria-label={$t('player.controls.more')}>
               <button class="mi" on:click={() => (menu = 'scenes')}><Icon name="bookmark" size={20} />{$t('player.bookmark.menu')}<span class="chev" aria-hidden="true">›</span></button>
-              <button class="mi" class:on={xray} aria-pressed={xray} on:click={() => { xray = !xray; if (xray) ensurePeople(); menu = ''; }}><Icon name="users" size={20} />{$t('player.controls.showCast')}</button>
+              <button class="mi" class:on={showXray} aria-pressed={showXray} on:click={() => { if (showXray) { menu = ''; closeCastInfo(); } else openCastInfo(tvMode()); }}><Icon name="users" size={20} />{$t('scenes.info.open')}</button>
               {#if !partyMode && ($castState.available || $castState.connected)}<button class="mi" class:on={casting} aria-pressed={casting} on:click={castClick}><Icon name="cast" size={20} />{castLabel}</button>{/if}
               {#if pipOk && !casting}<button class="mi" class:on={inPip} aria-pressed={inPip} aria-keyshortcuts="P" on:click={() => { menu = ''; void pip(); }}><Icon name="pip" size={20} />{$t('player.controls.pip')}</button>{/if}
               <button class="mi" on:click={() => (menu = 'settings')}><Icon name="settings" size={20} />{$t('player.controls.settings')}{#if sleepAt}<span class="muted"> · {$t('player.sleep.left', { t: sleepLeft })}</span>{/if}<span class="chev" aria-hidden="true">›</span></button>
@@ -964,7 +1058,7 @@
   .track.locked { cursor: not-allowed; }
   .buf { position: absolute; inset: 0 auto 0 0; background: rgba(255,255,255,.35); border-radius: 3px; }
   .played { position: absolute; inset: 0 auto 0 0; background: var(--acc); border-radius: 3px; }
-  .knob { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; background: var(--acc); border-radius: 50%; transform: scale(0); transition: transform var(--t-fast); }
+  .knob { z-index: 2; position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; background: var(--acc); border-radius: 50%; transform: scale(0); transition: transform var(--t-fast); }
   .track:hover .knob, .track:focus-visible .knob { transform: scale(1); }
   .tip { position: absolute; bottom: 22px; transform: translateX(-50%); background: rgba(20,20,20,.95); padding: .15rem .35rem .2rem; border-radius: 4px; font-size: .85rem; pointer-events: none; text-align: center; }
   .thumb { overflow: hidden; border-radius: 3px; margin: .2rem 0 .25rem; background: #111; }
@@ -974,11 +1068,13 @@
   .bm { display: flex; align-items: center; } .bm .mi { flex: 1; } .bm .mi .muted { min-width: 3rem; }
   .icx { background: transparent; padding: 0; width: 44px; min-height: 44px; color: var(--mut); } .icx:hover:not(:disabled) { background: rgba(255,255,255,.12); color: #fff; }
   .pad { padding: .3rem .8rem; }
-  .xray { position: absolute; left: clamp(.6rem, 2.4vw, 2.4rem); right: clamp(.6rem, 2.4vw, 2.4rem); bottom: 8.4rem; z-index: 7; background: linear-gradient(90deg, rgba(0,0,0,.82), rgba(0,0,0,.55)); border-radius: 8px; padding: .7rem 1rem; transition: opacity var(--t-med); max-width: calc(100% - var(--inset, 0px) - 2rem); }
-  .xray.hide { opacity: 0; pointer-events: none; } .xray h3 { font-size: .9rem; margin: 0 0 .5rem; color: var(--mut); text-transform: uppercase; letter-spacing: .06em; }
-  .xray ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 1rem; overflow-x: auto; }
-  .xray li { flex: 0 0 96px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: .15rem; font-size: .8rem; }
-  .xray img, .ph2 { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: #333; display: grid; place-items: center; }
+  .cihost { transition: opacity var(--t-med); } .cihost.hide { opacity: 0; pointer-events: none; } .cihost.hide :global(*) { pointer-events: none; }
+  /* chapter starts: small gaps in the seek bar (above buffer/played, below the knob) */
+  .chap { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: rgba(0,0,0,.85); pointer-events: none; z-index: 1; }
+  .chn { display: block; max-width: 220px; margin: .1rem auto .15rem; font-weight: 700; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fxcol { min-width: 170px; } .mi.fx { white-space: normal; align-items: flex-start; } .mi.fx :global(svg), .mi.fx .sp { margin-top: .2rem; }
+  .fxl { display: grid; line-height: 1.25; } .fxl small { color: var(--mut); font-weight: 400; font-size: .78rem; }
+  .fxnote { margin: .3rem .6rem 0; font-size: .78rem; color: var(--mut); max-width: 220px; }
   .dlg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 12; background: rgba(20,20,20,.98); border: 1px solid #3a3a3a; border-radius: 10px; padding: 1rem 1.2rem; width: min(520px, 92vw); max-height: 70%; overflow: auto; display: grid; gap: .8rem; }
   .dlg header { display: flex; justify-content: space-between; align-items: center; } .dlg ul { list-style: none; padding: 0; margin: 0; } .grow { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; }
   .sleepdot { position: absolute; top: 10px; right: 10px; width: 9px; height: 9px; border-radius: 50%; background: var(--acc); }
@@ -1041,7 +1137,7 @@
     /* phones: panels sit above the control bar across the full width instead of hanging off a button */
     .menu, .menu.tracks, .menu.more, .menu.scenes, .menu.speed, .menu.bare { position: fixed; left: .5rem; right: .5rem; bottom: 8.6rem; min-width: 0; max-width: none; max-height: 60vh; overflow-y: auto; }
     .menu.bare { overflow: visible; }
-    .menu.bare :global(.eps) { width: 100%; max-height: 60vh; }
+    .menu.bare :global(.eps), .menu.bare :global(.scn) { width: 100%; max-height: 60vh; }
     .lockbtn { bottom: auto; top: 5.5rem; } /* the two-row bar is taller on phones: keep the lock clear of the timeline */
     .speeds { flex-wrap: wrap; justify-content: center; } .speeds::before { display: none; } .sp-opt { min-width: 64px; }
   }

@@ -151,7 +151,10 @@ const en: Translation<typeof de> = {
   },
   listSaveFailed: 'Couldn’t be saved.',
   logout: {
-    confirmDownloads: 'Also delete the downloads on this device?\n\nOK: delete (recommended, e.g. on shared devices). Cancel: keep them.',
+    downloadsTitle: 'Also delete the downloads on this device?',
+    downloadsBody: 'Recommended on shared devices. If you keep them, they stay on this device and keep using storage.',
+    deleteDownloads: 'Delete downloads',
+    keepDownloads: 'Keep',
   },
   downloads: {
     pageTitle: 'Downloads',

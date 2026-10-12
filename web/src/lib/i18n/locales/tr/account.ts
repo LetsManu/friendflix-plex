@@ -152,7 +152,10 @@ const tr: Translation<typeof de> = {
   },
   listSaveFailed: 'Kaydedilemedi.',
   logout: {
-    confirmDownloads: 'Bu cihazdaki indirilenler de silinsin mi?\n\nTamam: sil (ortak cihazlarda önerilir). İptal: sakla.',
+    downloadsTitle: 'Bu cihazdaki indirilenler de silinsin mi?',
+    downloadsBody: 'Ortak cihazlarda önerilir. Saklarsan bu cihazda kalır ve yer kaplamaya devam eder.',
+    deleteDownloads: 'İndirilenleri sil',
+    keepDownloads: 'Sakla',
   },
   downloads: {
     pageTitle: 'İndirilenler',

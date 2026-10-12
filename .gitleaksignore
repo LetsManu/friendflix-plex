@@ -7,3 +7,5 @@ d0523039359fd16b7618fb3406c74e09c96f7436:docs/integrations.md:generic-api-key:3
 # test placeholders (backend/test/helpers.ts INTERNAL_SECRET and a wrong value) in media-hooks.test.ts, replaced in the next commit
 96752d696ea6f3e31a61c384b8469cd26f790413:backend/test/media-hooks.test.ts:generic-api-key:139
 96752d696ea6f3e31a61c384b8469cd26f790413:backend/test/media-hooks.test.ts:generic-api-key:219
+# i18n key name (fresh.q.hdr10plus) misread as a key
+c50a8c4e6ba697ac2e22bd3c16cd4bc8eacd5b1a:web/src/lib/badges.ts:generic-api-key:73

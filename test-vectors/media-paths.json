@@ -10,7 +10,8 @@
     "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Trickplay/320/0.jpg",
     "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Primary",
     "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Backdrop/0",
-    "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Logo"
+    "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Logo",
+    "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Chapter/12"
   ],
   "direct": [
     "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/stream",
@@ -32,6 +33,8 @@
     "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/master.m3u8%00.png",
     "/Videos/short/master.m3u8",
     "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Primary/../../../../System/Logs",
+    "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Chapter/1234",
+    "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Chapters/0",
     "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Download",
     "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/master.m3u8/extra",
     ""
@@ -54,6 +57,7 @@
       "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Logo",
       "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Primary/0",
       "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Thumb",
+      "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Chapter/0",
       "/System/Info",
       "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Download",
       "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/hls1/main/..%2f..%2fetc",

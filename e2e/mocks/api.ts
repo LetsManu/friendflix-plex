@@ -1,6 +1,7 @@
 import type { BrowserContext, Route } from '@playwright/test';
 import { ME, byName, episodes, hex, items, nolan, people, seedLists, type MockItem, type MockList, MOVIE, MOVIE2, SERIES } from './fixtures.js';
 import { pngFor } from './png.js';
+import { adminRoute, adminState, type AdminState } from './admin.js';
 
 /** Item whose reactions are locked (viewer has not seen it) / unlocked and contain an XSS probe. */
 export const LOCKED_ID = MOVIE.id;
@@ -18,6 +19,12 @@ export interface MockState {
   unmocked: Set<string>;
   /** payloads POSTed to /api/client-errors */
   clientErrors: unknown[];
+  /** admin endpoints (mocks/admin.ts) */
+  admin: AdminState;
+  /** /api/me reports an admin owner profile (admin pages, admin menu) */
+  asAdmin: boolean;
+  /** the profile's player sound pref (PUT /api/prefs/audiofx), echoed by GET /api/prefs */
+  audioFx?: string;
 }
 
 export function freshState(): MockState {
@@ -29,6 +36,8 @@ export function freshState(): MockState {
     log: [],
     unmocked: new Set(),
     clientErrors: [],
+    admin: adminState(),
+    asAdmin: false,
   };
 }
 
@@ -59,10 +68,11 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     let mm: RegExpMatchArray | null;
 
     if (p === '/api/client-errors') { st.clientErrors.push(body()); return route.fulfill({ status: 204 }); }
-    if (p === '/api/me') return J(ME);
+    if (p === '/api/me') return J(st.asAdmin ? { ...ME, role: 'admin', roleLabel: 'Admin', isAdmin: true } : ME);
     if (p === '/api/notifications') return J({ notifications: [{ id: 'n1', title: 'Anna hat dich zur Liste „Annas Klassiker“ eingeladen', link: '/lists/' + st.lists[1]!.id, read: false }] });
     if (p === '/api/notifications/read') return J({ ok: true });
-    if (p === '/api/prefs') return J({ prefs: {} });
+    if (p === '/api/prefs') return J({ prefs: st.audioFx ? { audioFx: st.audioFx } : {} });
+    if (p === '/api/prefs/audiofx' && m === 'PUT') { st.audioFx = body().audioFx; return J({ audioFx: st.audioFx }); }
     if (p === '/api/push/config') return J({ enabled: false }); // settings page: push not set up on the mock server
     // UI language (block 14): profile language + admin instance default
     if (p === '/api/prefs/language' && m === 'PUT') return J({ language: body().language });
@@ -125,13 +135,39 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
 
     // ----- lists -----
     if (p === '/api/lists/featured') return J({ lists: [] });
+    // Block 17 S1: themed lists = the lists marked `themed`; the pinned ones are the home rows (order = array order)
+    if (p === '/api/lists/themed') return J({ lists: st.lists.filter((l) => l.themed && l.pinned && l.items.length).map((l) => ({ id: l.id, name: l.name, description: l.description, emoji: l.emoji ?? null, coverColor: l.coverColor ?? null, owner: { name: l.owner.name }, items: l.items.map(find).filter(Boolean) })) });
+    if (p === '/api/lists/themed/manage') return J({ max: 5, lists: st.lists.filter((l) => l.themed).sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))).map((l) => ({ id: l.id, name: l.name, emoji: l.emoji ?? null, owner: { name: l.owner.name }, itemCount: l.items.length, pinned: Boolean(l.pinned) })) });
+    if (p === '/api/lists/themed/order' && m === 'PUT') {
+      const ids: string[] = body().ids;
+      const pinned = st.lists.filter((l) => l.pinned).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+      st.lists = [...pinned, ...st.lists.filter((l) => !l.pinned)];
+      return J({ ok: true });
+    }
+    if ((mm = p.match(/^\/api\/lists\/([^/]+)\/pin$/)) && m === 'PUT') {
+      const l = st.lists.find((x) => x.id === mm![1]);
+      if (!l) return J({ error: 'not_found' }, 404);
+      l.pinned = Boolean(body().pinned);
+      return J({ ok: true, pinned: l.pinned });
+    }
     if (p === '/api/lists' && m === 'GET') {
       return J({ lists: st.lists.map((l) => ({ id: l.id, name: l.name, description: l.description, owner: l.owner, role: l.role, itemCount: l.items.length, memberCount: l.members.length + 1, updatedAt: new Date().toISOString(), coverIds: l.items.slice(0, 4) })) });
     }
     if ((mm = p.match(/^\/api\/lists\/([^/]+)$/)) && m === 'GET') {
       const l = st.lists.find((x) => x.id === mm![1]);
       if (!l) return J({ error: 'not_found' }, 404);
-      return J({ list: { id: l.id, name: l.name, description: l.description, owner: l.owner, role: l.role }, members: [{ id: l.owner.id, name: l.owner.name, role: 'owner' }, ...l.members], items: l.items.map(find).map((i) => ({ ...i, addedBy: { id: 'u2', name: 'Anna' }, addedAt: new Date().toISOString(), note: null })), hiddenCount: 0 });
+      return J({ list: { id: l.id, name: l.name, description: l.description, owner: l.owner, role: l.role, themed: Boolean(l.themed), emoji: l.emoji ?? null, coverColor: l.coverColor ?? null, pinned: Boolean(l.pinned) }, members: [{ id: l.owner.id, name: l.owner.name, role: 'owner' }, ...l.members], items: l.items.map(find).map((i) => ({ ...i, addedBy: { id: 'u2', name: 'Anna' }, addedAt: new Date().toISOString(), note: null })), hiddenCount: 0 });
+    }
+    if ((mm = p.match(/^\/api\/lists\/([^/]+)$/)) && m === 'PATCH') {
+      const l = st.lists.find((x) => x.id === mm![1]);
+      if (!l) return J({ error: 'not_found' }, 404);
+      const b = body();
+      if (b.name !== undefined) l.name = b.name;
+      if (b.description !== undefined) l.description = b.description;
+      if (b.themed !== undefined) l.themed = b.themed;
+      if (b.emoji !== undefined) l.emoji = b.emoji;
+      if (b.coverColor !== undefined) l.coverColor = b.coverColor;
+      return J({ ok: true });
     }
     if ((mm = p.match(/^\/api\/lists\/([^/]+)\/items$/)) && m === 'POST') {
       const l = st.lists.find((x) => x.id === mm![1]);
@@ -166,7 +202,15 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     }
     if ((mm = p.match(/^\/api\/items\/([^/]+)\/favorite$/))) { if (m === 'POST') st.fav.add(mm[1]!); else st.fav.delete(mm[1]!); return J({ ok: true }); }
     if ((mm = p.match(/^\/api\/items\/([^/]+)\/(played|thumb)$/))) return J({ ok: true });
+    // Block 17 D1 (discovery) defaults = nothing to show; specs that exercise badges / removal dates / quality chips mock them themselves
+    if (p === '/api/discover/badges') return J({}); // no `badges` key = an older server: cards keep the client-side "Neue Folgen" / "Neu" hints
+    if (/^\/api\/items\/[^/]+\/facts$/.test(p)) return J({ fresh: null, leaving: null, traits: null });
+    if (/^\/api\/items\/[^/]+\/story$/.test(p)) return J({ story: null });
+    if (p === '/api/library/leaving') return J({ items: [] });
     if (/^\/api\/items\/[^/]+\/extras\/all$/.test(p)) return J({ items: [] }); // Extras tab (block 15): specs with extras mock it themselves
+    // Block 17 P1 (player): no chapters / no cast by default; player-scenes specs mock both themselves
+    if (/^\/api\/items\/[^/]+\/chapters$/.test(p)) return J({ supported: true, chapters: [] });
+    if (/^\/api\/items\/[^/]+\/castinfo$/.test(p)) return J({ item: { id: p.split('/')[3], name: '', type: 'Movie' }, cast: [], guests: [], directors: [], writers: [], creators: [], studios: [], genres: [], tags: [] });
     if (p === '/api/hubs') return J({ hubs: [] }); // brand hub tiles (block 15): specs with hubs mock it themselves
     if ((mm = p.match(/^\/api\/items\/([^/]+)\/reactions$/))) {
       if (mm[1] === LOCKED_ID && m === 'GET') return J({ locked: true, count: 3 });
@@ -200,6 +244,8 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     // profiles (gate "Wer schaut gerade?" and the avatar menu)
     if (p === '/api/profiles') return J({ profiles: PROFILES, max: 5, activeId: 'p1' });
     if ((mm = p.match(/^\/api\/profiles\/([^/]+)\/select$/)) && m === 'POST') return J({ ok: true });
+
+    if (p.startsWith('/api/admin/')) { const r = adminRoute(st.admin, m, p, sp, body(), J); if (r) return r; }
 
     st.unmocked.add(`${m} ${p}${u.search ? '?…' : ''}`);
     return J({ items: [] });

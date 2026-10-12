@@ -1,5 +1,5 @@
 {
-  "_comment": "Plex adapter (fork). Shared by backend (backend/src/plex/mediapaths.ts) and gateway (gateway/src/upstream/plex.ts) tests. 'allow'/'deny' = cookie allowlist, 'direct' = original streams, 'cast' = Chromecast subset, 'signatures' = HMAC bindings with 'secret' (part = direct stream, trickplay = BIF frames: separate domains), 'authorize' = adapter decision when the backend allows the item (checkItem true), 'rewrite' = public path + query -> Plex request.",
+  "_comment": "Plex adapter (fork). Shared by backend (backend/src/plex/mediapaths.ts) and gateway (gateway/src/upstream/plex.ts) tests. 'allow'/'deny' = cookie allowlist, 'direct' = original streams, 'cast' = Chromecast subset, 'signatures' = HMAC bindings with 'secret' (part = direct stream, trickplay = BIF frames, chapter = chapter stills of one media version: separate domains), 'authorize' = adapter decision when the backend allows the item (checkItem true), 'rewrite' = public path + query -> Plex request.",
   "secret": "vector-secret-vector-secret",
   "token": "PLEXTOKEN-must-never-leak",
   "signatures": {
@@ -48,6 +48,18 @@
         "part": "9f1e3000000000000000000000000001",
         "sig": "d8f6ec8c5d02be1b2057301538cdda83"
       }
+    ],
+    "chapter": [
+      {
+        "item": "9f1e0000000000000000000000000001",
+        "media": "11",
+        "sig": "5b4a028812c83a786aaafa3857161be7"
+      },
+      {
+        "item": "9f1e0000000000000000000000000025",
+        "media": "11",
+        "sig": "f44690e55d3edf6984f23798840e56cc"
+      }
     ]
   },
   "allow": [
@@ -62,7 +74,9 @@
     "/Items/9f1e0000000000000000000000000001/Images/Backdrop/0",
     "/Items/9f1e0000000000000000000000000001/Images/Logo",
     "/Items/9f1e0000000000000000000000000001/Images/Thumb",
-    "/Items/9f1e0000000000000000000000000001/Images/Banner"
+    "/Items/9f1e0000000000000000000000000001/Images/Banner",
+    "/Items/9f1e0000000000000000000000000001/Images/Chapter/1",
+    "/Items/9f1e0000000000000000000000000001/Images/Chapter/12"
   ],
   "direct": [
     "/Videos/9f1e0000000000000000000000000001/stream",
@@ -94,7 +108,10 @@
     "/Items/9f1e0000000000000000000000000001/Images/Primary/../../../System",
     "//evil.example/Items/9f1e0000000000000000000000000001/Images/Primary",
     "/Items/9f1e0000000000000000000000000001/Images/Primary%00.png",
-    "/Items/9f1e0000000000000000000000000001/Download"
+    "/Items/9f1e0000000000000000000000000001/Download",
+    "/Items/9f1e0000000000000000000000000001/Images/Chapter/x",
+    "/Items/9f1e0000000000000000000000000001/Images/Chapter/12345",
+    "/Items/9f1e0000000000000000000000000001/Images/Chapter"
   ],
   "cast": {
     "allow": [
@@ -109,7 +126,8 @@
       "/Videos/9f1e0000000000000000000000000001/9f1e3000000000000000000000000001/Trickplay/2000/0.jpg",
       "/Items/9f1e0000000000000000000000000001/Images/Logo",
       "/Items/9f1e0000000000000000000000000001/Images/Primary/0",
-      "/Videos/9f1e0000000000000000000000000001/master.m3u8"
+      "/Videos/9f1e0000000000000000000000000001/master.m3u8",
+      "/Items/9f1e0000000000000000000000000001/Images/Chapter/1"
     ]
   },
   "authorize": [
@@ -214,6 +232,41 @@
       "query": "MediaSourceId=9f1e3000000000000000000000000001&sig=4119f60c549b545c7cfe5176502b5e49",
       "allow": false,
       "_why": "a trickplay signature never unlocks the original file"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Chapter/1",
+      "query": "media=11&sig=5b4a028812c83a786aaafa3857161be7",
+      "allow": true
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Chapter/1",
+      "query": "media=11",
+      "allow": false,
+      "_why": "chapter still without signature"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Chapter/1",
+      "query": "media=12&sig=5b4a028812c83a786aaafa3857161be7",
+      "allow": false,
+      "_why": "signature bound to another media version"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Chapter/1",
+      "query": "media=11&sig=f44690e55d3edf6984f23798840e56cc",
+      "allow": false,
+      "_why": "signature bound to another item"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Chapter/1",
+      "query": "media=11&media=12&sig=5b4a028812c83a786aaafa3857161be7",
+      "allow": false,
+      "_why": "repeated media"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Chapter/1",
+      "query": "media=5b4a&sig=5b4a028812c83a786aaafa3857161be7",
+      "allow": false,
+      "_why": "media id is decimal"
     }
   ],
   "rewrite": [
@@ -273,6 +326,11 @@
       "query": "tag=m9f1e0000000000000000000000000025&maxHeight=600",
       "upstream": "/photo/:/transcode?url=%2Flibrary%2Fmetadata%2F37%2Fthumb&width=2400&height=600&minSize=0&upscale=0",
       "_why": "collection poster = a member the viewer may see (authorize checks that member too)"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Chapter/2",
+      "query": "media=11&sig=5b4a028812c83a786aaafa3857161be7&maxWidth=320&X-Plex-Token=PLEXTOKEN-must-never-leak",
+      "upstream": "/photo/:/transcode?url=%2Flibrary%2Fmedia%2F11%2FchapterImages%2F2&width=320&height=1280&minSize=0&upscale=0"
     }
   ]
 }

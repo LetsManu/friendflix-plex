@@ -5,6 +5,7 @@
   import Hero from '#lib/Hero.svelte';
   import LazyRow from '#lib/LazyRow.svelte';
   import Row from '#lib/Row.svelte';
+  import ThemedListRows from '#lib/ThemedListRows.svelte';
   import { loadFeatured, type FeaturedList } from '#lib/lists';
   import UpcomingRow from '#lib/UpcomingRow.svelte';
   import { homeCache, swrLoad } from '#lib/home';
@@ -16,6 +17,8 @@
   let top: Item[] | null = null, because: { name: string } | null = null, becauseItems: Item[] | null = null;
   let moreRaw: Array<{ because: { id: string; name: string }; items: Item[] }> = [];
   let featured: FeaturedList[] = [];
+  // titles an admin set a removal date for (only those the viewer can see; the row stays hidden while empty)
+  let leaving: Item[] | null = null;
   let views: Item[] = [], genres: string[] = [], error = '';
   const q = (p: Record<string, string>) => new URLSearchParams(p).toString();
   // Jellyfin can answer 5xx/network errors right after a fresh sign-up: retry (not on 401/403) before giving up
@@ -48,6 +51,7 @@
     // 2. the rows on the first screen
     void cached('resume', () => load('/api/library/resume').then((r) => r.items as Item[]), (v) => (resume = v), () => (resume = []), ALWAYS);
     void cached('nextup', () => load('/api/library/nextup').then((r) => r.items as Item[]), (v) => (next = v), () => (next = []), ALWAYS);
+    void cached('leaving', () => load('/api/library/leaving').then((r) => r.items as Item[]), (v) => (leaving = v), () => (leaving = []), ALWAYS);
     void cached('recs', () => load('/api/recommendations').then((r) => r.items as Item[]), (v) => (recs = v), () => (recs = []));
     void cached('friends', () => load('/api/library/friends-rated').then((r) => r.items as Item[]), (v) => (friendsRated = v), () => (friendsRated = []));
     void cached('because', () => load('/api/library/because'), (r: { because: { name: string } | null; items: Item[] }) => { because = r.because; becauseItems = r.items; }, () => (becauseItems = []));
@@ -88,6 +92,9 @@
   {#if error}<p class="err" style="margin:1rem var(--pad-x)">{error}</p>{/if}
   <Row title={$t('home.rows.resume')} items={resume} landscape removable on:remove={(e) => removeResume(e.detail.id)} />
   <Row title={$t('home.rows.nextUp')} items={nextOnly} landscape />
+  <!-- featured themed lists (worker S1) follow the second row -->
+  <ThemedListRows />
+  {#if leaving?.length}<Row title={$t('fresh.row.leaving')} items={leaving} />{/if}
   <Row title={$t('home.rows.recs')} items={recs} />
   <Row title={$t('home.rows.friendsRated')} items={friendsRated} />
   {#if because}<Row title={$t('home.rows.because', { name: because.name })} items={becauseItems} />{/if}

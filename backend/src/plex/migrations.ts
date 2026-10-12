@@ -12,6 +12,7 @@ import type pg from 'pg';
  *   profiles.jellyfin_user_id hold their ids) and their role/kids policy.
  * - plex_userdata: played / resume / favourites per identity (never written to Plex).
  * - plex_sync_state: small key/value state of the sync job.
+ * plex_items.chapters (3): chapter marks of a video (start ms, name, chapter image media id + index when PMS made thumbnails).
  */
 export const PLEX_MIGRATIONS: string[] = [
   // 1: mirror, identities, policies, user data
@@ -131,6 +132,12 @@ export const PLEX_MIGRATIONS: string[] = [
   alter table media_policies rename to plex_media_policies;
   alter table plex_sections add column missing_passes int not null default 0;
   alter table plex_sections add column empty_passes int not null default 0;
+  `,
+  // 3: Block 17 parity - chapter marks (includeChapters=1) and the stream keys behind the quality traits (HDR / Dolby Vision /
+  // audio layout) are new in the detail fetch: mark every detail stale so the next sync pass refetches them
+  `
+  alter table plex_items add column chapters jsonb;
+  update plex_items set detail_at = null where type in ('movie', 'episode') and detail_at is not null;
   `,
 ];
 

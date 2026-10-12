@@ -152,7 +152,10 @@ export default {
   /** "Meine Liste" / favourites could not be saved (stores.ts SAVE_FAILED) */
   listSaveFailed: 'Konnte nicht gespeichert werden.',
   logout: {
-    confirmDownloads: 'Auch die Downloads auf diesem Gerät löschen?\n\nOK: löschen (empfohlen, z. B. auf geteilten Geräten). Abbrechen: behalten.',
+    downloadsTitle: 'Auch die Downloads auf diesem Gerät löschen?',
+    downloadsBody: 'Empfohlen auf geteilten Geräten. Wenn du sie behältst, bleiben sie auf diesem Gerät und belegen weiter Speicher.',
+    deleteDownloads: 'Downloads löschen',
+    keepDownloads: 'Behalten',
   },
   /** download manager, downloads page, offline hub and offline player */
   downloads: {
