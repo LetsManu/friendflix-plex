@@ -37,9 +37,6 @@
 ## Das bekommst du
 
 Schauen · Entdecken · Gemeinsam · Familie und Kinder · Handy und TV · Admin
-### Markenhinweis
-
-Netflix, Disney+, Prime Video, Crunchyroll, Plex, Jellyfin und andere Namen sind Marken ihrer jeweiligen Inhaber. FriendFlix for Plex ist ein unabhängiges Open-Source-Projekt und steht in keiner Verbindung zu diesen Unternehmen, wird von ihnen weder gesponsert noch unterstützt. „for Plex“ beschreibt nur die Kompatibilität; das Projekt verwendet kein Plex-Logo und ist kein offizielles Plex-Produkt.
 
 ### Schauen
 
