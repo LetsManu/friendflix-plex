@@ -129,7 +129,7 @@ What the preview implements (checked by the test suite against the fake Plex ser
 | Profiles, kids profiles, PIN, age limits | Works | Enforced by FriendFlix on every list, search, title and media request; needs correct `contentRating`, unknown ratings are blocked for capped profiles |
 | Library access per role | Works | By library name, see section 4 |
 | Library, search, detail pages, collections, genres, studios | Works | From FriendFlix's mirror of the Plex library |
-| Images | Works | Posters, backdrops, logos (if Plex has one) through the Plex photo transcoder; collection composite posters |
+| Images | Works | Posters, backdrops, logos (if Plex has one) through the Plex photo transcoder. Collections without their own poster show their title: Plex's composite poster is never used, because it can show members a profile may not see |
 | Cast and crew | Limited | Names and roles, **no person images** |
 | "More like this" | Limited | Computed by FriendFlix from shared genres and cast, not Plex's own recommendations |
 | Continue watching, my list, favourites, ratings, history | Works | In FriendFlix; nothing is written to Plex |
@@ -141,12 +141,12 @@ What the preview implements (checked by the test suite against the fake Plex ser
 | Skip intro / credits | Limited | Only with Plex Pass markers; recap and preview skipping are never available |
 | Scrub preview thumbnails | Limited | Single frames from Plex's BIF index, only if preview thumbnails are generated |
 | Offline downloads | Works | Original file when it is already MP4/H.264/AAC, otherwise transcoded by Plex and remuxed by FriendFlix |
-| Chromecast | Limited | HLS works; **no subtitles while casting** yet |
+| Chromecast | Works | HLS; text subtitles through signed FriendFlix subtitle URLs |
 | TV mode, watch parties, recommendations, notifications, hubs | Works | FriendFlix features |
 | "Upcoming episodes" / calendar | Not available | Plex does not offer it |
 | Wishes (request service) | Not working yet | Upstream maps FriendFlix users to Seerr users via Jellyfin user ids; with Plex that mapping fails, so wishes cannot be created in the preview |
 | "Now playing" of other Plex apps | Not available | FriendFlix only shows its own sessions |
-| nginx "Plan B" media path | Not available | Unsupported with Plex |
+| nginx "Plan B" media path | Not available | Unsupported with Plex: `/internal/authz-nginx` answers `501 plan_b_unsupported` |
 
 ### Audio tracks
 
@@ -161,7 +161,7 @@ Plex only knows one token, so FriendFlix enforces the role settings itself:
 
 - **Bitrate / height caps** are sent with every transcode start; a capped role never gets Direct Play of a larger file.
 - **Transcoding off** (role template or *Admin → Roles*): only Direct Play. Titles that would need the transcoder answer `403 transcoding_not_allowed`; no Plex transcode is started. Casting and transcoded downloads are refused the same way.
-- **Max. streams**: counted per account (as upstream) and per profile identity (active Plex sessions with a progress report in the last 60 s). Changing quality or audio on the same title never counts twice. A stop report ends the Plex transcode immediately.
+- **Max. streams**: counted per account (as upstream) and per profile identity, on the server: every Plex transcode FriendFlix started for the profile counts as long as Plex still runs it (`/transcode/sessions`; Plex ends transcodes nobody fetches), plus Direct Play sessions with a progress report in the last 60 s. A title beyond the limit answers `429 max_streams` before a transcode starts. Changing quality or audio on the same title never counts twice. A stop report ends the Plex transcode immediately.
 
 ## Troubleshooting
 
@@ -170,6 +170,7 @@ Plex only knows one token, so FriendFlix enforces the role settings itself:
 | Health check or login fails, log shows `401` from Plex | Wrong or revoked `PLEX_TOKEN`, or server not claimed. Run the `curl` check from section 2. |
 | `ECONNREFUSED` / timeouts to Plex | Gateway or backend cannot reach `PLEX_URL`. Test from the container; use the LAN address; check firewalls and Docker networks. |
 | A library or title is missing | Role has no access to that library, or Plex has not finished scanning. Run a scan in Plex and wait for the next FriendFlix sync. |
+| A library deleted in Plex is still listed | Expected for a while: FriendFlix only drops a library (or empties one) after it was missing in 3 consecutive syncs (about 15 minutes), so a Plex hiccup never wipes the mirror. If Plex lists no libraries at all, FriendFlix keeps everything. |
 | Kids/age-limited profiles see nothing | Titles have no or unknown `contentRating`. See [Age ratings](#5-age-ratings). |
 | A rating change in Plex does not show up | Plex does not bump timestamps for metadata edits; wait for the next sweep (a few minutes). |
 | No skip-intro button | No markers (needs Plex Pass) or none detected yet. |
@@ -195,13 +196,16 @@ The preview is tested against a fake Plex server built from recorded answers of 
 8. **Subtitles:** an SRT sidecar file and an embedded text subtitle (MKV) show up and are in sync; image subtitles (PGS) are not offered.
 9. **Markers / thumbnails:** with Plex Pass and detected intros the skip button appears; with preview thumbnails generated, scrubbing shows frames.
 10. **Progress:** watch 5 minutes, close, reopen: resume position and *Continue watching* are right; Plex's own watch state for the token's account is unchanged.
-11. **Downloads and cast** (if you use them): a download finishes and plays offline; casting starts (without subtitles).
+11. **Downloads and cast** (if you use them): a download finishes and plays offline; casting starts, and a text subtitle chosen before casting shows on the TV.
 12. **Limits:** a role with transcoding off only plays direct-playable files; a role with 1 stream cannot start a second title on another device.
 13. **Token hygiene:** in the browser's developer tools (Network tab), no request URL, response or playlist contains your Plex token or your Plex server address.
 
 Report results (what worked, what did not, logs without the token) in an issue in [LetsManu/friendflix-plex](https://github.com/LetsManu/friendflix-plex/issues).
 
 ## Keeping in sync with upstream (maintainers)
+
+Security notes for the Plex adapter: age caps fail closed (a re-rated title is hidden from capped profiles until its age is recomputed, even if a sync pass aborts); direct-stream and trickplay URLs are signed in separate domains; the gateway memoises item visibility per session id for 5 s, exactly like its credential cache for Jellyfin - a profile switch issues a new session id, so the memo of the previous profile is never used for the new one.
+
 
 This repository is a fork of [LetsManu/friendflix](https://github.com/LetsManu/friendflix). To keep merges small:
 

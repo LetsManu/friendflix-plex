@@ -204,8 +204,8 @@ export class PlexPlayback {
       maxBitrate: opts.maxBitrate,
       ...(audioIndex !== undefined ? { audioIndex } : {}),
       audioTracks,
-      // cast: the cast route prefixes every URL with /media/c/<token>, which cannot express a backend (/api) subtitle URL
-      subtitles: cast ? [] : this.textSubs(r.streams).map((t) => ({ ...t, url: subtitleUrl(itemId, r.partId, t.index) })),
+      // also for cast: the cast route turns these /api URLs into signed /api/cast/subtitle URLs (capabilities.subtitleExtract)
+      subtitles: this.textSubs(r.streams).map((t) => ({ ...t, url: subtitleUrl(itemId, r.partId, t.index) })),
     };
   }
 

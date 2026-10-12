@@ -4,9 +4,10 @@ import { MemoryKV } from '../../src/kv.js';
 import type { MediaEvent } from '../../src/media/types.js';
 import { PlexClient } from '../../src/plex/client.js';
 import { migratePlex, PLEX_MIGRATIONS } from '../../src/plex/migrations.js';
+import { MISSING_PASSES } from '../../src/plex/sync.js';
 import { resetDb } from '../helpers.js';
 import { fixture, PLEX_TOKEN, PLEX_URL, PlexFake, plexServer } from '../plexfake.js';
-import { identity, item, plexEnv, type PlexEnv } from './setup.js';
+import { identity, item, kids, plexEnv, type PlexEnv } from './setup.js';
 
 let env: PlexEnv | null = null;
 afterEach(async () => {
@@ -23,7 +24,7 @@ describe('fork migrations', () => {
       await migratePlex(pool);
       expect((await pool.query('select version from plex_schema_migrations order by version')).rows.map((r) => r.version)).toEqual(PLEX_MIGRATIONS.map((_, i) => i + 1));
       expect(Number((await pool.query('select count(*) n from schema_migrations')).rows[0].n)).toBe(MIGRATIONS.length);
-      for (const t of ['plex_items', 'plex_tags', 'plex_sections', 'plex_userdata', 'media_policies', 'plex_identities', 'plex_ratings']) {
+      for (const t of ['plex_items', 'plex_tags', 'plex_sections', 'plex_userdata', 'plex_media_policies', 'plex_identities', 'plex_ratings']) {
         expect((await pool.query('select to_regclass($1) r', [t])).rows[0].r).toBe(t);
       }
     } finally {
@@ -117,6 +118,11 @@ describe('PlexSync', () => {
     await env.ms.sync.run();
     expect((await env.ms.views(u)).map((v) => v.name)).toEqual(['Movies', 'TV', 'Docs']);
     env.fake.sections = env.fake.sections.filter((s) => s.title !== 'TV');
+    // a section is only dropped after MISSING_PASSES consecutive passes without it (a PMS hiccup never wipes a library)
+    for (let i = 1; i < MISSING_PASSES; i++) {
+      expect((await env.ms.sync.run()).removed).toEqual([]);
+      expect((await env.ms.views(u)).map((v) => v.name)).toEqual(['Movies', 'TV', 'Docs']);
+    }
     const r = await env.ms.sync.run();
     expect(r.removed.sort()).toEqual(['10', '11', '3', '4', '5', '6', '7', '8', '9']);
     expect((await env.ms.views(u)).map((v) => v.name)).toEqual(['Movies', 'Docs']);
@@ -156,3 +162,63 @@ describe('PlexSync', () => {
     await env.ms.sync.run();
   });
 });
+
+describe('sync robustness (fail closed, no wipe on a bad answer)', () => {
+  it('a re-rated title stays hidden from a capped profile when the pass aborts before the ages are recomputed', async () => {
+    let rk = '';
+    env = await plexEnv((f) => (rk = f.addMovie({ title: 'Was PG', rating: 'PG' })));
+    const kid = await identity(env.ms, 'friend', kids(12));
+    expect((await env.ms.item(kid, item(rk))).name).toBe('Was PG');
+    env.fake.setRating(rk, 'R'); // PG (10) -> R (17), section 1
+    env.fake.fail = { re: /^\/library\/sections\/2\/all/, status: 500 }; // the TV section's listing fails: the pass aborts
+    await expect(env.ms.sync.run()).rejects.toThrow();
+    env.ms.forgetItems();
+    await expect(env.ms.item(kid, item(rk))).rejects.toMatchObject({ status: 404 });
+    expect((await env.ms.items(kid, { types: 'Movie' })).items.map((i) => i.name)).not.toContain('Was PG');
+    env.fake.fail = null;
+    await env.ms.sync.run();
+    env.ms.forgetItems();
+    await expect(env.ms.item(kid, item(rk))).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('upsertCore nulls the ages of a re-rated show and everything inheriting from it until refreshAges runs', async () => {
+    env = await plexEnv();
+    const { coreRow, upsertCore } = await import('../../src/plex/mirror.js');
+    const show = { ...env.fake.items.get('3')!, contentRating: 'TV-MA' };
+    await upsertCore(env.pool, [coreRow(show, 2)!]);
+    const r = await env.pool.query(`select rating_key, age_req, age_opt from plex_items where rating_key = 3 or parent_key = 3 or grandparent_key = 3`);
+    expect(r.rows.length).toBeGreaterThan(3);
+    for (const x of r.rows) expect([x.rating_key, x.age_req, x.age_opt]).toEqual([x.rating_key, null, null]);
+    // unchanged rating: ages stay
+    await env.ms.sync.run();
+    const before = (await env.pool.query('select age_req from plex_items where rating_key = 1')).rows[0].age_req;
+    await upsertCore(env.pool, [coreRow({ ...env.fake.items.get('1')!, title: 'Renamed' }, 1)!]);
+    expect((await env.pool.query('select age_req from plex_items where rating_key = 1')).rows[0].age_req).toBe(before);
+  });
+
+  it('an empty section list never wipes the mirror, an empty section listing only after MISSING_PASSES passes; no event storm', async () => {
+    env = await plexEnv();
+    const events: MediaEvent[] = [];
+    (env.ms.sync as unknown as { rt: unknown }).rt = rt(events);
+    const u = await identity(env.ms, 'admin');
+    const count = async () => Number((await env!.pool.query('select count(*) n from plex_items')).rows[0].n);
+    const n = await count();
+    const sections = env.fake.sections;
+    env.fake.sections = [];
+    for (let i = 0; i < MISSING_PASSES + 2; i++) expect((await env.ms.sync.run()).removed).toEqual([]);
+    expect(await count()).toBe(n);
+    expect((await env.ms.views(u)).map((v) => v.name)).toEqual(['Movies', 'TV']);
+    env.fake.sections = sections;
+    expect(await env.ms.sync.run()).toMatchObject({ added: [], removed: [] });
+    // one section answers with an empty listing (but the section itself is still there)
+    const items = env.fake.items;
+    const movies = [...items.entries()].filter(([, m]) => m.librarySectionID === 1 && m.type === 'movie');
+    for (const [k] of movies) items.delete(k);
+    for (let i = 1; i < MISSING_PASSES; i++) expect((await env.ms.sync.run()).removed).toEqual([]);
+    for (const [k, m] of movies) items.set(k, m);
+    expect(await env.ms.sync.run()).toMatchObject({ added: [], removed: [] });
+    expect(await count()).toBe(n);
+    expect(events).toEqual([]);
+  });
+});
+

@@ -58,6 +58,8 @@ export interface ItemRow {
   ep_last_played: Date | null;
   last_added: Date | null;
   member_count: string | number | null;
+  /** collections: rating key of the first member the viewer may see that has a poster */
+  first_member?: string | number | null;
 }
 
 const iso = (d: Date | string | null | undefined): string | undefined => {
@@ -78,11 +80,14 @@ export function toItemDto(r: ItemRow): ItemDto {
   const positionTicks = isGroup ? 0 : Number(r.ud_position ?? 0);
   const seriesKey = r.type === 'episode' ? r.grandparent_key : r.type === 'season' ? r.parent_key : null;
   const seriesThumb = r.type === 'episode' ? (r.grandparent_thumb ?? r.show_thumb) : r.type === 'season' ? (r.parent_thumb ?? r.show_thumb) : null;
-  // image tags = the Plex artwork timestamp (cache key; the gateway turns ?tag=<ts> into /library/metadata/<rk>/thumb/<ts>);
-  // collections without own artwork have a composite poster: tag c<ts> -> /library/collections/<rk>/composite/<ts>
-  const composite = r.type === 'collection' ? /^\/library\/collections\/\d+\/composite\/(\d{1,12})(?:\?|$)/.exec(r.thumb ?? '') : null;
+  // image tags = the Plex artwork timestamp (cache key; the gateway turns ?tag=<ts> into /library/metadata/<rk>/thumb/<ts>).
+  // A collection without own artwork only has a Plex *composite* poster, built from ALL members - also the ones this viewer may not
+  // see (kids / age caps / libraries). It is never served; the tag m<member id32> names the first member the viewer may see instead
+  // (the gateway checks that member's visibility too). Plex answers 404 for the untagged thumb of such a collection: image=false.
+  const composite = r.type === 'collection' && (!r.thumb || /^\/library\/collections\/\d+\/composite\//.test(r.thumb));
+  const memberTag = composite && r.first_member ? `m${encodePlexId('item', String(r.first_member))}` : undefined;
   const tags: ImageTags = {
-    primary: composite ? `c${composite[1]}` : imageTag(r.thumb),
+    primary: composite ? memberTag : imageTag(r.thumb),
     backdrop: imageTag(r.art),
     logo: imageTag(r.logo),
     seriesPrimary: imageTag(seriesThumb),
@@ -107,7 +112,7 @@ export function toItemDto(r: ItemRow): ItemDto {
     communityRating: community === undefined || community === null ? undefined : Math.round(Number(community) * 10) / 10,
     premiereDate: iso(r.originally_available),
     dateCreated: iso(r.added_at),
-    image: Boolean(r.thumb || seriesThumb),
+    image: composite ? false : Boolean(r.thumb || seriesThumb),
     backdrop: Boolean(r.art),
     logo: Boolean(r.logo),
     trailers: Number(r.trailer_count ?? 0),

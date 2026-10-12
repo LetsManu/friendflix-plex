@@ -1,14 +1,16 @@
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { blocksDirectStream, createGateway, normalizeCastPath, normalizePath } from '../src/gateway.js';
-import { selectUpstream, UPSTREAMS } from '../src/upstream/index.js';
-import { createPlexUpstream, decodePlexId, plexUpstream, verifyPartSig, verifySession } from '../src/upstream/plex.js';
+import { checkUpstreamConfig, selectUpstream, UPSTREAMS } from '../src/upstream/index.js';
+import { createPlexUpstream, decodePlexId, plexUpstream, verifyPartSig, verifySession, verifyTpSig } from '../src/upstream/plex.js';
 
 interface Vectors {
   secret: string; token: string; allow: string[]; deny: string[]; direct: string[]; cast: { allow: string[]; deny: string[] };
-  signatures: { part: Array<{ item: string; part: string; sig: string }>; session: Array<{ item: string; nonce: string; session: string }> };
+  signatures: { part: Array<{ item: string; part: string; sig: string }>; trickplay: Array<{ item: string; part: string; sig: string }>; session: Array<{ item: string; nonce: string; session: string }> };
   authorize: Array<{ path: string; query: string; allow: boolean }>;
   rewrite: Array<{ path: string; query: string; upstream: string }>;
 }
@@ -23,6 +25,7 @@ const P2 = '9f1e3000000000000000000000000063';
 const S1 = V.signatures.session[0]!.session; // bound to I
 const S2 = V.signatures.session[1]!.session; // bound to I2
 const SIG = V.signatures.part[0]!.sig; // I + P
+const TPSIG = V.signatures.trickplay[0]!.sig; // I + P, trickplay domain
 
 describe('registration', () => {
   it('MEDIA_SERVER=plex selects the Plex adapter (case-insensitive); unknown kinds still throw', () => {
@@ -55,6 +58,10 @@ describe('shared vectors (test-vectors/media-paths.plex.json, plex-ids.json)', (
     expect(verifyPartSig(V.secret, s.item, s.part, s.sig)).toBe(true);
     expect(verifyPartSig('another-secret-another', s.item, s.part, s.sig)).toBe(false);
     expect(verifyPartSig(V.secret, s.item, s.part, s.sig.toUpperCase())).toBe(false);
+  });
+  it.each(V.signatures.trickplay)('trickplay signature %# (own domain)', (s) => {
+    expect(verifyTpSig(V.secret, s.item, s.part, s.sig)).toBe(true);
+    expect(verifyPartSig(V.secret, s.item, s.part, s.sig)).toBe(false);
   });
   it.each(V.signatures.session)('session %#', (s) => {
     expect(verifySession(V.secret, s.item, s.session)).toBe(true);
@@ -221,7 +228,8 @@ describe('end to end through createGateway', () => {
   });
 
   it('trickplay: frame n of the signed part at n x interval ms', async () => {
-    const r = await get(`/media/Videos/${I}/${P}/Trickplay/2000/7.jpg?sig=${SIG}`);
+    expect((await get(`/media/Videos/${I}/${P}/Trickplay/2000/7.jpg?sig=${SIG}`)).status).toBe(403); // direct-stream sig: wrong domain
+    const r = await get(`/media/Videos/${I}/${P}/Trickplay/2000/7.jpg?sig=${TPSIG}`);
     expect(r.status).toBe(200);
     expect(await clean(r)).toBe('FRAME');
     expect(last().url).toBe('/library/parts/1/indexes/sd/14000');
@@ -289,5 +297,46 @@ describe('end to end through createGateway', () => {
     expect(seen.length).toBeGreaterThan(5);
     for (const s of seen.filter((x) => x.headers['x-plex-token'] === TOK)) expect(s.url).not.toContain(TOK);
     expect(seen.every((s) => !/x-plex-token=/i.test(s.url))).toBe(true);
+  });
+});
+
+describe('Plex adapter hooks', () => {
+  it('collection poster tag m<member>: the member must be visible too; composites are never fetched', async () => {
+    const M = '9f1e0000000000000000000000000025';
+    const seen: string[] = [];
+    const ctx = (allow: (id: string) => boolean) => ({
+      path: `/Items/${I}/Images/Primary`, query: new URLSearchParams(`tag=m${M}`), cast: false,
+      checkItem: async (id: string) => (seen.push(id), allow(id)),
+    });
+    expect(await up.authorize!(ctx(() => true))).toBe(true);
+    expect(seen).toEqual([M, I]);
+    expect(await up.authorize!(ctx((id) => id !== M))).toBe(false);
+    expect(up.rewrite!(`/Items/${I}/Images/Primary`, new URLSearchParams('tag=c1791800022')).query.get('url')).toBe('/library/metadata/1/thumb');
+    // the member tag only means something on Primary
+    expect(up.rewrite!(`/Items/${I}/Images/Backdrop`, new URLSearchParams(`tag=m${M}`)).query.get('url')).toBe('/library/metadata/1/art');
+  });
+
+  it('validateConfig: PLEX_URL (http/https) and PLEX_TOKEN or a readable PLEX_TOKEN_FILE', () => {
+    const v = up.validateConfig!;
+    expect(v({ PLEX_URL: 'http://plex:32400', PLEX_TOKEN: 't' })).toEqual([]);
+    expect(v({})).toEqual(['PLEX_URL is not set', 'PLEX_TOKEN (or PLEX_TOKEN_FILE) is not set']);
+    expect(v({ PLEX_URL: 'ftp://x', PLEX_TOKEN: 't' })).toEqual(['PLEX_URL must be an http(s) URL']);
+    expect(v({ PLEX_URL: 'nope', PLEX_TOKEN: 't' })).toEqual(['PLEX_URL is not a valid URL']);
+    const dir = mkdtempSync(join(tmpdir(), 'ffgw-'));
+    writeFileSync(join(dir, 'tok'), 'secret\n');
+    writeFileSync(join(dir, 'empty'), '\n');
+    expect(v({ PLEX_URL: 'http://plex:32400', PLEX_TOKEN_FILE: join(dir, 'tok') })).toEqual([]);
+    expect(v({ PLEX_URL: 'http://plex:32400', PLEX_TOKEN_FILE: join(dir, 'empty') })).toEqual(['PLEX_TOKEN_FILE is empty']);
+    expect(v({ PLEX_URL: 'http://plex:32400', PLEX_TOKEN_FILE: join(dir, 'missing') })).toEqual(['PLEX_TOKEN_FILE cannot be read']);
+    expect(() => checkUpstreamConfig(selectUpstream('plex'), { MEDIA_SERVER: 'plex' })).toThrow(/PLEX_URL/);
+  });
+
+  it('playlist: credentials stripped from every URI, URIs outside the session refused', () => {
+    const p = (b: string) => up.playlist!(b, { path: '', query: new URLSearchParams(), requestPath: '', cast: false });
+    const body = '#EXTM3U\n#EXT-X-MAP:URI="init.mp4?X-Plex-Token=SECRET&x=1"\n#EXTINF:8,\n00000.ts?X-Plex-Token=SECRET&X-Plex-Client-Identifier=c\n#EXTINF:8,\n00001.ts\n';
+    const out = p(body);
+    expect(out).not.toContain('SECRET');
+    expect(out).toBe('#EXTM3U\n#EXT-X-MAP:URI="init.mp4?x=1"\n#EXTINF:8,\n00000.ts\n#EXTINF:8,\n00001.ts\n');
+    for (const bad of ['http://plex:32400/x.ts', '//plex/x.ts', '/video/x.ts', '../x.ts', '#EXT-X-MAP:URI="http://plex/i.mp4"']) expect(() => p(`#EXTM3U\n${bad}\n`)).toThrow();
   });
 });

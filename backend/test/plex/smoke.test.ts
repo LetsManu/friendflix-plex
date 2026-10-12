@@ -73,6 +73,11 @@ describe('Plex mode end to end (backend level)', () => {
     const res = await tf.fetch(`${PLEX_URL}${rw.path}${q ? `?${q}` : ''}`, { headers: gw.authHeaders({ token: 'x', deviceId: 'y' }) });
     return { status: res.status, body: await res.text() };
   };
+  /** Plex reaps every transcode, the player state is gone (between the limit tests) */
+  const endAll = async () => {
+    for (const x of tf.sessions.values()) x.stopped = true;
+    for (const k of [...(await env.kv.keys('plexstarted:')), ...(await env.kv.keys('plexplay:'))]) await env.kv.del(k);
+  };
   const report = (s: Sess, kind: 'start' | 'progress' | 'stop', info: { itemId: string; playSessionId: string; mediaSourceId: string }, positionTicks = 0) =>
     call(s, 'POST', `/api/playback/${kind}`, { itemId: info.itemId, playSessionId: info.playSessionId, mediaSourceId: info.mediaSourceId, positionTicks, isPaused: false });
 
@@ -141,7 +146,7 @@ describe('Plex mode end to end (backend level)', () => {
   it('role without transcoding: Direct Play only, HLS refused with 403 transcoding_not_allowed (no Plex transcode started)', async () => {
     const s = await env.login();
     const jf = (await env.pool.query('select jellyfin_user_id j from users limit 1')).rows[0].j as string;
-    await env.pool.query('update media_policies set transcoding = false where identity_id = $1', [jf]);
+    await env.pool.query('update plex_media_policies set transcoding = false where identity_id = $1', [jf]);
     try {
       const starts = tf.calls.filter((c) => c.path.endsWith('/start.m3u8')).length;
       const r = await call(s, 'POST', '/api/playback/info', { itemId: item(2) }); // HEVC: no Direct Play
@@ -149,35 +154,84 @@ describe('Plex mode end to end (backend level)', () => {
       expect(r.json()).toEqual({ error: 'transcoding_not_allowed' });
       expect(tf.calls.filter((c) => c.path.endsWith('/start.m3u8')).length).toBe(starts);
     } finally {
-      await env.pool.query('update media_policies set transcoding = true where identity_id = $1', [jf]);
+      await env.pool.query('update plex_media_policies set transcoding = true where identity_id = $1', [jf]);
     }
   });
 
   it('maxStreams per identity: a second title beyond the policy limit is refused until the first one stops', async () => {
     const s = await env.login();
     const jf = (await env.pool.query('select jellyfin_user_id j from users limit 1')).rows[0].j as string;
-    await env.pool.query('update media_policies set max_streams = 1 where identity_id = $1', [jf]);
+    await env.pool.query('update plex_media_policies set max_streams = 1 where identity_id = $1', [jf]);
     try {
       const a = (await call(s, 'POST', '/api/playback/info', { itemId: item(1) })).json();
       expect((await report(s, 'start', a)).statusCode).toBeLessThan(300);
       // the same title again (quality / audio switch) is fine, another one is not
-      expect((await call(s, 'POST', '/api/playback/info', { itemId: item(1) })).statusCode).toBe(200);
+      const again = await call(s, 'POST', '/api/playback/info', { itemId: item(1) });
+      expect(again.statusCode).toBe(200);
       const b = await call(s, 'POST', '/api/playback/info', { itemId: item(2) });
       expect(b.statusCode).toBe(429);
       expect(b.json()).toEqual({ error: 'max_streams' });
       await report(s, 'stop', a);
+      await report(s, 'stop', again.json()); // the player stops the old session before it reloads
       expect((await call(s, 'POST', '/api/playback/info', { itemId: item(2) })).statusCode).toBe(200);
     } finally {
-      await env.pool.query('update media_policies set max_streams = null where identity_id = $1', [jf]);
+      await env.pool.query('update plex_media_policies set max_streams = null where identity_id = $1', [jf]);
+      await endAll();
     }
   });
 
-  it('collections with a composite poster get a c<ts> image tag the gateway maps to the composite', async () => {
+  it('maxStreams is enforced server-side: without any player report a second title is refused while the first transcode runs', async () => {
+    const s = await env.login();
+    const jf = (await env.pool.query('select jellyfin_user_id j from users limit 1')).rows[0].j as string;
+    await env.pool.query('update plex_media_policies set max_streams = 1 where identity_id = $1', [jf]);
+    try {
+      const starts2 = () => tf.calls.filter((c) => c.path.endsWith('/start.m3u8') && c.search.includes('%2Flibrary%2Fmetadata%2F2')).length;
+      const a = await call(s, 'POST', '/api/playback/info', { itemId: item(1) }); // starts the Plex transcode; no /api/playback/start
+      expect(a.statusCode, a.body).toBe(200);
+      expect(tf.sessions.get(a.json().playSessionId)?.stopped).toBe(false);
+      const n2 = starts2();
+      const b = await call(s, 'POST', '/api/playback/info', { itemId: item(2) });
+      expect(b.statusCode).toBe(429);
+      expect(b.json()).toEqual({ error: 'max_streams' });
+      expect(starts2()).toBe(n2);
+      // Plex reaps the abandoned transcode (nobody fetches it): the slot is free again
+      tf.sessions.get(a.json().playSessionId)!.stopped = true;
+      expect((await call(s, 'POST', '/api/playback/info', { itemId: item(2) })).statusCode).toBe(200);
+    } finally {
+      await env.pool.query('update plex_media_policies set max_streams = null where identity_id = $1', [jf]);
+      await endAll();
+    }
+  });
+
+  it('collections with a composite poster: no composite, the tag names a member the viewer may see (gateway checks it)', async () => {
     const owner = (await env.pool.query('select * from users limit 1')).rows[0];
-    const coll = (await ms.collections(owner)).find((c) => c.imageTags?.primary?.startsWith('c'));
-    expect(coll?.imageTags?.primary).toBe('c1791800022');
-    const q = new URLSearchParams({ tag: coll!.imageTags!.primary! });
-    expect(gw.rewrite(`/Items/${coll!.id}/Images/Primary`, q).query.get('url')).toMatch(/^\/library\/collections\/\d+\/composite\/1791800022$/);
+    const coll = (await ms.collections(owner)).find((c) => c.name === 'Both Movies')!;
+    expect(coll.image).toBe(false); // Plex has no untagged poster for a composite collection
+    const tag = coll.imageTags!.primary!;
+    expect(tag).toMatch(/^m9f1e0[0-9a-f]{27}$/);
+    const q = new URLSearchParams({ tag });
+    expect(gw.rewrite(`/Items/${coll.id}/Images/Primary`, q).query.get('url')).toBe(`/library/metadata/${BigInt('0x' + tag.slice(6))}/thumb`);
+  });
+
+  it('Chromecast: the cast session carries signed /api/cast/subtitle URLs for the extracted Plex subtitles', async () => {
+    const s = await env.login();
+    const r = await call(s, 'POST', '/api/cast/session', { itemId: item(1) });
+    expect(r.statusCode, r.body).toBe(200);
+    const j = r.json();
+    const sub = (j.subtitles as Array<{ index: number; url: string }>).find((x) => x.index === 4)!;
+    expect(sub.url).toMatch(new RegExp(`^https://portal\\.example\\.com/api/cast/subtitle/[0-9a-f-]{36}/${j.castId}/\\d+/[\\w-]{43}/${item(1)}/`));
+    const v = await env.app.inject({ url: sub.url.replace('https://portal.example.com', '') }); // the receiver: no cookie
+    bodies.push(v.body);
+    expect(v.statusCode).toBe(200);
+    expect(v.body).toContain('00:00:01.000 --> 00:00:03.500');
+    await call(s, 'DELETE', `/api/cast/session/${j.castId}`);
+    await endAll();
+  });
+
+  it('Plan B is refused clearly with Plex (capabilities.planB = false -> /internal/authz-nginx 501)', async () => {
+    const r = await env.app.inject({ url: '/internal/authz-nginx', headers: { 'x-internal-secret': cfg.INTERNAL_SECRET, 'x-original-uri': `/media/Items/${item(1)}/Images/Primary` } });
+    expect(r.statusCode).toBe(501);
+    expect(r.json()).toEqual({ error: 'plan_b_unsupported', kind: 'plex' });
   });
 
   it('kids profile: titles above the cap are denied for detail, playback and the gateway; an allowed one plays', async () => {

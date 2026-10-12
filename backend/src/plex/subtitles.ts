@@ -15,6 +15,46 @@ import type { PlexHttp } from './transcode.js';
 /** Plex subtitle codecs FriendFlix can turn into WebVTT (image subtitles such as PGS/VobSub are not offered). */
 export const TEXT_SUB_CODECS = new Set(['srt', 'subrip', 'ass', 'ssa', 'vtt', 'webvtt', 'mov_text', 'tx3g', 'text', 'smi', 'sami']);
 export const MAX_VTT_BYTES = 10 * 1024 * 1024;
+/** ffmpeg runtime limit for one embedded-subtitle extraction (it has to read the whole file through Plex) */
+export const EXTRACT_TIMEOUT_MS = 180_000;
+
+/**
+ * Process-wide limit for ffmpeg subtitle conversions: `max` run at once, up to `maxQueue` wait (each at most `waitMs`), more are
+ * refused at once. Keeps a burst of subtitle requests (many viewers, many tracks) from forking unbounded ffmpeg processes.
+ */
+export class Semaphore {
+  private active = 0;
+  private readonly queue: Array<() => void> = [];
+  constructor(readonly max = 2, readonly maxQueue = 16, readonly waitMs = 30_000) {}
+  get running() { return this.active; }
+  get waiting() { return this.queue.length; }
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.active >= this.max) {
+      if (this.queue.length >= this.maxQueue) throw new Error('subtitle conversion queue full');
+      await new Promise<void>((resolve, reject) => {
+        const go = () => { clearTimeout(t); resolve(); };
+        const t = setTimeout(() => {
+          const i = this.queue.indexOf(go);
+          if (i >= 0) this.queue.splice(i, 1);
+          reject(new Error('subtitle conversion queue timeout'));
+        }, this.waitMs);
+        this.queue.push(go);
+      });
+    } else {
+      this.active++;
+    }
+    try {
+      return await fn();
+    } finally {
+      const next = this.queue.shift();
+      if (next) next(); // hands the slot over (active stays)
+      else this.active--;
+    }
+  }
+}
+
+/** The shared slots for all subtitle conversions of this process. */
+export const subtitleSlots = new Semaphore(2, 16, 30_000);
 
 /** UTF-8 when valid (BOM stripped), else Windows-1252 (old SRT files). */
 export function decodeText(buf: Uint8Array): string {
@@ -51,14 +91,14 @@ const VTT_ARGS = (input: string, map?: string) => [
 ];
 
 /** Converts a sidecar subtitle file (as downloaded from /library/streams/<id>) to WebVTT. */
-export async function sidecarToVtt(ff: PlexFfmpeg, codec: string, bytes: Buffer): Promise<Buffer> {
+export async function sidecarToVtt(ff: PlexFfmpeg, codec: string, bytes: Buffer, slots: Semaphore = subtitleSlots): Promise<Buffer> {
   const c = codec.toLowerCase();
   if (c === 'srt' || c === 'subrip') return Buffer.from(srtToVtt(decodeText(bytes)), 'utf8');
   if (c === 'vtt' || c === 'webvtt') {
     const t = decodeText(bytes);
     return Buffer.from(t.startsWith('WEBVTT') ? t : `WEBVTT\n\n${t}`, 'utf8');
   }
-  return ff.run(VTT_ARGS('pipe:0'), bytes, { maxBytes: MAX_VTT_BYTES });
+  return slots.run(() => ff.run(VTT_ARGS('pipe:0'), bytes, { maxBytes: MAX_VTT_BYTES }));
 }
 
 /**
@@ -93,8 +133,9 @@ export async function withPartProxy<T>(http: PlexHttp, plexPath: string, fn: (ur
 }
 
 /** Embedded text stream (container index `index`) of a part -> WebVTT via ffmpeg. */
-export function extractEmbedded(http: PlexHttp, ff: PlexFfmpeg, partKey: string, index: number): Promise<Buffer> {
-  return withPartProxy(http, `/library/parts/${partKey}/0/file`, (url) => ff.run(VTT_ARGS(url, `0:${index}`), undefined, { maxBytes: MAX_VTT_BYTES, timeoutMs: 600_000 }));
+export function extractEmbedded(http: PlexHttp, ff: PlexFfmpeg, partKey: string, index: number, slots: Semaphore = subtitleSlots): Promise<Buffer> {
+  return slots.run(() => withPartProxy(http, `/library/parts/${partKey}/0/file`,
+    (url) => ff.run(VTT_ARGS(url, `0:${index}`), undefined, { maxBytes: MAX_VTT_BYTES, timeoutMs: EXTRACT_TIMEOUT_MS })));
 }
 
 /** Small LRU of finished conversions (single flight; failures are not kept). */

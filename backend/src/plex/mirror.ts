@@ -120,21 +120,38 @@ const CORE_COLS: Array<[keyof CoreRow, string]> = [
 /**
  * Bulk upsert of core rows (one statement). Unchanged rows are not rewritten. guids from a listing only replace stored ones
  * when the listing had any (`includeGuids=1` is honoured by current PMS versions).
+ *
+ * Fail closed on rating changes: the computed ages (age_req / age_opt, read by every access predicate) are only refreshed by
+ * refreshAges() after the pass. Until then an item whose content_rating changed - and every season / episode / extra inheriting
+ * from it - gets NULL ages, i.e. it is hidden from age-capped profiles instead of keeping its old (maybe lower) age.
  */
 export async function upsertCore(db: Db, rows: CoreRow[]): Promise<void> {
   if (!rows.length) return;
+  const json = JSON.stringify(rows);
+  await db.query(
+    `update plex_items c set age_req = null, age_opt = null
+     from jsonb_to_recordset($1::jsonb) as x(rating_key bigint, content_rating text)
+     join plex_items p on p.rating_key = x.rating_key
+     where p.content_rating is distinct from x.content_rating
+       and c.type in ('season', 'episode', 'clip') and (c.parent_key = p.rating_key or c.grandparent_key = p.rating_key)
+       and (c.age_req is not null or c.age_opt is not null)`,
+    [json],
+  );
   const cols = CORE_COLS.map(([c]) => c);
   const def = CORE_COLS.map(([c, t]) => `${c} ${t}`).join(', ');
-  const set = cols.filter((c) => c !== 'rating_key').map((c) => (c === 'guids'
-    ? `guids = case when cardinality(excluded.guids) > 0 then excluded.guids else plex_items.guids end`
-    : `${c} = excluded.${c}`)).join(', ');
+  const set = [
+    ...cols.filter((c) => c !== 'rating_key').map((c) => (c === 'guids'
+      ? `guids = case when cardinality(excluded.guids) > 0 then excluded.guids else plex_items.guids end`
+      : `${c} = excluded.${c}`)),
+    ...['age_req', 'age_opt'].map((c) => `${c} = case when plex_items.content_rating is distinct from excluded.content_rating then null else plex_items.${c} end`),
+  ].join(', ');
   const changed = cols.filter((c) => c !== 'rating_key' && c !== 'guids').map((c) => `plex_items.${c} is distinct from excluded.${c}`).join(' or ');
   await db.query(
     `insert into plex_items(${cols.join(', ')})
      select ${cols.join(', ')} from jsonb_to_recordset($1::jsonb) as x(${def})
      on conflict (rating_key) do update set ${set}
      where ${changed} or (cardinality(excluded.guids) > 0 and plex_items.guids is distinct from excluded.guids)`,
-    [JSON.stringify(rows)],
+    [json],
   );
 }
 

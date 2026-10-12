@@ -88,6 +88,10 @@ export class TranscoderFake {
       this.sessions.set(s, { rk, audio: this.selected.get(this.partOf(rk)), platform: plat, query: q, polls: 0, stopped: false, starts: (prev?.starts ?? 0) + 1, launched: false });
       return new Response(`#EXTM3U\n#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=891000,RESOLUTION=640x360\nsession/${s}/base/index.m3u8\n`, { headers: { 'content-type': 'application/vnd.apple.mpegurl' } });
     }
+    if (path === '/transcode/sessions') {
+      // like PMS: running transcodes, key = the session parameter of the start
+      return Response.json({ MediaContainer: { size: 0, TranscodeSession: [...this.sessions].filter(([, x]) => !x.stopped).map(([key]) => ({ key, protocol: 'hls' })) } });
+    }
     if (path === '/video/:/transcode/universal/stop') {
       const s = this.sessions.get(q.get('session') ?? '');
       if (s) s.stopped = true;

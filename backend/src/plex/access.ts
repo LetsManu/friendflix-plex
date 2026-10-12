@@ -123,7 +123,7 @@ export async function refreshAges(db: Db, log?: { warn(o: unknown, msg?: string)
 
 // ---------------------------------------------------------------- policies
 
-/** What media_policies holds for one identity (see admin.applyPolicy). */
+/** What plex_media_policies holds for one identity (see admin.applyPolicy). */
 export interface PlexPolicy {
   identity: string;
   /** role library names (matched case-insensitively against Plex section titles); null = all */
@@ -192,7 +192,7 @@ export function visibleSql(acc: Access, a: string, p: Param, depth = 0): string 
 /** Loads the policy of one identity (null = none: nothing visible). */
 export async function loadPolicy(db: Db, identity: string): Promise<PlexPolicy | null> {
   const r = await db.query<{ libraries: string[] | null; max_age: number | null; block_unrated: string[]; disabled: boolean }>(
-    'select libraries, max_age, block_unrated, disabled from media_policies where identity_id = $1', [identity]);
+    'select libraries, max_age, block_unrated, disabled from plex_media_policies where identity_id = $1', [identity]);
   const row = r.rows[0];
   if (!row) return null;
   return { identity, libraries: row.libraries, maxAge: row.max_age, blockUnrated: row.block_unrated ?? [], disabled: row.disabled };

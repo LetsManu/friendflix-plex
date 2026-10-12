@@ -220,10 +220,6 @@ describe('Plex browse + user data over the mirror', () => {
     expect(await e.ms.playMeta(u, item(424242))).toBeNull();
     await expect(e.ms.stopEncoding(u, 'x')).resolves.toBeUndefined();
     expect((await e.ms.subtitleStream(u, item(1), 'm', 3, 'vtt')).status).toBe(501);
-    expect(await e.ms.imageSource(item(1), 'Primary')).toBe('/library/metadata/1/thumb/1791799951');
-    expect(await e.ms.imageSource(item(9), 'Primary')).toBe('/library/metadata/9/thumb/1791799953');
-    expect(await e.ms.imageSource(item(1), 'Logo')).toBeNull();
-    expect(await e.ms.imageSource(item(1), 'Nope')).toBeNull();
   });
 
   it('admin: libraries = Plex sections, ping, no external sessions', async () => {

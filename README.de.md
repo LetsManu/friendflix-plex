@@ -141,7 +141,7 @@ Die FriendFlix-Oberfläche ist dieselbe; unterschiedlich ist, was Plex liefern k
 | Rückblick / Vorschau überspringen („Zuvor bei …“) | Nicht verfügbar | Plex hat dafür keine Marker |
 | Vorschaubilder beim Spulen | Eingeschränkt | Einzelbilder, nur wenn „Video-Vorschaubilder“ in Plex aktiviert sind |
 | Downloads | Funktioniert | Originaldatei, wenn browsertauglich, sonst von Plex transkodiert und von FriendFlix umverpackt |
-| Chromecast | Eingeschränkt | Funktioniert, beim Casten aber noch ohne Untertitel |
+| Chromecast | Funktioniert | Inklusive Text-Untertiteln (signierte FriendFlix-Untertitel-URLs) |
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen | Funktioniert | FriendFlix-Funktionen, unabhängig vom Medienserver |
 | „Demnächst erscheinende Folgen“ | Nicht verfügbar | Plex bietet das nicht |
 | Wünsche / Wunsch-Dienst | Noch nicht | Die Seerr-Nutzerzuordnung hängt an Jellyfin-Nutzer-IDs |
@@ -310,7 +310,7 @@ npm run e2e                                     # Playwright: baut die Web-App u
 
 - Ein Backend-Replikat: Watch-Party-Räume, Rate-Limits und Fernbedienungs-Räume liegen im Speicher.
 - Bildbasierte Untertitel (PGS) werden nicht angeboten; Text-Untertitel kommen als WebVTT.
-- Plex (siehe die [Tabelle oben](#plex-und-jellyfin-im-vergleich) und [docs/de/plex.md](docs/de/plex.md)): Intro/Abspann überspringen nur mit Plex-Pass-Markern (nie Recap/Vorschau); Vorschaubilder beim Spulen sind Einzelbilder und brauchen aktivierte Vorschaubilder in Plex; keine „demnächst erscheinenden Folgen“; die Tonspur-Auswahl gilt pro Plex-Konto (Stream-Starts laufen nacheinander, nimm ein eigenes Token); Untertitel extrahiert und wandelt FriendFlix um; der Server muss geclaimt und ein Token vorhanden sein; die Zuordnung der Wünsche pro Nutzer ist eingeschränkt; Plan B wird nicht unterstützt.
+- Plex (siehe die [Tabelle oben](#plex-und-jellyfin-im-vergleich) und [docs/de/plex.md](docs/de/plex.md)): Intro/Abspann überspringen nur mit Plex-Pass-Markern (nie Recap/Vorschau); Vorschaubilder beim Spulen sind Einzelbilder und brauchen aktivierte Vorschaubilder in Plex; keine „demnächst erscheinenden Folgen“; die Tonspur-Auswahl gilt pro Plex-Konto (Stream-Starts laufen nacheinander, nimm ein eigenes Token); Untertitel extrahiert und wandelt FriendFlix um; der Server muss geclaimt und ein Token vorhanden sein; Wünsche (Wunsch-Dienst) funktionieren noch nicht; Plan B wird nicht unterstützt.
 - Die Plex-Umsetzung stützt sich teils auf nicht dokumentierte Plex-APIs und ist gegen Plex Media Server 1.43 geprüft; andere Versionen können sich anders verhalten.
 - Die APIs von Wunsch-Dienst und Authentik unterscheiden sich je Version – nach Upgrades siehe [docs/operations.md](docs/operations.md) und [docs/integrations.md](docs/integrations.md).
 - Profile liegen in FriendFlix, nicht in Plex: Sie tauchen nicht in Plex' Nutzerliste auf und brauchen kein plex.tv-Konto.

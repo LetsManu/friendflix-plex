@@ -1,6 +1,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config.js';
 import { keyFromBase64 } from '../../src/crypto.js';
@@ -34,13 +35,15 @@ describe('MEDIA_SERVER=plex config', () => {
     const c = loadConfig({ ...BASE, JELLYFIN_URL: 'http://j', JELLYFIN_ADMIN_API_KEY: 'k', PLEX_URL: '', PLEX_TOKEN: '' });
     expect([c.MEDIA_SERVER, c.PLEX_URL, c.PLEX_TOKEN]).toEqual(['jellyfin', undefined, undefined]);
   });
-  it('the factory builds the Plex implementation (token only in its request headers)', async () => {
+  it('the factory builds the Plex implementation on the shared pool (MediaDeps.db; token only in its request headers)', async () => {
     const fake = new PlexFake();
-    const ms = createMediaServer({ cfg: { ...cfg, MEDIA_SERVER: 'plex', PLEX_URL, PLEX_TOKEN }, kv: new MemoryKV(), encKey: keyFromBase64(ENC_KEY), fetchImpl: fake.fetch });
+    const db = new pg.Pool({ connectionString: cfg.DATABASE_URL, max: 1 });
+    const ms = createMediaServer({ cfg: { ...cfg, MEDIA_SERVER: 'plex', PLEX_URL, PLEX_TOKEN }, kv: new MemoryKV(), db, encKey: keyFromBase64(ENC_KEY), fetchImpl: fake.fetch });
     expect(ms).toBeInstanceOf(PlexMediaServer);
     expect(ms.kind).toBe('plex');
     expect(await ms.admin.ping()).toBe(true);
     expect(fake.calls.at(-1)).toMatchObject({ path: '/identity', search: '', token: PLEX_TOKEN });
-    await ((ms as PlexMediaServer).db as unknown as { end(): Promise<void> }).end();
+    expect((ms as PlexMediaServer).db).toBe(db);
+    await db.end();
   });
 });

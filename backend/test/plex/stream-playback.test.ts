@@ -5,7 +5,7 @@ import { MediaError, type ItemDto, type MediaUser } from '../../src/media/types.
 import { PlexClient } from '../../src/plex/client.js';
 import { fmp4Playlist, splitFmp4, VIRTUAL_RE } from '../../src/plex/downloads.js';
 import { encodePlexId } from '../../src/plex/ids.js';
-import { partSig, sessionFor, verifyPartSig, verifySession } from '../../src/plex/mediapaths.js';
+import { partSig, sessionFor, tpSig, verifyPartSig, verifySession, verifyTpSig } from '../../src/plex/mediapaths.js';
 import { langMatches, PlexPlayback, plexPlaybackFactory } from '../../src/plex/playback.js';
 import { decodeText, srtToVtt } from '../../src/plex/subtitles.js';
 import { parseBifHeader } from '../../src/plex/trickplay.js';
@@ -15,7 +15,7 @@ import { bifHeader, FakeFfmpeg, STREAM_TOKEN, TranscoderFake } from './streamfak
 const SECRET = 'x'.repeat(32); // test-only HMAC key
 const vectors = JSON.parse(readFileSync(new URL('../../../test-vectors/media-paths.plex.json', import.meta.url), 'utf8')) as {
   secret: string;
-  signatures: { part: Array<{ item: string; part: string; sig: string }>; session: Array<{ item: string; nonce: string; session: string }> };
+  signatures: { part: Array<{ item: string; part: string; sig: string }>; trickplay: Array<{ item: string; part: string; sig: string }>; session: Array<{ item: string; nonce: string; session: string }> };
 };
 const MOVIE = encodePlexId('item', 1); // mkv h264/aac, audio 2 (eng, default) + 3 (jpn), subs 4 (embedded srt) + 5 (sidecar srt), BIF
 const EP = encodePlexId('item', 5);
@@ -48,6 +48,11 @@ describe('shared vectors: signatures and sessions', () => {
     expect(partSig(vectors.secret, v.item, v.part)).toBe(v.sig);
     expect(verifyPartSig(vectors.secret, v.item, v.part, v.sig)).toBe(true);
     expect(verifyPartSig('other-secret-other-secret', v.item, v.part, v.sig)).toBe(false);
+  });
+  it.each(vectors.signatures.trickplay)('trickplay sig %#', (v) => {
+    expect(tpSig(vectors.secret, v.item, v.part)).toBe(v.sig);
+    expect(verifyTpSig(vectors.secret, v.item, v.part, v.sig)).toBe(true);
+    expect(verifyPartSig(vectors.secret, v.item, v.part, v.sig)).toBe(false);
   });
   it.each(vectors.signatures.session)('session %#', (v) => {
     expect(sessionFor(vectors.secret, v.item, v.nonce)).toBe(v.session);
@@ -113,7 +118,7 @@ describe('playbackInfo', () => {
       expect((await pb.playbackInfo(ALICE, MOVIE, { ...opts, ...o })).directUrl, JSON.stringify(o)).toBeUndefined();
     }
     expect((await pb.playbackInfo(ALICE, MOVIE, { ...opts, maxHeight: 720 })).directUrl).toBeDefined(); // 360p source within cap
-    expect((await pb.playbackInfo(ALICE, MOVIE, { ...opts, cast: true })).subtitles).toEqual([]); // cast URLs cannot point at /api
+    expect((await pb.playbackInfo(ALICE, MOVIE, { ...opts, cast: true })).subtitles.map((x) => x.url)).toEqual(info.subtitles.map((x) => x.url)); // signed for the receiver by the cast route
   });
 });
 
@@ -357,7 +362,8 @@ describe('trickplay + playMeta', () => {
     const m = await pb.playMeta(ALICE, MOVIE);
     expect(m!.positionTicks).toBe(123_000_000);
     const tp = m!.trickplay(PART1)!;
-    expect(tp).toEqual({ width: 320, height: 180, tileWidth: 1, tileHeight: 1, count: 30, interval: 2000, url: `/media/Videos/${MOVIE}/${PART1}/Trickplay/2000/{n}.jpg?sig=${partSig(SECRET, MOVIE, PART1)}` });
+    expect(tp).toEqual({ width: 320, height: 180, tileWidth: 1, tileHeight: 1, count: 30, interval: 2000, url: `/media/Videos/${MOVIE}/${PART1}/Trickplay/2000/{n}.jpg?sig=${tpSig(SECRET, MOVIE, PART1)}` });
+    expect(tpSig(SECRET, MOVIE, PART1)).not.toBe(partSig(SECRET, MOVIE, PART1)); // own signature domain
     expect(m!.trickplay(encodePlexId('part', 2))).toBeUndefined();
     expect(await pb.playMeta(ALICE, DENIED)).toBeNull();
   });

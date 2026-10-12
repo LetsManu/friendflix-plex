@@ -22,6 +22,8 @@ export const POLL_MS = 5 * 60_000;
 const DEBOUNCE_MS = 3_000;
 /** local hour of the nightly full detail sweep */
 const SWEEP_HOUR = 3;
+/** consecutive successful passes a section must be missing (or list no items) before the mirror drops it */
+export const MISSING_PASSES = 3;
 
 type Log = MediaRuntime['log'];
 const noLog: Log = { warn: () => undefined, info: () => undefined };
@@ -76,81 +78,111 @@ export class PlexSync {
     const initial = !(await db.query('select 1 from plex_sync_state where k = $1', ['initialized'])).rowCount;
     const sections = (await this.client.sections()).filter((s) => LIST_TYPES[String(s.type)] && /^\d+$/.test(String(s.key)));
     const sectionIds = sections.map((s) => Number(s.key));
-    await db.query(
-      `insert into plex_sections(section_id, type, title, uuid, seen_at) select x.id, x.type, x.title, x.uuid, now()
-       from jsonb_to_recordset($1::jsonb) as x(id int, type text, title text, uuid text)
-       on conflict (section_id) do update set type = excluded.type, title = excluded.title, uuid = excluded.uuid, seen_at = now()`,
-      [JSON.stringify(sections.map((s) => ({ id: Number(s.key), type: String(s.type), title: String(s.title ?? ''), uuid: s.uuid ?? null })))],
-    );
-    const removed: string[] = [];
-    const goneSections = await db.query<{ rating_key: string; type: string }>(
-      `delete from plex_items where not (section_id = any($1::int[])) returning rating_key, type`, [sectionIds]);
-    removed.push(...goneSections.rows.filter((r) => r.type !== 'clip').map((r) => String(r.rating_key)));
-    await db.query('delete from plex_sections where not (section_id = any($1::int[]))', [sectionIds]);
-
     const added: string[] = [];
-    const needDetail = new Set<string>();
-    for (const s of sections) {
-      const sid = Number(s.key);
-      const before = new Map(
-        (await db.query<{ rating_key: string; plex_updated_at: string | null; detail_at: Date | null; type: string }>(
-          `select rating_key, plex_updated_at, detail_at, type from plex_items where section_id = $1 and type <> 'clip'`, [sid])).rows
-          .map((r) => [String(r.rating_key), r]),
+    const removed: string[] = [];
+    let details: number;
+    try {
+      await db.query(
+        `insert into plex_sections(section_id, type, title, uuid, seen_at, missing_passes) select x.id, x.type, x.title, x.uuid, now(), 0
+         from jsonb_to_recordset($1::jsonb) as x(id int, type text, title text, uuid text)
+         on conflict (section_id) do update set type = excluded.type, title = excluded.title, uuid = excluded.uuid, seen_at = now(), missing_passes = 0`,
+        [JSON.stringify(sections.map((s) => ({ id: Number(s.key), type: String(s.type), title: String(s.title ?? ''), uuid: s.uuid ?? null })))],
       );
-      const seen = new Set<string>();
-      for (const t of LIST_TYPES[String(s.type)]!) {
-        for await (const page of this.client.paged(`/library/sections/${sid}/all?type=${t}&includeGuids=1`, PAGE)) {
-          const rows = page.map((m) => coreRow(m, sid)).filter((r): r is CoreRow => r !== null);
+
+      const needDetail = new Set<string>();
+      for (const s of sections) {
+        const sid = Number(s.key);
+        const before = new Map(
+          (await db.query<{ rating_key: string; plex_updated_at: string | null; detail_at: Date | null; type: string }>(
+            `select rating_key, plex_updated_at, detail_at, type from plex_items where section_id = $1 and type <> 'clip'`, [sid])).rows
+            .map((r) => [String(r.rating_key), r]),
+        );
+        const seen = new Set<string>();
+        let listed = 0;
+        for (const t of LIST_TYPES[String(s.type)]!) {
+          for await (const page of this.client.paged(`/library/sections/${sid}/all?type=${t}&includeGuids=1`, PAGE)) {
+            const rows = page.map((m) => coreRow(m, sid)).filter((r): r is CoreRow => r !== null);
+            await upsertCore(db, rows);
+            listed += rows.length;
+            for (const r of rows) {
+              seen.add(r.rating_key);
+              const old = before.get(r.rating_key);
+              if (!old) added.push(r.rating_key);
+              if (r.type === 'season') continue; // seasons carry nothing a detail fetch would add
+              if (allDetails || !old || !old.detail_at || String(old.plex_updated_at ?? '') !== String(r.plex_updated_at ?? '')) needDetail.add(r.rating_key);
+            }
+          }
+        }
+        // collections (+ members: the item side only names them by tag)
+        for await (const page of this.client.paged(`/library/sections/${sid}/collections`, PAGE)) {
+          const rows = page.map((m) => coreRow({ ...m, type: 'collection' }, sid)).filter((r): r is CoreRow => r !== null);
           await upsertCore(db, rows);
           for (const r of rows) {
             seen.add(r.rating_key);
+            if (!before.has(r.rating_key)) added.push(r.rating_key);
             const old = before.get(r.rating_key);
-            if (!old) added.push(r.rating_key);
-            if (r.type === 'season') continue; // seasons carry nothing a detail fetch would add
-            if (allDetails || !old || !old.detail_at || String(old.plex_updated_at ?? '') !== String(r.plex_updated_at ?? '')) needDetail.add(r.rating_key);
+            if (!allDetails && old && String(old.plex_updated_at ?? '') === String(r.plex_updated_at ?? '') && old.detail_at) continue;
+            const members: string[] = [];
+            for await (const kids of this.client.paged(`/library/collections/${r.rating_key}/children`, PAGE)) {
+              for (const k of kids) if (/^\d+$/.test(String(k.ratingKey))) members.push(String(k.ratingKey));
+            }
+            await writeCollectionItems(db, r.rating_key, members);
+            await db.query('update plex_items set detail_at = now() where rating_key = $1', [r.rating_key]);
           }
         }
-      }
-      // collections (+ members: the item side only names them by tag)
-      for await (const page of this.client.paged(`/library/sections/${sid}/collections`, PAGE)) {
-        const rows = page.map((m) => coreRow({ ...m, type: 'collection' }, sid)).filter((r): r is CoreRow => r !== null);
-        await upsertCore(db, rows);
-        for (const r of rows) {
-          seen.add(r.rating_key);
-          if (!before.has(r.rating_key)) added.push(r.rating_key);
-          const old = before.get(r.rating_key);
-          if (!allDetails && old && String(old.plex_updated_at ?? '') === String(r.plex_updated_at ?? '') && old.detail_at) continue;
-          const members: string[] = [];
-          for await (const kids of this.client.paged(`/library/collections/${r.rating_key}/children`, PAGE)) {
-            for (const k of kids) if (/^\d+$/.test(String(k.ratingKey))) members.push(String(k.ratingKey));
-          }
-          await writeCollectionItems(db, r.rating_key, members);
-          await db.query('update plex_items set detail_at = now() where rating_key = $1', [r.rating_key]);
+        // a section that suddenly lists nothing while the mirror has items for it: only believed after MISSING_PASSES passes
+        // (a PMS hiccup must not remove - and later re-add - a whole library, with an itemRemoved/itemAdded storm)
+        let trustEmpty = true;
+        if (listed === 0 && [...before.values()].some((r) => r.type !== 'collection')) {
+          const n = (await db.query<{ empty_passes: number }>('update plex_sections set empty_passes = empty_passes + 1 where section_id = $1 returning empty_passes', [sid])).rows[0]?.empty_passes ?? 0;
+          trustEmpty = n >= MISSING_PASSES;
+          if (!trustEmpty) this.log.warn({ section: sid, items: before.size, passes: n }, 'plex: section listed no items, keeping the mirror for now');
+        } else {
+          await db.query('update plex_sections set empty_passes = 0 where section_id = $1 and empty_passes <> 0', [sid]);
+        }
+        const gone = trustEmpty ? [...before.keys()].filter((k) => !seen.has(k)) : [];
+        if (gone.length) {
+          const del = await db.query<{ rating_key: string }>('delete from plex_items where rating_key = any($1::bigint[]) returning rating_key', [gone]);
+          removed.push(...del.rows.map((r) => String(r.rating_key)));
         }
       }
-      const gone = [...before.keys()].filter((k) => !seen.has(k));
-      if (gone.length) {
-        const del = await db.query<{ rating_key: string }>('delete from plex_items where rating_key = any($1::bigint[]) returning rating_key', [gone]);
-        removed.push(...del.rows.map((r) => String(r.rating_key)));
-      }
-    }
-    // extras whose owner is gone
-    await db.query(`delete from plex_items c where c.type = 'clip' and not exists (select 1 from plex_items o where o.rating_key = c.parent_key)`);
-    await db.query(`delete from plex_collection_items ci where not exists (select 1 from plex_items i where i.rating_key = ci.item_key)`);
 
-    // items a websocket event marked stale (detail_at null) although their updatedAt did not change
-    for (const r of (await db.query<{ rating_key: string }>(`select rating_key from plex_items where detail_at is null and type in ('movie', 'show', 'episode')`)).rows) {
-      needDetail.add(String(r.rating_key));
+      // sections Plex no longer lists: dropped (with their items) only after MISSING_PASSES consecutive successful passes; an empty
+      // section list while the mirror has items is never believed (PMS starting up, a database migration, a proxy error page …)
+      const mirrorRows = (await db.query('select 1 from plex_items limit 1')).rowCount ?? 0;
+      if (sections.length === 0 && mirrorRows > 0) {
+        this.log.warn({}, 'plex: the server listed no movie/show sections, keeping the mirror');
+      } else {
+        await db.query('update plex_sections set missing_passes = missing_passes + 1 where not (section_id = any($1::int[]))', [sectionIds]);
+        const drop = (await db.query<{ section_id: number }>('select section_id from plex_sections where missing_passes >= $1', [MISSING_PASSES])).rows.map((r) => r.section_id);
+        if (drop.length) {
+          const goneSections = await db.query<{ rating_key: string; type: string }>(
+            'delete from plex_items where section_id = any($1::int[]) returning rating_key, type', [drop]);
+          removed.push(...goneSections.rows.filter((r) => r.type !== 'clip').map((r) => String(r.rating_key)));
+          await db.query('delete from plex_sections where section_id = any($1::int[])', [drop]);
+        }
+      }
+      // extras whose owner is gone
+      await db.query(`delete from plex_items c where c.type = 'clip' and not exists (select 1 from plex_items o where o.rating_key = c.parent_key)`);
+      await db.query(`delete from plex_collection_items ci where not exists (select 1 from plex_items i where i.rating_key = ci.item_key)`);
+
+      // items a websocket event marked stale (detail_at null) although their updatedAt did not change
+      for (const r of (await db.query<{ rating_key: string }>(`select rating_key from plex_items where detail_at is null and type in ('movie', 'show', 'episode')`)).rows) {
+        needDetail.add(String(r.rating_key));
+      }
+      details = await this.fetchDetails([...needDetail]);
+    } finally {
+      // always, also when the pass aborted half-way: upsertCore() nulled the ages of re-rated items (hidden for capped profiles),
+      // this recomputes them from what was written so far
+      await refreshAges(db, this.log).catch((e) => this.log.warn({ err: String(e) }, 'plex: age refresh failed'));
+      await Promise.resolve(this.after()).catch(() => undefined);
     }
-    const details = await this.fetchDetails([...needDetail]);
-    await refreshAges(db, this.log);
     if (initial) {
       await db.query(`insert into plex_sync_state(k, v) values ('initialized', to_jsonb(now())) on conflict (k) do nothing`);
     } else {
       await this.emit(added, removed);
     }
     await db.query(`insert into plex_sync_state(k, v) values ('last_sync', to_jsonb(now())) on conflict (k) do update set v = excluded.v`);
-    await this.after();
     return { added, removed, details, sections: sections.length };
   }
 

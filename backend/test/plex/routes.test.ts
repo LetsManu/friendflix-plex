@@ -41,7 +41,7 @@ describe('Plex behind the FriendFlix routes', () => {
     // provisioning created a synthetic identity with the role policy (admin: all libraries, no cap)
     const jf = (await env.pool.query('select jellyfin_user_id j from users')).rows[0].j as string;
     expect(jf).toMatch(/^[0-9a-f]{32}$/);
-    expect((await env.pool.query('select libraries, max_age, disabled from media_policies where identity_id=$1', [jf])).rows[0]).toEqual({ libraries: null, max_age: null, disabled: false });
+    expect((await env.pool.query('select libraries, max_age, disabled from plex_media_policies where identity_id=$1', [jf])).rows[0]).toEqual({ libraries: null, max_age: null, disabled: false });
   });
 
   it('library routes list from the mirror; item detail, seasons, episodes work', async () => {
@@ -85,7 +85,7 @@ describe('Plex behind the FriendFlix routes', () => {
     expect(r.statusCode, r.body).toBe(201);
     const pid = r.json().profile.id as string;
     const pj = (await env.pool.query('select jellyfin_user_id j from profiles where id=$1', [pid])).rows[0].j as string;
-    expect((await env.pool.query('select max_age, block_unrated from media_policies where identity_id=$1', [pj])).rows[0]).toEqual({ max_age: 6, block_unrated: ['Movie', 'Series', 'Trailer'] });
+    expect((await env.pool.query('select max_age, block_unrated from plex_media_policies where identity_id=$1', [pj])).rows[0]).toEqual({ max_age: 6, block_unrated: ['Movie', 'Series', 'Trailer'] });
     const sel = await call(owner, 'POST', `/api/profiles/${pid}/select`, {});
     expect(sel.statusCode, sel.body).toBe(200);
     const kid: Sess = { cookies: { ff_sid: sel.cookies.find((c) => c.name === 'ff_sid')!.value }, csrf: owner.csrf };

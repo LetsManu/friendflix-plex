@@ -8,7 +8,7 @@ import type pg from 'pg';
  * - plex_sections / plex_items / plex_tags / plex_collection_items: mirror of the Plex library (sync.ts), the source of every
  *   browse query (access rules are applied in SQL, see access.ts).
  * - plex_ratings: content rating string -> age (null = unrated, -1 = unknown => fail closed), refreshed from access.ts.
- * - plex_identities + media_policies: the synthetic per-account/per-profile identities (users.jellyfin_user_id /
+ * - plex_identities + plex_media_policies: the synthetic per-account/per-profile identities (users.jellyfin_user_id /
  *   profiles.jellyfin_user_id hold their ids) and their role/kids policy.
  * - plex_userdata: played / resume / favourites per identity (never written to Plex).
  * - plex_sync_state: small key/value state of the sync job.
@@ -124,6 +124,13 @@ export const PLEX_MIGRATIONS: string[] = [
     k text primary key,
     v jsonb not null
   );
+  `,
+  // 2: fork table names carry the plex_ prefix (no clash with a future upstream table); section disappearance / empty listing
+  // counters (sync.ts: a section or its items are only dropped after MISSING_PASSES consecutive successful passes)
+  `
+  alter table media_policies rename to plex_media_policies;
+  alter table plex_sections add column missing_passes int not null default 0;
+  alter table plex_sections add column empty_passes int not null default 0;
   `,
 ];
 

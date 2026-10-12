@@ -141,7 +141,7 @@ The FriendFlix interface is the same; what differs is what Plex can deliver. Sta
 | Skip recap / preview ("next time on …") | Not available | Plex has no such markers |
 | Scrub preview thumbnails | Limited | Single frames, only if "video preview thumbnails" are enabled in Plex |
 | Downloads | Works | Original file if browser-ready, otherwise transcoded by Plex and remuxed by FriendFlix |
-| Chromecast | Limited | Works, but no subtitles while casting yet |
+| Chromecast | Works | Including text subtitles (signed FriendFlix subtitle URLs) |
 | TV mode, watch parties, recommendations, notifications | Works | FriendFlix features, independent of the media server |
 | "Upcoming episodes" | Not available | Plex does not offer it |
 | Wishes / request service | Not working yet | The Seerr user mapping relies on Jellyfin user ids |
@@ -310,7 +310,7 @@ npm run e2e                                     # Playwright: builds the web app
 
 - One backend replica: watch-party rooms, rate limits and remote-control rooms live in memory.
 - Image-based subtitles (PGS) are not offered; text subtitles are delivered as WebVTT.
-- Plex (see the [table above](#plex-vs-jellyfin-what-works) and [docs/plex.md](docs/plex.md)): skip intro/credits only with Plex Pass markers (never recap/preview); scrub previews are single frames and need preview thumbnails enabled in Plex; no "upcoming episodes"; audio track selection is per Plex account (stream starts are serialized, use a dedicated token); subtitles are extracted and converted by FriendFlix; the server must be claimed and a token is required; the request service's per-user mapping is degraded; Plan B is not supported.
+- Plex (see the [table above](#plex-vs-jellyfin-what-works) and [docs/plex.md](docs/plex.md)): skip intro/credits only with Plex Pass markers (never recap/preview); scrub previews are single frames and need preview thumbnails enabled in Plex; no "upcoming episodes"; audio track selection is per Plex account (stream starts are serialized, use a dedicated token); subtitles are extracted and converted by FriendFlix; the server must be claimed and a token is required; wishes (request service) do not work yet; Plan B is not supported.
 - The Plex implementation relies on partly undocumented Plex APIs, verified against Plex Media Server 1.43; other versions may behave differently.
 - Request service and Authentik APIs differ between versions – after upgrades see [docs/operations.md](docs/operations.md) and [docs/integrations.md](docs/integrations.md).
 - Profiles live in FriendFlix, not in Plex: they do not appear in Plex's user list and need no plex.tv account.

@@ -129,7 +129,7 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | Profile, Kinderprofile, PIN, Altersgrenzen | Funktioniert | Von FriendFlix bei jeder Liste, Suche, jedem Titel und jeder Medienanfrage durchgesetzt; braucht korrekte `contentRating`, unbekannte Freigaben sind für begrenzte Profile gesperrt |
 | Bibliothekszugriff pro Rolle | Funktioniert | Über den Bibliotheksnamen, siehe Abschnitt 4 |
 | Bibliothek, Suche, Detailseiten, Sammlungen, Genres, Studios | Funktioniert | Aus FriendFlix' Spiegel der Plex-Bibliothek |
-| Bilder | Funktioniert | Poster, Hintergründe, Logos (falls Plex eins hat) über Plex' Bild-Transcoder; zusammengesetzte Sammlungsposter |
+| Bilder | Funktioniert | Poster, Hintergründe, Logos (falls Plex eins hat) über Plex' Bild-Transcoder. Sammlungen ohne eigenes Poster zeigen ihren Titel: Plex' zusammengesetztes Poster wird nie benutzt, weil es Titel zeigen kann, die ein Profil nicht sehen darf |
 | Besetzung | Eingeschränkt | Namen und Rollen, **keine Personenbilder** |
 | „Mehr davon“ | Eingeschränkt | Von FriendFlix aus gemeinsamen Genres und Besetzung berechnet, nicht Plex' eigene Empfehlungen |
 | Weiterschauen, Meine Liste, Favoriten, Bewertungen, Verlauf | Funktioniert | In FriendFlix; nichts wird in Plex geschrieben |
@@ -141,12 +141,12 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | Intro / Abspann überspringen | Eingeschränkt | Nur mit Plex-Pass-Markern; Rückblick und Vorschau überspringen gibt es nie |
 | Vorschaubilder beim Spulen | Eingeschränkt | Einzelbilder aus Plex' BIF-Index, nur wenn Vorschaubilder erzeugt sind |
 | Offline-Downloads | Funktioniert | Originaldatei, wenn sie schon MP4/H.264/AAC ist, sonst von Plex transkodiert und von FriendFlix umverpackt |
-| Chromecast | Eingeschränkt | HLS funktioniert; **beim Casten noch keine Untertitel** |
+| Chromecast | Funktioniert | HLS; Text-Untertitel über signierte FriendFlix-Untertitel-URLs |
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen, Hubs | Funktioniert | FriendFlix-Funktionen |
 | „Kommende Folgen“ / Kalender | Nicht verfügbar | Plex bietet das nicht |
 | Wünsche (Request-Dienst) | Noch nicht | Das Original ordnet FriendFlix-Nutzer über Jellyfin-IDs Seerr-Nutzern zu; mit Plex schlägt das fehl, in der Preview lassen sich keine Wünsche anlegen |
 | „Aktuell läuft“ anderer Plex-Apps | Nicht verfügbar | FriendFlix zeigt nur eigene Sitzungen |
-| nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt |
+| nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt: `/internal/authz-nginx` antwortet `501 plan_b_unsupported` |
 
 ### Tonspuren
 
@@ -161,7 +161,7 @@ Plex kennt nur ein Token, also setzt FriendFlix die Rolleneinstellungen selbst d
 
 - **Bitrate-/Höhenlimit** wird bei jedem Transcode-Start mitgeschickt; eine begrenzte Rolle bekommt nie Direct Play einer größeren Datei.
 - **Transcoding aus** (Rollenvorlage oder *Admin → Rollen*): nur Direct Play. Titel, die den Transcoder bräuchten, antworten mit `403 transcoding_not_allowed`; Plex startet keinen Transcode. Casten und transkodierte Downloads werden genauso abgelehnt.
-- **Max. Streams**: pro Konto (wie im Original) und pro Profil-Identität gezählt (aktive Plex-Sitzungen mit Fortschrittsmeldung in den letzten 60 s). Qualitäts- oder Tonspurwechsel beim selben Titel zählt nie doppelt. Eine Stopp-Meldung beendet den Plex-Transcode sofort.
+- **Max. Streams**: pro Konto (wie im Original) und pro Profil-Identität gezählt, auf dem Server: Jeder Plex-Transcode, den FriendFlix für das Profil gestartet hat, zählt, solange Plex ihn noch ausführt (`/transcode/sessions`; Plex beendet Transcodes, die niemand mehr abruft), dazu Direct-Play-Sitzungen mit Fortschrittsmeldung in den letzten 60 s. Ein Titel über der Grenze antwortet mit `429 max_streams`, bevor ein Transcode startet. Qualitäts- oder Tonspurwechsel beim selben Titel zählt nie doppelt. Eine Stopp-Meldung beendet den Plex-Transcode sofort.
 
 ## Fehlersuche
 
@@ -170,6 +170,7 @@ Plex kennt nur ein Token, also setzt FriendFlix die Rolleneinstellungen selbst d
 | Health-Check oder Login schlägt fehl, Log zeigt `401` von Plex | `PLEX_TOKEN` falsch oder widerrufen, oder Server nicht geclaimt. `curl`-Prüfung aus Abschnitt 2 ausführen. |
 | `ECONNREFUSED` / Timeouts zu Plex | Gateway oder Backend erreicht `PLEX_URL` nicht. Aus dem Container testen; LAN-Adresse nehmen; Firewalls und Docker-Netze prüfen. |
 | Bibliothek oder Titel fehlt | Rolle hat keinen Zugriff auf die Bibliothek, oder Plex hat den Scan nicht beendet. In Plex scannen und den nächsten FriendFlix-Sync abwarten. |
+| Eine in Plex gelöschte Bibliothek ist noch da | Für eine Weile erwartet: FriendFlix entfernt (oder leert) eine Bibliothek erst, wenn sie in 3 Syncs hintereinander fehlt (etwa 15 Minuten), damit ein Plex-Schluckauf nie den Spiegel löscht. Listet Plex gar keine Bibliotheken, behält FriendFlix alles. |
 | Kinder-/altersbeschränkte Profile sehen nichts | Titel haben keine oder unbekannte `contentRating`. Siehe [Altersfreigaben](#5-altersfreigaben). |
 | Freigaben-Änderung in Plex erscheint nicht | Plex ändert bei Metadaten-Bearbeitung keine Zeitstempel; nächsten Durchlauf abwarten (einige Minuten). |
 | Kein „Intro überspringen“ | Keine Marker (braucht Plex Pass) oder noch nicht erkannt. |
@@ -195,13 +196,16 @@ Die Preview ist gegen einen Fake-Plex-Server getestet, der aus aufgezeichneten A
 8. **Untertitel:** Eine SRT-Datei daneben und ein eingebetteter Text-Untertitel (MKV) erscheinen synchron; Bild-Untertitel (PGS) werden nicht angeboten.
 9. **Marker / Vorschaubilder:** Mit Plex Pass und erkannten Intros erscheint der Überspringen-Knopf; mit erzeugten Vorschaubildern zeigt das Spulen Bilder.
 10. **Fortschritt:** 5 Minuten schauen, schließen, wieder öffnen: Fortsetzungsposition und *Weiterschauen* stimmen; Plex' eigener Gesehen-Status des Token-Kontos bleibt unverändert.
-11. **Downloads und Casten** (falls genutzt): Ein Download wird fertig und spielt offline; Casten startet (ohne Untertitel).
+11. **Downloads und Casten** (falls genutzt): Ein Download wird fertig und spielt offline; Casten startet, und ein vorher gewählter Text-Untertitel erscheint auf dem Fernseher.
 12. **Grenzen:** Eine Rolle ohne Transcoding spielt nur direkt abspielbare Dateien; eine Rolle mit 1 Stream kann auf einem zweiten Gerät keinen zweiten Titel starten.
 13. **Token-Hygiene:** In den Entwicklerwerkzeugen des Browsers (Netzwerk) enthält keine Anfrage-URL, Antwort oder Playlist dein Plex-Token oder die Adresse deines Plex-Servers.
 
 Ergebnisse (was ging, was nicht, Logs ohne Token) bitte als Issue in [LetsManu/friendflix-plex](https://github.com/LetsManu/friendflix-plex/issues).
 
 ## Abgleich mit dem Original (für Maintainer)
+
+Sicherheitshinweise zum Plex-Adapter: Altersgrenzen schlagen im Zweifel zu (ein neu eingestufter Titel ist für begrenzte Profile versteckt, bis sein Alter neu berechnet ist, auch wenn ein Sync abbricht); Direct-Stream- und Trickplay-URLs sind in getrennten Domänen signiert; das Gateway merkt sich die Sichtbarkeit pro Sitzungs-ID 5 s lang, genau wie seinen Credential-Cache bei Jellyfin – ein Profilwechsel vergibt eine neue Sitzungs-ID, der Cache des vorherigen Profils gilt also nie für das neue.
+
 
 Dieses Repository ist ein Fork von [LetsManu/friendflix](https://github.com/LetsManu/friendflix). So bleiben Merges klein:
 

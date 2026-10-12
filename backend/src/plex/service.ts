@@ -3,7 +3,7 @@
  *
  * Plex is reached with ONE admin token, so Plex itself knows nothing about FriendFlix accounts and profiles. Instead:
  * - identities are synthetic (plex_identities; users/profiles.jellyfin_user_id hold their ids), their role / kids policy lives
- *   in media_policies (admin.applyPolicy);
+ *   in plex_media_policies (admin.applyPolicy);
  * - every browse call answers from the Postgres mirror (sync.ts) with the identity's access predicate (access.ts) applied in SQL;
  *   item() is 404 for anything the identity may not see;
  * - played / resume / favourites live in plex_userdata (userdata.ts), never in Plex.
@@ -189,7 +189,10 @@ export class PlexMediaServer implements MediaServer {
         g.ep_total, g.ep_played, g.ep_last_played,
         case when i.type = 'show' then (select max(e.added_at) from plex_items e where e.type = 'episode' and e.grandparent_key = i.rating_key) end last_added,
         case when i.type = 'collection' then (select count(*) from plex_collection_items cm join plex_items m on m.rating_key = cm.item_key
-          where cm.collection_key = i.rating_key and ${visibleSql(acc, 'm', p, 1)}) end member_count
+          where cm.collection_key = i.rating_key and ${visibleSql(acc, 'm', p, 1)}) end member_count,
+        case when i.type = 'collection' then (select fm.rating_key from plex_collection_items cf join plex_items fm on fm.rating_key = cf.item_key
+          where cf.collection_key = i.rating_key and fm.thumb is not null and ${visibleSql(acc, 'fm', p, 1)}
+          order by lower(coalesce(fm.title_sort, fm.title)), fm.rating_key limit 1) end first_member
       from plex_items i
       left join plex_items sh on sh.rating_key = case when i.type = 'episode' then i.grandparent_key when i.type = 'season' then i.parent_key end
       left join plex_userdata ud on ud.identity_id = ${idp} and ud.rating_key = i.rating_key
@@ -208,11 +211,15 @@ export class PlexMediaServer implements MediaServer {
     const idp = p(acc.identity);
     const o = build(p, acc);
     const where = [visibleSql(acc, 'i', p), ...o.where];
-    const sql = `${this.selectSql(acc, p, idp).replace(/^select /, `select ${o.total ? 'count(*) over() total_count, ' : ''}`)}
-      where ${where.join(' and ')}
-      ${o.order ? `order by ${o.order}` : ''} ${o.limit !== undefined ? `limit ${Math.max(0, Math.floor(o.limit))}` : ''} ${o.offset ? `offset ${Math.max(0, Math.floor(o.offset))}` : ''}`;
+    const base = `${this.selectSql(acc, p, idp)} where ${where.join(' and ')}`;
+    const offset = o.offset ? Math.max(0, Math.floor(o.offset)) : 0;
+    const sql = `${base.replace(/^select /, `select ${o.total ? 'count(*) over() total_count, ' : ''}`)}
+      ${o.order ? `order by ${o.order}` : ''} ${o.limit !== undefined ? `limit ${Math.max(0, Math.floor(o.limit))}` : ''} ${offset ? `offset ${offset}` : ''}`;
     const rows = await this.q<ItemRow & { total_count?: string }>(sql, params);
-    return { items: rows.map(toItemDto), total: rows[0]?.total_count !== undefined ? Number(rows[0].total_count) : rows.length };
+    let total = rows[0]?.total_count !== undefined ? Number(rows[0].total_count) : rows.length;
+    // a page past the end has no row to carry count(*) over(): count separately instead of answering total = 0
+    if (o.total && !rows.length && offset > 0) total = Number((await this.q<{ n: string }>(`select count(*) n from (${base}) x`, params))[0]?.n ?? 0);
+    return { items: rows.map(toItemDto), total };
   }
 
   /** Rating key of a visible item of the given types, or null. */
@@ -276,24 +283,6 @@ export class PlexMediaServer implements MediaServer {
       downloadSource: async () => { throw notImplemented('downloadSource'); },
       subtitleStream: async () => new Response(null, { status: 501 }),
     };
-  }
-
-  /**
-   * Mirror lookup for the playback module / gateway: Plex image path of an item (Primary = thumb, Backdrop = art, Logo, Thumb)
-   * or a person (tag) thumb. Server-relative; null when unknown. Callers check access first.
-   */
-  async imageSource(id: string, kind: string): Promise<string | null> {
-    const d = decodePlexId(id);
-    if (!d) return null;
-    if (d.kind === 'tag') {
-      const r = await this.q<{ thumb: string | null }>('select thumb from plex_tags where tag_id = $1 and thumb is not null limit 1', [d.value]);
-      return r[0]?.thumb ?? null;
-    }
-    if (d.kind !== 'item') return null;
-    const col = ({ primary: 'coalesce(thumb, grandparent_thumb, parent_thumb)', backdrop: 'art', logo: 'logo', thumb: 'coalesce(thumb, art)' } as Record<string, string>)[kind.toLowerCase()];
-    if (!col) return null;
-    const r = await this.q<{ path: string | null }>(`select ${col} path from plex_items where rating_key = $1`, [d.value]);
-    return r[0]?.path ?? null;
   }
 
   /** Mirror lookup for the playback module: media/parts/streams (no file paths) of a visible item; 404 otherwise. */
@@ -853,7 +842,7 @@ export class PlexMediaServer implements MediaServer {
         const maxAge = p.parental?.maxRating !== undefined ? p.parental.maxRating : t.maxParentalRating;
         await this.q('insert into plex_identities(id, name) values ($1, $1) on conflict (id) do nothing', [id]);
         await this.q(
-          `insert into media_policies(identity_id, libraries, max_age, block_unrated, disabled, hidden, max_bitrate, max_streams, transcoding, max_height, download, updated_at)
+          `insert into plex_media_policies(identity_id, libraries, max_age, block_unrated, disabled, hidden, max_bitrate, max_streams, transcoding, max_height, download, updated_at)
            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
            on conflict (identity_id) do update set libraries = excluded.libraries, max_age = excluded.max_age, block_unrated = excluded.block_unrated,
              disabled = excluded.disabled, hidden = excluded.hidden, max_bitrate = excluded.max_bitrate, max_streams = excluded.max_streams,
@@ -867,7 +856,7 @@ export class PlexMediaServer implements MediaServer {
       setDisabled: async (id, disabled) => {
         await this.q('insert into plex_identities(id, name) values ($1, $1) on conflict (id) do nothing', [id]);
         await this.q(
-          `insert into media_policies(identity_id, libraries, disabled) values ($1, '{}', $2)
+          `insert into plex_media_policies(identity_id, libraries, disabled) values ($1, '{}', $2)
            on conflict (identity_id) do update set disabled = excluded.disabled, updated_at = now()`, [id, disabled]);
         this.dropAccess(id);
       },

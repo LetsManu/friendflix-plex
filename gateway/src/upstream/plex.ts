@@ -11,7 +11,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import type { AuthorizeContext, Upstream, UpstreamCredentials } from './types.js';
+import type { AuthorizeContext, PlaylistContext, Upstream, UpstreamCredentials } from './types.js';
 
 // ---- Plex id codec (copy of backend/src/plex/ids.ts, checked against test-vectors/plex-ids.json)
 const PLEX_ID = /^9f1e([0-9a-f])([0-9a-f]{27})$/;
@@ -33,6 +33,8 @@ const mac = (secret: string, msg: string) => createHmac('sha256', secret).update
 const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 export const verifyPartSig = (secret: string, item: string, part: string, sig: string) =>
   /^[0-9a-f]{32}$/.test(sig) && same(mac(secret, `part|${item}|${part}`).slice(0, 32), sig);
+export const verifyTpSig = (secret: string, item: string, part: string, sig: string) =>
+  /^[0-9a-f]{32}$/.test(sig) && same(mac(secret, `tp|${item}|${part}`).slice(0, 32), sig);
 export const verifySession = (secret: string, item: string, s: string) =>
   /^[0-9a-f]{16}-[0-9a-f]{24}$/.test(s) && same(`${s.slice(0, 16)}-${mac(secret, `hls|${item}|${s.slice(0, 16)}`).slice(0, 24)}`, s);
 
@@ -59,6 +61,71 @@ const intIn = (v: string | null, min: number, max: number) => {
   const n = Number(v);
   return n >= min ? Math.min(n, max) : null;
 };
+
+/** Primary-image tag `m<item id32>` (a collection poster taken from a visible member): the member id, else null. */
+function memberTag(kind: string, tag: string | null): string | null {
+  const t = /^m(9f1e0[0-9a-f]{27})$/.exec(tag ?? '');
+  return kind === 'Primary' && t ? t[1]! : null;
+}
+
+const CREDENTIAL_KEYS = new Set(['x-plex-token', 'token', 'api_key', 'apikey', 'access_token']);
+/** One playlist URI without credential query parameters; null when it leaves the session directory (absolute / host / root path). */
+function cleanUri(uri: string): string | null {
+  const u = uri.trim();
+  if (!u) return u;
+  if (/^[a-z][\w+.-]*:/i.test(u) || u.startsWith('/') || u.startsWith('\\') || u.includes('..')) return null;
+  const q = u.indexOf('?');
+  if (q === -1) return u;
+  const keep = u.slice(q + 1).split('&').filter((kv) => {
+    let k = kv.split('=')[0] ?? '';
+    try { k = decodeURIComponent(k); } catch { /* keep raw */ }
+    return k !== '' && !CREDENTIAL_KEYS.has(k.toLowerCase()) && !k.toLowerCase().startsWith('x-plex-');
+  });
+  return keep.length ? `${u.slice(0, q)}?${keep.join('&')}` : u.slice(0, q);
+}
+
+/**
+ * Playlist hook (defence in depth): Plex session playlists only name relative segments (00000.ts), and the gateway sends the token
+ * as a header - but should a PMS version ever put X-Plex-Token (or any X-Plex-* parameter) into a URI, it is removed here, and a URI
+ * pointing outside the session directory (absolute URL, /path, ..) fails the request (502) instead of exposing the Plex address.
+ */
+export function plexPlaylist(body: string, _ctx?: PlaylistContext): string {
+  return body.split(/\r?\n/).map((line) => {
+    if (line.startsWith('#')) {
+      return line.replace(/URI="([^"]*)"/g, (_all, uri: string) => {
+        const c = cleanUri(uri);
+        if (c === null) throw new Error('plex playlist: URI outside the session');
+        return `URI="${c}"`;
+      });
+    }
+    const c = cleanUri(line);
+    if (c === null) throw new Error('plex playlist: URI outside the session');
+    return c;
+  }).join('\n');
+}
+
+/** Startup check (Upstream.validateConfig): PLEX_URL must be an http(s) URL and a token (PLEX_TOKEN or a readable PLEX_TOKEN_FILE) present. */
+export function validatePlexEnv(env: NodeJS.ProcessEnv): string[] {
+  const problems: string[] = [];
+  const url = (env.PLEX_URL ?? '').trim();
+  if (!url) problems.push('PLEX_URL is not set');
+  else {
+    try {
+      if (!/^https?:$/.test(new URL(url).protocol)) problems.push('PLEX_URL must be an http(s) URL');
+    } catch {
+      problems.push('PLEX_URL is not a valid URL');
+    }
+  }
+  const file = (env.PLEX_TOKEN_FILE ?? '').trim();
+  if (file) {
+    try {
+      if (!readFileSync(file, 'utf8').trim()) problems.push('PLEX_TOKEN_FILE is empty');
+    } catch {
+      problems.push('PLEX_TOKEN_FILE cannot be read');
+    }
+  } else if (!(env.PLEX_TOKEN ?? '').trim()) problems.push('PLEX_TOKEN (or PLEX_TOKEN_FILE) is not set');
+  return problems;
+}
 
 /** Reads VAR or the file named by VAR_FILE (Docker secrets), once. */
 function envSecret(name: string): () => string {
@@ -97,10 +164,15 @@ export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
     }
     if ((m = TRICKPLAY.exec(c.path))) {
       const sig = one(c.query, 'sig');
-      if (!sig || !verifyPartSig(secret(), m[1]!, m[2]!, sig)) return false;
+      if (!sig || !verifyTpSig(secret(), m[1]!, m[2]!, sig)) return false;
       return c.checkItem(m[1]!, 'media');
     }
-    if ((m = IMAGE.exec(c.path))) return c.checkItem(m[1]!, 'image');
+    if ((m = IMAGE.exec(c.path))) {
+      // a collection's poster may name one of its members (tag m<item id32>): the viewer must be allowed to see that member too
+      const member = memberTag(m[2]!, one(c.query, 'tag'));
+      if (member && !(await c.checkItem(member, 'image'))) return false;
+      return c.checkItem(m[1]!, 'image');
+    }
     return false; // fail closed for anything the allowlist may grow later
   }
 
@@ -121,9 +193,10 @@ export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
     if ((m = IMAGE.exec(path))) {
       const rk = keyOf(m[1]!, 'item')!;
       const tag = one(query, 'tag') ?? '';
-      let src = `/library/metadata/${rk}/${IMAGE_SOURCE[m[2]!]}`;
-      if (/^\d{1,12}$/.test(tag)) src += `/${tag}`;
-      else if (m[2] === 'Primary' && /^c\d{1,12}$/.test(tag)) src = `/library/collections/${rk}/composite/${tag.slice(1)}`;
+      const member = memberTag(m[2]!, tag);
+      // collection composites (/library/collections/<rk>/composite/…) are never served: they show members the viewer may not see
+      let src = member ? `/library/metadata/${keyOf(member, 'item')}/thumb` : `/library/metadata/${rk}/${IMAGE_SOURCE[m[2]!]}`;
+      if (!member && /^\d{1,12}$/.test(tag)) src += `/${tag}`;
       const w = intIn(one(query, 'maxwidth') ?? one(query, 'width'), 16, 3840);
       const h = intIn(one(query, 'maxheight') ?? one(query, 'height'), 16, 3840);
       const q = new URLSearchParams({ url: src, width: String(w ?? (h ? h * 4 : 1920)), height: String(h ?? (w ? w * 4 : 1920)), minSize: '0', upscale: '0' });
@@ -151,6 +224,8 @@ export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
     authHeaders: (_c: UpstreamCredentials) => ({ 'X-Plex-Token': token(), 'X-Plex-Client-Identifier': 'friendflix-gateway', 'X-Plex-Product': 'FriendFlix' }),
     authorize,
     rewrite,
+    validateConfig: validatePlexEnv,
+    playlist: plexPlaylist,
   };
 }
 
