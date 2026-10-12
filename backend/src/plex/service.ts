@@ -63,6 +63,8 @@ const PEOPLE_KINDS = ['actor', 'director', 'writer', 'producer'];
 const PERSON_TYPE: Record<string, string> = { actor: 'Actor', director: 'Director', writer: 'Writer', producer: 'Producer' };
 /** a series counts as continuing while an episode premiered within this many days (Plex has no series status) */
 const CONTINUING_DAYS = 60;
+/** lifetime of a library-wide snapshot behind libraryMediaTraits / libraryContinuingSeriesIds (one paging pass of fresh.ts) */
+const SNAPSHOT_MS = 120_000;
 const like = (s: string) => `%${s.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 const cloneItem = (i: ItemDto): ItemDto => ({ ...i, genres: [...i.genres], ...(i.imageTags ? { imageTags: { ...i.imageTags } } : {}) });
 
@@ -751,15 +753,34 @@ export class PlexMediaServer implements MediaServer {
     return plexTraits(r.flatMap((x) => x.media ?? []));
   }
 
+  /**
+   * Library-wide lists are paged by the caller with offsets; a page against a live table would cost O(N) per page and shift while a sync
+   * runs. So page 0 takes one snapshot (single query) and later pages slice it; the snapshot lives SNAPSHOT_MS.
+   */
+  private readonly snapshots = new Map<string, { exp: number; p: Promise<unknown[]> }>();
+  private snapshot<T>(key: string, start: number, limit: number, load: () => Promise<T[]>): Promise<T[]> {
+    const now = Date.now();
+    let s = this.snapshots.get(key);
+    if (!s || s.exp < now || start <= 0) {
+      const entry = { exp: now + SNAPSHOT_MS, p: load() as Promise<unknown[]> };
+      entry.p.catch(() => { if (this.snapshots.get(key) === entry) this.snapshots.delete(key); });
+      this.snapshots.set(key, entry);
+      s = entry;
+    }
+    const from = Math.max(0, start);
+    return (s.p as Promise<T[]>).then((all) => all.slice(from, from + Math.max(0, limit)));
+  }
+
   /** One page of the whole library's traits (stable order by rating key; items without streams count as SD so a short page = end). */
   async libraryMediaTraits(type: 'Movie' | 'Episode', start: number, limit: number): Promise<ItemMediaTraits[]> {
-    const r = await this.q<{ rating_key: string; grandparent_key: string | null; media: Array<Record<string, any>> | null }>(
-      `select rating_key, grandparent_key, media from plex_items where type = $1 order by rating_key offset $2 limit $3`,
-      [type === 'Episode' ? 'episode' : 'movie', Math.max(0, start), Math.max(0, limit)]);
-    return r.map((x) => ({
-      id: encodePlexId('item', x.rating_key), ...(x.grandparent_key ? { seriesId: encodePlexId('item', x.grandparent_key) } : {}),
-      traits: plexTraits(x.media) ?? { resolution: 'sd', hdr: null, audio: null },
-    }));
+    return this.snapshot(`traits:${type}`, start, limit, async () => {
+      const r = await this.q<{ rating_key: string; grandparent_key: string | null; media: Array<Record<string, any>> | null }>(
+        'select rating_key, grandparent_key, media from plex_items where type = $1 order by rating_key', [type === 'Episode' ? 'episode' : 'movie']);
+      return r.map((x) => ({
+        id: encodePlexId('item', x.rating_key), ...(x.grandparent_key ? { seriesId: encodePlexId('item', x.grandparent_key) } : {}),
+        traits: plexTraits(x.media) ?? { resolution: 'sd', hdr: null, audio: null },
+      }));
+    });
   }
 
   /**
@@ -768,13 +789,16 @@ export class PlexMediaServer implements MediaServer {
    * else is "continuing" (fresh.ts then never calls its newest episode a season finale by mistake).
    */
   async libraryContinuingSeriesIds(start: number, limit: number): Promise<string[]> {
-    const r = await this.q<{ rating_key: string }>(
-      `select s.rating_key from plex_items s where s.type = 'show' and not exists (
-         select 1 from plex_items e where e.type = 'episode' and e.grandparent_key = s.rating_key
-         having count(*) > 0 and count(*) = count(e.originally_available) and max(e.originally_available) < $1::date)
-       order by s.rating_key offset $2 limit $3`,
-      [new Date(Date.now() - CONTINUING_DAYS * 86_400_000).toISOString().slice(0, 10), Math.max(0, start), Math.max(0, limit)]);
-    return r.map((x) => encodePlexId('item', x.rating_key));
+    return this.snapshot('continuing', start, limit, async () => {
+      const r = await this.q<{ rating_key: string }>(
+        `select s.rating_key from plex_items s left join (
+           select grandparent_key k, count(*) n, count(originally_available) a, max(originally_available) m
+             from plex_items where type = 'episode' group by grandparent_key) e on e.k = s.rating_key
+         where s.type = 'show' and not (coalesce(e.n, 0) > 0 and e.n = e.a and e.m < $1::date)
+         order by s.rating_key`,
+        [new Date(Date.now() - CONTINUING_DAYS * 86_400_000).toISOString().slice(0, 10)]);
+      return r.map((x) => encodePlexId('item', x.rating_key));
+    });
   }
 
   /** Chapter marks of a visible video (includeChapters=1 in the detail sync), stills when PMS generated chapter thumbnails; 404 otherwise. */

@@ -137,7 +137,7 @@ export const PLEX_MIGRATIONS: string[] = [
   // audio layout) are new in the detail fetch: mark every detail stale so the next sync pass refetches them
   `
   alter table plex_items add column chapters jsonb;
-  update plex_items set detail_at = null where type in ('movie', 'show', 'episode');
+  update plex_items set detail_at = null where type in ('movie', 'episode') and detail_at is not null;
   `,
 ];
 
