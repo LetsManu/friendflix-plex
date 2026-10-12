@@ -39,6 +39,9 @@ const schema = z.object({
   /** required when MEDIA_SERVER=jellyfin (see the check below) */
   JELLYFIN_URL: z.string().url().optional(),
   JELLYFIN_ADMIN_API_KEY: opt,
+  /** required when MEDIA_SERVER=plex: base URL of the existing Plex Media Server and its admin token (backend + gateway only) */
+  PLEX_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
+  PLEX_TOKEN: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   SEERR_URL: z.string().url(),
   SEERR_API_KEY: z.string().min(1),
   NTFY_URL: opt, // e.g. https://ntfy.example.com/friendflix
@@ -104,6 +107,7 @@ const schema = z.object({
 /** Settings each media server kind needs (another kind adds its own entry). */
 const MEDIA_REQUIRED: Record<(typeof MEDIA_SERVERS)[number], Array<keyof z.infer<typeof schema>>> = {
   jellyfin: ['JELLYFIN_URL', 'JELLYFIN_ADMIN_API_KEY'],
+  plex: ['PLEX_URL', 'PLEX_TOKEN'],
 };
 
 const checked = schema.superRefine((c, ctx) => {

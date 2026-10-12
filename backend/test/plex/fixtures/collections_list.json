@@ -1,0 +1,37 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "allowSync": true,
+  "art": "/:/resources/movie-fanart.jpg",
+  "identifier": "com.plexapp.plugins.library",
+  "librarySectionID": 1,
+  "librarySectionTitle": "Movies",
+  "librarySectionUUID": "2cfc5463-1624-43a8-8e68-cab72d941e06",
+  "mediaTagPrefix": "/system/bundle/media/flags/",
+  "mediaTagVersion": 1786914632,
+  "thumb": "/:/resources/movie.png",
+  "title1": "Movies",
+  "title2": "All Movies",
+  "viewGroup": "movie",
+  "viewMode": 65592,
+  "Metadata": [
+   {
+    "ratingKey": "12",
+    "key": "/library/collections/12/children",
+    "guid": "collection://20fba9c6-66d5-4ce9-8026-fc54ac746a38",
+    "type": "collection",
+    "title": "Both Movies",
+    "subtype": "movie",
+    "summary": "",
+    "index": 22,
+    "ratingCount": 1,
+    "thumb": "/library/collections/12/composite/1791800022?width=400&height=600",
+    "addedAt": 1791800022,
+    "updatedAt": 1791800022,
+    "childCount": 2,
+    "maxYear": "2021",
+    "minYear": "2020"
+   }
+  ]
+ }
+}

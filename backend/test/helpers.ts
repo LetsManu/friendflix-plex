@@ -10,6 +10,8 @@ import { MemoryKV } from '../src/kv.js';
 import { SeerrClient } from '../src/seerr/client.js';
 import type { OidcClaims } from '../src/oidc.js';
 import { DEFAULT_ROLES } from '../src/roles.js';
+import { PLEX_TOKEN, PLEX_URL, plexServer, type PlexFake } from './plexfake.js';
+import type { PlexMediaServer } from '../src/plex/service.js';
 
 export const TEST_DB = process.env.TEST_DATABASE_URL ?? 'postgres://postgres@localhost:5433/ff_test';
 export const ENC_KEY = Buffer.alloc(32, 7).toString('base64');
@@ -66,6 +68,8 @@ export interface TestEnv {
   kv: MemoryKV;
   login: (claims?: OidcClaims) => Promise<{ cookies: Record<string, string>; csrf: string }>;
   close: () => Promise<void>;
+  /** makeEnv(…, { server: 'plex' }): the Plex implementation (ctx.jf) and its fake server (already synced once) */
+  plex?: { ms: PlexMediaServer; fake: PlexFake };
 }
 
 export const ADMIN: OidcClaims = { sub: 'sub-admin', email: 'admin@example.com', name: 'Admin', groups: ['friendflix-admins'] };
@@ -82,7 +86,7 @@ export function defaultJellyfin(): Record<string, Handler> {
   };
 }
 
-export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extra & { ctxPatch?: (c: Ctx) => void; seerr?: Record<string, Handler> } = {}): Promise<TestEnv> {
+export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extra & { ctxPatch?: (c: Ctx) => void; seerr?: Record<string, Handler>; server?: 'plex'; plexFake?: PlexFake } = {}): Promise<TestEnv> {
   const pool = await resetDb();
   const kv = new MemoryKV();
   const jfCalls: Call[] = [];
@@ -100,6 +104,13 @@ export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extr
       finish: async () => ({ authTime: Math.floor(Date.now() / 1000), ...claims.current }), // a fresh IdP login unless a test sets authTime
     },
   };
+  let plex: TestEnv['plex'];
+  if (extra.server === 'plex') {
+    plex = plexServer(pool, kv, extra.plexFake);
+    ctx.cfg = { ...cfg, MEDIA_SERVER: 'plex', PLEX_URL, PLEX_TOKEN };
+    ctx.jf = plex.ms;
+    await plex.ms.sync.run();
+  }
   extra.ctxPatch?.(ctx);
   const app = await buildApp(ctx, extra);
   const dev: { v?: string } = {};
@@ -114,6 +125,6 @@ export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extr
     const me = await app.inject({ url: '/api/me', cookies: { ff_sid: sid } });
     return { cookies: { ff_sid: sid }, csrf: me.json().csrfToken as string };
   };
-  return { ctx, app, pool, jfCalls, seerrCalls, claims, kv, login, close: async () => { await app.close(); await pool.end(); } };
+  return { ctx, app, pool, jfCalls, seerrCalls, claims, kv, login, plex, close: async () => { await plex?.ms.stop(); await app.close(); await pool.end(); } };
 }
 

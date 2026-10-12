@@ -1,0 +1,432 @@
+{
+ "MediaContainer": {
+  "size": 6,
+  "allowSync": true,
+  "art": "/:/resources/show-fanart.jpg",
+  "identifier": "com.plexapp.plugins.library",
+  "librarySectionID": 2,
+  "librarySectionTitle": "TV",
+  "librarySectionUUID": "7902c27a-98a6-4fae-bc4c-49aa03f2ad9c",
+  "mediaTagPrefix": "/system/bundle/media/flags/",
+  "mediaTagVersion": 1786914632,
+  "nocache": true,
+  "thumb": "/:/resources/show.png",
+  "title1": "TV",
+  "title2": "All Shows",
+  "viewGroup": "show",
+  "viewMode": 65592,
+  "Metadata": [
+   {
+    "ratingKey": "5",
+    "key": "/library/metadata/5",
+    "parentRatingKey": "4",
+    "grandparentRatingKey": "3",
+    "guid": "local://5",
+    "parentGuid": "local://4",
+    "grandparentGuid": "plex://show/6164d61b3727d6d857325229",
+    "grandparentSlug": "mad-test",
+    "type": "episode",
+    "title": "Episode 1",
+    "grandparentKey": "/library/metadata/3",
+    "parentKey": "/library/metadata/4",
+    "grandparentTitle": "MAD TEST",
+    "parentTitle": "Season 1",
+    "contentRating": "TV-PG",
+    "summary": "",
+    "index": 1,
+    "parentIndex": 1,
+    "year": 2019,
+    "thumb": "/library/metadata/5/thumb/1791799953",
+    "grandparentThumb": "/library/metadata/3/thumb/1791799954",
+    "duration": 60021,
+    "addedAt": 1791799938,
+    "updatedAt": 1791799953,
+    "Media": [
+     {
+      "id": 3,
+      "duration": 60021,
+      "bitrate": 1902,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "h264",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "audioProfile": "lc",
+      "videoProfile": "constrained baseline",
+      "Part": [
+       {
+        "id": 3,
+        "key": "/library/parts/3/1791799938/file.mkv",
+        "duration": 60021,
+        "file": "/media/TV/Test Show (2019)/Season 01/Test Show (2019) - s01e01.mkv",
+        "size": 14268462,
+        "audioProfile": "lc",
+        "container": "mkv",
+        "indexes": "sd",
+        "videoProfile": "constrained baseline"
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Episode 1",
+      "type": "coverPoster",
+      "url": "/library/metadata/3/thumb/1791799954"
+     },
+     {
+      "alt": "Episode 1",
+      "type": "snapshot",
+      "url": "/library/metadata/5/thumb/1791799953"
+     }
+    ]
+   },
+   {
+    "ratingKey": "6",
+    "key": "/library/metadata/6",
+    "parentRatingKey": "4",
+    "grandparentRatingKey": "3",
+    "guid": "local://6",
+    "parentGuid": "local://4",
+    "grandparentGuid": "plex://show/6164d61b3727d6d857325229",
+    "grandparentSlug": "mad-test",
+    "type": "episode",
+    "title": "Episode 2",
+    "grandparentKey": "/library/metadata/3",
+    "parentKey": "/library/metadata/4",
+    "grandparentTitle": "MAD TEST",
+    "parentTitle": "Season 1",
+    "contentRating": "TV-PG",
+    "summary": "",
+    "index": 2,
+    "parentIndex": 1,
+    "year": 2019,
+    "thumb": "/library/metadata/6/thumb/1791799953",
+    "grandparentThumb": "/library/metadata/3/thumb/1791799954",
+    "duration": 60021,
+    "addedAt": 1791799937,
+    "updatedAt": 1791799953,
+    "Media": [
+     {
+      "id": 4,
+      "duration": 60021,
+      "bitrate": 1902,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "h264",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "audioProfile": "lc",
+      "videoProfile": "constrained baseline",
+      "Part": [
+       {
+        "id": 4,
+        "key": "/library/parts/4/1791799937/file.mkv",
+        "duration": 60021,
+        "file": "/media/TV/Test Show (2019)/Season 01/Test Show (2019) - s01e02.mkv",
+        "size": 14267564,
+        "audioProfile": "lc",
+        "container": "mkv",
+        "indexes": "sd",
+        "videoProfile": "constrained baseline"
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Episode 2",
+      "type": "coverPoster",
+      "url": "/library/metadata/3/thumb/1791799954"
+     },
+     {
+      "alt": "Episode 2",
+      "type": "snapshot",
+      "url": "/library/metadata/6/thumb/1791799953"
+     }
+    ]
+   },
+   {
+    "ratingKey": "7",
+    "key": "/library/metadata/7",
+    "parentRatingKey": "4",
+    "grandparentRatingKey": "3",
+    "guid": "local://7",
+    "parentGuid": "local://4",
+    "grandparentGuid": "plex://show/6164d61b3727d6d857325229",
+    "grandparentSlug": "mad-test",
+    "type": "episode",
+    "title": "Episode 3",
+    "grandparentKey": "/library/metadata/3",
+    "parentKey": "/library/metadata/4",
+    "grandparentTitle": "MAD TEST",
+    "parentTitle": "Season 1",
+    "contentRating": "TV-PG",
+    "summary": "",
+    "index": 3,
+    "parentIndex": 1,
+    "year": 2019,
+    "thumb": "/library/metadata/7/thumb/1791799953",
+    "grandparentThumb": "/library/metadata/3/thumb/1791799954",
+    "duration": 60021,
+    "addedAt": 1791799936,
+    "updatedAt": 1791799953,
+    "Media": [
+     {
+      "id": 5,
+      "duration": 60021,
+      "bitrate": 1902,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "h264",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "audioProfile": "lc",
+      "videoProfile": "constrained baseline",
+      "Part": [
+       {
+        "id": 5,
+        "key": "/library/parts/5/1791799936/file.mkv",
+        "duration": 60021,
+        "file": "/media/TV/Test Show (2019)/Season 01/Test Show (2019) - s01e03.mkv",
+        "size": 14269863,
+        "audioProfile": "lc",
+        "container": "mkv",
+        "indexes": "sd",
+        "videoProfile": "constrained baseline"
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Episode 3",
+      "type": "coverPoster",
+      "url": "/library/metadata/3/thumb/1791799954"
+     },
+     {
+      "alt": "Episode 3",
+      "type": "snapshot",
+      "url": "/library/metadata/7/thumb/1791799953"
+     }
+    ]
+   },
+   {
+    "ratingKey": "9",
+    "key": "/library/metadata/9",
+    "parentRatingKey": "8",
+    "grandparentRatingKey": "3",
+    "guid": "local://9",
+    "parentGuid": "local://8",
+    "grandparentGuid": "plex://show/6164d61b3727d6d857325229",
+    "grandparentSlug": "mad-test",
+    "type": "episode",
+    "title": "Episode 1",
+    "grandparentKey": "/library/metadata/3",
+    "parentKey": "/library/metadata/8",
+    "grandparentTitle": "MAD TEST",
+    "parentTitle": "Season 2",
+    "contentRating": "TV-PG",
+    "summary": "",
+    "index": 1,
+    "parentIndex": 2,
+    "thumb": "/library/metadata/9/thumb/1791799953",
+    "grandparentThumb": "/library/metadata/3/thumb/1791799954",
+    "duration": 60021,
+    "addedAt": 1791799938,
+    "updatedAt": 1791799953,
+    "Media": [
+     {
+      "id": 6,
+      "duration": 60021,
+      "bitrate": 1902,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "h264",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "audioProfile": "lc",
+      "videoProfile": "constrained baseline",
+      "Part": [
+       {
+        "id": 6,
+        "key": "/library/parts/6/1791799938/file.mkv",
+        "duration": 60021,
+        "file": "/media/TV/Test Show (2019)/Season 02/Test Show (2019) - s02e01.mkv",
+        "size": 14268531,
+        "audioProfile": "lc",
+        "container": "mkv",
+        "indexes": "sd",
+        "videoProfile": "constrained baseline"
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Episode 1",
+      "type": "coverPoster",
+      "url": "/library/metadata/3/thumb/1791799954"
+     },
+     {
+      "alt": "Episode 1",
+      "type": "snapshot",
+      "url": "/library/metadata/9/thumb/1791799953"
+     }
+    ]
+   },
+   {
+    "ratingKey": "10",
+    "key": "/library/metadata/10",
+    "parentRatingKey": "8",
+    "grandparentRatingKey": "3",
+    "guid": "local://10",
+    "parentGuid": "local://8",
+    "grandparentGuid": "plex://show/6164d61b3727d6d857325229",
+    "grandparentSlug": "mad-test",
+    "type": "episode",
+    "title": "Episode 2",
+    "grandparentKey": "/library/metadata/3",
+    "parentKey": "/library/metadata/8",
+    "grandparentTitle": "MAD TEST",
+    "parentTitle": "Season 2",
+    "contentRating": "TV-PG",
+    "summary": "",
+    "index": 2,
+    "parentIndex": 2,
+    "thumb": "/library/metadata/10/thumb/1791799954",
+    "grandparentThumb": "/library/metadata/3/thumb/1791799954",
+    "duration": 60021,
+    "addedAt": 1791799937,
+    "updatedAt": 1791799954,
+    "Media": [
+     {
+      "id": 7,
+      "duration": 60021,
+      "bitrate": 1902,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "h264",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "audioProfile": "lc",
+      "videoProfile": "constrained baseline",
+      "Part": [
+       {
+        "id": 7,
+        "key": "/library/parts/7/1791799937/file.mkv",
+        "duration": 60021,
+        "file": "/media/TV/Test Show (2019)/Season 02/Test Show (2019) - s02e02.mkv",
+        "size": 14272169,
+        "audioProfile": "lc",
+        "container": "mkv",
+        "indexes": "sd",
+        "videoProfile": "constrained baseline"
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Episode 2",
+      "type": "coverPoster",
+      "url": "/library/metadata/3/thumb/1791799954"
+     },
+     {
+      "alt": "Episode 2",
+      "type": "snapshot",
+      "url": "/library/metadata/10/thumb/1791799954"
+     }
+    ]
+   },
+   {
+    "ratingKey": "11",
+    "key": "/library/metadata/11",
+    "parentRatingKey": "8",
+    "grandparentRatingKey": "3",
+    "guid": "local://11",
+    "parentGuid": "local://8",
+    "grandparentGuid": "plex://show/6164d61b3727d6d857325229",
+    "grandparentSlug": "mad-test",
+    "type": "episode",
+    "title": "Episode 3",
+    "grandparentKey": "/library/metadata/3",
+    "parentKey": "/library/metadata/8",
+    "grandparentTitle": "MAD TEST",
+    "parentTitle": "Season 2",
+    "contentRating": "TV-PG",
+    "summary": "",
+    "index": 3,
+    "parentIndex": 2,
+    "thumb": "/library/metadata/11/thumb/1791799954",
+    "grandparentThumb": "/library/metadata/3/thumb/1791799954",
+    "duration": 60021,
+    "addedAt": 1791799937,
+    "updatedAt": 1791799954,
+    "Media": [
+     {
+      "id": 8,
+      "duration": 60021,
+      "bitrate": 1902,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "h264",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "audioProfile": "lc",
+      "videoProfile": "constrained baseline",
+      "Part": [
+       {
+        "id": 8,
+        "key": "/library/parts/8/1791799937/file.mkv",
+        "duration": 60021,
+        "file": "/media/TV/Test Show (2019)/Season 02/Test Show (2019) - s02e03.mkv",
+        "size": 14268886,
+        "audioProfile": "lc",
+        "container": "mkv",
+        "indexes": "sd",
+        "videoProfile": "constrained baseline"
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Episode 3",
+      "type": "coverPoster",
+      "url": "/library/metadata/3/thumb/1791799954"
+     },
+     {
+      "alt": "Episode 3",
+      "type": "snapshot",
+      "url": "/library/metadata/11/thumb/1791799954"
+     }
+    ]
+   }
+  ]
+ }
+}

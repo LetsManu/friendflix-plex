@@ -16,8 +16,8 @@ describe('upstream adapter selection', () => {
     expect(jellyfinUpstream).toMatchObject({ kind: 'jellyfin', urlEnv: 'JELLYFIN_URL' });
   });
   it('refuses unknown kinds (a typo never starts a gateway), also prototype keys', () => {
-    for (const v of ['plex', 'emby', '__proto__', 'constructor', 'toString']) expect(() => selectUpstream(v)).toThrow(/unknown MEDIA_SERVER/);
-    expect(Object.keys(UPSTREAMS)).toEqual(['jellyfin']);
+    for (const v of ['emby', '__proto__', 'constructor', 'toString']) expect(() => selectUpstream(v)).toThrow(/unknown MEDIA_SERVER/);
+    expect(Object.keys(UPSTREAMS)).toEqual(['jellyfin', 'plex']); // fork: Plex adapter (gateway/test/plex.test.ts)
   });
 });
 

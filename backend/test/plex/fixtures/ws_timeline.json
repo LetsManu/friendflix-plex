@@ -1,0 +1,8 @@
+[
+ "{\"NotificationContainer\":{\"type\":\"timeline\",\"size\":1,\"TimelineEntry\":[{\"identifier\":\"com.plexapp.plugins.library\",\"sectionID\":\"2\",\"itemID\":\"9\",\"type\":4,\"title\":\"MAD TEST S02 E01\",\"state\":1,\"updatedAt\":1791800427}]}}",
+ "{\"NotificationContainer\":{\"type\":\"timeline\",\"size\":1,\"TimelineEntry\":[{\"identifier\":\"com.plexapp.plugins.library\",\"sectionID\":\"2\",\"itemID\":\"10\",\"type\":4,\"title\":\"MAD TEST S02 E02\",\"state\":1,\"updatedAt\":1791800427}]}}",
+ "{\"NotificationContainer\":{\"type\":\"timeline\",\"size\":1,\"TimelineEntry\":[{\"identifier\":\"com.plexapp.plugins.library\",\"sectionID\":\"2\",\"itemID\":\"8\",\"type\":3,\"title\":\"MAD TEST S02\",\"state\":5,\"metadataState\":\"processing\",\"updatedAt\":1791800428}]}}",
+ "{\"NotificationContainer\":{\"type\":\"timeline\",\"size\":1,\"TimelineEntry\":[{\"identifier\":\"com.plexapp.plugins.library\",\"sectionID\":\"2\",\"itemID\":\"9\",\"type\":4,\"title\":\"MAD TEST S02 E01\",\"state\":5,\"updatedAt\":1791800428}]}}",
+ "{\"NotificationContainer\":{\"type\":\"timeline\",\"size\":1,\"TimelineEntry\":[{\"identifier\":\"com.plexapp.plugins.library\",\"sectionID\":\"2\",\"itemID\":\"13\",\"parentItemID\":\"8\",\"rootItemID\":\"3\",\"type\":4,\"title\":\"\",\"state\":9,\"metadataState\":\"deleted\",\"updatedAt\":1791800444}]}}",
+ "{\"NotificationContainer\":{\"type\":\"activity\",\"size\":1,\"ActivityNotification\":[{\"event\":\"started\",\"uuid\":\"e1ab12ef-5d8e-46c1-b4d4-92422eb33d9f\",\"Activity\":{\"uuid\":\"e1ab12ef-5d8e-46c1-b4d4-92422eb33d9f\",\"type\":\"library.update.section\",\"cancellable\":false,\"userID\":1,\"title\":\"Scanning\",\"subtitle\":\"\",\"progress\":0}}]}}"
+]

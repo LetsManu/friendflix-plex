@@ -1,0 +1,157 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "allowSync": true,
+  "identifier": "com.plexapp.plugins.library",
+  "librarySectionID": 1,
+  "librarySectionTitle": "Movies",
+  "librarySectionUUID": "2cfc5463-1624-43a8-8e68-cab72d941e06",
+  "mediaTagPrefix": "/system/bundle/media/flags/",
+  "mediaTagVersion": 1786914632,
+  "Metadata": [
+   {
+    "ratingKey": "1",
+    "key": "/library/metadata/1",
+    "guid": "local://1",
+    "type": "movie",
+    "title": "Test Movie One",
+    "librarySectionTitle": "Movies",
+    "librarySectionID": 1,
+    "librarySectionKey": "/library/sections/1",
+    "summary": "",
+    "year": 2020,
+    "thumb": "/library/metadata/1/thumb/1791799951",
+    "art": "/library/metadata/1/art/1791799951",
+    "duration": 60021,
+    "addedAt": 1791799937,
+    "updatedAt": 1791799951,
+    "Media": [
+     {
+      "id": 1,
+      "duration": 60021,
+      "bitrate": 1902,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "h264",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "videoProfile": "constrained baseline",
+      "Part": [
+       {
+        "id": 1,
+        "key": "/library/parts/1/1791799937/file.mkv",
+        "duration": 60021,
+        "file": "/media/Movies/Test Movie One (2020)/Test Movie One (2020).mkv",
+        "size": 14268835,
+        "container": "mkv",
+        "videoProfile": "constrained baseline",
+        "Stream": [
+         {
+          "id": 1,
+          "streamType": 1,
+          "codec": "h264",
+          "index": 0,
+          "bitrate": 1902,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "bitDepth": 8,
+          "chromaLocation": "left",
+          "chromaSubsampling": "4:2:0",
+          "codedHeight": 368,
+          "codedWidth": 640,
+          "frameRate": 24.0,
+          "hasScalingMatrix": false,
+          "height": 360,
+          "level": 30,
+          "profile": "constrained baseline",
+          "refFrames": 1,
+          "scanType": "progressive",
+          "width": 640,
+          "displayTitle": "SD",
+          "extendedDisplayTitle": "SD (H.264 Constrained Baseline)"
+         },
+         {
+          "id": 2,
+          "streamType": 2,
+          "selected": true,
+          "default": true,
+          "codec": "aac",
+          "index": 1,
+          "channels": 1,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "samplingRate": 48000,
+          "title": "English",
+          "displayTitle": "English (AAC Mono)",
+          "extendedDisplayTitle": "English (AAC Mono)"
+         },
+         {
+          "id": 3,
+          "streamType": 2,
+          "codec": "aac",
+          "index": 2,
+          "channels": 1,
+          "language": "日本語",
+          "languageTag": "ja",
+          "languageCode": "jpn",
+          "samplingRate": 48000,
+          "title": "Japanese",
+          "displayTitle": "日本語 (AAC Mono)",
+          "extendedDisplayTitle": "Japanese (日本語 AAC Mono)"
+         },
+         {
+          "id": 4,
+          "streamType": 3,
+          "codec": "srt",
+          "index": 3,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "title": "EmbeddedEng",
+          "displayTitle": "English",
+          "extendedDisplayTitle": "EmbeddedEng (English SRT)"
+         },
+         {
+          "id": 5,
+          "key": "/library/streams/5",
+          "streamType": 3,
+          "file": "/media/Movies/Test Movie One (2020)/Test Movie One (2020).en.srt",
+          "codec": "srt",
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "format": "srt",
+          "displayTitle": "English",
+          "extendedDisplayTitle": "English (SRT External)"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Test Movie One",
+      "type": "coverPoster",
+      "url": "/library/metadata/1/thumb/1791799951"
+     },
+     {
+      "alt": "Test Movie One",
+      "type": "background",
+      "url": "/library/metadata/1/art/1791799951"
+     }
+    ],
+    "Extras": {
+     "size": 0
+    },
+    "Related": {}
+   }
+  ]
+ }
+}
