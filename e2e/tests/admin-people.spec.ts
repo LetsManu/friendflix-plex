@@ -392,7 +392,7 @@ test.describe('admin people (desktop)', () => {
         await page.goto(`/admin/${path}`);
         await expect(page.getByRole('heading', { level: 1, name: h1 })).toBeVisible();
         await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
-        await expect(page).toHaveTitle(`${h1} · Admin – FriendFlix`);
+        await expect(page).toHaveTitle(`${h1} · Admin – FriendFlix for Plex`); // fork: brand
         await expect.poll(() => noHorizontalOverflow(page)).toBe(true);
         await page.keyboard.press('Tab');
         const focusable = await page.evaluate(() => document.activeElement !== document.body);

@@ -104,6 +104,8 @@ Hover and scrub previews need Plex's **video preview thumbnails** (BIF files). T
 
 Without them, FriendFlix shows no scrub thumbnails. With them it shows single frames (one every ~2 s), not a continuous sprite sheet.
 
+**Chapter stills** in the player's "Scenes" panel come from Plex's chapter thumbnails: **Settings → Library → "Generate chapter thumbnails"** (*as a scheduled task* or *as soon as possible*), then analyse or wait. Chapter marks themselves (names, seek bar marks) need nothing: they are read from the files.
+
 ## 7. Plex Pass (optional)
 
 You do **not** need Plex Pass for FriendFlix. Plex Pass only adds things FriendFlix can then use:
@@ -128,7 +130,12 @@ What the preview implements (checked by the test suite against the fake Plex ser
 | Library access per role | Works | By library name, see section 4 |
 | Library, search, detail pages, collections, genres, studios | Works | From FriendFlix's mirror of the Plex library |
 | Images | Works | Posters, backdrops, logos (if Plex has one) through the Plex photo transcoder. Collections without their own poster show their title: Plex's composite poster is never used, because it can show members a profile may not see |
-| Cast and crew | Limited | Names and roles, **no person images** |
+| Cast & info panel | Limited | Actors with character names, directors, writers, producers, studio and Plex labels; on episodes everyone credited on the episode but not on the series is a guest star; **no person images** |
+| Chapters ("Scenes" panel, seek bar marks) | Works | Chapter marks of the file (Plex `includeChapters`); stills only when Plex generates chapter thumbnails (section 6); unnamed chapters ("Chapter 3") get the localized "Chapter 3" |
+| Quality chips, 4K / HDR browse filter | Works | From Plex's stream details: resolution, Dolby Vision, HDR10 / HDR10+ / HLG, channels, Atmos (from the track title). Libraries mirrored before this version are re-read automatically on the next sync |
+| Fresh labels (new, new season, new episode, season finale) | Limited | "Season finale" needs a series known to be ended; Plex has no series status, so FriendFlix treats a series as ended only when every episode has an air date and the newest is older than 60 days. Otherwise "new episode" is shown |
+| Leaving soon, story so far, themed lists, calm mode, clear voices, phone shortcuts and badge | Works | FriendFlix features; "story so far" uses Plex's season and episode summaries (none without a metadata agent) |
+| Admin pages (overview, people, content, live streams, previews, leaving soon) | Works | "Live streams" lists FriendFlix playback only; "Stop" ends the Plex transcode session, a direct-play file cannot be interrupted |
 | "More like this" | Limited | Computed by FriendFlix from shared genres and cast, not Plex's own recommendations |
 | Continue watching, my list, favourites, ratings, history | Works | In FriendFlix; nothing is written to Plex |
 | Direct play | Works | Browser-compatible files (MP4/WebM, H.264/VP9/AV1, AAC/MP3/Opus/FLAC) within the role's limits |
@@ -173,6 +180,8 @@ Plex only knows one token, so FriendFlix enforces the role settings itself:
 | A rating change in Plex does not show up | Plex does not bump timestamps for metadata edits; wait for the next sweep (a few minutes). |
 | No skip-intro button | No markers (needs Plex Pass) or none detected yet. |
 | No scrub thumbnails | Preview thumbnails not enabled/generated in Plex, see section 6. |
+| "Scenes" panel without pictures | Chapter thumbnails not enabled/generated in Plex, see section 6. Files without chapters have no "Scenes" at all. |
+| No 4K / HDR chips right after an update | The first sync after the update re-reads the stream details of every title; wait for it (minutes for large libraries). |
 | Wrong audio language or it changes while others watch | Another app uses the same Plex account. Use a dedicated token, see [Audio tracks](#audio-tracks). |
 | Stream does not start / stalls at the start | The Plex transcoder needs a few seconds for the first segment; check Plex's transcoder temp space and CPU load, and Plex's logs. |
 | Subtitles missing | Only text subtitles are offered; image subtitles (PGS) are not. |
@@ -201,7 +210,7 @@ Report results (what worked, what did not, logs without the token) in an issue i
 
 ## Keeping in sync with upstream (maintainers)
 
-Security notes for the Plex adapter: age caps fail closed (a re-rated title is hidden from capped profiles until its age is recomputed, even if a sync pass aborts); direct-stream and trickplay URLs are signed in separate domains; the gateway memoises item visibility per session id for 5 s, exactly like its credential cache for Jellyfin - a profile switch issues a new session id, so the memo of the previous profile is never used for the new one.
+Security notes for the Plex adapter: age caps fail closed (a re-rated title is hidden from capped profiles until its age is recomputed, even if a sync pass aborts); direct-stream, trickplay and chapter-still URLs are signed in separate domains (a chapter still binds the Plex media version to the item); the gateway memoises item visibility per session id for 5 s, exactly like its credential cache for Jellyfin - a profile switch issues a new session id, so the memo of the previous profile is never used for the new one.
 
 
 This repository is a fork of [LetsManu/friendflix](https://github.com/LetsManu/friendflix). To keep merges small:
@@ -215,6 +224,7 @@ git switch main && git merge upstream/main          # regularly, e.g. weekly or 
 - Plex code lives in `backend/src/plex/` and in the gateway's upstream adapter; shared code only gets the minimum changes needed (the media-server interface). Prefer adding files over editing upstream files.
 - Jellyfin-specific docs (`docs/integrations.md`, `docs/operations.md`, `docs/monitoring.md`, `docs/downloads.md`, `docs/discovery.md`, `docs/setup.md`, `docs/authentik.md` and their `docs/de/` twins) only carry a short note at the top pointing here, so upstream edits merge cleanly. Do not rewrite them in this fork.
 - README, `docs/plex.md`, `docs/de/plex.md` and branding are fork-only and will conflict only in the README: resolve by taking the fork text and re-applying upstream's factual changes (new env vars, features).
+- PWA manifest: upstream's localized route (`web/src/routes/manifest.webmanifest`) takes the name from `common.appName` (= `{brand}`, `web/src/lib/brand.ts`); the fork only changes one line in `web/src/lib/manifest.ts` (`short_name: BRAND_SHORT`) and the expectation in `manifest.test.ts`. There is no static `web/static/manifest.webmanifest` any more.
 - After each merge run lint, typecheck and the test suites, including the Plex tests against the fake Plex server.
 - Unrelated upstream features that depend on Jellyfin need a Plex equivalent or an entry in the parity table above.
 

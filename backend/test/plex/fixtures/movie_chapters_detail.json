@@ -1,0 +1,180 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "allowSync": true,
+  "identifier": "com.plexapp.plugins.library",
+  "librarySectionID": 1,
+  "librarySectionTitle": "Movies",
+  "librarySectionUUID": "2cfc5463-1624-43a8-8e68-cab72d941e06",
+  "mediaTagPrefix": "/system/bundle/media/flags/",
+  "mediaTagVersion": 1786914632,
+  "Metadata": [
+   {
+    "ratingKey": "15",
+    "key": "/library/metadata/15",
+    "guid": "local://15",
+    "type": "movie",
+    "title": "Test Chapters",
+    "librarySectionTitle": "Movies",
+    "librarySectionID": 1,
+    "librarySectionKey": "/library/sections/1",
+    "summary": "",
+    "year": 2022,
+    "thumb": "/library/metadata/15/thumb/1791822811",
+    "art": "/library/metadata/15/art/1791822811",
+    "duration": 60052,
+    "addedAt": 1791822811,
+    "updatedAt": 1791822811,
+    "chapterSource": "media",
+    "Media": [
+     {
+      "id": 11,
+      "duration": 60052,
+      "bitrate": 1901,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "h264",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "audioProfile": "lc",
+      "videoProfile": "constrained baseline",
+      "Part": [
+       {
+        "id": 11,
+        "key": "/library/parts/11/1791822793/file.mkv",
+        "duration": 60052,
+        "file": "/media/Movies/Test Chapters (2022)/Test Chapters (2022).mkv",
+        "size": 14268966,
+        "audioProfile": "lc",
+        "container": "mkv",
+        "indexes": "sd",
+        "videoProfile": "constrained baseline",
+        "Stream": [
+         {
+          "id": 48,
+          "streamType": 1,
+          "codec": "h264",
+          "index": 0,
+          "bitrate": 1901,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "bitDepth": 8,
+          "chromaLocation": "left",
+          "chromaSubsampling": "4:2:0",
+          "codedHeight": 368,
+          "codedWidth": 640,
+          "frameRate": 24.0,
+          "hasScalingMatrix": false,
+          "height": 360,
+          "level": 30,
+          "profile": "constrained baseline",
+          "refFrames": 1,
+          "scanType": "progressive",
+          "width": 640,
+          "displayTitle": "SD",
+          "extendedDisplayTitle": "SD (H.264 Constrained Baseline)"
+         },
+         {
+          "id": 49,
+          "streamType": 2,
+          "selected": true,
+          "default": true,
+          "codec": "aac",
+          "index": 1,
+          "channels": 1,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "audioChannelLayout": "mono",
+          "profile": "lc",
+          "samplingRate": 48000,
+          "title": "English",
+          "displayTitle": "English (AAC Mono)",
+          "extendedDisplayTitle": "English (AAC Mono)"
+         },
+         {
+          "id": 50,
+          "streamType": 2,
+          "codec": "aac",
+          "index": 2,
+          "channels": 1,
+          "language": "日本語",
+          "languageTag": "ja",
+          "languageCode": "jpn",
+          "audioChannelLayout": "mono",
+          "profile": "lc",
+          "samplingRate": 48000,
+          "title": "Japanese",
+          "displayTitle": "日本語 (AAC Mono)",
+          "extendedDisplayTitle": "Japanese (日本語 AAC Mono)"
+         },
+         {
+          "id": 51,
+          "streamType": 3,
+          "codec": "srt",
+          "index": 3,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "title": "EmbeddedEng",
+          "displayTitle": "English",
+          "extendedDisplayTitle": "EmbeddedEng (English SRT)"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Test Chapters",
+      "type": "coverPoster",
+      "url": "/library/metadata/15/thumb/1791822811"
+     },
+     {
+      "alt": "Test Chapters",
+      "type": "background",
+      "url": "/library/metadata/15/art/1791822811"
+     }
+    ],
+    "Chapter": [
+     {
+      "id": 23,
+      "filter": "thumb=23",
+      "tag": "Opening",
+      "index": 1,
+      "startTimeOffset": 0,
+      "endTimeOffset": 20000,
+      "thumb": "/library/media/11/chapterImages/1"
+     },
+     {
+      "id": 24,
+      "filter": "thumb=24",
+      "tag": "The Heist",
+      "index": 2,
+      "startTimeOffset": 20000,
+      "endTimeOffset": 40000,
+      "thumb": "/library/media/11/chapterImages/2"
+     },
+     {
+      "id": 25,
+      "filter": "thumb=25",
+      "tag": "Chapter 3",
+      "index": 3,
+      "startTimeOffset": 40000,
+      "endTimeOffset": 60000,
+      "thumb": "/library/media/11/chapterImages/3"
+     }
+    ],
+    "Extras": {
+     "size": 0
+    }
+   }
+  ]
+ }
+}

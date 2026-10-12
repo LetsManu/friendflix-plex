@@ -78,7 +78,7 @@ describe('PlexSync', () => {
     // details are fetched in multi-key batches, with guids / markers / extras
     const detail = fake.calls.filter((c) => c.path.startsWith('/library/metadata/'));
     expect(detail.length).toBe(1);
-    expect(detail[0]!.search).toBe('?includeGuids=1&includeMarkers=1&includeExtras=1');
+    expect(detail[0]!.search).toBe('?includeGuids=1&includeMarkers=1&includeExtras=1&includeChapters=1');
     // a second pass without changes fetches no details
     fake.calls.length = 0;
     const r = await env.ms.sync.run();

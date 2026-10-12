@@ -14,10 +14,10 @@ test.describe('admin shell + overview (desktop)', () => {
     await expect(nav.getByRole('link', { name: /Geräte.*4 offen/ })).toBeVisible();
     await expect(nav.getByRole('link', { name: /Vorschauen.*10 fehlgeschlagen/ })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Nutzer' })).toBeVisible();
-    await expect(page).toHaveTitle('Nutzer · Admin – FriendFlix');
+    await expect(page).toHaveTitle('Nutzer · Admin – FriendFlix for Plex'); // fork: brand
     await nav.getByRole('link', { name: /Audit-Log/ }).click();
     await expect(page).toHaveURL(/\/admin\/audit$/);
-    await expect(page).toHaveTitle('Audit-Log · Admin – FriendFlix');
+    await expect(page).toHaveTitle('Audit-Log · Admin – FriendFlix for Plex'); // fork: brand
     await expect(nav.getByRole('link', { name: /Audit-Log/ })).toHaveAttribute('aria-current', 'page');
     // the phone list and the back chevron are phone-only
     await expect(page.getByRole('link', { name: 'Zurück zur Admin-Übersicht' })).toBeHidden();

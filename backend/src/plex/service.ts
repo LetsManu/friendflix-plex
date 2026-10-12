@@ -14,12 +14,13 @@ import { randomBytes } from 'node:crypto';
 import type { Db } from '../db.js';
 import type { KV } from '../kv.js';
 import type {
-  ClipTranscode, DownloadQuality, DownloadSourceDto, ExternalSession, IdentityPolicy, ItemDto, ItemQuery, ItemStreams, ItemTraits, MediaAdmin,
-  MediaCapabilities, MediaCredentials, MediaRuntime, MediaServer, MediaUser, PersonDto, PlaybackDto, PlaybackOptions, PlaybackReport, Segment, SegmentType,
+  ChapterDto, ClipTranscode, DownloadQuality, DownloadSourceDto, ExternalSession, IdentityPolicy, ItemCreditsDto, ItemDto, ItemMediaTraits, ItemQuery, ItemStreams, ItemTraits, MediaAdmin,
+  MediaCapabilities, MediaCredentials, MediaRuntime, MediaServer, MediaTraits, MediaUser, PersonDto, PlaybackDto, PlaybackOptions, PlaybackReport, Segment, SegmentType,
   SubtitleHit, TrackList, TrickplayDto,
 } from '../media/types.js';
 import { loadPolicy, paramList, refreshAges, resolveAccess, visibleSql, type Access, type Param } from './access.js';
 import { PlexError, type PlexClient } from './client.js';
+import { chapterDtos, plexTraits, type MirrorChapter } from './depth.js';
 import { plexTypes, sectionDto, toItemDto, type ItemRow } from './dto.js';
 import { decodePlexId, encodePlexId, plexKey } from './ids.js';
 import { PlexSync } from './sync.js';
@@ -51,6 +52,8 @@ export interface PlexDeps {
   playback?: (svc: PlexMediaServer) => PlexPlayback;
   /** websocket change feed in start() (default on) */
   websocket?: boolean;
+  /** INTERNAL_SECRET: signs chapter still URLs (verified by the gateway); without it chapters come without stills */
+  secret?: string;
 }
 
 export const ITEM_MEMO_TTL_MS = 10_000;
@@ -58,6 +61,8 @@ const ITEM_MEMO_MAX = 2000;
 const ACCESS_TTL_MS = 5_000;
 const PEOPLE_KINDS = ['actor', 'director', 'writer', 'producer'];
 const PERSON_TYPE: Record<string, string> = { actor: 'Actor', director: 'Director', writer: 'Writer', producer: 'Producer' };
+/** a series counts as continuing while an episode premiered within this many days (Plex has no series status) */
+const CONTINUING_DAYS = 60;
 const like = (s: string) => `%${s.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 const cloneItem = (i: ItemDto): ItemDto => ({ ...i, genres: [...i.genres], ...(i.imageTags ? { imageTags: { ...i.imageTags } } : {}) });
 
@@ -92,6 +97,7 @@ export class PlexMediaServer implements MediaServer {
   private readonly kv: KV;
   private readonly playback: PlexPlayback;
   private readonly websocket: boolean;
+  private readonly secret: string | undefined;
   private initP: Promise<void> | null = null;
   private readonly migrateFn: () => Promise<void>;
   private readonly accessMemo = new Map<string, { exp: number; p: Promise<Access> }>();
@@ -99,7 +105,7 @@ export class PlexMediaServer implements MediaServer {
   private sectionsMemo: { exp: number; p: Promise<Array<{ id: number; title: string; type: string }>> } | null = null;
   private flagTimer: NodeJS.Timeout | null = null;
   /** feature flags learned from the mirror (capabilities) */
-  private flags = { markers: false, bif: false };
+  private flags = { markers: false, bif: false, chapters: false };
 
   constructor(d: PlexDeps) {
     this.client = d.client;
@@ -107,6 +113,7 @@ export class PlexMediaServer implements MediaServer {
     this.kv = d.kv;
     this.migrateFn = d.migrate;
     this.websocket = d.websocket ?? true;
+    this.secret = d.secret;
     this.sync = new PlexSync(d.client, d.db, () => this.ready(), async () => {
       this.forgetItems();
       this.sectionsMemo = null;
@@ -117,11 +124,12 @@ export class PlexMediaServer implements MediaServer {
     this.playback = d.playback?.(this) ?? this.stubPlayback();
   }
 
-  /** Honest capabilities: skip segments only when Plex delivered markers, trickplay when BIF index files exist. */
+  /** Honest capabilities: skip segments only when Plex delivered markers, trickplay when BIF index files exist, chapters when any video has some. */
   get capabilities(): MediaCapabilities {
     return {
       segments: new Set<SegmentType>(this.flags.markers ? ['intro', 'outro'] : []),
       trickplay: this.flags.bif, upcoming: false, subtitleSearch: false, webhooks: false, changeFeed: true, planB: false, subtitleExtract: true,
+      chapters: this.flags.chapters,
     };
   }
 
@@ -728,6 +736,71 @@ export class PlexMediaServer implements MediaServer {
     return out;
   }
 
+  // ---------------------------------------------------------------- Block 17: traits, chapters, credits (mirror only)
+
+  /** Best video / audio of a visible title from the mirrored streams; a series reports its best episode the viewer may see. */
+  async mediaTraits(user: MediaUser, id: string): Promise<MediaTraits | null> {
+    const rk = await this.visibleKey(user, id, ['movie', 'episode', 'show']);
+    if (!rk) return null;
+    const acc = await this.access(user);
+    const { params, p } = paramList();
+    const r = await this.q<{ media: Array<Record<string, any>> | null }>(
+      `select i.media from plex_items i where (i.rating_key = ${p(rk)} and i.type <> 'show')
+         or (i.type = 'episode' and i.grandparent_key = ${p(rk)} and i.media is not null and ${visibleSql(acc, 'i', p)})
+       order by i.rating_key limit 1000`, params);
+    return plexTraits(r.flatMap((x) => x.media ?? []));
+  }
+
+  /** One page of the whole library's traits (stable order by rating key; items without streams count as SD so a short page = end). */
+  async libraryMediaTraits(type: 'Movie' | 'Episode', start: number, limit: number): Promise<ItemMediaTraits[]> {
+    const r = await this.q<{ rating_key: string; grandparent_key: string | null; media: Array<Record<string, any>> | null }>(
+      `select rating_key, grandparent_key, media from plex_items where type = $1 order by rating_key offset $2 limit $3`,
+      [type === 'Episode' ? 'episode' : 'movie', Math.max(0, start), Math.max(0, limit)]);
+    return r.map((x) => ({
+      id: encodePlexId('item', x.rating_key), ...(x.grandparent_key ? { seriesId: encodePlexId('item', x.grandparent_key) } : {}),
+      traits: plexTraits(x.media) ?? { resolution: 'sd', hdr: null, audio: null },
+    }));
+  }
+
+  /**
+   * One page of the ids of every series that may still continue (library-wide). Plex has no series status, so this is conservative:
+   * a series counts as ended only when it has episodes, all with an air date, the newest older than CONTINUING_DAYS - everything
+   * else is "continuing" (fresh.ts then never calls its newest episode a season finale by mistake).
+   */
+  async libraryContinuingSeriesIds(start: number, limit: number): Promise<string[]> {
+    const r = await this.q<{ rating_key: string }>(
+      `select s.rating_key from plex_items s where s.type = 'show' and not exists (
+         select 1 from plex_items e where e.type = 'episode' and e.grandparent_key = s.rating_key
+         having count(*) > 0 and count(*) = count(e.originally_available) and max(e.originally_available) < $1::date)
+       order by s.rating_key offset $2 limit $3`,
+      [new Date(Date.now() - CONTINUING_DAYS * 86_400_000).toISOString().slice(0, 10), Math.max(0, start), Math.max(0, limit)]);
+    return r.map((x) => encodePlexId('item', x.rating_key));
+  }
+
+  /** Chapter marks of a visible video (includeChapters=1 in the detail sync), stills when PMS generated chapter thumbnails; 404 otherwise. */
+  async chapters(user: MediaUser, id: string): Promise<ChapterDto[]> {
+    const rk = await this.mustSee(user, id);
+    const r = await this.q<{ chapters: MirrorChapter[] | null }>('select chapters from plex_items where rating_key = $1', [rk]);
+    return chapterDtos(id, r[0]?.chapters, this.secret);
+  }
+
+  /**
+   * Credits of one visible item from the mirrored tags: Role (character name in `role`), Director, Writer, Producer; studios; labels as
+   * tags. Episodes report only their own (the castinfo route takes the regulars from the series and calls the rest guest stars).
+   */
+  async credits(user: MediaUser, id: string): Promise<ItemCreditsDto> {
+    const rk = await this.mustSee(user, id);
+    const r = await this.q<{ tag: string; tag_id: string | null; role: string | null; kind: string }>(
+      `select tag, tag_id, role, kind from plex_tags where rating_key = $1 and kind = any($2::text[]) order by array_position($2::text[], kind), pos`,
+      [rk, [...PEOPLE_KINDS, 'studio', 'label']]);
+    const seen = new Set<string>();
+    const people = r.filter((x) => PEOPLE_KINDS.includes(x.kind) && x.tag_id !== null && !seen.has(`${x.tag_id}|${x.kind}`) && seen.add(`${x.tag_id}|${x.kind}`))
+      .slice(0, 80)
+      .map((x) => ({ id: encodePlexId('tag', x.tag_id!), name: x.tag, ...(x.role ? { role: x.role } : {}), type: PERSON_TYPE[x.kind] ?? 'Actor', image: false }));
+    const names = (kind: string, max: number) => [...new Set(r.filter((x) => x.kind === kind).map((x) => x.tag))].slice(0, max);
+    return { people, studios: names('studio', 6), tags: names('label', 20) };
+  }
+
   // ---------------------------------------------------------------- user data
 
   async setFavorite(user: MediaUser, id: string, on: boolean): Promise<void> {
@@ -778,10 +851,11 @@ export class PlexMediaServer implements MediaServer {
 
   /** Learns the capability flags from the mirror (markers present, BIF index files present). */
   async refreshFlags(): Promise<void> {
-    const r = await this.q<{ markers: boolean; bif: boolean }>(
+    const r = await this.q<{ markers: boolean; bif: boolean; chapters: boolean }>(
       `select exists (select 1 from plex_items where markers is not null and jsonb_array_length(markers) > 0) markers,
-              exists (select 1 from plex_items where media::text like '%"indexes": "sd"%' or media::text like '%"indexes":"sd"%') bif`);
-    this.flags = { markers: Boolean(r[0]?.markers), bif: Boolean(r[0]?.bif) };
+              exists (select 1 from plex_items where media::text like '%"indexes": "sd"%' or media::text like '%"indexes":"sd"%') bif,
+              exists (select 1 from plex_items where chapters is not null and jsonb_array_length(chapters) > 0) chapters`);
+    this.flags = { markers: Boolean(r[0]?.markers), bif: Boolean(r[0]?.bif), chapters: Boolean(r[0]?.chapters) };
   }
 
   // ---------------------------------------------------------------- admin-key lookups

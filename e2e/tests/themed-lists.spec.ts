@@ -89,7 +89,7 @@ test.describe('manifest language', () => {
     expect(res.headers()['content-type']).toContain('application/manifest+json');
     expect(res.headers()['vary']).toMatch(/Accept-Language/i);
     const m = await res.json();
-    expect(m.name).toBe('FriendFlix');
+    expect(m.name).toBe('FriendFlix for Plex'); // fork: brand (BRAND_NAME)
     expect(m.shortcuts[0].name).toBe('Continue Watching');
   });
 });

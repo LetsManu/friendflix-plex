@@ -193,7 +193,7 @@ export class PlexSync {
       const batch = keys.slice(i, i + DETAIL_BATCH);
       let list: Array<Record<string, any>>;
       try {
-        list = (await this.client.container(`/library/metadata/${batch.join(',')}?includeGuids=1&includeMarkers=1&includeExtras=1`)).Metadata ?? [];
+        list = (await this.client.container(`/library/metadata/${batch.join(',')}?includeGuids=1&includeMarkers=1&includeExtras=1&includeChapters=1`)).Metadata ?? [];
       } catch (e) {
         this.log.warn({ err: String(e) }, 'plex: detail fetch failed');
         continue;
