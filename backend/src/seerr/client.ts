@@ -16,6 +16,19 @@ export function portalStatus(mediaStatus?: number, requestStatus?: number): Port
   return 'nicht_angefragt';
 }
 
+export type RequestStateKey = 'pending' | 'approved' | 'processing' | 'available' | 'partial' | 'declined' | 'unknown';
+
+/** Language-neutral state of one Seerr request (admin UI translates it): declined > available > partial > processing > approved > pending. */
+export function requestStateKey(mediaStatus?: number, requestStatus?: number): RequestStateKey {
+  if (requestStatus === 3 && mediaStatus !== 5) return 'declined';
+  if (mediaStatus === 5) return 'available';
+  if (mediaStatus === 4) return 'partial';
+  if (mediaStatus === 3) return 'processing';
+  if (requestStatus === 2) return 'approved';
+  if (mediaStatus === 2 || requestStatus === 1) return 'pending';
+  return 'unknown';
+}
+
 /** Seerr REST client (API key only used here, server-side; Seerr is reachable only on the internal network). */
 export class SeerrClient {
   constructor(
@@ -57,6 +70,10 @@ export class SeerrClient {
   }
   listRequests(filter: string, take = 50, skip = 0) {
     return this.json<{ results: any[]; pageInfo: any }>(`/request?take=${take}&skip=${skip}&filter=${encodeURIComponent(filter)}&sort=added`);
+  }
+  /** request totals by state (Seerr /request/count) */
+  requestCount() {
+    return this.json<{ total: number; movie: number; tv: number; pending: number; approved: number; declined: number; processing: number; available: number }>('/request/count');
   }
   approve(id: number) {
     return this.json(`/request/${id}/approve`, { method: 'POST' });

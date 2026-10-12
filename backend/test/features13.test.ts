@@ -79,7 +79,7 @@ describe('similar titles and "Weil du ... gesehen hast"', () => {
 
 describe('viewing preferences', () => {
   it('has safe defaults, validates and persists per user', async () => {
-    expect((await call('GET', '/api/prefs')).json().prefs).toEqual({ autoplayNext: true, autoSkipIntro: false, shareHistory: false, shareRatings: true, hoverTrailers: true, hoverClip: true, autoStartPreview: true, audioLang: '', subtitleLang: '', quality: 0, stillWatching: true, stillWatchingEpisodes: 3, subtitleStyle: { size: 'm', color: 'white', background: 'semi', font: 'sans' }, spoilerProtection: false, animeOriginal: false, weeklyDigest: true, ntfyTopic: '', language: '' });
+    expect((await call('GET', '/api/prefs')).json().prefs).toEqual({ autoplayNext: true, autoSkipIntro: false, shareHistory: false, shareRatings: true, hoverTrailers: true, hoverClip: true, autoStartPreview: true, audioLang: '', subtitleLang: '', quality: 0, stillWatching: true, stillWatchingEpisodes: 3, subtitleStyle: { size: 'm', color: 'white', background: 'semi', font: 'sans' }, spoilerProtection: false, animeOriginal: false, weeklyDigest: true, ntfyTopic: '', calm: false, audioFx: 'off', language: '' });
     const put = await call('PUT', '/api/prefs', { autoplayNext: false, autoSkipIntro: true, audioLang: 'ger', subtitleLang: 'eng', quality: 4_000_000, animeOriginal: true });
     expect(put.statusCode).toBe(200);
     expect((await call('GET', '/api/prefs')).json().prefs).toMatchObject({ autoplayNext: false, autoSkipIntro: true, audioLang: 'ger', subtitleLang: 'eng', quality: 4_000_000, animeOriginal: true });

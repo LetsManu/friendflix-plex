@@ -14,7 +14,9 @@
   import { toThumb, type Thumb } from '#lib/rating';
   import { openModal } from '#lib/modal';
   import { isSpoiler } from '#lib/spoiler';
-  import { hasNewEpisodes } from '#lib/badges';
+  import { cardTag } from '#lib/badges';
+  import { badges, loadFacts, wantBadge, type MediaTraits } from '#lib/fresh';
+  import QualityChips from '#lib/QualityChips.svelte';
   import { genreLine, lengthLabel, previewRect, ratingBadge, type PreviewBox } from '#lib/hover';
   import { playPreview, previewFailed, previewOwner, stopPreview, toggleSound } from '#lib/preview';
 
@@ -53,7 +55,12 @@
   $: srcs = item.backdrop ? srcset('Backdrop', item.id, [520, 780, 1280]) : item.image ? srcset('Primary', item.id, [320, 520, 780]) : '';
   $: posterOnly = !item.backdrop && item.image;
   $: pct = item.positionTicks && item.runtimeTicks ? Math.min(100, (item.positionTicks / item.runtimeTicks) * 100) : 0;
-  $: fresh = hasNewEpisodes(item, Date.now());
+  $: badgeId = item.type === 'Episode' ? item.seriesId : item.id;
+  $: wantBadge(badgeId);
+  $: tag = cardTag(badgeId ? $badges[badgeId] : undefined, item, Date.now());
+  // quality chips (4K / HDR / Atmos ...) arrive a moment after the pop-out opened; nothing is shown while unknown
+  let traits: MediaTraits | null = null;
+  $: if (item.type !== 'BoxSet') void loadFacts(listId).then((f) => { if (f && listId === (item.seriesId ?? item.id)) traits = f.traits; });
   $: rate = ratingBadge(item, Date.now());
   $: len = lengthLabel(item);
   $: genres = genreLine(item.genres);
@@ -173,7 +180,7 @@
     {#if src}<img class="hi" class:on={hiLoaded || !startSrc} class:contain={posterOnly} class:spoil={isSpoiler(item, $prefs)} {src} srcset={srcs} sizes="{box?.width ?? 360}px" alt="" on:load={() => (hiLoaded = true)} />{/if}
     {#if playing}<!-- svelte-ignore a11y_media_has_caption --><video bind:this={pv} class="pv" loop playsinline on:volumechange={() => pv && (vmuted = pv.muted)} on:playing={() => pv && (vmuted = pv.muted)}></video>{/if}
     <span class="shade"></span>
-    {#if fresh}<span class="newep">{$t('home.card.newEpisodes')}</span>{/if}
+    {#if tag}<span class="newep" class:leave={tag.kind === 'leaving'}>{$t(tag.key, { n: tag.kind === 'leaving' ? tag.n : 0 })}</span>{/if}
     <span class="cap">{item.type === 'Episode' && item.seriesName ? item.seriesName : item.name}</span>
     {#if playing}<button type="button" class="snd" aria-label={vmuted ? $t('home.card.soundOn') : $t('home.card.soundOff')} aria-pressed={!vmuted} on:click={(e) => { release(e); toggleSound(pv); }}><Icon name={vmuted ? 'volume-off' : 'volume'} size={16} /></button>{/if}
     {#if pct}<span class="progress"><i style="width:{pct}%"></i></span>{/if}
@@ -196,6 +203,7 @@
       {#if item.rating}<span class="age">{item.rating}</span>{/if}
       {#if len}<span>{len}</span>{/if}
     </div>
+    <QualityChips {traits} />
     {#if item.caption}<div class="sub cap2">{item.caption}</div>{:else if sub}<div class="sub">{sub}</div>{/if}
     {#if genres}<div class="sub">{genres}</div>{/if}
   </div>
@@ -213,6 +221,7 @@
   .shade { position: absolute; inset: 0; background: linear-gradient(transparent 50%, rgba(24,24,24,.95)); pointer-events: none; }
   .cap { position: absolute; left: .9rem; right: 3.4rem; bottom: .6rem; font-weight: 800; font-size: 1.05rem; line-height: 1.2; text-shadow: 0 1px 8px #000; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none; }
   .newep { position: absolute; left: .7rem; top: .6rem; padding: .1rem .45rem; border-radius: 3px; background: var(--acc); color: #fff; font-size: .68rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+  .newep.leave { background: #b3261e; }
   .snd { position: absolute; right: .7rem; bottom: .6rem; z-index: 2; width: 32px; min-height: 32px; height: 32px; padding: 0; border-radius: 50%; background: rgba(20,20,20,.7); border: 1.5px solid rgba(255,255,255,.6); color: #fff; }
   .snd::after { content: ''; position: absolute; inset: -6px; }
   .snd:hover:not(:disabled) { background: rgba(20,20,20,.9); border-color: #fff; }

@@ -1,6 +1,7 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { audit } from '../audit.js';
+import { Where, likePattern, orderBy, pageQuery } from '../adminlist.js';
 import type { Ctx } from '../ctx.js';
 import { revokeSessions } from '../devices.js';
 import { adminOverview, revokeLicense } from '../downloads.js';
@@ -38,17 +39,80 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
     };
   });
 
+  // one cheap call for the admin shell (pending badges) and the overview: counts only, every source optional
+  app.get('/api/admin/summary', admin, async () => {
+    const { listLive } = await import('../live.js');
+    const { parties } = await import('./party.js');
+    const one = async <T>(sql: string): Promise<T> => (await ctx.db.query(sql)).rows[0] as T;
+    const [users, devices, invites, polls, previews, downloads, check, seerr, jellyfin, live] = await Promise.all([
+      one<{ total: string; locked: string }>('select count(*) total, count(*) filter (where disabled) locked from users'),
+      one<{ n: string }>('select count(*) n from devices where not approved'),
+      one<{ n: string }>('select count(*) n from invites where used_at is null and expires_at > now()'),
+      one<{ n: string }>("select count(*) n from polls where status='needs_approval'"),
+      one<{ failed: string; ok: string; bytes: string }>("select count(*) filter (where status='failed') failed, count(*) filter (where status='ok') ok, coalesce(sum(bytes) filter (where status='ok'),0)::text bytes from preview_clips"),
+      one<{ bytes: string }>("select coalesce(sum(bytes),0)::text bytes from download_jobs where status='ready'"),
+      ctx.db.query<{ finished_at: Date; results: Array<{ ok: boolean }> }>('select finished_at, results from playback_checks order by id desc limit 1').then((r) => r.rows[0] ?? null),
+      ctx.seerr.requestCount().catch(() => null), // Seerr down or not configured: the UI shows "not reachable"
+      ctx.jf.admin.ping().catch(() => false),
+      listLive(ctx).then((l) => l.length).catch(() => 0),
+    ]);
+    const total = Number(users.total), locked = Number(users.locked);
+    return {
+      users: { total, active: total - locked, locked },
+      pending: {
+        requests: seerr ? seerr.pending : null,
+        devices: Number(devices.n),
+        polls: Number(polls.n),
+        invites: Number(invites.n),
+        previewsFailed: Number(previews.failed),
+      },
+      requests: seerr ? { pending: seerr.pending, approved: seerr.approved, processing: seerr.processing, available: seerr.available, declined: seerr.declined, total: seerr.total } : null,
+      storage: {
+        downloadsEnabled: ctx.cfg.DOWNLOADS_ENABLED === 'true',
+        downloadsBytes: Number(downloads.bytes),
+        downloadsMaxBytes: Math.round(ctx.cfg.DOWNLOAD_CACHE_MAX_GB * 1024 ** 3),
+        previewBytes: Number(previews.bytes),
+        previewClips: Number(previews.ok),
+      },
+      playbackCheck: check ? { finishedAt: check.finished_at.toISOString(), total: check.results.length, failed: check.results.filter((x) => !x.ok).length } : null,
+      services: { jellyfin: Boolean(jellyfin), seerr: seerr !== null },
+      live: { streams: live, partyRooms: parties.rooms.size },
+    };
+  });
+
   app.post('/api/admin/previews/regenerate', admin, async (req) => {
     const { itemId } = z.object({ itemId: z.string().regex(/^[0-9a-f]{32}$/) }).parse(req.body);
     await previews(ctx).regenerate(itemId);
+    await audit(ctx, req.user!.id, 'preview.regenerate', itemId);
     return { ok: true };
   });
 
   app.post('/api/admin/previews/regenerate-failed', admin, async () => ({ ok: true, count: await previews(ctx).regenerateFailed() }));
 
-  app.get('/api/admin/previews', admin, async () => {
-    const user = await serviceUser(ctx);
-    const lib = user ? await libraryItems(ctx, user) : [];
+  // The library listing is a crawl through Jellyfin: short memo so paging/filtering/polling do not repeat it.
+  const libMemo = { at: 0, rows: [] as Array<{ id: string; name: string; type: string }> };
+  const library = async () => {
+    if (Date.now() - libMemo.at > 15_000) {
+      const user = await serviceUser(ctx);
+      libMemo.rows = user ? await libraryItems(ctx, user) : [];
+      libMemo.at = Date.now();
+    }
+    return libMemo.rows;
+  };
+  const PREVIEW_ORDER = { failed: 0, preparing: 1, missing: 2, ok: 3 } as const;
+  // Without params: every title (legacy). ?status=failed|preparing|missing|ok &q= &sort=name|status|size &dir= &limit= &offset= pages the list server-side
+  // (response adds `total` = matching rows); ?ids=a,b,c answers only those titles (the page polls rows that are being prepared).
+  app.get('/api/admin/previews', admin, async (req) => {
+    const p = z.object({
+      status: z.enum(['failed', 'preparing', 'missing', 'ok']).optional(),
+      q: z.string().trim().max(100).optional(),
+      sort: z.enum(['name', 'status', 'size']).optional(),
+      dir: z.enum(['asc', 'desc']).optional(),
+      limit: z.coerce.number().int().min(1).max(200).optional(),
+      offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+      ids: z.string().max(4000).optional(),
+    }).parse(req.query);
+    const lib = await library();
     const clips = new Map((await ctx.db.query<{ item_id: string; status: string; bytes: number | null; error: string | null; audio_lang: string | null; created_at: Date }>('select * from preview_clips')).rows.map((r) => [r.item_id, r]));
     const queued = new Set(previews(ctx).queued());
     const rows = await Promise.all(lib.map(async (i) => {
@@ -60,10 +124,55 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
       return { itemId: i.id, name: i.name, type: i.type, status, bytes: status === 'ok' ? c?.bytes ?? null : null, audioLang: status === 'ok' ? c?.audio_lang ?? null : null, error: status === 'failed' ? c?.error ?? null : null, createdAt: c?.created_at ?? null };
     }));
     const count = (s: string) => rows.filter((r) => r.status === s).length;
+    const summary = { total: rows.length, ok: count('ok'), failed: count('failed'), missing: count('missing'), preparing: count('preparing'), totalBytes: rows.reduce((a, r) => a + (r.bytes ?? 0), 0) };
+    const paged = p.limit !== undefined || p.ids !== undefined || p.status !== undefined || p.q !== undefined || p.sort !== undefined;
+    if (!paged) return { summary, items: [...rows].sort((a, b) => PREVIEW_ORDER[a.status] - PREVIEW_ORDER[b.status] || a.name.localeCompare(b.name)) };
+    let list = rows;
+    if (p.ids !== undefined) { const want = new Set(p.ids.split(',').filter(Boolean)); list = list.filter((r) => want.has(r.itemId)); }
+    if (p.status) list = list.filter((r) => r.status === p.status);
+    if (p.q) { const q = p.q.toLocaleLowerCase(); list = list.filter((r) => r.name.toLocaleLowerCase().includes(q)); }
+    const sign = p.dir === 'desc' ? -1 : 1;
+    const by = {
+      name: (a: (typeof rows)[number], b: (typeof rows)[number]) => sign * a.name.localeCompare(b.name),
+      status: (a: (typeof rows)[number], b: (typeof rows)[number]) => sign * (PREVIEW_ORDER[a.status] - PREVIEW_ORDER[b.status]) || a.name.localeCompare(b.name),
+      size: (a: (typeof rows)[number], b: (typeof rows)[number]) => sign * ((a.bytes ?? -1) - (b.bytes ?? -1)) || a.name.localeCompare(b.name),
+    }[p.sort ?? 'status'];
+    list = [...list].sort(by);
+    return { summary, items: list.slice(p.offset, p.limit === undefined ? undefined : p.offset + p.limit), total: list.length };
+  });
+
+  // removes a clip (and its failure marker): frees the space, the warmer rebuilds it later
+  app.delete('/api/admin/previews/:itemId', admin, async (req, reply) => {
+    const itemId = z.string().regex(/^[0-9a-f]{32}$/).safeParse((req.params as { itemId: string }).itemId);
+    if (!itemId.success) return reply.code(404).send({ error: 'not_found' });
+    await previews(ctx).clear(itemId.data);
+    libMemo.at = 0;
+    await audit(ctx, req.user!.id, 'preview.clear', itemId.data);
+    return { ok: true };
+  });
+
+  // playing right now (portal + Jellyfin sessions the portal knows about); the admin can end a stream
+  app.get('/api/admin/live', admin, async () => {
+    const { listLive } = await import('../live.js');
+    const rows = (await listLive(ctx)).sort((a, b) => b.updatedAt - a.updatedAt);
     return {
-      summary: { total: rows.length, ok: count('ok'), failed: count('failed'), missing: count('missing'), preparing: count('preparing'), totalBytes: rows.reduce((a, r) => a + (r.bytes ?? 0), 0) },
-      items: rows,
+      sessions: rows.map((l) => ({
+        userId: l.userId, userName: l.userName, profileName: l.profileName ?? null, playSessionId: l.playSessionId, itemId: l.itemId, title: l.title, seriesName: l.seriesName ?? null,
+        type: l.type ?? null, positionTicks: l.positionTicks, runtimeTicks: l.runtimeTicks ?? null, isPaused: l.isPaused, updatedAt: new Date(l.updatedAt).toISOString(), source: l.source,
+      })),
     };
+  });
+  app.post('/api/admin/live/stop', admin, async (req, reply) => {
+    const b = z.object({ userId: uuid, playSessionId: z.string().min(1).max(200) }).parse(req.body);
+    const { getLive, clearLive } = await import('../live.js');
+    const live = await getLive(ctx, b.userId, b.playSessionId);
+    if (!live) return reply.code(404).send({ error: 'not_found' });
+    const user = await getUserById(ctx, b.userId);
+    // ends the server-side transcode, the player then fails and shows its error; a direct-play file cannot be interrupted from here
+    if (user) await ctx.jf.stopEncoding(user, b.playSessionId).catch(() => undefined);
+    await clearLive(ctx, b.userId, b.playSessionId);
+    await audit(ctx, req.user!.id, 'live.stop', b.userId, { title: live.title });
+    return { ok: true };
   });
 
   // ---- instance default UI language (asked once on the first admin visit; profiles may override it) ----
@@ -148,13 +257,22 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
     return { ok: true };
   });
 
-  app.get('/api/admin/users', admin, async () => {
+  // ?q= (name/email/login) &role= &status=active|locked &sort=name|email|role|status|lastSeen|createdAt &dir= &limit= &offset=; without params: everyone (max 1000)
+  app.get('/api/admin/users', admin, async (req) => {
+    const p = pageQuery.extend({ role: z.string().max(40).optional(), status: z.enum(['active', 'locked']).optional() }).parse(req.query);
+    const w = new Where();
+    if (p.q) { const m = w.param(likePattern(p.q)); w.add(`(u.name ilike ${m} or coalesce(u.email,'') ilike ${m} or coalesce(u.jellyfin_username,'') ilike ${m})`); }
+    if (p.role) w.add('u.role = ?', p.role);
+    if (p.status) w.add(p.status === 'locked' ? 'u.disabled' : 'not u.disabled');
+    const order = orderBy({ name: 'lower(u.name)', email: "lower(coalesce(u.email,''))", role: 'u.role', status: 'u.disabled', lastSeen: 'u.last_seen', createdAt: 'u.created_at' }, p.sort, p.dir, 'u.created_at, u.id');
+    const total = Number((await ctx.db.query<{ c: string }>(`select count(*) c from users u ${w.sql}`, w.params)).rows[0]!.c);
     const r = await ctx.db.query(
-      `select u.id, u.name, u.email, u.role, u.disabled, u.jellyfin_username, u.seerr_user_id, u.created_at,
-              (select max(last_seen) from devices d where d.user_id = u.id) last_seen
-         from users u order by u.created_at`,
+      `select * from (select u.id, u.name, u.email, u.role, u.disabled, u.jellyfin_username, u.seerr_user_id, u.created_at,
+              (select max(last_seen) from devices d where d.user_id = u.id) last_seen from users u) u
+        ${w.sql} ${order} limit ${p.limit ?? 1000} offset ${p.offset ?? 0}`,
+      w.params,
     );
-    return { users: r.rows };
+    return { users: r.rows, total };
   });
 
   app.patch('/api/admin/users/:id', admin, async (req, reply) => {
@@ -209,12 +327,23 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
     return { id: inv.id, link: inv.link, enrollUrl: inv.enrollUrl, authentik: inv.authentik, expiresAt: inv.expiresAt }; // token is shown exactly once
   });
 
-  app.get('/api/admin/invites', admin, async () => {
+  // ?q= (note/role/redeemer) &status=open|used|expired &sort=role|note|validUntil|status|createdAt &dir= &limit= &offset=; without params: the newest 100
+  app.get('/api/admin/invites', admin, async (req) => {
+    const p = pageQuery.extend({ status: z.enum(['open', 'used', 'expired']).optional(), role: z.string().max(40).optional() }).parse(req.query);
+    const w = new Where();
+    if (p.q) { const m = w.param(likePattern(p.q)); w.add(`(coalesce(i.note,'') ilike ${m} or i.role ilike ${m} or coalesce(u.name,'') ilike ${m})`); }
+    if (p.role) w.add('i.role = ?', p.role);
+    if (p.status === 'used') w.add('i.used_at is not null');
+    else if (p.status === 'expired') w.add('i.used_at is null and i.expires_at < now()');
+    else if (p.status === 'open') w.add('i.used_at is null and i.expires_at >= now()');
+    const order = orderBy({ role: 'i.role', note: "lower(coalesce(i.note,''))", validUntil: 'i.expires_at', createdAt: 'i.created_at', status: "(case when i.used_at is not null then 2 when i.expires_at < now() then 1 else 0 end)" }, p.sort, p.dir, 'i.created_at desc, i.id');
+    const from = 'from invites i left join users u on u.id = i.used_by';
+    const total = Number((await ctx.db.query<{ c: string }>(`select count(*) c ${from} ${w.sql}`, w.params)).rows[0]!.c);
     const r = await ctx.db.query(
-      `select i.id, i.role, i.note, i.expires_at, i.used_at, u.name used_by_name
-         from invites i left join users u on u.id = i.used_by order by i.created_at desc limit 100`,
+      `select i.id, i.role, i.note, i.created_at, i.expires_at, i.used_at, u.name used_by_name ${from} ${w.sql} ${order} limit ${p.limit ?? 100} offset ${p.offset ?? 0}`,
+      w.params,
     );
-    return { invites: r.rows };
+    return { invites: r.rows, total };
   });
 
   app.delete('/api/admin/invites/:id', admin, async (req) => {
@@ -225,11 +354,25 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
     return { ok: true };
   });
 
-  app.get('/api/admin/lists', admin, async () => {
+  // ?q= (list or owner name) &featured=1 &limit= &offset=; without params the newest 200 lists (legacy). `total` = matching lists, `featuredCount` = lists shown on the home page.
+  app.get('/api/admin/lists', admin, async (req) => {
+    const p = z.object({
+      q: z.string().trim().max(100).optional(),
+      featured: z.enum(['1', '0']).optional(),
+      limit: z.coerce.number().int().min(1).max(200).default(200),
+      offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+    }).parse(req.query);
+    const params: unknown[] = [];
+    const where: string[] = [];
+    if (p.q) { params.push(`%${p.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`); where.push(`(l.name ilike $${params.length} or o.name ilike $${params.length})`); }
+    if (p.featured) where.push(p.featured === '1' ? 'l.featured_at is not null' : 'l.featured_at is null');
+    const w = where.length ? `where ${where.join(' and ')}` : '';
+    const total = Number((await ctx.db.query<{ c: string }>(`select count(*) c from lists l join users o on o.id = l.owner_id ${w}`, params)).rows[0]!.c);
+    const featuredCount = Number((await ctx.db.query<{ c: string }>('select count(*) c from lists where featured_at is not null')).rows[0]!.c);
     const r = await ctx.db.query<{ id: string; name: string; owner_id: string; owner_name: string; item_count: string; featured: boolean }>(
       `select l.id, l.name, l.owner_id, o.name as owner_name, (select count(*) from list_items i where i.list_id = l.id) as item_count, l.featured_at is not null as featured
-         from lists l join users o on o.id = l.owner_id order by l.created_at desc limit 200`);
-    return { lists: r.rows.map((x) => ({ id: x.id, name: x.name, owner: { id: x.owner_id, name: x.owner_name }, itemCount: Number(x.item_count), featured: x.featured })) };
+         from lists l join users o on o.id = l.owner_id ${w} order by l.featured_at desc nulls last, l.created_at desc limit ${p.limit} offset ${p.offset}`, params);
+    return { lists: r.rows.map((x) => ({ id: x.id, name: x.name, owner: { id: x.owner_id, name: x.owner_name }, itemCount: Number(x.item_count), featured: x.featured })), total, featuredCount, max: MAX_FEATURED };
   });
 
   app.put('/api/admin/lists/:id/featured', admin, async (req, reply) => {
@@ -249,24 +392,84 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
     return { ok: true, featured: b.featured };
   });
 
+  // ?actor=<user id>|system &action=<category ("user") or full action ("user.role")> &from=&to= (ISO times) &q= (actor/target/action) &dir=asc|desc &limit= (default 100) &offset=
   app.get('/api/admin/audit', admin, async (req) => {
-    const limit = z.coerce.number().int().min(1).max(500).default(100).parse((req.query as { limit?: string }).limit);
+    const p = pageQuery.extend({
+      actor: z.union([uuid, z.literal('system')]).optional(),
+      action: z.string().regex(/^[a-z_]+(\.[a-z_]+)?$/).optional(),
+      from: z.coerce.date().optional(),
+      to: z.coerce.date().optional(),
+    }).parse(req.query);
+    const w = new Where();
+    if (p.actor === 'system') w.add('a.actor is null');
+    else if (p.actor) w.add('a.actor = ?', p.actor);
+    if (p.action?.includes('.')) w.add('a.action = ?', p.action);
+    else if (p.action) { const exact = w.param(p.action), prefix = w.param(`${p.action}.%`); w.add(`(a.action = ${exact} or a.action like ${prefix})`); }
+    if (p.from) w.add('a.at >= ?', p.from);
+    if (p.to) w.add('a.at <= ?', p.to);
+    if (p.q) { const m = w.param(likePattern(p.q)); w.add(`(a.action ilike ${m} or coalesce(u.name,'') ilike ${m} or coalesce(tu.name, tl.name, '') ilike ${m})`); }
+    // target_name: the user (or list) the target id points to, so the UI can say "… locked Anna" instead of a uuid
+    const from = `from audit_log a left join users u on u.id = a.actor
+         left join users tu on tu.id::text = a.target left join lists tl on tl.id::text = a.target`;
+    const total = Number((await ctx.db.query<{ c: string }>(`select count(*) c ${from} ${w.sql}`, w.params)).rows[0]!.c);
     const r = await ctx.db.query(
-      'select a.id, a.at, a.action, a.target, a.meta, u.name actor from audit_log a left join users u on u.id = a.actor order by a.id desc limit $1',
-      [limit],
+      `select a.id, a.at, a.action, a.target, a.meta, a.actor actor_id, u.name actor, coalesce(tu.name, tl.name) target_name ${from} ${w.sql}
+        order by a.id ${p.dir === 'asc' ? 'asc' : 'desc'} limit ${p.limit ?? 100} offset ${p.offset ?? 0}`,
+      w.params,
     );
-    return { entries: r.rows };
+    return { entries: r.rows, total };
   });
 
-  app.get('/api/admin/devices', admin, async () => {
-    const r = await ctx.db.query('select d.user_id, d.device_id, d.label, d.approved, d.last_seen, u.name from devices d join users u on u.id=d.user_id order by d.approved, d.last_seen desc limit 300');
-    return { devices: r.rows };
+  // options of the audit filters: people who acted and the action groups that occur
+  app.get('/api/admin/audit/filters', admin, async () => {
+    const actors = (await ctx.db.query<{ id: string; name: string }>('select distinct u.id, u.name from audit_log a join users u on u.id = a.actor order by u.name')).rows;
+    const system = Number((await ctx.db.query<{ c: string }>('select count(*) c from (select 1 from audit_log where actor is null limit 1) x')).rows[0]!.c) > 0;
+    const categories = (await ctx.db.query<{ c: string }>("select distinct split_part(action, '.', 1) c from audit_log order by 1")).rows.map((x) => x.c);
+    return { actors, system, categories };
   });
+
+  // ?q= (person/device) &status=pending|approved &sort=user|device|lastSeen|status &dir= &limit= (default 300) &offset=; `pending` = all waiting devices (badge), whatever the filter
+  app.get('/api/admin/devices', admin, async (req) => {
+    const p = pageQuery.extend({ status: z.enum(['pending', 'approved']).optional() }).parse(req.query);
+    const w = new Where();
+    if (p.q) { const m = w.param(likePattern(p.q)); w.add(`(u.name ilike ${m} or coalesce(d.label,'') ilike ${m})`); }
+    if (p.status) w.add(p.status === 'pending' ? 'not d.approved' : 'd.approved');
+    const order = orderBy({ user: 'lower(u.name)', device: "lower(coalesce(d.label,''))", lastSeen: 'd.last_seen', status: 'd.approved' }, p.sort, p.dir, 'd.approved, d.last_seen desc, d.device_id');
+    const from = 'from devices d join users u on u.id = d.user_id';
+    const total = Number((await ctx.db.query<{ c: string }>(`select count(*) c ${from} ${w.sql}`, w.params)).rows[0]!.c);
+    const pending = Number((await ctx.db.query<{ c: string }>('select count(*) c from devices where not approved')).rows[0]!.c);
+    const r = await ctx.db.query(`select d.user_id, d.device_id, d.label, d.approved, d.last_seen, u.name ${from} ${w.sql} ${order} limit ${p.limit ?? 300} offset ${p.offset ?? 0}`, w.params);
+    // `current`: the device this admin is using right now (the page offers no revoke for it)
+    return { devices: r.rows.map((d) => ({ ...d, current: d.user_id === req.user!.id && d.device_id === req.session!.deviceId })), total, pending };
+  });
+  /** the device this admin request comes from: unapproving/removing it would sign the admin out */
+  const ownDevice = (req: FastifyRequest, b: { userId: string; deviceId: string }) => b.userId === req.user!.id && b.deviceId === req.session!.deviceId;
   app.post('/api/admin/devices/approve', admin, async (req, reply) => {
     const b = z.object({ userId: uuid, deviceId: z.string().min(10).max(80) }).parse(req.body);
     const r = await ctx.db.query('update devices set approved=true where user_id=$1 and device_id=$2', [b.userId, b.deviceId]);
     if (!r.rowCount) return reply.code(404).send({ error: 'not_found' });
     await audit(ctx, req.user!.id, 'device.approve', b.userId, { by: 'admin' });
+    return { ok: true };
+  });
+  // inverse of approve (the Undo of the toast): the device waits for approval again
+  app.post('/api/admin/devices/unapprove', admin, async (req, reply) => {
+    const b = z.object({ userId: uuid, deviceId: z.string().min(10).max(80) }).parse(req.body);
+    if (ownDevice(req, b)) return reply.code(400).send({ error: 'cannot_lock_yourself_out' });
+    const r = await ctx.db.query('update devices set approved=false where user_id=$1 and device_id=$2', [b.userId, b.deviceId]);
+    if (!r.rowCount) return reply.code(404).send({ error: 'not_found' });
+    // sessions cached deviceApproved=true (refreshDevice): sign them out, the device has to wait for approval after the next login
+    await revokeSessions(ctx, b.userId, b.deviceId);
+    await audit(ctx, req.user!.id, 'device.unapprove', b.userId, { by: 'admin' });
+    return { ok: true };
+  });
+  // decline a waiting device / revoke an approved one: forget the device and sign out its sessions (it can register again)
+  app.post('/api/admin/devices/remove', admin, async (req, reply) => {
+    const b = z.object({ userId: uuid, deviceId: z.string().min(10).max(80) }).parse(req.body);
+    if (ownDevice(req, b)) return reply.code(400).send({ error: 'cannot_lock_yourself_out' });
+    const r = await ctx.db.query('delete from devices where user_id=$1 and device_id=$2', [b.userId, b.deviceId]);
+    if (!r.rowCount) return reply.code(404).send({ error: 'not_found' });
+    await revokeSessions(ctx, b.userId, b.deviceId);
+    await audit(ctx, req.user!.id, 'device.remove', b.userId, { by: 'admin' });
     return { ok: true };
   });
 

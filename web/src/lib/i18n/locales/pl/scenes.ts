@@ -1,0 +1,68 @@
+import type de from '../de/scenes';
+import type { Translation } from '../../types';
+
+const dict: Translation<typeof de> = {
+  info: {
+    title: 'Obsada i informacje',
+    open: 'Obsada i informacje',
+    openKey: 'Obsada i informacje (I)',
+    close: 'Zamknij obsadę i informacje',
+    cast: 'Obsada',
+    guests: 'Gościnnie',
+    facts: 'Tło',
+    as: 'jako {role}',
+    directors: 'Reżyseria',
+    writers: 'Scenariusz',
+    creators: 'Twórcy',
+    studio: 'Studio',
+    year: 'Rok',
+    rating: 'Kategoria wiekowa',
+    score: 'Ocena',
+    genres: 'Gatunki',
+    tags: 'Tagi',
+    loading: 'Wczytywanie obsady…',
+    failed: 'Nie udało się wczytać obsady i informacji.',
+    none: 'Brak informacji o obsadzie tego tytułu.',
+    person: '{name}, pokaż więcej tytułów',
+  },
+  peek: {
+    label: 'Obsada w skrócie',
+    more: 'Wszystkie informacje',
+    hintKey: 'Więcej: {key}',
+    hintTv: 'Więcej: OK',
+  },
+  person: {
+    role: 'gra: {role}',
+    more: 'Inne tytuły: {name}',
+    loading: 'Wczytywanie tytułów…',
+    none: 'Brak innych tytułów w Twojej bibliotece.',
+    failed: 'Nie udało się wczytać tytułów.',
+    page: 'Wszystkie tytuły i informacje',
+    back: 'Wróć do obsady',
+  },
+  chapters: {
+    title: 'Sceny',
+    open: 'Sceny',
+    close: 'Zamknij sceny',
+    chapter: 'Rozdział {n}',
+    current: 'Teraz odtwarzane',
+    jump: '{name}, od {t}',
+    count: { one: '{n} scena', few: '{n} sceny', many: '{n} scen', other: '{n} sceny' },
+  },
+  audio: {
+    title: 'Dźwięk',
+    voice: 'Wyraźne głosy',
+    voiceHint: 'Wyeksponuj dialogi',
+    night: 'Tryb nocny',
+    nightHint: 'Głośne fragmenty ciszej, ciche głośniej',
+    on: '{name}: włączone',
+    off: '{name}: wyłączone',
+    unsupported: 'Niedostępne na tym urządzeniu',
+    casting: 'Niedostępne podczas przesyłania na inne urządzenie',
+    needsTap: 'Dotknij obrazu lub naciśnij dowolny klawisz, a „{name}” zacznie działać.',
+  },
+  shortcuts: {
+    peek: 'Szybki podgląd obsady',
+  },
+};
+export default dict;

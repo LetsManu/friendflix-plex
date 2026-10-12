@@ -142,6 +142,12 @@ class Previews {
     void this.enqueue(id).catch(() => undefined);
   }
 
+  /** Removes the clip and its row (frees the space; the warmer or the next hover builds it again). */
+  async clear(id: string): Promise<void> {
+    await this.inflight.get(id)?.catch(() => undefined);
+    await rmClip(this.ctx, id);
+  }
+
   /** Re-queues every failed item. */
   async regenerateFailed(): Promise<number> {
     const ids = (await this.ctx.db.query<{ item_id: string }>("select item_id from preview_clips where status = 'failed'")).rows.map((r) => r.item_id);

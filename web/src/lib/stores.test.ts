@@ -2,8 +2,8 @@ import { get } from 'svelte/store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.fn();
-vi.mock('#lib/api', () => ({ api: (...a: unknown[]) => api(...a) }));
-const { listIds, toggleList, prefs, savePrefs, saveLanguage, loadPrefs, mergePrefsInto, DEFAULT_PREFS } = await import('./stores');
+vi.mock('#lib/api', () => ({ api: (...a: unknown[]) => api(...a), getActiveProfile: () => 'p1' }));
+const { listIds, toggleList, prefs, prefsLoaded, savePrefs, saveLanguage, saveAudioFx, cachedCalm, loadPrefs, mergePrefsInto, DEFAULT_PREFS } = await import('./stores');
 const i18n = await import('#lib/i18n');
 
 beforeEach(() => { api.mockReset(); listIds.set(new Set()); });
@@ -42,6 +42,33 @@ describe('prefs and the UI language', () => {
     expect('language' in body).toBe(false);
     expect(body.autoplayNext).toBe(false);
     expect(get(prefs)).toMatchObject({ autoplayNext: false, language: 'fr' }); // the store keeps the current language
+  });
+
+  it('calm keeps a fast-start copy per profile (the cold-start intro decides before /api/prefs answers)', async () => {
+    const m = new Map<string, string>();
+    vi.stubGlobal('localStorage', { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) });
+    try {
+      expect(cachedCalm('p1')).toBe(false);
+      api.mockResolvedValueOnce({ prefs: { ...DEFAULT_PREFS, calm: true } });
+      await loadPrefs();
+      expect(get(prefsLoaded)).toBe(true);
+      expect(cachedCalm('p1')).toBe(true);
+      expect(cachedCalm('p2')).toBe(false);
+      api.mockResolvedValue({});
+      await savePrefs({ ...get(prefs), calm: false });
+      expect(cachedCalm('p1')).toBe(false);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('audioFx has its own endpoint; savePrefs never sends it and keeps the current value', async () => {
+    api.mockResolvedValue({});
+    prefs.set({ ...DEFAULT_PREFS });
+    await saveAudioFx('night');
+    expect(api).toHaveBeenCalledWith('/api/prefs/audiofx', { method: 'PUT', body: { audioFx: 'night' } });
+    api.mockClear();
+    await savePrefs({ ...DEFAULT_PREFS, audioFx: 'off' });
+    expect('audioFx' in (api.mock.calls[0]![1].body as Record<string, unknown>)).toBe(false);
+    expect(get(prefs).audioFx).toBe('night');
   });
 
   it('a /api/prefs answer requested before a language switch does not undo it', async () => {

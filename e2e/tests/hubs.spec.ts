@@ -127,7 +127,7 @@ test.describe('admin hubs (desktop)', () => {
     await expect(page.getByText('Aktuell: 1.')).toBeVisible();
     await expect(page.getByRole('button', { name: /Anime \(schon angelegt\)/ })).toBeDisabled();
     await page.getByRole('button', { name: 'Dokumentation übernehmen' }).click();
-    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Dokumentation');
+    await expect(page.locator('#hub-name')).toHaveValue('Dokumentation');
     await page.getByRole('button', { name: 'Speichern' }).click();
     await expect(page.getByText('„Dokumentation“ gespeichert.')).toBeVisible();
     expect(posted).toEqual([{ name: 'Dokumentation', source: 'genre', sourceValue: 'Dokumentation', accent: null, imageItemId: null, enabled: true }]);

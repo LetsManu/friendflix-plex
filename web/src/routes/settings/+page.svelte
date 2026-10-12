@@ -118,6 +118,7 @@
   <div class="field"><label for="sl">{$t('account.settings.subtitles')}</label>
     <select id="sl" bind:value={form.subtitleLang}><option value="">{$t('common.off')}</option>{#each LANGS as v}<option value={v}>{trackName(v)}</option>{/each}</select></div>
   {@render check('animeOriginal', 'anime.settings.original', 'anime.settings.originalHint')}
+  {@render check('calm', 'mine.calm.title', 'mine.calm.hint')}
   {#if !$kidsMode}
   <div class="field"><label for="q">{$t('account.settings.quality')}</label>
     <select id="q" bind:value={form.quality}>{#each QUALITIES as [v, l]}<option value={v}>{$t(l)}</option>{/each}</select>

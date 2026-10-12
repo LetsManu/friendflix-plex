@@ -12,7 +12,20 @@ describe('resolveKey', () => {
   });
   it('volume with up/down, but the TV opens the control bar instead', () => {
     expect(r('ArrowUp')).toEqual({ type: 'volume', delta: 0.1 }); expect(r('ArrowDown')).toEqual({ type: 'volume', delta: -0.1 });
-    expect(r('ArrowUp', { tv: true })).toEqual({ type: 'tvControls' });
+    expect(r('ArrowUp', { tv: true, onBody: false })).toEqual({ type: 'tvControls' });
+    expect(r('ArrowDown', { tv: true })).toEqual({ type: 'tvControls' });
+  });
+  it('cast peek: I on desktop, up on the TV (bar hidden), the remote Info key; OK / I then open the full panel', () => {
+    expect(r('i')).toEqual({ type: 'peek' }); expect(r('I')).toEqual({ type: 'peek' });
+    expect(r('ArrowUp', { tv: true })).toEqual({ type: 'peek' });
+    expect(r('ArrowUp', { tv: true, overlayOpen: true })).toEqual({ type: 'tvControls' });
+    expect(r('Info', { tv: true, onBody: false })).toEqual({ type: 'peek' });
+    expect(r('i', { overlayOpen: true })).toBeNull();
+    expect(r('Enter', { tv: true, peekOpen: true })).toEqual({ type: 'castInfo' });
+    expect(r('i', { peekOpen: true })).toEqual({ type: 'castInfo' });
+    expect(r('Enter', { tv: true, peekOpen: true, hasSkip: true })).toEqual({ type: 'skip' }); // the skip button keeps OK
+    expect(r('Enter', { peekOpen: false })).toEqual({ type: 'toggle' });
+    expect(r('i', { tv: true })).toBeNull(); // letters stay free on the TV
   });
   it('digits seek to percent', () => { expect(r('0')).toEqual({ type: 'seekPct', pct: 0 }); expect(r('9')).toEqual({ type: 'seekPct', pct: 90 }); });
   it('s only skips while the skip button is visible', () => { expect(r('s')).toBeNull(); expect(r('S', { hasSkip: true })).toEqual({ type: 'skip' }); });

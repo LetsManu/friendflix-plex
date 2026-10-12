@@ -16,6 +16,8 @@ export interface AutoStartEnv {
   tv: boolean;
   hidden: boolean;
   reducedMotion: boolean;
+  /** calm mode (profile pref): nothing starts by itself */
+  calm?: boolean;
   /** the preview is actually playing (or just ended) */
   previewing: boolean;
   /** a /watch target exists */
@@ -30,7 +32,7 @@ export interface AutoStartEnv {
 }
 
 export function autoStartAllowed(e: AutoStartEnv): boolean {
-  return e.pref !== false && !e.touch && !e.tv && !e.hidden && !e.reducedMotion && e.previewing && e.hasTarget && !e.cancelled
+  return e.pref !== false && !e.touch && !e.tv && !e.hidden && !e.reducedMotion && !e.calm && e.previewing && e.hasTarget && !e.cancelled
     && !e.popoverOpen && !e.typing && !e.userStartedPreview;
 }
 

@@ -152,7 +152,10 @@ const it: Translation<typeof de> = {
   },
   listSaveFailed: 'Impossibile salvare.',
   logout: {
-    confirmDownloads: 'Eliminare anche i download su questo dispositivo?\n\nOK: elimina (consigliato, ad es. sui dispositivi condivisi). Annulla: conserva.',
+    downloadsTitle: 'Eliminare anche i download su questo dispositivo?',
+    downloadsBody: 'Consigliato sui dispositivi condivisi. Se li conservi, restano su questo dispositivo e continuano a occupare spazio.',
+    deleteDownloads: 'Elimina download',
+    keepDownloads: 'Conserva',
   },
   downloads: {
     pageTitle: 'Download',

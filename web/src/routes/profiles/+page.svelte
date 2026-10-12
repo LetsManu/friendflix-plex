@@ -11,7 +11,9 @@
   import Logo from '#lib/Logo.svelte';
   import { markPicked } from '#lib/gate';
   import { loadIntroSettings, markSessionSeen, shouldPlayIntro, shouldPlayIntroSound } from '#lib/intro';
+  import { cachedCalm } from '#lib/stores';
   import { t, tr, type TKey } from '#lib/i18n';
+  import { confirm } from '#lib/ui/confirm';
   const colorKey = (key: string) => `account.profiles.colors.${key}` as TKey;
 
   /** unlock 'owner': leaving the active kids profile towards this profile needs the owner profile's PIN (it has none of its own) */
@@ -63,7 +65,7 @@
   let intro: { sound: boolean } | null = null, introDone: (() => void) | null = null;
   async function playIntro(profileId: string) {
     const s = loadIntroSettings(profileId);
-    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches || cachedCalm(profileId); // calm mode: the calm fade
     const route = target().split(/[?#]/)[0];
     markSessionSeen(); // the page reloads into the app next: no second (silent) intro on top of this one
     if (!shouldPlayIntro({ setting: s.show, reducedMotion, route, sessionSeen: false, tv: document.documentElement.classList.contains('tv') })) return;
@@ -135,7 +137,7 @@
     } finally { edBusy = false; }
   }
   async function remove() {
-    if (!ed?.id || !confirm(tr('account.profiles.confirmDelete', { name: ed.name }))) return;
+    if (!ed?.id || !(await confirm({ title: tr('account.profiles.confirmDelete', { name: ed.name }), danger: true, confirmLabel: tr('account.profiles.delete') }))) return;
     edBusy = true; edErr = '';
     try { await api(`/api/profiles/${ed.id}`, { method: 'DELETE' }); ed = null; await load(); }
     catch (e) { edErr = e instanceof ApiError && e.body?.error === 'jellyfin' ? tr('account.profiles.jellyfinDelete') : tr('account.profiles.deleteFailed'); }

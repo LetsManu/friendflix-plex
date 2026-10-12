@@ -3,7 +3,8 @@ import { BRAND_NAME } from '../brand';
 interface PushClient { url: string; focus(): Promise<unknown>; navigate?(url: string): Promise<unknown>; postMessage(m: unknown): void }
 interface SwScope {
   location: { origin: string };
-  registration: { showNotification(title: string, o?: Record<string, unknown>): Promise<void> };
+  registration: { showNotification(title: string, o?: Record<string, unknown>): Promise<void>; getNotifications?(): Promise<unknown[]> };
+  navigator?: { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
   clients: { matchAll(o: Record<string, unknown>): Promise<PushClient[]>; openWindow(url: string): Promise<unknown> };
   addEventListener(type: string, fn: (e: any) => void): void;
 }
@@ -15,6 +16,16 @@ export function safeLink(link: unknown, origin: string): string | null {
     const u = new URL(link, origin);
     return u.origin === origin ? u.pathname + u.search + u.hash : null;
   } catch { return null; }
+}
+
+/** App icon badge from the service worker: the number of notifications still showing (best effort, silently skipped where unsupported). */
+export async function updateBadge(s: Pick<SwScope, 'registration' | 'navigator'>): Promise<void> {
+  try {
+    const nav = s.navigator;
+    if (!nav?.setAppBadge) return;
+    const n = (await s.registration.getNotifications?.())?.length ?? 0;
+    if (n > 0) await nav.setAppBadge(Math.min(99, n)); else await nav.clearAppBadge?.();
+  } catch { /* badge is a nicety */ }
 }
 
 export function installPush(sw: unknown): void {
@@ -31,11 +42,12 @@ export function installPush(sw: unknown): void {
       badge: '/icon-192.png',
       tag: typeof d.tag === 'string' ? d.tag : undefined,
       data: { link },
-    }));
+    }).then(() => updateBadge(s)));
   });
   s.addEventListener('notificationclick', (e) => {
     e.notification.close();
     const link = safeLink(e.notification.data?.link, s.location.origin) ?? '/';
+    e.waitUntil(updateBadge(s)); // the clicked notification is closed: recount
     const url = new URL(link, s.location.origin).toString();
     e.waitUntil((async () => {
       const wins = await s.clients.matchAll({ type: 'window', includeUncontrolled: true });

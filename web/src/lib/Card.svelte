@@ -11,7 +11,8 @@
   import { createEventDispatcher, onDestroy, tick } from 'svelte';
   import { prefs } from '#lib/stores';
   import { isSpoiler } from '#lib/spoiler';
-  import { hasNewEpisodes, isNewTitle } from '#lib/badges';
+  import { cardTag } from '#lib/badges';
+  import { badges, wantBadge } from '#lib/fresh';
   import HoverPreview from '#lib/HoverPreview.svelte';
   import { hoverOwner, nextHoverUid } from '#lib/hover';
 
@@ -44,8 +45,10 @@
   $: sub = item.type === 'Episode' ? `${item.seriesName ?? ''} · S${item.parentIndexNumber ?? '?'}:E${item.indexNumber ?? '?'}` : '';
   $: pct = item.positionTicks && item.runtimeTicks ? Math.min(100, (item.positionTicks / item.runtimeTicks) * 100) : 0;
   $: inList = $listIds.has(item.seriesId ?? item.id);
-  $: fresh = hasNewEpisodes(item, Date.now());
-  $: isNew = !fresh && isNewTitle(item, Date.now());
+  // one tag per card from the server (fresh label or "Nur noch N Tage"); episodes ask for their series' removal date
+  $: badgeId = item.type === 'Episode' ? item.seriesId : item.id;
+  $: wantBadge(badgeId);
+  $: tag = cardTag(badgeId ? $badges[badgeId] : undefined, item, Date.now());
   let imgEl: HTMLImageElement | undefined;
 
   // ---- desktop pop-out preview (HoverPreview, portal): opens after ~450 ms hover / 600 ms keyboard focus ----
@@ -135,8 +138,9 @@
   <a class="thumb" {href} bind:this={thumbEl} aria-label={item.name + (sub ? ', ' + sub : '')}>
     {#if posterOnly}<img class="blur" loading="lazy" decoding="async" {src} srcset={srcs} {sizes} alt="" aria-hidden="true" />{/if}
     {#if src}<img bind:this={imgEl} class:contain={posterOnly} class:spoil={isSpoiler(item, $prefs)} loading="lazy" decoding="async" {src} srcset={srcs} {sizes} alt="" width={posterSrc ? 200 : 320} height={posterSrc ? 300 : 180} />{/if}
-    {#if isNew}<span class="brand"><Logo size={16} label="" /><span class="neu">{$t('home.card.new')}</span></span>{/if}
-    {#if fresh}<span class="newep">{$t('home.card.newEpisodes')}</span>{/if}
+    {#if tag?.kind === 'leaving'}<span class="newep leave">{$t(tag.key, { n: tag.n })}</span>
+    {:else if tag && (tag.label === 'new' || tag.label === 'newSeries')}<span class="brand"><Logo size={16} label="" /><span class="neu">{$t(tag.key)}</span></span>
+    {:else if tag}<span class="newep">{$t(tag.key)}</span>{/if}
     <span class="cap" class:big={!src}>{#if epSub}<span class="l1">{item.seriesName}</span><span class="l2">{epSub}</span>{:else}{item.name}{/if}</span>
     {#if pct}<span class="progress"><i style="width:{pct}%"></i></span>{/if}
   </a>
@@ -190,6 +194,7 @@
   .brand { position: absolute; left: .45rem; top: .4rem; z-index: 2; pointer-events: none; display: flex; align-items: center; gap: .3rem; }
   .neu { padding: .05rem .4rem; border-radius: 3px; background: rgba(20,20,20,.78); color: #fff; font-size: .66rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
   .newep { position: absolute; left: .45rem; top: .45rem; z-index: 2; pointer-events: none; padding: .1rem .45rem; border-radius: 3px; background: var(--acc); color: #fff; font-size: .68rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+  .newep.leave { background: #b3261e; }
   .blur { position: absolute; inset: -10%; width: 120%; height: 120%; object-fit: cover; filter: blur(18px) brightness(.55); }
   .thumb img.spoil { filter: blur(14px); transform: scale(1.1); }
   .thumb img.contain { position: relative; object-fit: contain; }

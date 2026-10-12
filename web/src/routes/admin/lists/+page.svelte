@@ -1,53 +1,76 @@
 <script lang="ts">
+  /** Admin → Listen: which member lists are shown on everybody's home page (at most 5). Server paging + search. */
   import { onMount } from 'svelte';
   import { api, ApiError } from '#lib/api';
-  import { t, tr } from '#lib/i18n';
-  interface AdminList { id: string; name: string; owner: { id: string; name: string }; itemCount: number; featured: boolean }
-  let lists: AdminList[] | null = null, msg = '', failed = false, busy = '';
-  const MAX = 5;
-  $: count = lists ? lists.filter((l) => l.featured).length : 0;
+  import { fmtNumber, t, tr } from '#lib/i18n';
+  import { busyKeys, errorText, runAction } from '#lib/ui/action';
+  import DataTable from '#lib/ui/DataTable.svelte';
+  import Progress from '#lib/ui/Progress.svelte';
+  import Toggle from '#lib/ui/Toggle.svelte';
+  import type { Column, Query } from '#lib/ui/table';
 
-  async function load() {
-    try { lists = (await api('/api/admin/lists')).lists; failed = false; } catch { lists = []; failed = true; }
-  }
-  async function toggle(l: AdminList) {
-    if (busy) return;
-    busy = l.id; msg = '';
-    const next = !l.featured;
+  interface AdminList { id: string; name: string; owner: { id: string; name: string }; itemCount: number; featured: boolean }
+  const PAGE = 25;
+  let rows: AdminList[] | null = null, total = 0, featuredCount = 0, max = 5, error: string | null = null;
+  let page = 0, q = '';
+  let seq = 0;
+
+  async function load(offset = page * PAGE) {
+    const my = ++seq;
+    error = null;
     try {
-      await api(`/api/admin/lists/${l.id}/featured`, { method: 'PUT', body: { featured: next } });
-      l.featured = next; lists = lists;
-      msg = next ? tr('admin.lists.shown', { name: l.name }) : tr('admin.lists.hidden', { name: l.name });
-    } catch (e) {
-      msg = e instanceof ApiError && e.status === 409 ? tr('admin.lists.tooMany', { max: MAX }) : e instanceof ApiError && e.status === 404 ? tr('admin.lists.gone') : tr('common.failed');
-      if (e instanceof ApiError && e.status === 404) await load();
-    }
-    busy = '';
+      const r = await api<{ lists: AdminList[]; total: number; featuredCount: number; max: number }>(`/api/admin/lists?${new URLSearchParams({ limit: String(PAGE), offset: String(offset), ...(q.trim() ? { q: q.trim() } : {}) })}`);
+      if (my !== seq) return;
+      rows = r.lists; total = r.total; featuredCount = r.featuredCount; max = r.max;
+    } catch (e) { if (my !== seq) return; rows = []; total = 0; error = errorText(e); }
   }
-  onMount(load);
+  const onQuery = (e: CustomEvent<Query>) => { q = e.detail.q; page = Math.floor(e.detail.offset / PAGE); void load(e.detail.offset); };
+  onMount(() => load(0));
+
+  const put = (l: AdminList, featured: boolean) => api(`/api/admin/lists/${l.id}/featured`, { method: 'PUT', body: { featured } });
+  function toggle(l: AdminList, next: boolean) {
+    const set = (v: boolean) => { l.featured = v; featuredCount += v ? 1 : -1; rows = rows; };
+    void runAction({
+      key: `list:${l.id}`,
+      apply: () => { const prev = l.featured; set(next); return () => { l.featured = prev; featuredCount += prev ? 1 : -1; rows = rows; }; },
+      run: () => put(l, next),
+      success: next ? tr('admin.lists.shown', { name: l.name }) : tr('admin.lists.hidden', { name: l.name }),
+      undo: { run: () => put(l, !next) },
+      error: (e) => e instanceof ApiError && e.status === 409 ? tr('admin.lists.tooMany', { max })
+        : e instanceof ApiError && e.status === 404 ? tr('admin.lists.gone') : errorText(e),
+    }).then((res) => { if (!res.ok && res.error instanceof ApiError && res.error.status === 404) void load(); });
+  }
+
+  $: columns = [
+    { key: 'name', label: $t('adminContent.lists.name'), value: (l) => l.name, primary: true, sortable: false },
+    { key: 'owner', label: $t('adminContent.lists.owner'), value: (l) => l.owner.name, sortable: false },
+    { key: 'items', label: $t('adminContent.lists.items'), value: (l) => l.itemCount, sortable: false, align: 'end' },
+    { key: 'featured', label: $t('admin.lists.feature'), value: (l) => l.featured, sortable: false, filter: false, align: 'end' },
+  ] as Column<AdminList>[];
 </script>
 
-<p class="muted">{$t('admin.lists.intro', { max: MAX, count })}</p>
-<p role="status" aria-live="polite" class="msg">{msg}</p>
-{#if lists === null}<p class="muted">{$t('admin.lists.loading')}</p>
-{:else if failed}<p class="err" role="alert">{$t('admin.lists.loadFailed')} <button type="button" class="sec" on:click={load}>{$t('admin.tryAgain')}</button></p>
-{:else if !lists.length}<p class="muted">{$t('admin.lists.empty')}</p>
-{:else}
-  <ul class="ls">
-    {#each lists as l (l.id)}
-      <li class="panel">
-        <div class="info"><a href="/lists/{l.id}"><b>{l.name}</b></a><span class="muted"> {$t('admin.lists.meta', { name: l.owner.name, n: l.itemCount })}</span></div>
-        <button type="button" class:sec={!l.featured} aria-pressed={l.featured} disabled={busy === l.id} on:click={() => toggle(l)}>{$t('admin.lists.feature')}<span class="sr-only">: {l.name}</span></button>
-      </li>
-    {/each}
-  </ul>
-{/if}
+<p class="intro muted">{$t('admin.lists.intro', { max, count: featuredCount })}</p>
+<div class="slots"><Progress value={featuredCount} max={max} tone={featuredCount >= max ? 'warn' : 'acc'} label={$t('adminContent.lists.slots', { count: featuredCount, max })} /></div>
+
+<DataTable
+  caption={$t('admin.tabs.lists')} {rows} {columns} key={(l) => l.id} {error} pageSize={PAGE} bind:page bind:q total={rows === null ? null : total}
+  filterable filterPlaceholder={$t('adminContent.lists.search')} emptyText={$t('admin.lists.empty')} busyKey={(l) => `list:${l.id}`}
+  on:query={onQuery} on:retry={() => load(0)}>
+  <svelte:fragment slot="cell" let:row let:col>
+    {#if col.key === 'name'}
+      <a class="nm" href="/lists/{row.id}">{row.name}</a>
+    {:else if col.key === 'items'}
+      {fmtNumber(row.itemCount)}
+    {:else if col.key === 'featured'}
+      <Toggle hideLabel label={$t('adminContent.lists.featureName', { name: row.name })} checked={row.featured} pending={$busyKeys.has(`list:${row.id}`)}
+        on:change={(e) => toggle(row, e.detail)} />
+    {:else}{col.value?.(row) ?? ''}{/if}
+  </svelte:fragment>
+</DataTable>
 
 <style>
-  .ls { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
-  .ls li { display: flex; gap: .8rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-  .info { min-width: 0; overflow-wrap: anywhere; }
-  .ls button { min-height: 44px; }
-  .ls button[aria-pressed='true']::before { content: '✓ '; }
-  .msg { min-height: 1.4em; }
+  .intro { margin: 0 0 .8rem; max-width: 70ch; }
+  .slots { max-width: 24rem; margin-bottom: 1rem; }
+  .nm { color: var(--fg); text-decoration: underline; text-decoration-color: rgba(255,255,255,.3); text-underline-offset: 3px; }
+  .nm:hover { text-decoration-color: currentColor; }
 </style>

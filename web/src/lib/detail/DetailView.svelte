@@ -28,6 +28,10 @@
   import MoreLikeThis from '#lib/detail/MoreLikeThis.svelte';
   import InfoBlock from '#lib/detail/InfoBlock.svelte';
   import Extras from '#lib/detail/Extras.svelte';
+  import TitleFacts from '#lib/detail/TitleFacts.svelte';
+  import StoryCard from '#lib/detail/StoryCard.svelte';
+  import LeavingDialog from '#lib/detail/LeavingDialog.svelte';
+  import { forgetFacts, loadFacts, type Facts } from '#lib/fresh';
 
   /** Unified detail view: used inside the popup (ItemModal) and as the full page (/item/[id]). */
   export let id: string;
@@ -46,6 +50,8 @@
   let logoFailed = false, saveMsg = '', saveT: ReturnType<typeof setTimeout>, castMsg = '', castT: ReturnType<typeof setTimeout>;
   let lgA = '', lgS = '';
   let dl: DownloadButton | undefined, dlAvail = false, dlState = '';
+  // fresh label, removal date and quality chips (Block 17); admins get "Entfernungsdatum" in the ⋯ menu
+  let facts: Facts | null = null, leavingDlg = false;
 
   // ---- loading: render from the card's data at once, every request in parallel (only the episode list waits for seasons + next-up) ----
   let loadSeq = 0, epSeq = 0, epKey = '';
@@ -57,6 +63,7 @@
     const my = ++loadSeq;
     stopHero(); cancelAuto(); autoCancelled = false; heroByUser = false;
     failed = false; episodes = null; next = null; seasons = []; ratings = []; avg = null; stars = 0; review = ''; followed = false; season = ''; epKey = '';
+    facts = null; leavingDlg = false;
     extras = []; more = null; people = []; logoFailed = false; heroLoaded = false; heroTried = ''; recOpen = false; castMsg = ''; saveMsg = ''; tab = '';
     savedLang(want);
     const cd: ItemDetail | undefined = cachedDetail(want);
@@ -68,6 +75,7 @@
 
     const pItem = api<ItemDetail>(`/api/items/${want}`);
     // secondary requests start now; each one is optional (the view works without it)
+    opt(loadFacts(want), (f) => (facts = f), my);
     opt(api(`/api/items/${want}/people`), (r) => (people = (r.people as Person[]) ?? []), my);
     opt(api(`/api/items/${want}/extras/all`), (r) => (extras = (r.items as typeof extras) ?? []), my);
     if (!$kidsMode) opt(api(`/api/items/${want}/ratings`), (rr) => { ratings = rr.ratings; avg = rr.average; const mine = ratings.find((x) => x.mine); stars = mine?.stars ?? 0; review = mine?.review ?? ''; }, my);
@@ -211,6 +219,7 @@
     ...(social ? [{ id: 'rec', label: $t('detail.actions.recommend'), icon: 'send', run: openRec }, { id: 'share', label: $t('detail.actions.share'), icon: 'share', run: share }] : []),
     ...(item.type !== 'Series' && social ? [{ id: 'party', label: $t('detail.actions.party'), icon: 'users', run: startParty }] : []),
     ...($tvOnline && playTarget ? [{ id: 'tv', label: $t('detail.actions.tv'), icon: 'tv', run: castHere }] : []),
+    ...(facts?.admin && (item.type === 'Movie' || item.type === 'Series' || item.type === 'BoxSet') ? [{ id: 'leaving', label: $t('fresh.admin.menu'), icon: 'calendar', run: () => { leavingDlg = true; } }] : []),
     ...(canPreview && !heroPlaying ? [{ id: 'trailer', label: $t('detail.actions.trailer'), icon: 'film', run: () => startHero(true) }] : []),
     ...(item.type !== 'Series' && dlAvail && !phone ? [{ id: 'dl', label: dlState ? $t('detail.actions.downloadState', { state: dlState }) : $t('detail.actions.download'), icon: 'download', run: () => dl?.activate() }] : []),
   ] as MoreAction[]) : [];
@@ -233,7 +242,7 @@
     if (!item || (!forced && !eligible())) return;
     heroPlaying = true; previewEnded = false;
     if (forced) { heroByUser = true; cancelAuto(); } // "Trailer abspielen": the viewer watches the trailer, no autostart afterwards
-    if (!(await playPreview(item.id, () => hv, heroOwner))) heroPlaying = false;
+    if (!(await playPreview(item.id, () => hv, heroOwner, forced))) heroPlaying = false; // explicit "Trailer abspielen" still works in calm mode
   }
   function stopHero() { clearTimeout(heroT); if (heroOwner && $previewOwner === heroOwner) stopPreview(heroOwner); heroPlaying = false; }
   const tvMode = () => document.documentElement.classList.contains('tv');
@@ -243,7 +252,7 @@
   let dvEl: HTMLDivElement | undefined, autoEl: HTMLDivElement | undefined;
   $: autoOn = autoStartAllowed({
     pref: ($prefs as { autoStartPreview?: boolean }).autoStartPreview, touch, tv: typeof document !== 'undefined' && tvMode(), hidden: false, reducedMotion: false,
-    previewing: heroPlaying, hasTarget: Boolean(playBase), cancelled: autoCancelled, userStartedPreview: heroByUser,
+    previewing: heroPlaying, hasTarget: Boolean(playBase), cancelled: autoCancelled, userStartedPreview: heroByUser, calm: $prefs.calm,
   });
   $: counting = autoT !== undefined;
   /** the viewer is busy right now: a popover (MoreActions / RatingButton / ListMenu) is open or a text field has focus */
@@ -359,6 +368,7 @@
         {#if item.rating}<span class="age" title={$t('detail.view.ageRating')}>{item.rating}</span>{/if}
         {#if len}<span>{len}</span>{/if}
       </p>
+      <TitleFacts {facts} episode={item.type === 'Episode'} />
       <a class="btn light play wide" data-autofocus href={playHref} on:touchstart|passive={prefetchPlayer} on:focus={prefetchPlayer}><Icon name="play" size={24} />{playLabel}</a>
       {#if item.type !== 'Series'}<DownloadButton itemId={item.id} block />{:else if playTarget}<DownloadButton itemId={playTarget} seriesId={item.id} block />{/if}
       {#if resumeLine}<p class="resume">{resumeLine}</p>{/if}
@@ -391,6 +401,7 @@
               {#if item.rating}<span class="age" title={$t('detail.view.ageRating')}>{item.rating}</span>{/if}
               {#if len}<span>{len}</span>{/if}
             </p>
+            <TitleFacts {facts} episode={item.type === 'Episode'} />
             {#if langs}<p class="muted small">{langs}</p>{/if}
             <p class="ov">{overview || $t('detail.view.noOverview')}</p>
           {/if}
@@ -414,6 +425,8 @@
           {#if moods.length}<div><dt>{$t('detail.view.moods')}</dt><dd>{moods.join(', ')}</dd></div>{/if}
         </dl>
       </div>
+
+      {#if item.type === 'Series'}<StoryCard seriesId={item.id} />{/if}
 
       {#if tabbed}
         <div class="tabs" role="tablist" aria-label={$t('hubs.extras.tabs')} tabindex="-1" on:keydown={tabKeys}>
@@ -455,7 +468,7 @@
       {/if}
 
       <CastRow id={item.id} {people} />
-      <InfoBlock {item} {people} />
+      <InfoBlock {item} {people} {facts} />
       {#if item.type !== 'Series'}<DownloadButton bind:this={dl} itemId={item.id} headless bind:available={dlAvail} bind:stateText={dlState} />{/if}
     </div>
   {:else if !failed}
@@ -469,6 +482,12 @@
     </div>
   {/if}
 </div>
+
+{#if leavingDlg && item}
+  <LeavingDialog itemId={item.id} name={item.name} leavesAt={facts?.leaving?.leavesAt ?? ''} note={facts?.leaving?.note ?? ''}
+    on:close={() => (leavingDlg = false)}
+    on:saved={async () => { const id = item?.id; leavingDlg = false; if (!id) return; forgetFacts(id); facts = await loadFacts(id); }} />
+{/if}
 
 <style>
   .dv { --dv-bg: var(--bg); position: relative; color: var(--fg); }

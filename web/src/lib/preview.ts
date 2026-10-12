@@ -1,5 +1,19 @@
 import { derived, get, writable } from 'svelte/store';
 import { api, ApiError } from '#lib/api';
+import { prefs } from '#lib/stores';
+
+/**
+ * Calm mode (profile pref `calm`): the ONE helper every autoplaying thing asks. No billboard trailer, hover-card preview, detail
+ * auto-start preview or other background video, and no sound with them; animations are damped by the `html.calm` rule (stores.ts).
+ * `prefers-reduced-motion` counts as calm for motion, so `motionAllowed()` is the check for anything that moves on its own.
+ */
+export const calmMode = (): boolean => get(prefs).calm === true;
+export function motionAllowed(): boolean {
+  if (calmMode()) return false;
+  try { return typeof matchMedia === 'undefined' || !matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return true; }
+}
+/** May a preview / trailer clip start by itself (no click)? Calm mode and reduced motion say no. */
+export const autoplayAllowed = (): boolean => motionAllowed();
 
 /** Owner of the preview that is running right now (a card's item id, or `hero:<id>`) - only one at a time. */
 export const previewOwner = writable<string>('');
@@ -26,9 +40,12 @@ export function toggleSound(v?: HTMLVideoElement) {
 /**
  * Plays the muted-or-not preview of `itemId` in the <video> returned by `getVideo`.
  * `owner` identifies who plays it (defaults to the item id) so the billboard and the hover cards never play together.
+ * `explicit`: the viewer asked for it (button click) - the only case that plays in calm mode.
  */
-export async function playPreview(itemId: string, getVideo: () => HTMLVideoElement | undefined, owner = itemId): Promise<boolean> {
+export async function playPreview(itemId: string, getVideo: () => HTMLVideoElement | undefined, owner = itemId, explicit = false): Promise<boolean> {
   if (!itemId || itemId === 'undefined' || failed.has(itemId)) return false;
+  // calm mode: nothing starts by itself; only a click on "Trailer abspielen" (explicit) may still play
+  if (!explicit && calmMode()) return false;
   previewOwner.set(owner); // claim synchronously so the card's guard keeps the <video> mounted
   try {
     const { url } = (await api<{ url?: string } | null>(`/api/items/${itemId}/trailer`)) ?? {};

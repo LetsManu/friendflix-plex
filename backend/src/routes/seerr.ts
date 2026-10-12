@@ -5,7 +5,7 @@ import { audit } from '../audit.js';
 import type { Ctx } from '../ctx.js';
 import { effectiveLanguage, m } from '../i18n.js';
 import { localizeStored, notify } from '../notify.js';
-import { portalStatus, SeerrError } from '../seerr/client.js';
+import { portalStatus, requestStateKey, SeerrError } from '../seerr/client.js';
 import { ensureSeerrUser } from '../seerr/service.js';
 import { requireGrownUp } from '../kids.js';
 import { requireAdmin } from '../session.js';
@@ -119,8 +119,12 @@ export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // ---- admin approval ----
   app.get('/api/admin/requests', admin, wrap(async (req) => {
-    const f = z.enum(['pending', 'approved', 'processing', 'available', 'all']).default('pending').parse((req.query as { filter?: string }).filter);
-    const r = await ctx.seerr.listRequests(f, 50, 0);
+    const q = z.object({
+      filter: z.enum(['pending', 'approved', 'processing', 'available', 'all']).default('pending'),
+      take: z.coerce.number().int().min(1).max(100).default(50),
+      skip: z.coerce.number().int().min(0).max(100_000).default(0),
+    }).parse(req.query);
+    const r = await ctx.seerr.listRequests(q.filter, q.take, q.skip);
     const ids = r.results.map((x: any) => x.id);
     const owners = ids.length ? (await ctx.db.query('select s.seerr_request_id id, u.name from seerr_requests s join users u on u.id=s.user_id where s.seerr_request_id = any($1)', [ids])).rows : [];
     const byId = new Map(owners.map((o: any) => [o.id, o.name]));
@@ -134,10 +138,12 @@ export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
       }
     }));
     return {
+      // `status` is the legacy portal literal (German); `statusKey` is the language-neutral key the admin UI translates
       requests: r.results.map((x: any, i: number) => ({
         id: x.id, title: titles[i], mediaType: x.type, requestedBy: byId.get(x.id) ?? x.requestedBy?.displayName ?? '?',
-        status: portalStatus(x.media?.status, x.status), createdAt: x.createdAt,
+        status: portalStatus(x.media?.status, x.status), statusKey: requestStateKey(x.media?.status, x.status), createdAt: x.createdAt,
       })),
+      total: Number(r.pageInfo?.results ?? r.results.length),
     };
   }));
   for (const action of ['approve', 'decline'] as const) {

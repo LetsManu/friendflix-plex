@@ -43,6 +43,10 @@ const de = {
   'party.invite': '{name} lädt dich zur Watch-Party ein: {title}',
   'list.invite': '{name} hat dich zur Liste „{list}“ eingeladen',
   'recommend': '{name} empfiehlt dir „{title}“',
+  // leaving soon (admin set a removal date)
+  'leaving.days': { one: '„{title}“ ist nur noch {n} Tag verfügbar', other: '„{title}“ ist nur noch {n} Tage verfügbar' },
+  'leaving.today': '„{title}“ ist nur noch heute verfügbar',
+  'leaving.body': 'Steht auf deiner Liste oder in „Weiterschauen“ – schau es dir noch an, bevor es weg ist.',
   // movie night polls
   'poll.open': 'Filmabend-Abstimmung: {title}',
   'poll.cancelled': 'Abstimmung ohne Stimmen beendet: {title}',
@@ -121,6 +125,10 @@ const en: Catalog = {
   'party.invite': '{name} invited you to a watch party: {title}',
   'list.invite': '{name} invited you to the list “{list}”',
   'recommend': '{name} recommends “{title}” to you',
+  // leaving soon (admin set a removal date)
+  'leaving.days': { one: '“{title}” is only available for {n} more day', other: '“{title}” is only available for {n} more days' },
+  'leaving.today': '“{title}” is only available today',
+  'leaving.body': 'It is on your list or in Continue Watching – watch it before it is gone.',
   'poll.open': 'Movie night vote: {title}',
   'poll.cancelled': 'Vote ended without votes: {title}',
   'poll.scheduled': 'Movie night is set: {title}',
@@ -190,6 +198,10 @@ const fr: Catalog = {
   'party.invite': '{name} vous invite à une soirée de visionnage : {title}',
   'list.invite': '{name} vous a invité à la liste « {list} »',
   'recommend': '{name} vous recommande « {title} »',
+  // leaving soon (admin set a removal date)
+  'leaving.days': { one: '« {title} » n’est plus disponible que {n} jour', many: '« {title} » n’est plus disponible que {n} jours', other: '« {title} » n’est plus disponible que {n} jours' },
+  'leaving.today': '« {title} » n’est disponible qu’aujourd’hui',
+  'leaving.body': 'Il est dans votre liste ou dans « Reprendre » – regardez-le avant qu’il ne disparaisse.',
   'poll.open': 'Vote pour la soirée cinéma : {title}',
   'poll.cancelled': 'Vote terminé sans votes : {title}',
   'poll.scheduled': 'La soirée cinéma est fixée : {title}',
@@ -259,6 +271,10 @@ const es: Catalog = {
   'party.invite': '{name} te invita a una watch party: {title}',
   'list.invite': '{name} te ha invitado a la lista «{list}»',
   'recommend': '{name} te recomienda «{title}»',
+  // leaving soon (admin set a removal date)
+  'leaving.days': { one: '«{title}» solo estará disponible {n} día más', many: '«{title}» solo estará disponible {n} días más', other: '«{title}» solo estará disponible {n} días más' },
+  'leaving.today': '«{title}» solo está disponible hoy',
+  'leaving.body': 'Está en tu lista o en «Seguir viendo»: míralo antes de que desaparezca.',
   'poll.open': 'Votación de la noche de cine: {title}',
   'poll.cancelled': 'Votación terminada sin votos: {title}',
   'poll.scheduled': 'Noche de cine confirmada: {title}',
@@ -328,6 +344,10 @@ const it: Catalog = {
   'party.invite': '{name} ti invita a una watch party: {title}',
   'list.invite': '{name} ti ha invitato alla lista «{list}»',
   'recommend': '{name} ti consiglia «{title}»',
+  // leaving soon (admin set a removal date)
+  'leaving.days': { one: '«{title}» sarà disponibile ancora per {n} giorno', many: '«{title}» sarà disponibile ancora per {n} giorni', other: '«{title}» sarà disponibile ancora per {n} giorni' },
+  'leaving.today': '«{title}» è disponibile solo oggi',
+  'leaving.body': 'È nella tua lista o in «Continua a guardare»: guardalo prima che scompaia.',
   'poll.open': 'Votazione serata film: {title}',
   'poll.cancelled': 'Votazione chiusa senza voti: {title}',
   'poll.scheduled': 'Serata film confermata: {title}',
@@ -397,6 +417,10 @@ const tr: Catalog = {
   'party.invite': '{name} seni birlikte izleme partisine davet ediyor: {title}',
   'list.invite': '{name} seni “{list}” listesine davet etti',
   'recommend': '{name} sana “{title}” öneriyor',
+  // leaving soon (admin set a removal date)
+  'leaving.days': { one: '“{title}” yalnızca {n} gün daha izlenebilir', other: '“{title}” yalnızca {n} gün daha izlenebilir' },
+  'leaving.today': '“{title}” yalnızca bugün izlenebilir',
+  'leaving.body': 'Listenizde veya “İzlemeye devam et” bölümünde – kalkmadan önce izleyin.',
   'poll.open': 'Film gecesi oylaması: {title}',
   'poll.cancelled': 'Oylama oy almadan sona erdi: {title}',
   'poll.scheduled': 'Film gecesi belli oldu: {title}',
@@ -466,6 +490,10 @@ const pl: Catalog = {
   'party.invite': '{name} zaprasza Cię na wspólne oglądanie: {title}',
   'list.invite': '{name} zaprosił(a) Cię do listy „{list}”',
   'recommend': '{name} poleca Ci „{title}”',
+  // leaving soon (admin set a removal date)
+  'leaving.days': { one: '„{title}” będzie dostępny jeszcze tylko {n} dzień', few: '„{title}” będzie dostępny jeszcze tylko {n} dni', many: '„{title}” będzie dostępny jeszcze tylko {n} dni', other: '„{title}” będzie dostępny jeszcze tylko {n} dnia' },
+  'leaving.today': '„{title}” jest dostępny tylko dzisiaj',
+  'leaving.body': 'Jest na Twojej liście lub w „Kontynuuj oglądanie” – obejrzyj, zanim zniknie.',
   'poll.open': 'Głosowanie na wieczór filmowy: {title}',
   'poll.cancelled': 'Głosowanie zakończone bez głosów: {title}',
   'poll.scheduled': 'Wieczór filmowy ustalony: {title}',

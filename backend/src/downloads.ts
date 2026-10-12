@@ -622,6 +622,8 @@ export async function gcLicenses(ctx: Pick<Ctx, 'db'>): Promise<number> {
 export async function adminOverview(ctx: Pick<Ctx, 'db'>) {
   const jobs = (await ctx.db.query(
     `select j.id, j.item_id, j.quality, j.audio_lang, j.max_height, j.max_bitrate, j.status, j.seg_done, j.seg_total, j.bytes, j.error, j.created_at, j.updated_at, j.last_used_at,
+            (select d.meta->>'title' from downloads d where d.job_id=j.id and d.meta->>'title' is not null order by d.created_at desc limit 1) title,
+            (select d.meta->>'seriesName' from downloads d where d.job_id=j.id and d.meta->>'title' is not null order by d.created_at desc limit 1) series_name,
             (select count(*) from downloads d where d.job_id=j.id and d.status in ('pending','fetched'))::int licenses
        from download_jobs j order by j.created_at desc limit 200`,
   )).rows;

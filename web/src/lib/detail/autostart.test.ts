@@ -16,6 +16,8 @@ describe('autoStartAllowed', () => {
     expect(autoStartAllowed({ ...base, touch: true })).toBe(false);
     expect(autoStartAllowed({ ...base, tv: true })).toBe(false);
     expect(autoStartAllowed({ ...base, reducedMotion: true })).toBe(false);
+    expect(autoStartAllowed({ ...base, calm: true })).toBe(false); // calm mode (profile pref)
+    expect(autoStartAllowed({ ...base, calm: false })).toBe(true);
     expect(autoStartAllowed({ ...base, cancelled: true })).toBe(false);
   });
 });

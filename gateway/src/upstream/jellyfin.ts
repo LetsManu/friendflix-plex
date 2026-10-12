@@ -17,9 +17,9 @@ export const jellyfinUpstream: Upstream = {
     new RegExp(`^/Videos/${ID}/stream(\\.\\w{2,5})?$`),
     new RegExp(`^/Videos/${ID}/${ID}/Subtitles/\\d{1,3}/\\d{1,10}/Stream\\.(vtt|srt)$`),
     new RegExp(`^/Videos/${ID}/Trickplay/\\d{2,4}/\\d{1,5}\\.jpg$`),
-    new RegExp(`^/Items/${ID}/Images/(Primary|Backdrop|Logo|Thumb|Banner)(/\\d{1,3})?$`),
+    new RegExp(`^/Items/${ID}/Images/(Primary|Backdrop|Logo|Thumb|Banner|Chapter)(/\\d{1,3})?$`),
   ],
-  // no /stream (direct download), no Trickplay, no Logo/Thumb/Banner
+  // no /stream (direct download), no Trickplay, no Logo/Thumb/Banner/Chapter
   castPaths: [
     new RegExp(`^/Videos/${ID}/(master|main)\\.m3u8$`),
     new RegExp(`^/Videos/${ID}/(hls1?|hls)/[\\w.-]+/[\\w.-]+$`),

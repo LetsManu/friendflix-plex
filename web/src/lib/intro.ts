@@ -57,12 +57,14 @@ export interface IntroContext {
   tv: boolean;
   /** automatic cold-start intro (no user gesture). With reduced motion it is skipped; a user-triggered intro shows the calm fade instead. */
   cold?: boolean;
+  /** the profile's calm mode (nothing moves by itself): the cold-start intro is skipped like with reduced motion */
+  calm?: boolean;
 }
 
-export function shouldPlayIntro({ setting, reducedMotion, route, sessionSeen, tv, cold = false }: IntroContext): boolean {
+export function shouldPlayIntro({ setting, reducedMotion, route, sessionSeen, tv, cold = false, calm = false }: IntroContext): boolean {
   if (!setting || tv || sessionSeen) return false;
   if (isIntroFreeRoute(route)) return false;
-  if (cold && reducedMotion) return false;
+  if (cold && (reducedMotion || calm)) return false;
   return true;
 }
 
