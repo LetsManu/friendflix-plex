@@ -1,4 +1,4 @@
-# Monitoring (Icinga / Prometheus)
+# Monitoring (Icinga / Prometheus / Grafana)
 
 > **FriendFlix for Plex (Preview):** Wo hier „Jellyfin“ steht, ist bei Plex der Plex-Medienserver gemeint (`/health/ready` prüft ihn). Einrichtung: [de/plex.md](de/plex.md).
 
@@ -11,6 +11,25 @@ Endpunkte (nur lokal auf dem Docker-Host erreichbar: Ports sind an `127.0.0.1` g
 | `http://127.0.0.1:3082/metrics` | Gateway-Durchsatz |
 
 Wichtige Metriken: `friendflix_active_streams`, `friendflix_gateway_bytes_total` (Durchsatz = `rate()`), `friendflix_gateway_active_streams`, `friendflix_gateway_requests_total{code}`, `friendflix_dependency_up{dependency}`, `friendflix_users_total`, `friendflix_pending_devices`, `friendflix_pending_polls`, `friendflix_party_rooms`, `friendflix_client_errors_total{kind}` (Browser-Fehler, siehe unten).
+
+Weitere Metriken: `friendflix_http_requests_total{method,status}` (Status als Klasse `2xx`…`5xx`), `friendflix_gateway_download_bytes_total`, `friendflix_gateway_cast_requests_total{code}`, `friendflix_download_jobs{status}`, `friendflix_download_disk_bytes`, `friendflix_authz_nginx_total{result}` (nur Plan B) sowie die Node.js-Standardmetriken des Backends mit Präfix `friendflix_` (`friendflix_process_cpu_seconds_total`, `friendflix_nodejs_eventloop_lag_p99_seconds`, …).
+
+## Prometheus + Grafana (optional)
+`compose.monitoring.yaml` ergänzt den Stack um Prometheus und Grafana mit fertigem Dashboard ([deploy/grafana/friendflix.json](../deploy/grafana/friendflix.json)):
+```bash
+# .env: METRICS_TOKEN=<openssl rand -hex 32>   GRAFANA_ADMIN_PASSWORD=<langes Passwort>   (beides Pflicht, es gibt kein Standardpasswort)
+docker compose -f compose.prod.yaml -f compose.monitoring.yaml up -d      # bzw. -f compose.yaml -f compose.monitoring.yaml
+ssh -L 3083:127.0.0.1:3083 docker-host                                   # dann http://localhost:3083, Login GRAFANA_ADMIN_USER (admin)
+```
+- **Netz:** Prometheus hängt nur im internen Netz `monitoring` (kein Internet, kein Host-Port) und erreicht dort `backend:3000` und `gateway:4000`; beide Dienste treten diesem Netz durch das Overlay bei. Grafana ist zusätzlich im Netz `monitoring-ui` und nur auf `127.0.0.1:${GRAFANA_PORT:-3083}` veröffentlicht. Für Zugriff über NPM: eigener Proxy-Host mit Access-List auf `127.0.0.1:3083`, `GRAFANA_ROOT_URL=https://grafana.example.com/` und `GRAFANA_COOKIE_SECURE=true` setzen.
+- **Token:** `METRICS_TOKEN` gelangt als Compose-Secret nach `/run/secrets/metrics_token` (aus der Umgebung, nicht in der Prometheus-Konfiguration). Deshalb läuft Prometheus nicht mit `read_only` (Compose schreibt das Secret beim Start in den Container), aber als `nobody` ohne Capabilities.
+- **Grafana:** Datenquelle (`uid: prometheus`) und Dashboard werden aus `deploy/grafana/provisioning/` geladen; Änderungen im UI am Dashboard nicht speichern, sondern JSON exportieren und `deploy/grafana/friendflix.json` ersetzen. `GRAFANA_ADMIN_PASSWORD` gilt nur beim ersten Start (wenn Grafana seine Datenbank anlegt); später im UI ändern oder `docker compose exec grafana grafana cli admin reset-admin-password <neu>`. Selbstregistrierung, anonymer Zugriff, Telemetrie, Update-Checks und Plugin-Downloads sind abgeschaltet.
+- **Aufbewahrung:** `PROMETHEUS_RETENTION` (Default `30d`), Daten in den Volumes `prometheus` und `grafana`. Scrape-Intervall 30 s (`deploy/prometheus/prometheus.yml`); jeder Backend-Scrape fragt Postgres, Redis und Jellyfin kurz ab.
+- Die Dateien werden aus `./deploy` gemountet, der Host braucht also den Checkout des Repos (wie für `compose.prod.yaml`). Ein vorhandenes Prometheus/Grafana kann stattdessen den Scrape-Block unten nutzen und das Dashboard importieren (*Dashboards → New → Import*; Variablen `backend_job`/`gateway_job` auf die eigenen Job-Namen setzen).
+
+**Dashboard „FriendFlix“:** Abhängigkeiten (Postgres/Redis/Jellyfin erreichbar), Scrape-Status, aktive Streams (Backend-Sicht und offene Gateway-Antworten), Gateway-Durchsatz (Streaming und Downloads), Nutzer, Watch-Party-Räume, wartende Geräte/Abstimmungen; Backend-Anfragen nach Statusklasse und Methode, 4xx/5xx-Anteil; Gateway- und Chromecast-Antworten nach Statuscode; abgelehnte Medienanfragen (401/403, Plan-B-Entscheidungen); Download-Jobs nach Status und belegter Platz; Browser-Fehler nach Art; CPU, Speicher und Event-Loop-Verzögerung des Backends.
+
+**Was es (noch) nicht als Metrik gibt** – das Dashboard zeigt nur vorhandene Metriken: Latenz pro Route (dafür `Server-Timing` und das `slow request`-Log, siehe unten), Wiedergabe-Starts/-Fehler, Antwortzeiten des Medienservers (nur Erreichbarkeit über `friendflix_dependency_up{dependency="jellyfin"}`) und fehlgeschlagene Logins (Audit-Log). Abgelehnte Medienanfragen sind der nächstliegende Ersatz für Auth-Fehler.
 
 ## Icinga-Beispiele
 ```

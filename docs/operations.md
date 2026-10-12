@@ -1,4 +1,4 @@
-# Betrieb: Backup, Restore, Firewall, Updates
+# Betrieb: Backup, Restore, Firewall, Updates, Image-Prüfung
 
 Erstinstallation: [de/setup.md](de/setup.md) ([English](setup.md)). Authentik einrichten, sichern und aktualisieren: [de/authentik.md](de/authentik.md) ([English](authentik.md)).
 
@@ -51,6 +51,47 @@ Nach Jellyfin-Updates: `JELLYFIN_URL=… ./scripts/gen-jellyfin-client.sh` und D
 - **API:** In Portainer → *My account* → *Access tokens* ein Token anlegen (`PORTAINER_API_KEY`), `PORTAINER_URL` (intern erreichbar vom Backend), `PORTAINER_STACK_ID` (steht in der URL des Stacks, `…/stacks/<id>`) und ggf. `PORTAINER_ENDPOINT_ID` (Default 1) setzen. Das Portal liest den Stack (Git- oder Datei-Stack), behält dessen Umgebungsvariablen unverändert und löst ein Redeploy mit Image-Pull aus.
 
 Sicherheit: Webhook-URL und Token können den Stack neu deployen. Am besten einen eigenen Portainer-Benutzer nur mit Zugriff auf dieses eine Stack verwenden (kein Admin) und das Token ausschließlich in der `.env`/den Docker-Secrets ablegen. Beide Werte erscheinen weder in Antworten noch in Logs. Pro 2 Minuten ist ein Update möglich; jeder Auslöser steht als `system.update` im Audit-Log. Optional senkt `GITHUB_TOKEN` (ohne Rechte) das GitHub-Limit-Risiko; Ergebnisse werden 10 Minuten gecacht.
+
+## Images prüfen: Signatur, SBOM, Provenienz
+Jedes veröffentlichte Image (`ghcr.io/<owner>/friendflix-{backend,gateway,web}`, Tags `latest`, Kurz-SHA, `x.y.z`) ist
+- mit **cosign keyless** signiert: kein Schlüssel, kein Secret. Der Publish-Job holt sich per GitHub-OIDC ein kurzlebiges Zertifikat von Sigstore (Fulcio), die Signatur steht im öffentlichen Transparenz-Log (Rekor). Die Identität im Zertifikat ist der Workflow, der signiert hat: `https://github.com/<Owner>/<Repo>/.github/workflows/publish.yml@refs/heads/main` bzw. `@refs/tags/vX.Y.Z`.
+- mit **GitHub-Attestations** versehen: SLSA-Provenienz (welcher Commit, welcher Workflow-Lauf) und die SBOM (SPDX, von BuildKit beim Build erzeugt), beide auch in GHCR neben dem Image abgelegt.
+- zusätzlich mit den BuildKit-Attestations (SBOM + Provenienz `mode=max`) direkt im Image-Index.
+
+Signiert und attestiert wird nur der Digest, der vorher von Trivy geprüft wurde (siehe Kopf von `.github/workflows/ci.yml`), und nur bei Push auf `main` bzw. `v*`-Tags, nie in Pull Requests. Images von vor dieser Umstellung sind nicht signiert.
+
+**Prüfen** (cosign ≥ 3, `gh` ≥ 2.60; Owner im Image-Namen klein geschrieben, in der Identität so wie auf GitHub – das Regex unterscheidet Groß-/Kleinschreibung):
+```bash
+IMG=ghcr.io/letsmanu/friendflix-backend:latest      # bzw. :<sha> oder :<x.y.z>, gateway / web genauso
+
+# Signatur: muss aus einem Workflow dieses Repos stammen, ausgestellt für GitHub Actions
+cosign verify "$IMG" \
+  --certificate-identity-regexp '^https://github.com/LetsManu/friendflix/.github/workflows/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+# Provenienz (Standard-Prädikat SLSA) und SBOM (gh lädt die Attestations aus der GitHub-API, braucht `gh auth login`)
+gh attestation verify "oci://$IMG" --repo LetsManu/friendflix
+gh attestation verify "oci://$IMG" --repo LetsManu/friendflix --predicate-type https://spdx.dev/Document/v2.3
+#   ohne GitHub-Login: --bundle-from-oci (liest die Attestations aus GHCR)
+
+# SBOM / Provenienz ansehen
+docker buildx imagetools inspect "$IMG" --format '{{ json .SBOM.SPDX }}' | jq '.packages | length'
+docker buildx imagetools inspect "$IMG" --format '{{ json .Provenance.SLSA }}' | jq . | head -40
+```
+Strenger (nur `main` und Versions-Tags): `--certificate-identity-regexp '^https://github\.com/LetsManu/friendflix/\.github/workflows/publish\.yml@refs/(heads/main|tags/v.+)$'`.
+
+**Forks** (z. B. die Plex-Variante) brauchen keine Anpassung an den Workflows: Image-Namen und Signatur-Identität leiten sich vom Repo ab, in dem der Workflow läuft. Beim Prüfen `letsmanu`/`LetsManu/friendflix` durch den eigenen Owner bzw. `<owner>/<repo>` ersetzen.
+
+**Beim Deployment** am besten einen geprüften Digest pinnen statt `latest`: `docker buildx imagetools inspect "$IMG" --format '{{.Manifest.Digest}}'`, prüfen, dann in `compose.prod.yaml` per `FF_TAG` den Tag (oder direkt `image: …@sha256:…`) setzen.
+
+## Empfohlener Branch-Schutz
+GitHub → *Settings* → *Rules* → *Rulesets* (oder *Branches* → *Branch protection rule*) für `main`:
+- **Require a pull request before merging** (ohne Pflicht-Review reicht für ein Ein-Personen-Projekt), **Block force pushes**, **Restrict deletions**.
+- **Require status checks to pass** mit genau diesen Checks aus `.github/workflows/ci.yml` (Namen wie in der Auswahl; sie erscheinen dort erst, nachdem sie einmal gelaufen sind):
+  `test (22)`, `test (26)`, `e2e`, `dast`, `secrets`, `docker (backend)`, `docker (gateway)`, `docker (web)`
+- **Require branches to be up to date before merging** (*Require status checks to pass* → *Require branches to be up to date before merging*): die Checks müssen gegen den aktuellen Stand von `main` gelaufen sein.
+- Optional: den Check der CodeQL-Standardeinrichtung (Name erscheint nach dem ersten Lauf) bzw. unter Rulesets **Require code scanning results** für CodeQL.
+- Nicht als Pflicht-Check eintragen: `publish / …` und `Scorecard analysis` (laufen nur bei Push bzw. zeitgesteuert, nie in einem PR – der PR würde ewig warten).
 
 ## Plan B: NPM liefert /media/ direkt (auth_request)
 Standard ist das Node-Gateway. Wird es bei vielen parallelen Streams zum Engpass (CPU des `gateway`-Containers, `rate(friendflix_gateway_bytes_total)`), kann NPM/nginx `/media/` selbst ausliefern. Jede Anfrage wird vorher vom Backend freigegeben (`GET /internal/authz-nginx`).

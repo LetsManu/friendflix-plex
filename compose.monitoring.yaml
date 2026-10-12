@@ -1,0 +1,82 @@
+# Optional monitoring stack: Prometheus + Grafana with the FriendFlix dashboard (docs/monitoring.md "Prometheus + Grafana").
+# Overlay for compose.prod.yaml (or compose.yaml):
+#   docker compose -f compose.prod.yaml -f compose.monitoring.yaml up -d
+# Needs in .env: METRICS_TOKEN (bearer token for /metrics) and GRAFANA_ADMIN_PASSWORD (no default password).
+# - `monitoring` is internal (no egress, no host access): Prometheus only reaches backend + gateway, which join it here.
+# - Grafana additionally sits on `monitoring-ui` so it can be published, by default on 127.0.0.1:${GRAFANA_PORT:-3083}
+#   only (SSH tunnel, or an NPM proxy host with an access list). Prometheus has no published port.
+# - Config/dashboard files are bind-mounted from ./deploy, so this needs the repository checkout on the host.
+
+networks:
+  monitoring:
+    internal: true
+  monitoring-ui: {}
+
+secrets:
+  metrics_token:
+    environment: METRICS_TOKEN
+
+services:
+  backend:
+    networks: [monitoring]
+  gateway:
+    networks: [monitoring]
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    restart: unless-stopped
+    # not read_only: compose writes the environment-sourced secret into the container at start, which a read-only
+    # service refuses. The process still runs as nobody without capabilities, on an internal network without egress.
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+    secrets: [metrics_token]
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/-/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [monitoring]
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      # used only when Grafana creates its database (first start); later: Grafana UI or `grafana cli admin reset-admin-password`
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env (compose.monitoring.yaml)}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_COOKIE_SECURE: ${GRAFANA_COOKIE_SECURE:-false} # true when served via https (NPM)
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true" # no plugin downloads at start; the dashboard only uses built-in panels
+    volumes:
+      - grafana:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/friendflix.json:/etc/grafana/dashboards/friendflix.json:ro
+    depends_on: [prometheus]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    ports: ["${BIND_ADDR:-127.0.0.1}:${GRAFANA_PORT:-3083}:3000"]
+    networks: [monitoring, monitoring-ui]
+
+volumes:
+  prometheus:
+  grafana:

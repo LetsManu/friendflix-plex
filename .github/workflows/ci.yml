@@ -5,6 +5,10 @@
 # publish.yml (called after test, secrets and docker all passed) does NOT rebuild: it only re-tags the already scanned
 # image (`docker buildx imagetools create`) to latest / short sha / semver. What gets released is what was scanned.
 # A failed scan leaves only the unreleased `ci-<sha>` tag in GHCR (never latest); prune old ci-* tags from time to time.
+# Supply chain (push only): the candidate carries BuildKit SBOM (SPDX) + SLSA provenance (mode=max) attestations, Trivy
+# findings go to code scanning as SARIF, and publish.yml signs the promoted digest with cosign keyless (GitHub OIDC) and
+# adds GitHub artifact attestations (provenance + SBOM). Nothing on pull_request can write packages, sign or attest.
+# DAST: `dast` runs an OWASP ZAP baseline scan against the built web app (rules: .zap/rules.tsv).
 name: CI
 on:
   push: { branches: [main], tags: ["v*"] }
@@ -54,6 +58,54 @@ jobs:
             e2e/playwright-report/
             e2e/test-results/
           retention-days: 7
+  # OWASP ZAP baseline (passive) scan against the built web app, started like in `e2e` (node web/build, no backend).
+  # Fails on High-risk alerts, Medium/Low become warnings. Suppressions with reasons: .zap/rules.tsv. Report: artifact `zap-report`.
+  dast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # pinned by digest; bump together with the tag (Dependabot does not update `docker run` lines)
+      ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:7aaa659b0d43078febd82e29bad112285c370727e86ab8340444220e17d9f0d2
+      TARGET: http://127.0.0.1:4173
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 26, cache: npm } # same as the web image
+      - run: npm ci
+      - run: npm run build -w web
+      - name: Start web app
+        run: |
+          PORT=4173 HOST=127.0.0.1 ORIGIN="$TARGET" nohup node web/build > "$RUNNER_TEMP/web.log" 2>&1 &
+          for _ in $(seq 1 60); do curl -fsS -o /dev/null "$TARGET/offline" && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/web.log"; exit 1
+      - name: ZAP baseline scan
+        run: |
+          mkdir -p zap && chmod 777 zap   # the ZAP container runs as uid 1000
+          cp .zap/rules.tsv zap/rules.tsv
+          docker pull -q "$ZAP_IMAGE"
+          # -I: warnings never fail here; the gate below decides. Exit 1 = a rule set to FAIL in rules.tsv, 3 = scan error.
+          rc=0
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" "$ZAP_IMAGE" \
+            zap-baseline.py -t "$TARGET" -c rules.tsv -I -r zap-report.html -J zap-report.json -w zap-report.md || rc=$?
+          [ -s zap/zap-report.json ] || { echo "::error::ZAP produced no report (exit $rc)"; exit 1; }
+          [ "$rc" -le 2 ] || { echo "::error::ZAP baseline failed (exit $rc)"; exit "$rc"; }
+          [ "$rc" -ne 1 ] || { echo "::error::ZAP: a rule configured as FAIL in .zap/rules.tsv matched"; exit 1; }
+      - name: Gate (fail on High, warn on Medium)
+        run: |
+          ignored=$(awk -F'\t' '!/^#/ && $2 == "IGNORE" { print $1 }' .zap/rules.tsv | jq -R . | jq -sc .)
+          alerts=$(jq -c --argjson ign "$ignored" '[.site[].alerts[] | select((.pluginid | tostring) as $id | $ign | index($id) | not)]' zap/zap-report.json)
+          jq -r '.[] | select(.riskcode == "2" or .riskcode == "1") | "::warning title=ZAP \(.riskdesc)::\(.name) [\(.pluginid)] (\(.count) URLs)"' <<< "$alerts"
+          high=$(jq '[.[] | select(.riskcode == "3")]' <<< "$alerts")
+          if [ "$(jq length <<< "$high")" -gt 0 ]; then
+            jq -r '.[] | "::error title=ZAP \(.riskdesc)::\(.name) [\(.pluginid)] (\(.count) URLs)"' <<< "$high"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: zap-report
+          path: zap/zap-report.*
+          retention-days: 14
   secrets:
     runs-on: ubuntu-latest
     steps:
@@ -67,6 +119,7 @@ jobs:
     permissions:
       contents: read
       packages: write # literal on purpose: permissions don't accept expressions; PRs never push and fork PRs get a read-only token anyway
+      security-events: write # Trivy SARIF upload (push only, same reasoning)
     strategy:
       matrix: { service: [backend, gateway, web] }
     env:
@@ -123,7 +176,11 @@ jobs:
             BUILD_TIME=${{ github.event.head_commit.timestamp || github.event.repository.pushed_at }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-      - name: Scan pushed digest
+          # SPDX SBOM + full SLSA provenance stored next to the image (index digest); publish.yml re-uses the SBOM
+          sbom: true
+          provenance: mode=max
+      # report first (never fails) so code scanning also gets the findings of a run that the gate below fails
+      - name: Scan pushed digest (SARIF for code scanning)
         if: github.event_name == 'push'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
@@ -131,12 +188,36 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         with:
           image-ref: ${{ steps.img.outputs.name }}@${{ steps.build.outputs.digest }}
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          limit-severities-for-sarif: true
+          ignore-unfixed: true
+          exit-code: "0"
+      - name: Upload Trivy SARIF
+        if: github.event_name == 'push'
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}
+      - name: Scan pushed digest (gate)
+        if: github.event_name == 'push'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: ${{ steps.img.outputs.name }}@${{ steps.build.outputs.digest }}
+          format: table
+          output: ""
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
+          skip-setup-trivy: true
   # images are only published after every check above passed (main -> latest + sha, v* tags -> semver)
+  # signing/attesting (id-token, attestations) happens only here, i.e. only on push events
   publish:
     if: github.event_name == 'push'
-    needs: [test, e2e, secrets, docker]
-    permissions: { contents: read, packages: write }
+    needs: [test, e2e, dast, secrets, docker]
+    permissions: { contents: read, packages: write, id-token: write, attestations: write }
     uses: ./.github/workflows/publish.yml

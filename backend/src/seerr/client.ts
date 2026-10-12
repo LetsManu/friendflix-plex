@@ -70,4 +70,27 @@ export class SeerrClient {
   importJellyfinUsers(jellyfinUserIds: string[]) {
     return this.json<Array<{ id: number; jellyfinUserId?: string }>>('/user/import-from-jellyfin', { method: 'POST', body: JSON.stringify({ jellyfinUserIds }) });
   }
+  // ---- local Seerr users (media servers without a Seerr user import, capabilities.requestUsers = 'local') ----
+  /** One user; a SeerrError with status 404 when it does not exist (any more). */
+  getUser(id: number) {
+    return this.json<{ id: number; email?: string }>(`/user/${id}`);
+  }
+  /** One page of users (oldest first), for the lookup by email. */
+  listUsersPage(take: number, skip: number) {
+    return this.json<{ results: Array<{ id: number; email?: string }>; pageInfo?: { results?: number } }>(`/user?take=${take}&skip=${skip}&sort=created`);
+  }
+  /**
+   * Creates a local user (needs an API key with MANAGE_USERS, i.e. the admin key). Seerr gives it its *default* permissions; 409 when
+   * the email is taken. The password is required unless Seerr's email agent is on (it would mail one); FriendFlix never uses it.
+   */
+  createLocalUser(body: { email: string; username: string; password: string }) {
+    return this.json<{ id: number }>('/user', { method: 'POST', body: JSON.stringify(body) });
+  }
+  /** Sets a user's permission bits (PUT /user/{id} replaces username + permissions, so the username is sent along). */
+  setUserPermissions(id: number, username: string, permissions: number) {
+    return this.json(`/user/${id}`, { method: 'PUT', body: JSON.stringify({ username, permissions }) });
+  }
+  deleteUser(id: number) {
+    return this.json(`/user/${id}`, { method: 'DELETE' });
+  }
 }

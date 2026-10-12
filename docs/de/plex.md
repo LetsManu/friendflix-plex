@@ -142,7 +142,7 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | Chromecast | Funktioniert | HLS; Text-Untertitel über signierte FriendFlix-Untertitel-URLs |
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen, Hubs | Funktioniert | FriendFlix-Funktionen |
 | „Kommende Folgen“ / Kalender | Nicht verfügbar | Plex bietet das nicht |
-| Wünsche (Request-Dienst) | Noch nicht | Das Original ordnet FriendFlix-Nutzer über Jellyfin-IDs Seerr-Nutzern zu; mit Plex schlägt das fehl, in der Preview lassen sich keine Wünsche anlegen |
+| Wünsche (Request-Dienst) | Funktioniert | Jedes FriendFlix-Konto bekommt beim ersten Wunsch einen eigenen lokalen Seerr-Nutzer (nur Wunsch-Recht) |
 | „Aktuell läuft“ anderer Plex-Apps | Nicht verfügbar | FriendFlix zeigt nur eigene Sitzungen |
 | nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt: `/internal/authz-nginx` antwortet `501 plan_b_unsupported` |
 
