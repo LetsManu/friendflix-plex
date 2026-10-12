@@ -14,6 +14,108 @@ Zurück zur [README](../../README.de.md).
 - Das Token benutzen nur Gateway und Backend auf dem Server. Es geht nie an einen Browser; Clients sehen nur FriendFlix-URLs.
 - `compose.plex.yaml` **verbindet nur mit deinem vorhandenen Plex-Server** (`PLEX_URL`, `PLEX_TOKEN` oder `PLEX_TOKEN_FILE`). Es startet keinen Plex-Container.
 
+Dasselbe als Bild – wer was hält und was welche Grenze überquert (alle Diagramme, mit Container-Ansicht und dem Ablauf bei „Play“: [architecture.md](../architecture.md), englisch):
+
+```mermaid
+---
+config:
+  flowchart:
+    curve: basis
+    nodeSpacing: 50
+    rankSpacing: 65
+    padding: 14
+  themeVariables:
+    edgeLabelBackground: 'rgba(150,150,150,0.12)'
+  themeCSS: '.labelBkg { background-color: rgba(127,127,127,0.12) !important; }'
+---
+flowchart TB
+  accTitle: FriendFlix for Plex Vertrauensgrenzen
+  accDescr: Zuschauer im Internet halten nur ein Sitzungs-Cookie und signierte Medien-URLs. Das Plex-Admin-Token liegt nur in der Umgebung von Backend und Gateway auf dem Docker-Host. Das Backend entscheidet den Zugriff aus seinem Postgres-Spiegel der Plex-Bibliothek; das Gateway fragt es vor jeder Medienanfrage. Plex steht in deinem Netz und ist für Browser nie erreichbar.
+  subgraph PUB["Internet · nicht vertrauenswürdig"]
+    V("📺 <b>Zuschauer</b><br/><small>Sitzungs-Cookie<br/>signierte /media-URLs</small>"):::ext
+    P("🛡️ <b>Reverse-Proxy</b><br/><small>TLS</small>"):::edge
+  end
+  subgraph HOST["Docker-Host · FriendFlix"]
+    GW("📡 <b>gateway</b><br/><small>PLEX_TOKEN_FILE<br/>INTERNAL_SECRET</small>"):::app
+    BE("⚙️ <b>backend</b><br/><small>PLEX_TOKEN_FILE<br/>INTERNAL_SECRET</small>"):::app
+    PG[("🗄️ <b>Postgres</b><br/><small>Bibliotheks-Spiegel<br/>Profile · Wiedergabestand</small>")]:::store
+  end
+  subgraph LAN["Dein Netz"]
+    PX("🎬 <b>Plex Media Server</b><br/><small>ein Admin-Token<br/>nicht öffentlich</small>"):::media
+  end
+  V -->|"HTTPS"| P
+  P -->|"/media/*"| GW
+  P -->|"/api /auth /ws"| BE
+  GW -->|"darf dieses Profil<br/>das sehen?"| BE
+  BE -->|"Zugriff wird hier entschieden<br/>(Rollen · Altersgrenzen)"| PG
+  GW ==>|"Video"| PX
+  BE -->|"Bibliotheks-Sync"| PX
+  classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
+  classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
+  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
+  classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
+  classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
+  classDef fork fill:#4a1d3c,stroke:#e070b0,stroke-width:1px,stroke-dasharray:4 3,color:#fff0f8
+  linkStyle default stroke:#8b949e,stroke-width:1.4px
+  style PUB fill:none,stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4
+  style LAN fill:none,stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4
+  style HOST fill:none,stroke:#e50914,stroke-width:1px,stroke-dasharray:4 4
+```
+
+> 🟥 FriendFlix · 🟩 Medienserver · 🟦 weitere Dienste · 🟪 Reverse-Proxy · 🟨 Datenspeicher · ⬛ Zuschauer / extern · gestrichelter Rahmen = Netz bzw. Grenze · dicke Linie = Videostream · gepunktet = optional / über öffentliche URL
+
+Was passiert, wenn jemand Play drückt: FriendFlix entscheidet (Profil, Rollen-Limits, Altersregeln) und startet den Plex-Stream mit dem eigenen Token; jede Playlist und jedes Segment läuft danach durchs Gateway, das beim Backend nachfragt und die Signatur des Pfads prüft.
+
+```mermaid
+---
+config:
+  sequence:
+    mirrorActors: false
+    messageMargin: 34
+    boxMargin: 10
+    noteMargin: 12
+---
+sequenceDiagram
+  accTitle: Play drücken
+  accDescr: Der Browser holt Wiedergabe-Infos vom Backend und streamt dann HLS über das Gateway, das jede Anfrage beim Backend autorisiert, bevor es den Medienserver anspricht.
+  autonumber
+  box rgba(139,148,158,0.10) Zuschauer
+    actor browser as 📺 Browser
+    participant web as 🖥️ web
+  end
+  box rgba(229,9,20,0.07) FriendFlix
+    participant backend as ⚙️ backend
+    participant gateway as 📡 gateway
+  end
+  box rgba(63,182,139,0.09) Medienserver
+    participant Plex as 🎬 Plex
+  end
+  browser->>web: GET /watch/:id
+  web-->>browser: App-Hülle
+  browser->>+backend: POST /api/playback/info · ff_sid
+  Note over backend: Sitzung · Profil · Rollen-Limits
+  backend->>+Plex: Transcode-Entscheidung + Audio / Untertitel · Server-Token
+  Plex-->>-backend: Streams
+  backend-->>-browser: HLS-URL /media/… (kein Token)
+  loop Playlist + jedes Segment
+    browser->>+gateway: GET /media/….m3u8 · ff_sid
+    gateway->>+backend: POST /internal/authz · INTERNAL_SECRET
+    backend-->>-gateway: Identität + Limits (5 s Cache)
+    gateway->>+backend: POST /internal/authz/item
+    backend-->>-gateway: {allow} · Sichtbarkeit des Profils aus dem Spiegel
+    Note over gateway: HMAC prüfen: Part · Session · Kapitelbild
+    Note over gateway: Allowlist · Höhe / Bitrate begrenzen
+    gateway->>Plex: GET HLS · X-Plex-Token
+    Plex-->>gateway: Playlist / Segment
+    Note over gateway: Zugangsdaten aus Playlist entfernen
+    gateway-->>-browser: Stream
+  end
+  browser->>backend: POST /api/playback/start · progress · stop
+  Note over backend: Position in Postgres gespeichert · nie nach Plex geschrieben
+  backend->>Plex: Stopp → Transcode-Session beenden
+```
+
 ## 1. Server claimen
 
 FriendFlix braucht einen **geclaimten** Server und ein Token. Ein ungeclaimter Plex-Server beantwortet tokenlose Anfragen nur von der Maschine, auf der er läuft; aus einem Container oder von einem anderen Host ist er so nicht nutzbar.
@@ -149,7 +251,7 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | Chromecast | Funktioniert | HLS; Text-Untertitel über signierte FriendFlix-Untertitel-URLs |
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen, Hubs | Funktioniert | FriendFlix-Funktionen |
 | „Kommende Folgen“ / Kalender | Nicht verfügbar | Plex bietet das nicht |
-| Wünsche (Request-Dienst) | Funktioniert | Jedes FriendFlix-Konto bekommt beim ersten Wunsch einen eigenen lokalen Seerr-Nutzer (nur Wunsch-Recht) |
+| Wünsche (Request-Dienst) | Funktioniert | Jedes FriendFlix-Konto bekommt beim ersten Wunsch einen eigenen lokalen Wunsch-Dienst-Nutzer (nur Wunsch-Recht) |
 | „Aktuell läuft“ anderer Plex-Apps | Nicht verfügbar | FriendFlix zeigt nur eigene Sitzungen |
 | nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt: `/internal/authz-nginx` antwortet `501 plan_b_unsupported` |
 

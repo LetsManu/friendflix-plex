@@ -36,6 +36,8 @@ flowchart LR
   ff -->|"internal network media"| se["Seerr"]
 ```
 
+For the full picture of containers, networks and ports see [architecture.md](architecture.md#containers-and-networks).
+
 Order matters because each step produces a value the next one needs:
 
 | Step | Produces |
@@ -222,7 +224,7 @@ The backend trusts `X-Forwarded-*` headers (`trustProxy`), so NPM must be the on
 1. Open `https://portal.example.com` and click sign in. Authentik asks for username, password and, the first time, makes you set up TOTP or a passkey.
 2. Because you are in `friendflix-admins` (`ADMIN_GROUP`), FriendFlix creates your account with the role **admin** without an invite, plus a Jellyfin user and your owner profile. Your first device is approved automatically; further devices have to be approved under *Devices*.
 3. **Instance language:** FriendFlix asks the first admin once which language the whole instance should use by default (English, German, French, Spanish, Italian, Turkish, Polish). Every profile can pick its own language later; new profiles are asked on their first login, with the browser language suggested.
-4. Look around *Admin*: status page (Jellyfin/Seerr reachable), roles and limits, the weekly digest.
+4. Look around *Admin*: the **overview** (health of the media server and the request service, what waits for your decision, recent activity), roles and limits, the weekly digest. Under *Content* you can add **brand hubs**, pin themed lists to the home page and set "leaving soon" dates; the owner profile can create kids profiles under *Profiles*.
 
 ## 10. Invite friends
 
@@ -246,7 +248,7 @@ For someone who already has an Authentik account, tick **already has an Authenti
 | **TV mode** | Nothing to configure: open `https://portal.example.com/tv` on the TV and pair it with the phone. | [tv-mode.md](tv-mode.md) |
 | **Database backups** | `mkdir -p backups && sudo chown 70 backups`, then `docker compose -f compose.prod.yaml --profile backup up -d backup` (`BACKUP_HOUR`, `BACKUP_KEEP_DAYS`, `BACKUP_PATH`). Back up Authentik separately ([authentik.md §2.6](authentik.md#26-backups-and-updates)) and keep `APP_ENC_KEY` in a password manager. | [operations.md](operations.md#backups--wiederherstellung) |
 | **One-click updates** | *Admin → Update* redeploys through **Portainer**: either `PORTAINER_WEBHOOK_URL` (stack webhook), or `PORTAINER_URL` + `PORTAINER_API_KEY` + `PORTAINER_STACK_ID` (+ `PORTAINER_ENDPOINT_ID`, default `1`). Use a Portainer user that can only redeploy this one stack. FriendFlix deliberately never gets the Docker socket: **do not mount `/var/run/docker.sock` into any FriendFlix container**, the web app must not be able to control Docker. | [operations.md](operations.md#updates-aus-dem-portal) |
-| **Monitoring** | `METRICS_TOKEN`, Prometheus/Icinga examples. | [monitoring.md](monitoring.md) |
+| **Monitoring** | `METRICS_TOKEN`, Prometheus/Icinga examples; optional Prometheus + Grafana stack: set `GRAFANA_ADMIN_PASSWORD` (no default) and add `-f compose.monitoring.yaml`. | [monitoring.md](monitoring.md) |
 | **Plan B** | NPM serves `/media/` itself (`auth_request`); then `DOWNLOADS_ENABLED=false`, `CAST_ENABLED=false`. | [operations.md](operations.md#plan-b-npm-liefert-media-direkt-auth_request) |
 
 After changing `.env`: `docker compose -f compose.prod.yaml up -d` (recreates only what changed).

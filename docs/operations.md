@@ -60,6 +60,53 @@ Jedes veröffentlichte Image (`ghcr.io/<owner>/friendflix-{backend,gateway,web}`
 
 Signiert und attestiert wird nur der Digest, der vorher von Trivy geprüft wurde (siehe Kopf von `.github/workflows/ci.yml`), und nur bei Push auf `main` bzw. `v*`-Tags, nie in Pull Requests. Images von vor dieser Umstellung sind nicht signiert.
 
+Vom Push bis zum laufenden Stack:
+
+```mermaid
+---
+config:
+  flowchart:
+    curve: basis
+    nodeSpacing: 50
+    rankSpacing: 65
+    padding: 14
+  themeVariables:
+    edgeLabelBackground: 'rgba(150,150,150,0.12)'
+  themeCSS: '.labelBkg { background-color: rgba(127,127,127,0.12) !important; }'
+---
+flowchart TB
+  accTitle: Vom Commit zum laufenden Stack
+  accDescr: CI baut und scannt Images, Publish signiert sie mit cosign und attestiert SBOM und Provenienz, GHCR speichert sie, Portainer oder Compose zieht sie.
+  DEV("👩‍💻 <b>Push</b><br/><small>main oder Tag</small>"):::ext
+  subgraph GHA["GitHub Actions"]
+    CI("🧪 <b>ci.yml</b><br/><small>Test · E2E · ZAP · Build</small>"):::app
+    TR("🔍 <b>Trivy</b><br/><small>exakten Digest scannen</small>"):::app
+    PB("✍️ <b>publish.yml</b><br/><small>cosign · Attestierungen</small>"):::app
+  end
+  GH[("📦 <b>GHCR</b><br/><small>friendflix-plex-*</small>")]:::store
+  DH("🐳 <b>Docker-Host</b><br/><small>compose / Portainer</small>"):::media
+  PT("🪝 <b>Portainer webhook</b><br/><small>Admin → Update</small>"):::svc
+  VER("✅ <b>Du prüfst</b><br/><small>cosign verify · gh attestation</small>"):::ext
+  DEV --> CI
+  CI -->|"ci-&lt;sha&gt;"| TR
+  TR -->|sauber| PB
+  PB -->|"latest · sha · x.y.z"| GH
+  GH -->|"pull_policy: always"| DH
+  PT -.->|neu deployen| DH
+  VER -.-> GH
+  classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
+  classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
+  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
+  classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
+  classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
+  classDef fork fill:#4a1d3c,stroke:#e070b0,stroke-width:1px,stroke-dasharray:4 3,color:#fff0f8
+  linkStyle default stroke:#8b949e,stroke-width:1.4px
+  style GHA fill:none,stroke:#e50914,stroke-width:1px,stroke-dasharray:4 4
+```
+
+> 🟥 FriendFlix · 🟩 Medienserver · 🟦 weitere Dienste · 🟪 Reverse-Proxy · 🟨 Datenspeicher · ⬛ Zuschauer / extern · gestrichelter Rahmen = Netz bzw. Grenze · dicke Linie = Videostream · gepunktet = optional / über öffentliche URL
+
 **Prüfen** (cosign ≥ 3, `gh` ≥ 2.60; Owner im Image-Namen klein geschrieben, in der Identität so wie auf GitHub – das Regex unterscheidet Groß-/Kleinschreibung):
 ```bash
 IMG=ghcr.io/letsmanu/friendflix-backend:latest      # bzw. :<sha> oder :<x.y.z>, gateway / web genauso
@@ -83,6 +130,11 @@ Strenger (nur `main` und Versions-Tags): `--certificate-identity-regexp '^https:
 **Forks** (z. B. die Plex-Variante) brauchen keine Anpassung an den Workflows: Image-Namen und Signatur-Identität leiten sich vom Repo ab, in dem der Workflow läuft. Beim Prüfen `letsmanu`/`LetsManu/friendflix` durch den eigenen Owner bzw. `<owner>/<repo>` ersetzen.
 
 **Beim Deployment** am besten einen geprüften Digest pinnen statt `latest`: `docker buildx imagetools inspect "$IMG" --format '{{.Manifest.Digest}}'`, prüfen, dann in `compose.prod.yaml` per `FF_TAG` den Tag (oder direkt `image: …@sha256:…`) setzen.
+
+## Weitere Prüfungen in der Pipeline
+- **DAST:** Der CI-Job `dast` startet die gebaute Web-App und lässt einen **OWASP-ZAP-Baseline-Scan** darüber laufen (schlägt bei „High“ fehl, warnt bei „Medium/Low“; Regeln und bewusste Ausnahmen in `.zap/rules.tsv`, Bericht als Artefakt `zap-report`). `publish` wartet auf ihn.
+- **Lieferkette:** Trivy (Image-Digest), gitleaks (Secrets), `npm audit` und der **OpenSSF Scorecard** ([scorecard.yml](../.github/workflows/scorecard.yml), wöchentlich und bei jedem Push auf `main`, Ergebnis im Code-Scanning und als Badge im README).
+- Der Sprach- und der Bildqualitäts-Index werden von Hintergrundjobs gepflegt (`BACKGROUND_JOBS=true`, höchstens alle 12 h; beim ersten Start laufen sie sofort). Bis dahin sind die Filter „Ton / Untertitel“ und „Bildqualität“ unvollständig; ebenso laufen die Bald-weg-Erinnerungen nur mit diesem Schalter.
 
 ## Empfohlener Branch-Schutz
 GitHub → *Settings* → *Rules* → *Rulesets* (oder *Branches* → *Branch protection rule*) für `main`:

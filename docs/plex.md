@@ -14,6 +14,108 @@ Back to the [README](../README.md).
 - The token is only used by the gateway and the backend on the server. It is never sent to a browser; clients only see FriendFlix URLs.
 - `compose.plex.yaml` only **connects to your existing Plex server** (`PLEX_URL`, `PLEX_TOKEN` or `PLEX_TOKEN_FILE`). It does not start a Plex container.
 
+The same in a picture – who holds what, and what crosses which boundary (all diagrams, with the container view and the "press play" walk-through: [architecture.md](architecture.md)):
+
+```mermaid
+---
+config:
+  flowchart:
+    curve: basis
+    nodeSpacing: 50
+    rankSpacing: 65
+    padding: 14
+  themeVariables:
+    edgeLabelBackground: 'rgba(150,150,150,0.12)'
+  themeCSS: '.labelBkg { background-color: rgba(127,127,127,0.12) !important; }'
+---
+flowchart TB
+  accTitle: FriendFlix for Plex trust boundaries
+  accDescr: Viewers on the internet only hold a session cookie and signed media URLs. The Plex admin token lives only in the backend and gateway environment on the Docker host. The backend decides access from its Postgres mirror of the Plex library; the gateway asks it before every media request. Plex is on your own network and never reachable by a browser.
+  subgraph PUB["Internet · untrusted"]
+    V("📺 <b>Viewers</b><br/><small>session cookie<br/>signed /media URLs</small>"):::ext
+    P("🛡️ <b>Reverse proxy</b><br/><small>TLS</small>"):::edge
+  end
+  subgraph HOST["Docker host · FriendFlix"]
+    GW("📡 <b>gateway</b><br/><small>PLEX_TOKEN_FILE<br/>INTERNAL_SECRET</small>"):::app
+    BE("⚙️ <b>backend</b><br/><small>PLEX_TOKEN_FILE<br/>INTERNAL_SECRET</small>"):::app
+    PG[("🗄️ <b>Postgres</b><br/><small>library mirror<br/>profiles · watch state</small>")]:::store
+  end
+  subgraph LAN["Your network"]
+    PX("🎬 <b>Plex Media Server</b><br/><small>one admin token<br/>not public</small>"):::media
+  end
+  V -->|"HTTPS"| P
+  P -->|"/media/*"| GW
+  P -->|"/api /auth /ws"| BE
+  GW -->|"may this profile<br/>see it?"| BE
+  BE -->|"access is decided here<br/>(roles · age limits)"| PG
+  GW ==>|"video"| PX
+  BE -->|"library sync"| PX
+  classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
+  classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
+  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
+  classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
+  classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
+  classDef fork fill:#4a1d3c,stroke:#e070b0,stroke-width:1px,stroke-dasharray:4 3,color:#fff0f8
+  linkStyle default stroke:#8b949e,stroke-width:1.4px
+  style PUB fill:none,stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4
+  style LAN fill:none,stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4
+  style HOST fill:none,stroke:#e50914,stroke-width:1px,stroke-dasharray:4 4
+```
+
+> 🟥 FriendFlix · 🟩 media server · 🟦 other service · 🟪 reverse proxy · 🟨 data store · ⬛ viewers / outside · dashed frame = network or boundary · thick line = video stream · dotted = optional / via public URL
+
+What happens when somebody presses play: FriendFlix decides (profile, role limits, age rules) and starts the Plex stream with its own token; every playlist and segment then passes the gateway, which asks the backend again and checks the signature of the path.
+
+```mermaid
+---
+config:
+  sequence:
+    mirrorActors: false
+    messageMargin: 34
+    boxMargin: 10
+    noteMargin: 12
+---
+sequenceDiagram
+  accTitle: Press play
+  accDescr: Browser asks the backend for playback info, then streams HLS through the gateway, which authorises every request with the backend before talking to the media server.
+  autonumber
+  box rgba(139,148,158,0.10) Viewer
+    actor browser as 📺 Browser
+    participant web as 🖥️ web
+  end
+  box rgba(229,9,20,0.07) FriendFlix
+    participant backend as ⚙️ backend
+    participant gateway as 📡 gateway
+  end
+  box rgba(63,182,139,0.09) Media server
+    participant Plex as 🎬 Plex
+  end
+  browser->>web: GET /watch/:id
+  web-->>browser: app shell
+  browser->>+backend: POST /api/playback/info · ff_sid
+  Note over backend: session · profile · role limits
+  backend->>+Plex: transcode decision + audio / subtitle choice · server token
+  Plex-->>-backend: streams
+  backend-->>-browser: HLS URL /media/… (no token)
+  loop playlist + every segment
+    browser->>+gateway: GET /media/….m3u8 · ff_sid
+    gateway->>+backend: POST /internal/authz · INTERNAL_SECRET
+    backend-->>-gateway: identity + limits (cached 5 s)
+    gateway->>+backend: POST /internal/authz/item
+    backend-->>-gateway: {allow} · profile visibility from the mirror
+    Note over gateway: verify HMAC: part · session · chapter still
+    Note over gateway: allowlist · clamp height / bitrate
+    gateway->>Plex: GET HLS · X-Plex-Token
+    Plex-->>gateway: playlist / segment
+    Note over gateway: strip credentials from playlist
+    gateway-->>-browser: stream
+  end
+  browser->>backend: POST /api/playback/start · progress · stop
+  Note over backend: position saved in Postgres · never written to Plex
+  backend->>Plex: stop → end the transcode session
+```
+
 ## 1. Claim the server
 
 FriendFlix needs a **claimed** server and a token. An unclaimed Plex server only answers token-less requests from the machine it runs on, so it cannot be used from a container or another host.
@@ -149,7 +251,7 @@ What the preview implements (checked by the test suite against the fake Plex ser
 | Chromecast | Works | HLS; text subtitles through signed FriendFlix subtitle URLs |
 | TV mode, watch parties, recommendations, notifications, hubs | Works | FriendFlix features |
 | "Upcoming episodes" / calendar | Not available | Plex does not offer it |
-| Wishes (request service) | Works | Each FriendFlix account gets its own local Seerr user (request permission only), created on the first wish |
+| Wishes (request service) | Works | Each FriendFlix account gets its own local request-service user (request permission only), created on the first wish |
 | "Now playing" of other Plex apps | Not available | FriendFlix only shows its own sessions |
 | nginx "Plan B" media path | Not available | Unsupported with Plex: `/internal/authz-nginx` answers `501 plan_b_unsupported` |
 

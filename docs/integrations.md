@@ -1,6 +1,6 @@
 # Integrations (Jellyfin, Seerr, Authentik, ntfy/Discord)
 
-> **FriendFlix for Plex (preview):** the Jellyfin steps on this page (webhook plugin, API key) do **not** apply. Use [plex.md](plex.md) for the media-server setup ([Deutsch](de/plex.md)). The sections below on the request service, Authentik, ntfy and Discord notifications and web push apply unchanged.
+> **FriendFlix for Plex (preview):** the Jellyfin steps on this page (webhook plugin, API key) do **not** apply. Use [plex.md](plex.md) for the media-server setup ([Deutsch](de/plex.md)). The sections below on the request service, Authentik, ntfy and Discord notifications and web push apply unchanged. The section "What FriendFlix reads from Jellyfin" is the Jellyfin side; for Plex the same data (cast, chapters, stream details, ratings, preview thumbnails) is described in [plex.md](plex.md) (sections 4 to 6 and the feature parity table).
 
 Webhook URLs use the **internal Docker network** (`http://backend:3000`, Jellyfin/Seerr share the `media` network with the backend), never the public host. NPM answers `/internal/*` with 404.
 `WEBHOOK_SECRET` is the shared secret (`.env`).
@@ -16,6 +16,14 @@ Plugin "Webhook" → Add Generic Destination:
 ```
 `itemType`, `provider_tmdb`, `seriesId`, `seasonNumber` and `episodeNumber` are only used for `ItemAdded`: when a Movie/Series with that TMDB id (or an Episode) arrives, the people who pressed "Erinnere mich" are notified at once. Jellyfin gives an announced (virtual) episode a new id when its file arrives, so episode reminders are matched on series + season + episode number as well as the id; a series reminder only fires once at least one real episode exists. Without Item Added the portal checks every 30 minutes (and Seerr's MEDIA_AVAILABLE webhook fires reminders immediately). Reminders are personal: they only go to the in-app inbox and the user's own ntfy topic, never to the global ntfy/Discord channel.
 Pause is derived from `isPaused` in progress events. Sessions started in the portal are tracked directly and need no webhook.
+
+## What FriendFlix reads from Jellyfin (no setup needed)
+Besides browsing and playback, newer features read more from the library; nothing here needs a plugin, but the data has to exist in Jellyfin:
+- **Cast & info** and the person pages: people with their roles (actors, guest stars, director, writers, creators), studios and tags (`fields=People,Studios,Tags`).
+- **Scenes:** chapters (`fields=Chapters`); chapter pictures come from Jellyfin (`/Items/<id>/Images/Chapter/<n>`, through the gateway). Titles without chapters simply show no scene marks.
+- **Picture-and-sound chips and the quality filter:** stream details of the media sources (resolution, HDR / Dolby Vision, audio channels / Atmos). The filter reads an index that the backend builds in the background with the admin key (`BACKGROUND_JOBS=true`).
+- **Labels:** "Season finale" needs Jellyfin's series status (continuing / ended) and the episode dates.
+- **Skip intro / credits / preview:** media segments (Jellyfin >= 10.10, e.g. from the Intro Skipper plugin).
 
 ## Seerr
 - Users imported from Jellyfin get default permissions. Leave "auto-approve" **off** if the admin should approve every wish.
@@ -44,6 +52,7 @@ Moved to [authentik.md §7–§9](authentik.md#7-enrollment-flow-for-invitations
 Set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (both required; `VAPID_SUBJECT` optional, default `PUBLIC_URL`) to enable per-device browser push. Generate a key pair with `node scripts/gen-vapid.mjs` (prints ready-to-paste env lines) or `npx web-push generate-vapid-keys`. The private key can be supplied as a Docker secret (`VAPID_PRIVATE_KEY_FILE`, see `compose.secrets.yaml`: `secrets/vapid_private_key` must exist; an empty file counts as unset and leaves push disabled). An invalid key pair is detected at startup, logged as a warning and also disables push. Keep the pair stable: changing it invalidates all existing subscriptions.
 
 - Users enable it under *Einstellungen → Benachrichtigungen* (per device). Personal notices go to that user's subscriptions; announcements (movie night, "now available") only to devices that opted in. Non-owner profiles only ever see a generic "Neue Benachrichtigung" text.
+- Every push also refreshes the app-icon badge (number of unread notices) on installed apps that support it, see [personal.md](personal.md).
 - The portal must be served over HTTPS. On iOS (16.4+) the site has to be installed first (Share -> "Zum Home-Bildschirm").
 - The backend only posts to the browsers' push services (FCM, Mozilla, Windows, Apple); other endpoints are rejected. Outbound HTTPS to those hosts must be allowed.
 - Subscriptions are removed automatically when the push service reports them gone (404/410), after a device or session revoke, or after repeated failures for over 7 days.
