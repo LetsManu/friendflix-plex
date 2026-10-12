@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
-    <img src="docs/images/logo.svg" alt="FriendFlix" width="360">
+    <img src="docs/images/logo.svg" alt="FriendFlix for Plex" width="480">
   </picture>
 </p>
 
