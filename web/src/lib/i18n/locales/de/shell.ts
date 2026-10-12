@@ -109,7 +109,7 @@ export default {
     label: 'Fußzeile',
     more: 'Weitere Seiten',
     help: 'Hilfe',
-    tagline: 'FriendFlix · privat unter Freunden',
+    tagline: '{brand} · privat unter Freunden',
     language: 'Sprache',
   },
   help: {

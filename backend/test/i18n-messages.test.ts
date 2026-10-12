@@ -135,7 +135,7 @@ describe('notifications in the recipient language', () => {
     await call(admin, 'PUT', '/api/admin/settings/language', { language: 'es' });
     await notify(env.ctx, { userId: null, kind: 'poll_open', title: m('poll.open', { title: 'Kino' }), external: true, dedupe: 'i18n-poll' });
     expect((await env.pool.query("select title from notifications where kind='poll_open'")).rows[0].title).toBe('Votación de la noche de cine: Kino');
-    expect(ntfy.at(-1)).toEqual({ title: 'Votación de la noche de cine: Kino', body: 'Votación de la noche de cine: Kino' });
+    expect(ntfy.at(-1)).toEqual({ title: 'FriendFlix for Plex – Votación de la noche de cine: Kino', body: 'Votación de la noche de cine: Kino' });
     inbox = (await call(admin, 'GET', '/api/notifications')).json().notifications;
     expect(inbox[0].title).toBe('Vote pour la soirée cinéma : Kino'); // the reader's language, not the instance's
 
@@ -163,7 +163,7 @@ describe('notifications in the recipient language', () => {
       await sendWebPush(env.ctx, { userId: adminId, kind: 'tv_paired', title: m('tv.paired.title'), body: m('tv.paired.body') });
       expect(payloads).toHaveLength(2);
       expect(payloads).toContainEqual(expect.objectContaining({ title: 'Una TV è stata collegata al tuo account', body: 'Non sei stato tu? Blocca il dispositivo in «Dispositivi».' }));
-      expect(payloads).toContainEqual(expect.objectContaining({ title: 'FriendFlix', body: 'Nowe powiadomienie' }));
+      expect(payloads).toContainEqual(expect.objectContaining({ title: 'FriendFlix for Plex', body: 'Nowe powiadomienie' }));
     } finally {
       (webpush as { generateRequestDetails: unknown }).generateRequestDetails = orig;
     }

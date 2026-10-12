@@ -1,3 +1,4 @@
+import { BRAND_NAME } from './brand.js';
 import webpush from 'web-push';
 import type { Ctx } from './ctx.js';
 import { broadcastLanguage, isLanguage, msg, renderNotice, type Language } from './i18n.js';
@@ -43,7 +44,7 @@ const SAFE_LINK = /^\/(?!\/)[^\s\\]{0,300}$/;
 
 /** Payload in `lang` (the subscribing profile's language). Non-owner profiles only get a neutral text (the lock screen is shared). */
 export function buildPayload(n: Pick<Notice, 'kind' | 'title' | 'body' | 'link' | 'pushBody'>, isOwner: boolean, lang: Language = 'de'): PushPayload {
-  if (!isOwner) return { title: 'FriendFlix', body: msg(lang, 'push.generic'), link: '/', tag: n.kind, ts: Date.now() };
+  if (!isOwner) return { title: BRAND_NAME, body: msg(lang, 'push.generic'), link: '/', tag: n.kind, ts: Date.now() };
   const r = renderNotice(n, lang);
   const p: PushPayload = { title: r.title.slice(0, 120), body: (r.pushBody ?? r.body ?? '').slice(0, 300), tag: n.kind, ts: Date.now() };
   if (n.link && SAFE_LINK.test(n.link)) p.link = n.link;

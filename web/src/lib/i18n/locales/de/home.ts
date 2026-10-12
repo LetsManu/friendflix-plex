@@ -101,7 +101,7 @@ export default {
     close: 'Trailer schließen',
   },
   intro: {
-    loading: 'FriendFlix wird geladen',
+    loading: '{brand} wird geladen',
   },
   /** /new */
   new: {

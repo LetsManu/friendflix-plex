@@ -1,8 +1,8 @@
 /** Shared words and building blocks used by every area (buttons, states, units). German = source of truth. */
 export default {
-  appName: 'FriendFlix',
+  appName: '{brand}',
   /** browser tab title of a page */
-  pageTitle: '{page} – FriendFlix',
+  pageTitle: '{page} – {brand}',
   save: 'Speichern',
   saving: 'Speichere …',
   saved: 'Gespeichert',

@@ -46,7 +46,7 @@
   async function closePlayer() { playing = null; await load(); }
 </script>
 
-<svelte:head><title>{$t('account.offline.pageTitle')}</title></svelte:head>
+<svelte:head><title>{$t('common.pageTitle', { page: $t('account.offline.pageTitle') })}</title></svelte:head>
 
 <section class="offline" id="main">
   <h1>{profileName ? $t('account.offline.titleFor', { name: profileName }) : $t('account.offline.title')}</h1>

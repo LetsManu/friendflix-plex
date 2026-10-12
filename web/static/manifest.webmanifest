@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "FriendFlix",
+  "name": "FriendFlix for Plex",
   "short_name": "FriendFlix",
-  "description": "FriendFlix - gemeinsam Filme und Serien schauen",
+  "description": "FriendFlix for Plex - gemeinsam Filme und Serien schauen",
   "lang": "de",
   "start_url": "/",
   "scope": "/",

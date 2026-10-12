@@ -23,7 +23,7 @@
     busy = false;
   }
 </script>
-<svelte:head><title>{$t('admin.digest.pageTitle')}</title></svelte:head>
+<svelte:head><title>{$t('common.pageTitle', { page: $t('admin.digest.pageTitle') })}</title></svelte:head>
 <p class="muted">{$t('admin.digest.intro')}</p>
 {#if s}
   <form class="panel form" on:submit|preventDefault={save}>

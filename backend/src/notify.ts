@@ -1,6 +1,7 @@
 import type { Ctx } from './ctx.js';
 import { broadcastLanguage, isMsg, renderKnown, renderNotice, userLanguage, type Language, type Rendered, type Text } from './i18n.js';
 export { renderNotice, type Rendered } from './i18n.js';
+import { brandTitle } from './brand.js';
 import { sendWebPush } from './push.js';
 
 export interface Notice {
@@ -75,7 +76,7 @@ export async function pushPersonal(ctx: Pick<Ctx, 'db' | 'cfg' | 'fetchImpl'>, u
   const click = n.link ? new URL(n.link, ctx.cfg.PUBLIC_URL).toString() : undefined;
   const res = await ctx.fetchImpl(new URL(encodeURIComponent(topic), `${base}/`).toString(), {
     method: 'POST',
-    headers: { Title: encodeURIComponent(n.title).slice(0, 200), ...(click ? { Click: click } : {}) },
+    headers: { Title: encodeURIComponent(brandTitle(n.title)).slice(0, 200), ...(click ? { Click: click } : {}) },
     body: n.body ?? n.title,
     signal: AbortSignal.timeout(8000),
   });
@@ -84,12 +85,12 @@ export async function pushPersonal(ctx: Pick<Ctx, 'db' | 'cfg' | 'fetchImpl'>, u
 
 /** ntfy: plain POST with Title header. Discord: webhook JSON. Failures never break the caller. */
 export async function pushExternal(ctx: Pick<Ctx, 'cfg' | 'fetchImpl'>, n: Pick<Rendered, 'title' | 'body' | 'link'>) {
-  const text = n.body ? `${n.title}\n${n.body}` : n.title;
+  const text = n.body ? `${brandTitle(n.title)}\n${n.body}` : brandTitle(n.title);
   const jobs: Promise<unknown>[] = [];
   if (ctx.cfg.NTFY_URL) {
     jobs.push(ctx.fetchImpl(ctx.cfg.NTFY_URL, {
       method: 'POST',
-      headers: { Title: encodeURIComponent(n.title).slice(0, 200), ...(n.link ? { Click: n.link } : {}) },
+      headers: { Title: encodeURIComponent(brandTitle(n.title)).slice(0, 200), ...(n.link ? { Click: n.link } : {}) },
       body: n.body ?? n.title,
       signal: AbortSignal.timeout(8000),
     }));

@@ -108,7 +108,7 @@ const es: Translation<typeof de> = {
     label: 'Pie de página',
     more: 'Más páginas',
     help: 'Ayuda',
-    tagline: 'FriendFlix · privado entre amigos',
+    tagline: '{brand} · privado entre amigos',
     language: 'Idioma',
   },
   help: {

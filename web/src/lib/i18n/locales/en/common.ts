@@ -2,8 +2,8 @@ import type de from '../de/common';
 import type { Translation } from '../../types';
 
 const en: Translation<typeof de> = {
-  appName: 'FriendFlix',
-  pageTitle: '{page} – FriendFlix',
+  appName: '{brand}',
+  pageTitle: '{page} – {brand}',
   save: 'Save',
   saving: 'Saving …',
   saved: 'Saved',

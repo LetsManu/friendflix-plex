@@ -147,7 +147,7 @@ describe('web push', () => {
       await env.pool.query("update push_subscriptions set profile_id=$1 where endpoint=$2", [kid, FCM + 'own']);
       payloads.length = 0;
       await sendWebPush(env.ctx, { userId: aId, kind: 'k', title: 'Titel', body: 'inbox', link: '/watch/1' });
-      expect(payloads[0]).toMatchObject({ title: 'FriendFlix', body: 'Neue Benachrichtigung', link: '/' });
+      expect(payloads[0]).toMatchObject({ title: 'FriendFlix for Plex', body: 'Neue Benachrichtigung', link: '/' });
     } finally {
       (webpush as { generateRequestDetails: unknown }).generateRequestDetails = orig;
     }
