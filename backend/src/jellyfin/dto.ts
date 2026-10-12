@@ -1,53 +1,8 @@
-/** Trimmed item shape sent to the browser (never raw Jellyfin JSON, no tokens, no server paths). */
-export interface ItemDto {
-  id: string;
-  name: string;
-  type: string;
-  year?: number;
-  overview?: string;
-  runtimeTicks?: number;
-  seriesId?: string;
-  seriesName?: string;
-  seasonId?: string;
-  indexNumber?: number;
-  parentIndexNumber?: number;
-  genres: string[];
-  rating?: string;
-  communityRating?: number;
-  premiereDate?: string;
-  /** when the item was added to the library (Jellyfin DateCreated) */
-  dateCreated?: string;
-  image: boolean;
-  backdrop: boolean;
-  /** transparent title logo available (shown in the billboard) */
-  logo: boolean;
-  /** number of local (playable) trailers */
-  trailers: number;
-  played: boolean;
-  favorite: boolean;
-  positionTicks: number;
-  playedPercentage?: number;
-  /** ISO timestamp of the viewer's last playback (UserData.LastPlayedDate) */
-  lastPlayedDate?: string;
-  childCount?: number;
-  unplayedCount?: number;
-  /** ISO timestamp when media was last added (new episodes for a series) */
-  lastAdded?: string;
-  /**
-   * Jellyfin image tags (change whenever the image changes). Sent as `&tag=<tag>` on /media/Items/<id>/Images/<Kind> URLs, they
-   * let the gateway mark the image immutable. Keys are only present when the image exists; `seriesPrimary` is the series poster
-   * of an episode (/media/Items/<seriesId>/Images/Primary). The booleans above stay for older clients.
-   */
-  imageTags?: ImageTags;
-}
+/** Jellyfin JSON -> the server-neutral DTOs of ../media/types.ts (re-exported here for existing imports). */
+import { DOWNLOAD_PRESETS, maxWidthFor, type DownloadQuality, type DownloadSourceDto, type ImageTags, type ItemDto, type PlaybackDto, type TrickplayDto } from '../media/types.js';
 
-export interface ImageTags {
-  primary?: string;
-  backdrop?: string;
-  logo?: string;
-  thumb?: string;
-  seriesPrimary?: string;
-}
+export { DOWNLOAD_PRESETS, maxWidthFor };
+export type { DownloadQuality, DownloadSourceDto, ImageTags, ItemDto, PlaybackDto, TrickplayDto };
 
 const tagStr = (v: unknown) => (typeof v === 'string' && /^[\w-]{1,64}$/.test(v) ? v : undefined);
 
@@ -97,28 +52,6 @@ export function toItemDto(i: Record<string, any>): ItemDto {
     imageTags: imageTags(i),
   };
 }
-
-export interface PlaybackDto {
-  itemId: string;
-  playSessionId: string;
-  mediaSourceId: string;
-  directUrl?: string;
-  hlsUrl: string;
-  runtimeTicks?: number;
-  resumeTicks: number;
-  /** bitrate cap used for this session (<= role limit) */
-  maxBitrate: number;
-  /** role limit, upper bound for the quality menu */
-  roleMaxBitrate?: number;
-  /** audio track baked into hlsUrl (explicit audioIndex or the matched audioLang); undefined = source default */
-  audioIndex?: number;
-  trickplay?: TrickplayDto;
-  audioTracks: Array<{ index: number; language?: string; title: string; isDefault: boolean }>;
-  subtitles: Array<{ index: number; language?: string; title: string; url: string; isDefault: boolean }>;
-}
-
-/** 16:9 width for a height cap (1080 -> 1920) */
-export const maxWidthFor = (h: number) => Math.round((h * 16) / 9 / 2) * 2;
 
 const TEXT_SUBS = new Set(['srt', 'subrip', 'ass', 'ssa', 'vtt', 'webvtt', 'mov_text', 'subviewer']);
 
@@ -194,19 +127,6 @@ export function toPlaybackDto(args: {
   };
 }
 
-/** Timeline preview thumbnails (Jellyfin >= 10.9 trickplay): tile sheets of tileWidth x tileHeight thumbnails. */
-export interface TrickplayDto {
-  width: number;
-  height: number;
-  tileWidth: number;
-  tileHeight: number;
-  count: number;
-  /** ms between thumbnails */
-  interval: number;
-  /** URL with {n} = sheet index */
-  url: string;
-}
-
 /** Picks the resolution closest to ~320 px from Jellyfin's `Trickplay[mediaSourceId][width]` map. */
 export function toTrickplayDto(itemId: string, mediaSourceId: string, raw: Record<string, any> | undefined): TrickplayDto | undefined {
   const forSource = raw?.[mediaSourceId] ?? (raw ? Object.values(raw)[0] : undefined);
@@ -221,27 +141,6 @@ export function toTrickplayDto(itemId: string, mediaSourceId: string, raw: Recor
     count: Number(t.ThumbnailCount), interval: Number(t.Interval),
     url: `/media/Videos/${itemId}/Trickplay/${w}/{n}.jpg?MediaSourceId=${encodeURIComponent(mediaSourceId)}`,
   };
-}
-
-export type DownloadQuality = 'sd' | 'hd' | 'fhd' | 'original';
-/** Server-side preparation presets (video + audio bits per second); roles clamp height/bitrate on top. */
-export const DOWNLOAD_PRESETS: Record<Exclude<DownloadQuality, 'original'>, { height: number; videoBps: number; audioBps: number }> = {
-  sd: { height: 480, videoBps: 1_000_000, audioBps: 128_000 },
-  hd: { height: 720, videoBps: 2_500_000, audioBps: 128_000 },
-  fhd: { height: 1080, videoBps: 5_000_000, audioBps: 160_000 },
-};
-
-export interface DownloadSourceDto {
-  mediaSourceId: string;
-  /** mp4/m4v + 8-bit H.264 + AAC/MP3 within the caps: the gateway may proxy the file as is */
-  originalEligible: boolean;
-  sizeBytes: number;
-  runtimeTicks?: number;
-  audio: Array<{ index: number; lang: string; title: string; isDefault: boolean }>;
-  subtitles: Array<{ index: number; lang: string; title: string; url: string }>;
-  /** Jellyfin-relative HLS master (fMP4 segments, no /media prefix) for server-side preparation; absent for 'original' */
-  masterPath?: string;
-  playSessionId: string;
 }
 
 export function toDownloadSource(args: {

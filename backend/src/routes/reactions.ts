@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
-import { JellyfinError } from '../jellyfin/client.js';
-import type { ItemDto } from '../jellyfin/dto.js';
+import { MediaError, type ItemDto } from '../media/types.js';
 import { requireGrownUp } from '../kids.js';
 import { id32 } from './_shared.js';
 
@@ -21,7 +20,7 @@ export function reactionRoutes(app: FastifyInstance, ctx: Ctx) {
     try {
       item = await ctx.jf.item(req.jfUser!, id);
     } catch (e) {
-      if (e instanceof JellyfinError) {
+      if (e instanceof MediaError) {
         if (e.status === 404 || e.status === 403 || e.status === 400) reply.code(404).send({ error: 'not_found' });
         else reply.code(502).send({ error: 'jellyfin', status: e.status });
         return null;

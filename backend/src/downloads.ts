@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import type { Ctx } from './ctx.js';
-import type { ItemDto } from './jellyfin/dto.js';
+import type { ItemDto } from './media/types.js';
 import { enqueueJob, jobProgress, preparer } from './downloadprep.js';
 import { getProfile, jfUserFor } from './profiles.js';
 import { effectiveRole, type RoleTemplate } from './roles.js';
@@ -11,7 +11,7 @@ import type { JfUser, UserRow } from './types.js';
 export type Quality = 'sd' | 'hd' | 'fhd' | 'original';
 export const QUALITIES: readonly Quality[] = ['sd', 'hd', 'fhd', 'original'];
 
-/** What ctx.jf.downloadSource() reports about an item (see jellyfin/service.ts). */
+/** What ctx.jf.downloadSource() reports about an item (see media/types.ts). */
 export interface DownloadSourceInfo {
   mediaSourceId: string;
   originalEligible: boolean;

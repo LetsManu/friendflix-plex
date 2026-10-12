@@ -116,7 +116,7 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
     const checks: Record<string, boolean> = {
       redis: await ctx.kv.ping().catch(() => false),
       postgres: await ctx.db.query('select 1').then(() => true, () => false),
-      jellyfin: await ctx.jf.client.ping(),
+      jellyfin: await ctx.jf.admin.ping(),
     };
     const ok = Object.values(checks).every(Boolean);
     return reply.code(ok ? 200 : 503).send({ status: ok ? 'ok' : 'degraded', checks });

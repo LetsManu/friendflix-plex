@@ -4,18 +4,17 @@ import { z } from 'zod';
 import { CAST_TOKEN_RE, resolveCast } from '../cast.js';
 import type { Ctx } from '../ctx.js';
 import { authorizeDownload } from '../downloads.js';
-import { clearLive, setLive } from '../live.js';
+import { setLive } from '../live.js';
+import { dispatchMediaEvent } from '../media/events.js';
+import { MediaError } from '../media/types.js';
 import { jfUserFor, resolveProfile } from '../profiles.js';
 import { effectiveRole } from '../roles.js';
 import { loadSession } from '../session.js';
-import { mediaBrowserHeader } from '../jellyfin/client.js';
 import { upstreamUri } from '../mediapath.js';
 import { authzNginx } from '../metrics.js';
 import { getUserById } from '../users.js';
-import { fireEpisode, fireTmdb } from '../reminders.js';
 import type { UserRow } from '../types.js';
 
-const normId = (s: string) => s.replace(/-/g, '').toLowerCase();
 const eq = (a: string, b: string) => {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
@@ -23,25 +22,6 @@ const eq = (a: string, b: string) => {
 };
 
 export const checkSecret = (req: FastifyRequest, header: string, secret: string) => eq(String(req.headers[header] ?? ''), secret);
-
-/** Jellyfin webhook plugin template (documented in README); values arrive as strings. */
-const jfWebhook = z.object({
-  type: z.string(),
-  user: z.string().optional(),
-  itemId: z.string().transform(normId).optional(),
-  name: z.string().optional(),
-  seriesName: z.string().optional(),
-  positionTicks: z.coerce.number().optional(),
-  runtimeTicks: z.coerce.number().optional(),
-  isPaused: z.union([z.boolean(), z.string()]).optional(),
-  deviceName: z.string().optional(),
-  itemType: z.string().optional(),
-  provider_tmdb: z.union([z.string(), z.number()]).optional(),
-  /** ItemAdded Episode: lets "Erinnere mich" match a replaced placeholder episode by series + season + number */
-  seriesId: z.string().transform(normId).optional(),
-  seasonNumber: z.union([z.string(), z.number()]).optional(),
-  episodeNumber: z.union([z.string(), z.number()]).optional(),
-});
 
 interface MediaAuth {
   userId: string;
@@ -62,10 +42,16 @@ const inflight = new Map<string, Promise<MediaAuth | null>>();
 export const forgetAuth = (sid: string) => {
   memo.delete(sid);
   inflight.delete(sid); // a lookup still running for the old profile must neither be joined nor stored
+  for (const k of [...itemMemo.keys()]) if (k.startsWith(`${sid}|`)) itemMemo.delete(k);
 };
 
+/** /internal/authz/item answers per session + item (5 s; errors are never memoised). */
+const ITEM_MEMO_MS = 5_000;
+const itemMemo = new Map<string, { exp: number; v: boolean }>();
+
 export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
-  async function lookup(sid: string): Promise<MediaAuth | null> {
+  /** The session's account, role and media server identity (active profile); null = no usable session. */
+  async function sessionIdentity(sid: string) {
     const s = await loadSession(ctx, sid);
     if (!s || !s.deviceApproved) return null;
     const user = await getUserById(ctx, s.userId);
@@ -73,8 +59,14 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
     const role = (user ? await effectiveRole(ctx, user.role) : undefined) ?? (await effectiveRole(ctx, 'guest')); // admin overrides (Admin → Rollen) apply to media too
     const prof = user && !user.disabled ? await resolveProfile(ctx, user, s) : null; // no profile chosen yet (owner PIN) -> deny
     if (!user || !prof || !role) return null;
-    const jfUser = jfUserFor(user, prof);
-    return { userId: user.id, token: await ctx.jf.token(jfUser), deviceId: ctx.jf.deviceId(jfUser), maxBitrate: role.maxBitrate, canDownload: role.download || ctx.cfg.DIRECT_PLAY_REQUIRES_DOWNLOAD !== 'true', ...(role.maxHeight ? { maxHeight: role.maxHeight } : {}) };
+    return { user, role, jfUser: jfUserFor(user, prof) };
+  }
+
+  async function lookup(sid: string): Promise<MediaAuth | null> {
+    const id = await sessionIdentity(sid);
+    if (!id) return null;
+    const { user, role, jfUser } = id;
+    return { userId: user.id, ...(await ctx.jf.mediaAuth(jfUser)), maxBitrate: role.maxBitrate, canDownload: role.download || ctx.cfg.DIRECT_PLAY_REQUIRES_DOWNLOAD !== 'true', ...(role.maxHeight ? { maxHeight: role.maxHeight } : {}) };
   }
 
   /** Errors (DB/Redis/Jellyfin down) propagate and are never memoised: the next request retries. */
@@ -155,62 +147,69 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
     authzNginx.inc({ result: 'ok' });
     return reply
       .header('X-Jellyfin-Uri', uri)
-      .header('X-Jellyfin-Auth', mediaBrowserHeader({ deviceId: a.deviceId, token: a.token }))
+      .header('X-Jellyfin-Auth', ctx.jf.planBAuthHeader(a))
       .header('Cache-Control', 'no-store')
       .code(204)
       .send();
   });
 
-  app.post('/internal/webhook/jellyfin', async (req, reply) => {
-    if (!checkSecret(req, 'x-webhook-secret', ctx.cfg.WEBHOOK_SECRET)) return reply.code(403).send({ error: 'forbidden' });
-    const b = jfWebhook.safeParse(req.body);
+  /**
+   * Per-item access for upstreams that authenticate with one server-wide token (gateway Upstream.authorize hook): may this session's
+   * active profile see the item? Same visibility as the API (ctx.jf.item as that profile). 200 {allow}, 401 = no usable session.
+   */
+  app.post('/internal/authz/item', { config: { rateLimit: false } }, async (req, reply) => {
+    if (!checkSecret(req, 'x-internal-secret', ctx.cfg.INTERNAL_SECRET)) return reply.code(403).send({ error: 'forbidden' });
+    const b = z.object({
+      sid: z.string().regex(/^[\w-]{20,80}$/),
+      itemId: z.string().regex(/^[0-9a-f]{32}$/),
+      kind: z.enum(['media', 'image', 'subtitle']).default('media'),
+    }).strict().safeParse(req.body);
     if (!b.success) return reply.code(400).send({ error: 'bad_request' });
-    const e = b.data;
-    if (e.type === 'ItemAdded' && e.itemId) {
-      // "Erinnere mich": a title or episode just arrived in the library
-      const tmdb = Number(e.provider_tmdb);
-      if ((e.itemType === 'Movie' || e.itemType === 'Series') && Number.isInteger(tmdb) && tmdb > 0) await fireTmdb(ctx, e.itemType === 'Movie' ? 'movie' : 'tv', tmdb, e.itemId);
-      else if (e.itemType === 'Episode') {
-        const num = (v: string | number | undefined) => (v !== undefined && v !== '' && Number.isInteger(Number(v)) ? Number(v) : undefined);
-        const sid = e.seriesId && /^[0-9a-f]{32}$/.test(e.seriesId) ? e.seriesId : undefined;
-        await fireEpisode(ctx, { itemId: e.itemId, seriesId: sid, season: num(e.seasonNumber), episode: num(e.episodeNumber) });
-      }
-      return { ok: true };
+    const key = `${b.data.sid}|${b.data.itemId}`; // visibility does not depend on the kind
+    const hit = itemMemo.get(key);
+    if (hit && hit.exp > Date.now()) return { allow: hit.v };
+    const id = await sessionIdentity(b.data.sid);
+    if (!id) return reply.code(401).send({ error: 'unauthenticated' });
+    let allow: boolean;
+    try {
+      await ctx.jf.item(id.jfUser, b.data.itemId);
+      allow = true;
+    } catch (e) {
+      if (!(e instanceof MediaError) || ![400, 403, 404].includes(e.status)) throw e; // server trouble: 500/502, not memoised
+      allow = false;
     }
-    if (!e.user || !e.itemId) return { ok: true };
-    const r = await ctx.db.query<UserRow>('select * from users where lower(jellyfin_username)=lower($1)', [e.user]);
-    const user = r.rows[0];
-    if (!user) return { ok: true };
-    // played state / resume position changed outside the portal: drop memoised items and dependent caches of that Jellyfin user
-    if (e.type === 'PlaybackStop' || e.type === 'PlaybackStart' || e.type === 'PlaybackProgress') await ctx.jf.touchUserData(user.jellyfin_user_id);
-    const ps = `wh-${(e.deviceName ?? 'dev').replace(/[^\w]/g, '').slice(0, 24)}`;
-    if (e.type === 'PlaybackStop') await clearLive(ctx, user.id, ps);
-    else if (e.type === 'PlaybackStart' || e.type === 'PlaybackProgress') {
-      await setLive(ctx, {
-        userId: user.id, userName: user.name, itemId: e.itemId, title: e.name ?? '', seriesName: e.seriesName,
-        positionTicks: e.positionTicks ?? 0, runtimeTicks: e.runtimeTicks, isPaused: e.isPaused === true || e.isPaused === 'True' || e.isPaused === 'true',
-        playSessionId: ps, updatedAt: Date.now(), source: 'jellyfin',
-      });
-    }
-    return { ok: true };
+    itemMemo.set(key, { exp: Date.now() + ITEM_MEMO_MS, v: allow });
+    if (itemMemo.size > 5000) itemMemo.clear();
+    return { allow };
   });
+
+  // Webhooks of the configured server (Jellyfin: /internal/webhook/jellyfin), translated into neutral events by the implementation.
+  if (ctx.jf.webhookEvents) {
+    const translate = ctx.jf.webhookEvents.bind(ctx.jf);
+    app.post(`/internal/webhook/${ctx.jf.kind}`, async (req, reply) => {
+      if (!checkSecret(req, 'x-webhook-secret', ctx.cfg.WEBHOOK_SECRET)) return reply.code(403).send({ error: 'forbidden' });
+      const events = translate(req.body);
+      if (!events) return reply.code(400).send({ error: 'bad_request' });
+      for (const e of events) await dispatchMediaEvent(ctx, e);
+      return { ok: true };
+    });
+  }
 }
 
 /** Fallback when the webhook plugin is not installed: poll GET /Sessions (every 10 s). */
 export async function pollJellyfinSessions(ctx: Ctx) {
-  const sessions = await ctx.jf.client.sessions();
-  const active = sessions.filter((s) => s.NowPlayingItem && !String(s.DeviceId ?? '').startsWith('ff-'));
+  const active = await ctx.jf.admin.externalSessions();
   if (!active.length) return;
-  const r = await ctx.db.query<UserRow>('select * from users where jellyfin_user_id = any($1)', [active.map((s) => s.UserId)]);
+  const r = await ctx.db.query<UserRow>('select * from users where jellyfin_user_id = any($1)', [active.map((s) => s.serverUserId)]);
   const byJf = new Map(r.rows.map((u) => [u.jellyfin_user_id.replace(/-/g, ''), u]));
   for (const s of active) {
-    const u = byJf.get(String(s.UserId).replace(/-/g, ''));
+    const u = byJf.get(s.serverUserId.replace(/-/g, ''));
     if (!u) continue;
-    const it = s.NowPlayingItem;
+    const it = s.item;
     await setLive(ctx, {
-      userId: u.id, userName: u.name, itemId: it.Id, title: it.Name, seriesName: it.SeriesName, type: it.Type,
-      positionTicks: s.PlayState?.PositionTicks ?? 0, runtimeTicks: it.RunTimeTicks, isPaused: Boolean(s.PlayState?.IsPaused),
-      playSessionId: `jf-${s.Id}`, updatedAt: Date.now(), source: 'jellyfin',
+      userId: u.id, userName: u.name, itemId: it.id, title: it.name, seriesName: it.seriesName, type: it.type,
+      positionTicks: s.positionTicks, runtimeTicks: it.runtimeTicks, isPaused: s.isPaused,
+      playSessionId: `jf-${s.sessionId}`, updatedAt: Date.now(), source: 'jellyfin',
     }, 25);
   }
 }

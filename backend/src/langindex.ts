@@ -1,4 +1,5 @@
 import type { Ctx } from './ctx.js';
+import type { ItemStreams } from './media/types.js';
 
 /** ISO 639-2/B (bibliographic) -> 639-2/T, so "ger" and "deu" are one language. */
 const B2T: Record<string, string> = {
@@ -24,26 +25,21 @@ let startedOnce = false;
 
 interface Agg { type: 'Movie' | 'Series'; audio: Set<string>; subs: Set<string> }
 
-function collect(into: Map<string, Agg>, id: string, type: 'Movie' | 'Series', item: any) {
-  const streams: any[] = Array.isArray(item.MediaStreams) && item.MediaStreams.length ? item.MediaStreams : (item.MediaSources?.[0]?.MediaStreams ?? []);
+function collect(into: Map<string, Agg>, id: string, type: 'Movie' | 'Series', item: ItemStreams) {
   let a = into.get(id);
   if (!a) into.set(id, (a = { type, audio: new Set(), subs: new Set() }));
-  for (const s of streams) {
-    const l = normLang(s?.Language);
-    if (!l) continue;
-    if (s.Type === 'Audio') a.audio.add(l);
-    else if (s.Type === 'Subtitle') a.subs.add(l);
+  for (const [langs, set] of [[item.audio, a.audio], [item.subtitles, a.subs]] as const) {
+    for (const raw of langs) {
+      const l = normLang(raw);
+      if (l) set.add(l);
+    }
   }
 }
 
 /** Pages one item type; returns false when the cap cut the listing short. */
-async function scan(ctx: Ctx, type: 'Movie' | 'Episode', cap: number, onItem: (i: any) => void): Promise<boolean> {
-  const fields = type === 'Episode' ? 'MediaStreams,SeriesId' : 'MediaStreams';
+async function scan(ctx: Ctx, type: 'Movie' | 'Episode', cap: number, onItem: (i: ItemStreams) => void): Promise<boolean> {
   for (let start = 0; start < cap; start += PAGE) {
-    const r = await ctx.jf.client.adminJson<{ Items?: any[] }>(
-      `/Items?recursive=true&includeItemTypes=${type}&fields=${fields}&enableImages=false&enableUserData=false&startIndex=${start}&limit=${Math.min(PAGE, cap - start)}`,
-    );
-    const items = r?.Items ?? [];
+    const items = await ctx.jf.libraryStreams(type, start, Math.min(PAGE, cap - start));
     items.forEach(onItem);
     if (items.length < Math.min(PAGE, cap - start)) return true;
   }
@@ -66,8 +62,8 @@ export async function langIndexTick(ctx: Ctx, opts: { force?: boolean } = {}): P
     startedOnce = true;
     const runStart = new Date();
     const agg = new Map<string, Agg>();
-    const moviesDone = await scan(ctx, 'Movie', MAX_MOVIES, (i) => { if (i?.Id) collect(agg, i.Id, 'Movie', i); });
-    const epsDone = await scan(ctx, 'Episode', MAX_EPISODES, (i) => { if (i?.SeriesId) collect(agg, i.SeriesId, 'Series', i); });
+    const moviesDone = await scan(ctx, 'Movie', MAX_MOVIES, (i) => { if (i.id) collect(agg, i.id, 'Movie', i); });
+    const epsDone = await scan(ctx, 'Episode', MAX_EPISODES, (i) => { if (i.seriesId) collect(agg, i.seriesId, 'Series', i); });
     const rows = [...agg.entries()];
     for (let i = 0; i < rows.length; i += 1000) {
       const b = rows.slice(i, i + 1000);

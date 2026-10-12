@@ -60,9 +60,9 @@ describe('helpers', () => {
   it('seasonOf / isAnime', () => {
     expect(seasonOf(new Date('2026-10-12T00:00:00Z'))).toEqual({ season: 'fall', year: 2026 });
     expect(seasonOf(new Date('2026-01-01T00:00:00Z')).season).toBe('winter');
-    expect(isAnime({ Genres: ['Anime'] })).toBe(true);
-    expect(isAnime({ Genres: ['Animation'], ProductionLocations: ['Japan'] })).toBe(true);
-    expect(isAnime({ Genres: ['Animation'], ProductionLocations: ['USA'] })).toBe(false);
+    expect(isAnime({ genres: ['Anime'] })).toBe(true);
+    expect(isAnime({ genres: ['Animation'], countries: ['Japan'] })).toBe(true);
+    expect(isAnime({ genres: ['Animation'], countries: ['USA'] })).toBe(false);
   });
 });
 

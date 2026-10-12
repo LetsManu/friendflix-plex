@@ -18,7 +18,7 @@ export const cfg: Config = {
   PORT: 3000, PUBLIC_URL: 'https://portal.example.com', DATABASE_URL: TEST_DB, REDIS_URL: 'redis://x', SESSION_TTL_SECONDS: 600, SESSION_IDLE_SECONDS: 300,
   APP_ENC_KEY: ENC_KEY, INTERNAL_SECRET: 'internal-secret-123456', WEBHOOK_SECRET: 'webhook-secret-123456', ADMIN_GROUP: 'friendflix-admins',
   OIDC_ISSUER: 'https://auth.example.com/', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's',
-  JELLYFIN_URL: 'http://jellyfin:8096', JELLYFIN_ADMIN_API_KEY: 'adminkey', SEERR_URL: 'http://seerr:5055', SEERR_API_KEY: 'seerrkey',
+  MEDIA_SERVER: 'jellyfin', JELLYFIN_URL: 'http://jellyfin:8096', JELLYFIN_ADMIN_API_KEY: 'adminkey', SEERR_URL: 'http://seerr:5055', SEERR_API_KEY: 'seerrkey',
   NTFY_URL: undefined, DISCORD_WEBHOOK_URL: undefined, METRICS_TOKEN: undefined, AUTHENTIK_URL: undefined, AUTHENTIK_API_TOKEN: undefined,
   AUTHENTIK_ENROLL_FLOW: undefined, ROLE_TEMPLATES: undefined, OIDC_ALLOW_INSECURE: 'false', BACKGROUND_JOBS: 'false',
   PREVIEW_DIR: '/tmp/ff-test-previews', PREVIEW_WARM: 'false',
@@ -88,7 +88,7 @@ export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extr
   const jfCalls: Call[] = [];
   const seerrCalls: Call[] = [];
   const claims = { current: ADMIN };
-  const client = new JellyfinClient(cfg.JELLYFIN_URL, cfg.JELLYFIN_ADMIN_API_KEY, fakeHttp({ ...defaultJellyfin(), ...extraJf }, jfCalls));
+  const client = new JellyfinClient(cfg.JELLYFIN_URL!, cfg.JELLYFIN_ADMIN_API_KEY!, fakeHttp({ ...defaultJellyfin(), ...extraJf }, jfCalls));
   const encKey = keyFromBase64(ENC_KEY);
   const ctx: Ctx = {
     cfg, kv, db: pool, encKey, fetchImpl: fetch,

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { appendFile, mkdir, readdir, rename, rm, stat, statfs, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Ctx } from './ctx.js';
-import { DOWNLOAD_PRESETS, type DownloadQuality } from './jellyfin/dto.js';
+import { DOWNLOAD_PRESETS, type DownloadQuality } from './media/types.js';
 import { listLive } from './live.js';
 import { m, type Text } from './i18n.js';
 import { notify } from './notify.js';
@@ -201,7 +201,7 @@ class Preparer {
   }
 
   private async fetchOk(user: JfUser, path: string): Promise<Response> {
-    const res = await this.ctx.jf.call(user, path);
+    const res = await this.ctx.jf.mediaFetch(user, path);
     if (!res.ok) throw new Error(`Jellyfin ${path.split('?')[0]} -> ${res.status}`);
     return res;
   }
@@ -294,8 +294,7 @@ class Preparer {
     }
     const src = await ctx.jf.downloadSource(user, job.item_id, { quality: job.quality, audioIndex, maxHeight, maxBitrate });
     if (!src.masterPath) throw new Error('no master playlist');
-    const q = new URL(src.masterPath, 'http://jf.invalid').searchParams;
-    const playSessionId = q.get('PlaySessionId') ?? src.playSessionId;
+    const playSessionId = src.playSessionId; // the session the master playlist belongs to (stopEncoding / resume bookkeeping)
     try {
       const variant = lines(await (await this.fetchOk(user, src.masterPath)).text()).find((l) => l && !l.startsWith('#'));
       if (!variant) throw new Error('no variant');

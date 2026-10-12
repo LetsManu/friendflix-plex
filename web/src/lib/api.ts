@@ -86,7 +86,8 @@ export interface Me { id: string; name: string; role: string; roleLabel: string;
   /** false = no admin stored the instance language yet (asked once) */ defaultLanguageSet?: boolean;
   /** browser language from Accept-Language when supported, else null */ suggestedLanguage?: string | null;
   /** the active profile is a kids profile (kids home, no social features); absent on older servers */ kids?: boolean;
-  /** false = the active profile never finished /welcome (absent = onboarded) */ onboarded?: boolean }
+  /** false = the active profile never finished /welcome (absent = onboarded) */ onboarded?: boolean;
+  /** media server kind + capabilities (see lib/capabilities.ts); absent on older servers = everything supported */ server?: { kind: string; capabilities?: unknown } }
 export interface MeProfile { id: string; name: string; avatar: string; isOwner: boolean; kids?: boolean; /** parental cap of a kids profile (0/6/12) */ maxRating?: number }
 
 // ---- shared item cache: the modal / item page render instantly from what a card already had, then revalidate ----

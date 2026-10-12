@@ -1,8 +1,13 @@
 import { decrypt, encrypt } from '../crypto.js';
 import type { KV } from '../kv.js';
+import type {
+  ClipTranscode, ExternalSession, IdentityPolicy, ItemDto, ItemQuery, ItemStreams, ItemTraits, MediaAdmin, MediaCapabilities, MediaCredentials, MediaServer,
+  MediaEvent, PersonDto, PlaybackDto, PlaybackReport, SegmentType,
+} from '../media/types.js';
 import type { JfUser } from '../types.js';
-import { JellyfinClient, JellyfinError } from './client.js';
-import { maxWidthFor, toDownloadSource, toItemDto, toPlaybackDto, type DownloadQuality, type DownloadSourceDto, type ItemDto, type PlaybackDto } from './dto.js';
+import { JellyfinClient, JellyfinError, mediaBrowserHeader, policyFromTemplate } from './client.js';
+import { jellyfinWebhookEvents } from './webhook.js';
+import { maxWidthFor, toDownloadSource, toItemDto, toPlaybackDto, toTrickplayDto, type DownloadQuality, type DownloadSourceDto } from './dto.js';
 
 const TOKEN_TTL = 6 * 3600;
 /** item() memo: one detail page fires ~8 parallel requests that each load the same item (access check / data). */
@@ -12,30 +17,30 @@ const normId = (s: string) => s.replace(/-/g, '').toLowerCase();
 const cloneItem = (i: ItemDto): ItemDto => ({ ...i, genres: [...i.genres], ...(i.imageTags ? { imageTags: { ...i.imageTags } } : {}) });
 const FIELDS = 'Overview,Genres,OfficialRating,CommunityRating,PremiereDate,DateCreated,ProductionYear,ChildCount,RunTimeTicks,DateLastMediaAdded';
 
-export interface ItemQuery {
-  parentId?: string;
-  q?: string;
-  types?: string;
-  sort?: string;
-  desc?: boolean;
-  limit?: number;
-  start?: number;
-  filter?: 'favorites' | 'unplayed' | 'played';
-  ids?: string[];
-  genre?: string;
-  studio?: string;
-  decade?: number;
-  year?: number;
-  minRating?: number;
-  person?: string;
-}
+export type { ItemQuery };
+const nid = (s: unknown) => String(s).replace(/-/g, '').toLowerCase();
+const traitsOf = (i: Record<string, any>): ItemTraits => ({
+  genres: Array.isArray(i.Genres) ? i.Genres : [], tags: Array.isArray(i.Tags) ? i.Tags : [], countries: Array.isArray(i.ProductionLocations) ? i.ProductionLocations : [],
+});
+
+/** Jellyfin (>= 10.10) can do everything FriendFlix offers. */
+export const JELLYFIN_CAPABILITIES: MediaCapabilities = {
+  segments: new Set<SegmentType>(['intro', 'outro', 'recap', 'preview']),
+  trickplay: true, upcoming: true, subtitleSearch: true, webhooks: true, changeFeed: false, planB: true, subtitleExtract: false,
+};
+
+const REPORT_KIND = { start: 'Playing', progress: 'Playing/Progress', stop: 'Playing/Stopped' } as const;
 
 /**
  * Per-user Jellyfin access. The portal logs in server-side (AuthenticateByName) with the
  * stored (encrypted) password, caches the user token (encrypted, in Redis) and re-authenticates
  * on 401. The token never leaves the backend/gateway.
  */
-export class JellyfinService {
+export class JellyfinService implements MediaServer {
+  readonly kind = 'jellyfin';
+  readonly capabilities = JELLYFIN_CAPABILITIES;
+  readonly admin: MediaAdmin;
+
   /** Remembers which of two possible API paths a given Jellyfin version supports. */
   private readonly compatChoice = new Map<string, number>();
   /**
@@ -51,7 +56,9 @@ export class JellyfinService {
     readonly client: JellyfinClient,
     private readonly kv: KV,
     private readonly encKey: Buffer,
-  ) {}
+  ) {
+    this.admin = this.makeAdmin();
+  }
 
   deviceId(user: JfUser) {
     return `ff-${user.id}`;
@@ -67,6 +74,33 @@ export class JellyfinService {
     const auth = await this.client.authenticateByName(user.jellyfin_username, pw, this.deviceId(user));
     await this.kv.set(key, encrypt(this.encKey, auth.AccessToken), TOKEN_TTL);
     return auth.AccessToken;
+  }
+
+  async mediaAuth(user: JfUser): Promise<MediaCredentials> {
+    return { token: await this.token(user), deviceId: this.deviceId(user) };
+  }
+
+  planBAuthHeader(cred: MediaCredentials): string {
+    return mediaBrowserHeader({ deviceId: cred.deviceId, token: cred.token });
+  }
+
+  mediaFetch(user: JfUser, path: string, init: RequestInit = {}): Promise<Response> {
+    return this.call(user, path, init);
+  }
+
+  /** The PlaybackInfo HLS master with forced re-encoding at the given limits (same session / device as `info`). */
+  async clipTranscode(_user: JfUser, info: PlaybackDto, o: ClipTranscode): Promise<{ path: string; playSessionId: string }> {
+    const master = new URL(info.hlsUrl.replace(/^\/media/, ''), 'http://jf.invalid');
+    const q = master.searchParams;
+    if (o.audioIndex !== undefined) q.set('AudioStreamIndex', String(o.audioIndex));
+    const set: Record<string, string> = {
+      ...(o.fmp4 ? { SegmentContainer: 'mp4', VideoCodec: 'h264', AudioCodec: 'aac' } : {}),
+      AllowVideoStreamCopy: 'false', AllowAudioStreamCopy: 'false', VideoBitrate: String(o.videoBitrate), AudioBitrate: String(o.audioBitrate), MaxWidth: String(o.maxWidth),
+      ...(o.stereo ? { TranscodingMaxAudioChannels: '2' } : {}),
+      ...(o.maxBitrate ? { MaxStreamingBitrate: String(o.maxBitrate) } : {}),
+    };
+    for (const [k, v] of Object.entries(set)) q.set(k, v);
+    return { path: master.pathname + master.search, playSessionId: q.get('PlaySessionId') ?? info.playSessionId };
   }
 
   async call(user: JfUser, path: string, init: RequestInit = {}): Promise<Response> {
@@ -121,6 +155,7 @@ export class JellyfinService {
     if (q.ids?.length) p.set('ids', q.ids.join(','));
     if (q.genre) p.set('genres', q.genre);
     if (q.studio) p.set('studios', q.studio);
+    if (q.tag) p.set('tags', q.tag);
     if (q.year) p.set('years', String(q.year)); // year wins over decade
     else if (q.decade) p.set('years', Array.from({ length: 10 }, (_, n) => q.decade! + n).join(','));
     if (q.minRating) p.set('minCommunityRating', String(q.minRating));
@@ -259,10 +294,18 @@ export class JellyfinService {
     return r.Items.map((i) => ({ id: i.Id, name: i.Name, image: Boolean(i.ImageTags?.Primary) }));
   }
 
-  /** Raw Jellyfin item for a person page (caller checks Type === 'Person'). */
-  async person(user: JfUser, id: string): Promise<Record<string, any>> {
+  /** A person page's header; null when the id is no person. */
+  async person(user: JfUser, id: string): Promise<PersonDto | null> {
     const uid = user.jellyfin_user_id;
-    return this.compat<Record<string, any>>(user, 'item', [`/Items/${id}?userId=${uid}`, `/Users/${uid}/Items/${id}`]);
+    const raw = await this.compat<Record<string, any>>(user, 'item', [`/Items/${id}?userId=${uid}`, `/Users/${uid}/Items/${id}`]);
+    if (raw.Type !== 'Person') return null;
+    const birth = raw.PremiereDate ? new Date(raw.PremiereDate).getUTCFullYear() : NaN;
+    return {
+      id: raw.Id as string, name: raw.Name as string,
+      ...(raw.Overview ? { overview: raw.Overview as string } : {}),
+      ...(Number.isFinite(birth) ? { birthYear: birth } : {}),
+      image: Boolean(raw.ImageTags?.Primary),
+    };
   }
 
   /**
@@ -279,13 +322,13 @@ export class JellyfinService {
   }
 
   /** Resume position + raw trickplay info in ONE lookup (runs in parallel with PlaybackInfo); null when the lookup fails. */
-  async playMeta(user: JfUser, itemId: string): Promise<{ positionTicks: number; trickplay?: Record<string, any> } | null> {
+  async playMeta(user: JfUser, itemId: string): Promise<{ positionTicks: number; trickplay: (mediaSourceId: string) => ReturnType<typeof toTrickplayDto> } | null> {
     try {
       const r = await this.json<{ Items: Array<{ Trickplay?: Record<string, any>; UserData?: { PlaybackPositionTicks?: number } }> }>(
         user, `/Items?userId=${user.jellyfin_user_id}&ids=${itemId}&fields=Trickplay&enableUserData=true`);
       const it = r.Items[0];
       if (!it) return null;
-      return { positionTicks: Number(it.UserData?.PlaybackPositionTicks ?? 0), trickplay: it.Trickplay };
+      return { positionTicks: Number(it.UserData?.PlaybackPositionTicks ?? 0), trickplay: (ms) => toTrickplayDto(itemId, ms, it.Trickplay) };
     } catch {
       return null;
     }
@@ -340,6 +383,21 @@ export class JellyfinService {
     return Array.isArray(list) && list[0]?.Id ? list[0].Id : null;
   }
 
+  /** All local trailers as items (Extras tab). */
+  async trailers(user: JfUser, id: string): Promise<ItemDto[]> {
+    const res = await this.call(user, `/Items/${id}/LocalTrailers?userId=${user.jellyfin_user_id}`);
+    if (!res.ok) return [];
+    const j = (await res.json().catch(() => [])) as unknown;
+    return Array.isArray(j) ? j.map(toItemDto) : [];
+  }
+
+  async facets(user: JfUser, kind: 'studio' | 'genre'): Promise<Array<{ name: string; count: number }>> {
+    const path = kind === 'studio' ? '/Studios' : '/Genres';
+    const r = await this.json<{ Items: Array<{ Name: string; MovieCount?: number; SeriesCount?: number; ChildCount?: number }> }>(user,
+      `${path}?userId=${user.jellyfin_user_id}&includeItemTypes=Movie,Series&recursive=true&fields=ItemCounts&limit=200`).catch(() => ({ Items: [] }));
+    return r.Items.map((x) => ({ name: x.Name, count: (x.MovieCount ?? 0) + (x.SeriesCount ?? 0) || x.ChildCount || 0 }));
+  }
+
   async collections(user: JfUser): Promise<ItemDto[]> {
     const r = await this.json<{ Items: any[] }>(user, `/Items?userId=${user.jellyfin_user_id}&includeItemTypes=BoxSet&recursive=true&sortBy=SortName&fields=${FIELDS}&limit=100`);
     return r.Items.map(toItemDto);
@@ -386,6 +444,60 @@ export class JellyfinService {
   async upcoming(user: JfUser): Promise<ItemDto[]> {
     const r = await this.json<{ Items: any[] }>(user, `/Shows/Upcoming?userId=${user.jellyfin_user_id}&limit=50&fields=${FIELDS}`);
     return r.Items.map(toItemDto);
+  }
+
+  /** Newest movies + episodes by library date (weekly digest). */
+  async addedItems(user: JfUser, page: { start: number; limit: number }): Promise<ItemDto[]> {
+    const p = new URLSearchParams({
+      userId: user.jellyfin_user_id, recursive: 'true', includeItemTypes: 'Movie,Episode', sortBy: 'DateCreated', sortOrder: 'Descending',
+      limit: String(page.limit), startIndex: String(page.start), fields: 'DateCreated,PremiereDate,ProductionYear',
+    });
+    const r = await this.json<{ Items?: any[] }>(user, `/Items?${p}`);
+    return (r.Items ?? []).map(toItemDto);
+  }
+
+  async itemTraits(user: JfUser, id: string): Promise<ItemTraits | null> {
+    const qs = new URLSearchParams({ userId: user.jellyfin_user_id, ids: id, includeItemTypes: 'Series', recursive: 'true', fields: 'Genres,Tags,ProductionLocations', enableImages: 'false', enableUserData: 'false' });
+    const r = await this.json<{ Items?: any[] }>(user, `/Items?${qs}`);
+    const s = (r.Items ?? []).find((x) => nid(x.Id) === id);
+    return s ? traitsOf(s) : null;
+  }
+
+  async continuingSeries(user: JfUser): Promise<Array<{ item: ItemDto; traits: ItemTraits }>> {
+    const sp = new URLSearchParams({
+      userId: user.jellyfin_user_id, recursive: 'true', includeItemTypes: 'Series', seriesStatus: 'Continuing', limit: '300', sortBy: 'SortName',
+      fields: 'Overview,Genres,Tags,ProductionLocations,OfficialRating,CommunityRating,PremiereDate,ProductionYear,ChildCount',
+    });
+    const r = await this.json<{ Items: any[] }>(user, `/Items?${sp}`);
+    return (r.Items ?? []).map((s) => ({ item: toItemDto(s), traits: traitsOf(s) }));
+  }
+
+  async premieringEpisodes(user: JfUser, from: string, to: string): Promise<ItemDto[]> {
+    const ep = new URLSearchParams({
+      userId: user.jellyfin_user_id, recursive: 'true', includeItemTypes: 'Episode', minPremiereDate: from, maxPremiereDate: to, sortBy: 'PremiereDate', sortOrder: 'Descending', limit: '600',
+      fields: 'PremiereDate', enableUserData: 'false', enableImages: 'false', enableTotalRecordCount: 'false',
+    });
+    const r = await this.json<{ Items: any[] }>(user, `/Items?${ep}`);
+    return (r.Items ?? []).map(toItemDto);
+  }
+
+  /** A real (non-placeholder) episode: Jellyfin lists announced episodes as Virtual / missing. */
+  async availableEpisodes(user: JfUser, ids: string[]): Promise<Set<string>> {
+    const out = new Set<string>();
+    if (!ids.length) return out;
+    const p = new URLSearchParams({ userId: user.jellyfin_user_id, ids: ids.join(','), isMissing: 'false', recursive: 'true', includeItemTypes: 'Episode', fields: 'LocationType' });
+    const r = await this.json<{ Items?: Array<{ Id: string; LocationType?: string }> }>(user, `/Items?${p}`);
+    for (const i of r.Items ?? []) if (i.LocationType !== 'Virtual') out.add(i.Id);
+    return out;
+  }
+
+  /** Jellyfin gives an episode a NEW id when its file arrives (the announced one was a placeholder): find it by season + number. */
+  async seasonEpisodeIds(user: JfUser, seriesId: string, season: number): Promise<Map<number, string>> {
+    const p = new URLSearchParams({ userId: user.jellyfin_user_id, season: String(season), isMissing: 'false', fields: 'LocationType' });
+    const r = await this.json<{ Items?: Array<{ Id: string; IndexNumber?: number; LocationType?: string }> }>(user, `/Shows/${seriesId}/Episodes?${p}`);
+    const out = new Map<number, string>();
+    for (const i of r.Items ?? []) if (i.LocationType !== 'Virtual' && i.IndexNumber != null && !out.has(i.IndexNumber)) out.set(i.IndexNumber, i.Id);
+    return out;
   }
 
   async setFavorite(user: JfUser, id: string, on: boolean) {
@@ -491,14 +603,28 @@ export class JellyfinService {
     await this.mutate(user, () => this.compat(user, 'userdata', [`/UserItems/${id}/UserData?userId=${uid}`, `/Users/${uid}/Items/${id}/UserData`], { method: 'POST', body }));
   }
 
+  /** Jellyfin converts text subtitles to WebVTT itself (the same stream the gateway serves at the DTO's subtitle URL). */
+  subtitleStream(user: JfUser, itemId: string, mediaSourceId: string, streamIndex: number, format: 'vtt'): Promise<Response> {
+    return this.call(user, `/Videos/${itemId}/${encodeURIComponent(mediaSourceId)}/Subtitles/${streamIndex}/0/Stream.${format}`);
+  }
+
+  webhookEvents(body: unknown): MediaEvent[] | null {
+    return jellyfinWebhookEvents(body);
+  }
+
   /** Stops the server-side transcode behind a PlaySessionId (Jellyfin keeps encoding otherwise). Never throws. */
   async stopEncoding(user: JfUser, playSessionId: string): Promise<void> {
     await this.call(user, `/Videos/ActiveEncodings?${new URLSearchParams({ deviceId: this.deviceId(user), playSessionId })}`, { method: 'DELETE' }).catch(() => undefined);
   }
 
   /** Playing / Progress / Stopped reports (powers "Weiterschauen" and Jellyfin statistics). */
-  async report(user: JfUser, kind: 'Playing' | 'Playing/Progress' | 'Playing/Stopped', body: Record<string, unknown>) {
-    const res = await this.mutate(user, () => this.call(user, `/Sessions/${kind}`, { method: 'POST', body: JSON.stringify({ CanSeek: true, PlayMethod: 'DirectStream', ...body }) }));
+  async report(user: JfUser, r: PlaybackReport) {
+    const kind = REPORT_KIND[r.event];
+    const { PlayMethod, ...rest } = {
+      ItemId: r.itemId, MediaSourceId: r.mediaSourceId, PlaySessionId: r.playSessionId, PositionTicks: r.positionTicks, IsPaused: r.paused,
+      AudioStreamIndex: r.audioIndex, SubtitleStreamIndex: r.subtitleIndex, PlayMethod: r.playMethod ?? 'DirectStream',
+    };
+    const res = await this.mutate(user, () => this.call(user, `/Sessions/${kind}`, { method: 'POST', body: JSON.stringify({ CanSeek: true, PlayMethod, ...rest }) }));
     if (!res.ok) throw new JellyfinError(res.status, `report ${kind} -> ${res.status}`);
   }
 
@@ -510,5 +636,59 @@ export class JellyfinService {
     );
     const i = r.Items[0];
     return i ? { id: i.Id, name: i.Name } : null;
+  }
+
+  /** A series counts as available once at least one real (non-placeholder) episode exists. */
+  async seriesHasEpisode(seriesId: string): Promise<boolean> {
+    const p = new URLSearchParams({ parentId: seriesId, recursive: 'true', includeItemTypes: 'Episode', isMissing: 'false', limit: '1', fields: 'LocationType' });
+    const r = await this.client.adminJson<{ Items?: Array<{ LocationType?: string }> }>(`/Items?${p}`);
+    return (r.Items ?? []).some((i) => i.LocationType !== 'Virtual');
+  }
+
+  async libraryStreams(type: 'Movie' | 'Episode', start: number, limit: number): Promise<ItemStreams[]> {
+    const fields = type === 'Episode' ? 'MediaStreams,SeriesId' : 'MediaStreams';
+    const r = await this.client.adminJson<{ Items?: any[] }>(
+      `/Items?recursive=true&includeItemTypes=${type}&fields=${fields}&enableImages=false&enableUserData=false&startIndex=${start}&limit=${limit}`,
+    );
+    return (r?.Items ?? []).map((item) => {
+      const streams: any[] = Array.isArray(item?.MediaStreams) && item.MediaStreams.length ? item.MediaStreams : (item?.MediaSources?.[0]?.MediaStreams ?? []);
+      const langs = (kind: string) => streams.filter((s) => s?.Type === kind && s.Language != null).map((s) => s.Language);
+      return { id: item?.Id, seriesId: item?.SeriesId, audio: langs('Audio'), subtitles: langs('Subtitle') };
+    });
+  }
+
+  private makeAdmin(): MediaAdmin {
+    const client = this.client;
+    return {
+      createIdentity: async (name, password) => ({ id: (await client.createUser(name, password)).Id }),
+      deleteIdentity: async (id) => {
+        const res = await client.adminFetch(`/Users/${id}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 404) throw new JellyfinError(res.status, `Jellyfin delete user -> ${res.status}`);
+      },
+      /** Resolves the template's library names to media folder ids and merges our managed fields into the Jellyfin policy. */
+      applyPolicy: async (id, p: IdentityPolicy) => {
+        const t = p.template;
+        let ids: string[] | null = null;
+        if (t.libraries !== 'all') {
+          const folders = await client.mediaFolders();
+          const want = new Set(t.libraries.map((n) => n.toLowerCase()));
+          ids = folders.filter((f) => want.has(f.Name.toLowerCase())).map((f) => f.Id);
+        }
+        const parental = p.parental
+          ? { ...(p.parental.maxRating !== undefined ? { MaxParentalRating: p.parental.maxRating } : {}), BlockUnratedItems: p.parental.blockUnrated }
+          : {};
+        await client.setPolicy(id, { ...policyFromTemplate(t, ids), IsDisabled: p.disabled, ...(p.hidden ? { IsHidden: true } : {}), ...parental });
+      },
+      setDisabled: (id, disabled) => client.setPolicy(id, { IsDisabled: disabled }),
+      libraries: async () => (await client.mediaFolders()).map((f) => ({ id: f.Id, name: f.Name })),
+      ping: () => client.ping(),
+      /** sessions of other apps: FriendFlix' own devices ("ff-<id>") are tracked by the portal itself */
+      externalSessions: async (): Promise<ExternalSession[]> => (await client.sessions())
+        .filter((s) => s.NowPlayingItem && !String(s.DeviceId ?? '').startsWith('ff-'))
+        .map((s) => ({
+          sessionId: String(s.Id), serverUserId: String(s.UserId), positionTicks: s.PlayState?.PositionTicks ?? 0, isPaused: Boolean(s.PlayState?.IsPaused),
+          item: { id: s.NowPlayingItem.Id, name: s.NowPlayingItem.Name, seriesName: s.NowPlayingItem.SeriesName, type: s.NowPlayingItem.Type, runtimeTicks: s.NowPlayingItem.RunTimeTicks },
+        })),
+    };
   }
 }

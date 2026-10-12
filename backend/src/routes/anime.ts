@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
-import { JellyfinError } from '../jellyfin/client.js';
-import { toItemDto, type ItemDto } from '../jellyfin/dto.js';
+import { MediaError, type ItemDto, type ItemTraits } from '../media/types.js';
 import { requireGrownUp } from '../kids.js';
 import { requireUser } from '../session.js';
 import type { JfUser } from '../types.js';
@@ -28,10 +27,10 @@ export const seasonOf = (d: Date): { season: SimulcastSeason; year: number } => 
 });
 
 /** Anime = genre "Anime", or "Animation" produced in Japan, or tagged "anime". */
-export function isAnime(i: { Genres?: string[]; Tags?: string[]; ProductionLocations?: string[] }): boolean {
-  const g = (i.Genres ?? []).map((x) => x.toLowerCase());
-  if (g.includes('anime') || (i.Tags ?? []).some((x) => x.toLowerCase() === 'anime')) return true;
-  return g.includes('animation') && (i.ProductionLocations ?? []).some((x) => /^(japan|jp|jpn)$/i.test(x.trim()));
+export function isAnime(i: Partial<ItemTraits>): boolean {
+  const g = (i.genres ?? []).map((x) => x.toLowerCase());
+  if (g.includes('anime') || (i.tags ?? []).some((x) => x.toLowerCase() === 'anime')) return true;
+  return g.includes('animation') && (i.countries ?? []).some((x) => /^(japan|jp|jpn)$/i.test(x.trim()));
 }
 
 /** Plain text comment: no control characters (newlines are kept, at most two in a row), trimmed. */
@@ -48,7 +47,7 @@ export function animeRoutes(app: FastifyInstance, ctx: Ctx) {
   const social = { preHandler: requireGrownUp(ctx) };
   const writeLimit = (max: number) => ({ rateLimit: { max, timeWindow: '1 minute' } });
 
-  /** The visible item (series / episode ids are accepted where `types` allows), else a thrown JellyfinError -> 404. */
+  /** The visible item (series / episode ids are accepted where `types` allows), else a thrown MediaError -> 404. */
   const visible = (req: any, id: string) => ctx.jf.item(req.jfUser!, id);
 
   // ---- per-series audio / subtitle preference ----
@@ -69,9 +68,7 @@ export function animeRoutes(app: FastifyInstance, ctx: Ctx) {
     const key = `isanime:${sid}`;
     const hit = await ctx.kv.get(key);
     if (hit) return hit === '1';
-    const qs = new URLSearchParams({ userId: req.jfUser!.jellyfin_user_id, ids: sid, includeItemTypes: 'Series', recursive: 'true', fields: 'Genres,Tags,ProductionLocations', enableImages: 'false', enableUserData: 'false' });
-    const r = await ctx.jf.json<{ Items?: any[] }>(req.jfUser!, `/Items?${qs}`);
-    const s = (r.Items ?? []).find((x) => String(x.Id).replace(/-/g, '').toLowerCase() === sid);
+    const s = await ctx.jf.itemTraits(req.jfUser!, sid);
     const anime = Boolean(s && isAnime(s));
     await ctx.kv.set(key, anime ? '1' : '0', 3600);
     return anime;
@@ -153,41 +150,29 @@ export function animeRoutes(app: FastifyInstance, ctx: Ctx) {
     const now = Date.now();
     const from = new Date(now - SIM_WINDOW_DAYS * 86_400_000).toISOString();
     const to = new Date(now + SIM_WINDOW_DAYS * 86_400_000).toISOString();
-    const uid = user.jellyfin_user_id;
-    const sp = new URLSearchParams({
-      userId: uid, recursive: 'true', includeItemTypes: 'Series', seriesStatus: 'Continuing', limit: '300', sortBy: 'SortName',
-      fields: 'Overview,Genres,Tags,ProductionLocations,OfficialRating,CommunityRating,PremiereDate,ProductionYear,ChildCount',
-    });
-    const ep = new URLSearchParams({
-      userId: uid, recursive: 'true', includeItemTypes: 'Episode', minPremiereDate: from, maxPremiereDate: to, sortBy: 'PremiereDate', sortOrder: 'Descending', limit: '600',
-      fields: 'PremiereDate', enableUserData: 'false', enableImages: 'false', enableTotalRecordCount: 'false',
-    });
-    const [series, eps] = await Promise.all([
-      ctx.jf.json<{ Items: any[] }>(user, `/Items?${sp}`),
-      ctx.jf.json<{ Items: any[] }>(user, `/Items?${ep}`),
-    ]);
-    const bySeries = new Map<string, any[]>();
-    for (const e of eps.Items ?? []) {
-      if (!e.SeriesId || !e.PremiereDate || !Number.isFinite(Date.parse(e.PremiereDate))) continue;
-      const l = bySeries.get(String(e.SeriesId).replace(/-/g, '').toLowerCase()) ?? [];
+    const [series, eps] = await Promise.all([ctx.jf.continuingSeries(user), ctx.jf.premieringEpisodes(user, from, to)]);
+    const bySeries = new Map<string, ItemDto[]>();
+    for (const e of eps) {
+      if (!e.seriesId || !e.premiereDate || !Number.isFinite(Date.parse(e.premiereDate))) continue;
+      const l = bySeries.get(String(e.seriesId).replace(/-/g, '').toLowerCase()) ?? [];
       l.push(e);
-      bySeries.set(String(e.SeriesId).replace(/-/g, '').toLowerCase(), l);
+      bySeries.set(String(e.seriesId).replace(/-/g, '').toLowerCase(), l);
     }
-    const mini = (e: any) => ({ id: e.Id as string, name: e.Name as string, season: e.ParentIndexNumber as number | undefined, index: e.IndexNumber as number | undefined, premiereDate: e.PremiereDate as string });
+    const mini = (e: ItemDto) => ({ id: e.id, name: e.name, season: e.parentIndexNumber, index: e.indexNumber, premiereDate: e.premiereDate! });
     const out: SimulcastEntry[] = [];
-    for (const s of series.Items ?? []) {
-      const list = bySeries.get(String(s.Id).replace(/-/g, '').toLowerCase());
+    for (const { item: s, traits } of series) {
+      const list = bySeries.get(String(s.id).replace(/-/g, '').toLowerCase());
       if (!list?.length) continue;
-      const aired = list.filter((e) => Date.parse(e.PremiereDate) <= now); // list is newest first
-      const upcoming = list.filter((e) => Date.parse(e.PremiereDate) > now);
+      const aired = list.filter((e) => Date.parse(e.premiereDate!) <= now); // list is newest first
+      const upcoming = list.filter((e) => Date.parse(e.premiereDate!) > now);
       const latest = aired[0];
       const next = upcoming[upcoming.length - 1]; // soonest upcoming
       const ref = latest ?? next!;
-      const d = new Date(ref.PremiereDate);
+      const d = new Date(ref.premiereDate!);
       const timed = d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0;
       const { season, year } = seasonOf(d);
       out.push({
-        item: toItemDto(s), anime: isAnime(s), weekday: d.getUTCDay(), timed, airsAt: d.toISOString(), season, seasonYear: year,
+        item: s, anime: isAnime(traits), weekday: d.getUTCDay(), timed, airsAt: d.toISOString(), season, seasonYear: year,
         ...(latest ? { latest: mini(latest) } : {}), ...(next ? { next: mini(next) } : {}),
       });
     }
@@ -202,7 +187,7 @@ export function animeRoutes(app: FastifyInstance, ctx: Ctx) {
     try {
       item = await ctx.jf.item(req.jfUser!, id);
     } catch (e) {
-      if (e instanceof JellyfinError) {
+      if (e instanceof MediaError) {
         if (e.status === 404 || e.status === 403 || e.status === 400) reply.code(404).send({ error: 'not_found' });
         else reply.code(502).send({ error: 'jellyfin', status: e.status });
         return null;

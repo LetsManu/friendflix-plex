@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { Ctx } from '../ctx.js';
-import { JellyfinError } from '../jellyfin/client.js';
-import type { ItemDto } from '../jellyfin/dto.js';
+import { MediaError, type ItemDto } from '../media/types.js';
 import { requireGrownUp } from '../kids.js';
 import { itemsByIds } from './discover.js';
 
@@ -52,7 +51,7 @@ export function trendingRoutes(app: FastifyInstance, ctx: Ctx) {
       await ctx.kv.set(key, JSON.stringify(items), TTL);
       return { items };
     } catch (e) {
-      if (e instanceof JellyfinError) return reply.code(502).send({ error: 'jellyfin', status: e.status });
+      if (e instanceof MediaError) return reply.code(502).send({ error: 'jellyfin', status: e.status });
       throw e;
     }
   });

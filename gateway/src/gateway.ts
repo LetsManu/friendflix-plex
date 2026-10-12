@@ -4,9 +4,17 @@ import { constants as fsc } from 'node:fs';
 import { open, realpath } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
+import { jellyfinUpstream, type Upstream } from './upstream/index.js';
+
+export { mediaBrowserHeader } from './upstream/jellyfin.js';
 
 export interface GatewayOptions {
-  jellyfinUrl: string;
+  /** media server adapter (allowlist, credential params, auth header); default Jellyfin */
+  upstream?: Upstream;
+  /** base URL of the media server */
+  upstreamUrl?: string;
+  /** @deprecated alias of upstreamUrl */
+  jellyfinUrl?: string;
   backendUrl: string;
   internalSecret: string;
   metricsToken?: string;
@@ -43,36 +51,17 @@ interface Authz {
   canDownload?: boolean;
 }
 
-const ID = '[0-9a-fA-F]{32}';
 /**
- * Allowlist of upstream paths. Anything else is rejected, so the gateway can never be used as
- * a general proxy to Jellyfin (or any other host: the upstream origin is fixed anyway).
+ * Allowlist of upstream paths (of the default Jellyfin adapter, see upstream/jellyfin.ts). Anything else is rejected, so the
+ * gateway can never be used as a general proxy to the media server (or any other host: the upstream origin is fixed anyway).
  */
-export const ALLOWED_PATHS: RegExp[] = [
-  new RegExp(`^/Videos/${ID}/(master|main)\\.m3u8$`),
-  new RegExp(`^/Videos/${ID}/(hls1?|hls)/[\\w.-]+/[\\w.-]+$`),
-  new RegExp(`^/Videos/${ID}/stream(\\.\\w{2,5})?$`),
-  new RegExp(`^/Videos/${ID}/${ID}/Subtitles/\\d{1,3}/\\d{1,10}/Stream\\.(vtt|srt)$`),
-  new RegExp(`^/Videos/${ID}/Trickplay/\\d{2,4}/\\d{1,5}\\.jpg$`),
-  new RegExp(`^/Items/${ID}/Images/(Primary|Backdrop|Logo|Thumb|Banner)(/\\d{1,3})?$`),
-];
+export const ALLOWED_PATHS: RegExp[] = jellyfinUpstream.paths;
 
-/**
- * Chromecast subset (token in the URL path, no cookie): HLS playlists + segments, VTT subtitles, poster images.
- * No /stream (direct download), no Trickplay, no Logo/Thumb/Banner.
- */
-export const CAST_PATHS: RegExp[] = [
-  new RegExp(`^/Videos/${ID}/(master|main)\\.m3u8$`),
-  new RegExp(`^/Videos/${ID}/(hls1?|hls)/[\\w.-]+/[\\w.-]+$`),
-  new RegExp(`^/Videos/${ID}/${ID}/Subtitles/\\d{1,3}/\\d{1,10}/Stream\\.vtt$`),
-  new RegExp(`^/Items/${ID}/Images/(Primary|Backdrop)$`),
-];
+/** Chromecast subset (token in the URL path, no cookie) of the default adapter. */
+export const CAST_PATHS: RegExp[] = jellyfinUpstream.castPaths;
 const CAST_ROUTE = /^\/media\/c\/([A-Za-z0-9_-]{43})(\/.*)$/;
 const CAST_PREFIX = '/media/c/';
 const CAST_PLAYLIST_MAX = 8 * 1024 * 1024; // very long films at short segment lengths reach several MB
-const CAST_DROP_QUERY = new Set(['livestreamid', 'deviceid']);
-const CAST_CLAMP_HEIGHT = ['maxheight', 'height'];
-const CAST_CLAMP_WIDTH = ['maxwidth', 'width'];
 const CAST_FAIL_LIMIT = 30; // DISTINCT failing tokens per minute and client address
 const CAST_BLOCK_MS = 5 * 60_000;
 const CAST_CORS: Record<string, string> = {
@@ -81,17 +70,13 @@ const CAST_CORS: Record<string, string> = {
   'cross-origin-resource-policy': 'cross-origin',
 };
 
-const STREAM_PATH = /^\/Videos\/[0-9a-fA-F]{32}\/stream(\.\w{2,5})?$/;
 /**
  * Direct (original) streams bypass the transcoder, so the resolution cap and the download flag cannot be enforced on them.
- * Roles with a height cap or without download rights get HLS only; every /stream request (static or not: Jellyfin can stream-copy) is refused.
+ * Roles with a height cap or without download rights get HLS only; every direct stream request is refused.
  */
-export const blocksDirectStream = (path: string, auth: Pick<Authz, 'maxHeight' | 'canDownload'>) =>
-  STREAM_PATH.test(path) && (Boolean(auth.maxHeight) || auth.canDownload !== true);
+export const blocksDirectStream = (path: string, auth: Pick<Authz, 'maxHeight' | 'canDownload'>, up: Upstream = jellyfinUpstream) =>
+  up.directStream.test(path) && (Boolean(auth.maxHeight) || auth.canDownload !== true);
 
-const IMAGE_PATH = /^\/Items\/[0-9a-fA-F]{32}\/Images\//;
-const STRIP_QUERY = new Set(['api_key', 'apikey', 'x-emby-token', 'x-mediabrowser-token', 'token']);
-const CLAMP_QUERY = ['maxstreamingbitrate', 'videobitrate'];
 const PASS_RESPONSE_HEADERS = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified', 'cache-control', 'content-disposition'];
 
 /** Returns a safe normalized path or null. Rejects traversal, encoded slashes, backslashes, control chars. */
@@ -107,19 +92,19 @@ export function normalizePath(raw: string, allow: RegExp[] = ALLOWED_PATHS): str
   return allow.some((re) => re.test(p)) ? p : null;
 }
 
-export const normalizeCastPath = (raw: string) => normalizePath(raw, CAST_PATHS);
+export const normalizeCastPath = (raw: string, up: Upstream = jellyfinUpstream) => normalizePath(raw, up.castPaths);
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
 const lc = (v: string) => v.replace(/-/g, '').toLowerCase();
 
 /** Removes token-like parameters from one playlist URI (relative, optionally with a query). */
-export function stripUriTokens(uri: string): string {
+export function stripUriTokens(uri: string, strip: ReadonlySet<string> = jellyfinUpstream.stripQuery): string {
   const q = uri.indexOf('?');
   if (q === -1) return uri;
   const keep = uri.slice(q + 1).split('&').filter((kv) => {
     let k = kv.split('=')[0] ?? '';
     try { k = decodeURIComponent(k); } catch { /* keep raw */ }
-    return !STRIP_QUERY.has(k.toLowerCase());
+    return !strip.has(k.toLowerCase());
   });
   return keep.length ? `${uri.slice(0, q)}?${keep.join('&')}` : uri.slice(0, q);
 }
@@ -130,7 +115,7 @@ export function stripUriTokens(uri: string): string {
  * ../ escapes, backslash tricks): the receiver would otherwise fetch from another host/path and leak or bypass the gateway.
  * `requestPath` is the public path the playlist was requested at (/media/c/<token>/Videos/<id>/main.m3u8).
  */
-export function sanitizePlaylist(text: string, requestPath: string): string | null {
+export function sanitizePlaylist(text: string, requestPath: string, strip: ReadonlySet<string> = jellyfinUpstream.stripQuery): string | null {
   const m = CAST_ROUTE.exec(requestPath);
   if (!m) return null;
   const prefix = `${CAST_PREFIX}${m[1]}/`;
@@ -149,25 +134,23 @@ export function sanitizePlaylist(text: string, requestPath: string): string | nu
     if (line.startsWith('#')) {
       return line.replace(/(URI\s*=\s*["']?)([^"',]*)/gi, (_m, pre: string, u: string) => {
         check(u);
-        return `${pre}${stripUriTokens(u)}`;
+        return `${pre}${stripUriTokens(u, strip)}`;
       });
     }
     const t = line.trim();
     if (!t) return line;
     check(t);
-    return stripUriTokens(t);
+    return stripUriTokens(t, strip);
   });
   return bad ? null : out.join('\n');
 }
 
-export function mediaBrowserHeader(deviceId: string, token: string) {
-  const esc = (v: string) => v.replace(/["\\\r\n]/g, '');
-  return `MediaBrowser Client="FriendFlix", Device="Gateway", DeviceId="${esc(deviceId)}", Version="0.1.0", Token="${esc(token)}"`;
-}
-
 export function createGateway(opts: GatewayOptions): { server: Server; metrics: () => string } {
   const f = opts.fetchImpl ?? fetch;
-  const base = new URL(opts.jellyfinUrl);
+  const up = opts.upstream ?? jellyfinUpstream;
+  const upstreamUrl = opts.upstreamUrl ?? opts.jellyfinUrl;
+  if (!upstreamUrl) throw new Error('gateway: upstreamUrl missing');
+  const base = new URL(upstreamUrl);
   const authCache = new Map<string, { exp: number; v: Authz | null }>();
   const castCache = new Map<string, { exp: number; v: Authz | null }>();
   const castFails = new Map<string, { start: number; hashes: Set<string>; blockedUntil: number }>();
@@ -195,6 +178,28 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
    * after the memo expired share ONE backend call. Backend failures (network, 5xx) are not memoised, so the next request retries.
    */
   const authInflight = new Map<string, Promise<Authz | null>>();
+
+  /** Upstream.authorize helper: item visibility of the session's active profile (backend /internal/authz/item), memoised 5 s. */
+  const itemCache = new Map<string, { exp: number; v: boolean }>();
+  async function checkItem(sid: string, itemId: string, kind: 'media' | 'image' | 'subtitle'): Promise<boolean> {
+    const id = lc(itemId);
+    if (!/^[0-9a-f]{32}$/.test(id)) return false;
+    const key = `${sha256(sid)}|${id}`; // never keep the raw session id as a key; visibility does not depend on the kind
+    const hit = itemCache.get(key);
+    if (hit && hit.exp > Date.now()) return hit.v;
+    const r = await f(new URL('/internal/authz/item', opts.backendUrl), {
+      method: 'POST',
+      headers: { 'x-internal-secret': opts.internalSecret, 'content-type': 'application/json' },
+      body: JSON.stringify({ sid, itemId: id, kind }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (r.status === 401) return false;
+    if (!r.ok) throw new Error(`authz/item ${r.status}`); // backend trouble: 503, not cached
+    const v = ((await r.json()) as { allow?: unknown }).allow === true;
+    itemCache.set(key, { exp: Date.now() + 5_000, v });
+    if (itemCache.size > 5000) itemCache.clear();
+    return v;
+  }
   async function authorize(cookie: string | undefined): Promise<Authz | null> {
     const sid = /(?:^|;\s*)ff_sid=([\w-]+)/.exec(cookie ?? '')?.[1];
     if (!sid) return null;
@@ -240,7 +245,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
     if (req.method !== 'GET' && req.method !== 'HEAD') return end(res, 405, 'method not allowed');
     if (!url.pathname.startsWith('/media/')) return end(res, 404, 'not found');
 
-    const path = normalizePath(url.pathname.slice('/media'.length));
+    const path = normalizePath(url.pathname.slice('/media'.length), up.paths);
     if (!path) {
       count('403');
       return end(res, 403, 'forbidden');
@@ -256,9 +261,17 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
       count('401');
       return end(res, 401, 'unauthorized');
     }
-    if (blocksDirectStream(path, auth)) {
+    if (blocksDirectStream(path, auth, up)) {
       count('403');
       return end(res, 403, 'forbidden');
+    }
+    if (up.authorize) {
+      const sid = /(?:^|;\s*)ff_sid=([\w-]+)/.exec(req.headers.cookie ?? '')![1]!;
+      const ok = await up.authorize({ path, query: url.searchParams, cast: false, checkItem: (id, kind) => checkItem(sid, id, kind) }).catch(() => 'error' as const);
+      if (ok !== true) {
+        count(ok === 'error' ? '503' : '403');
+        return ok === 'error' ? end(res, 503, 'unavailable') : end(res, 403, 'forbidden');
+      }
     }
     return forward(req, res, url, path, auth, count, false, false, authzMs);
   }
@@ -326,7 +339,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
 
     const t = auth.download;
     if (t.kind === 'static') {
-      const path = normalizePath(t.path);
+      const path = normalizePath(t.path, up.paths);
       if (!path) return fail(403, 'forbidden');
       const target = new URL(path, 'http://x');
       for (const [k, v] of Object.entries(t.query ?? {})) target.searchParams.set(k, v);
@@ -489,7 +502,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
       res.setHeader('retry-after', '300');
       return cors(429, 'too many requests');
     }
-    const path = normalizeCastPath(mm[2]!);
+    const path = normalizeCastPath(mm[2]!, up);
     if (!path) {
       castCount('403');
       return cors(403, 'forbidden');
@@ -511,7 +524,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
       castCount('401');
       return cors(401, 'unauthorized');
     }
-    if (auth.kind === 'img' && !IMAGE_PATH.test(path)) {
+    if (auth.kind === 'img' && !up.image.test(path)) {
       castCount('403'); // poster tokens may fetch images only
       return cors(403, 'forbidden');
     }
@@ -519,37 +532,52 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
       castCount('403');
       return cors(403, 'forbidden');
     }
+    if (up.authorize) {
+      const scope = auth.scope;
+      const ok = await up.authorize({ path, query: url.searchParams, cast: true, checkItem: async (id) => lc(id) === lc(scope.itemId) }).catch(() => 'error' as const);
+      if (ok !== true) {
+        castCount(ok === 'error' ? '503' : '403');
+        return cors(ok === 'error' ? 503 : 403, ok === 'error' ? 'unavailable' : 'forbidden');
+      }
+    }
     return forward(req, res, url, path, auth, castCount, true, false, authzMs);
   }
 
   async function forward(req: IncomingMessage, res: ServerResponse, url: URL, path: string, auth: Authz, countCode: (k: string) => void, cast = false, download = false, authzMs = 0) {
-    const target = new URL(path, base);
+    let target = new URL(path, base);
     if (target.origin !== base.origin) return end(res, 403, 'forbidden'); // SSRF guard (defence in depth)
     for (const [k, v] of url.searchParams) {
       const lk = k.toLowerCase();
-      if (STRIP_QUERY.has(lk)) continue;
-      if (cast && CAST_DROP_QUERY.has(lk)) continue; // stream/device identity comes from the token, never from the receiver's URL
+      if (up.stripQuery.has(lk)) continue;
+      if (cast && up.castDropQuery.has(lk)) continue; // stream/device identity comes from the token, never from the receiver's URL
       // resolution cap: always on the cast path (default 1080), on the cookie path when the role has one
-      if ((cast || auth.maxHeight) && (CAST_CLAMP_HEIGHT.includes(lk) || CAST_CLAMP_WIDTH.includes(lk))) {
+      if ((cast || auth.maxHeight) && (up.clampHeight.includes(lk) || up.clampWidth.includes(lk))) {
         const cap = auth.maxHeight ?? 1080;
-        const lim = CAST_CLAMP_WIDTH.includes(lk) ? Math.ceil((cap * 16) / 9) : cap; // widths: 16:9 equivalent of the height cap
+        const lim = up.clampWidth.includes(lk) ? Math.ceil((cap * 16) / 9) : cap; // widths: 16:9 equivalent of the height cap
         const n = Number(v);
         target.searchParams.set(k, String(Number.isFinite(n) && n > 0 ? Math.min(n, lim) : lim));
         continue;
       }
-      if (CLAMP_QUERY.includes(lk)) {
+      if (up.clampBitrate.includes(lk)) {
         const n = Number(v);
         target.searchParams.set(k, String(Number.isFinite(n) && n > 0 ? Math.min(n, auth.maxBitrate) : auth.maxBitrate));
         continue;
       }
       target.searchParams.append(k, v);
     }
+    if (up.rewrite) {
+      const r = up.rewrite(target.pathname, target.searchParams);
+      const q = r.query.toString();
+      if (!r.path.startsWith('/') || r.path.startsWith('//') || r.path.includes('\\')) return end(res, 502, 'bad gateway');
+      target = new URL(`${r.path}${q ? `?${q}` : ''}`, base);
+      if (target.origin !== base.origin) return end(res, 502, 'bad gateway');
+    }
     const requestUrl = `${base.origin}${target.pathname}${target.search}`;
     const playlist = cast && /\.m3u8$/.test(path);
     const extra = cast ? CAST_CORS : undefined;
 
     // identity: keep upstream bytes as-is so content-length matches the body we relay
-    const headers: Record<string, string> = { Authorization: mediaBrowserHeader(auth.deviceId, auth.token), 'accept-encoding': 'identity' };
+    const headers: Record<string, string> = { ...up.authHeaders(auth), 'accept-encoding': 'identity' };
     // cast playlists are rewritten, so they are always fetched whole and unconditionally
     for (const h of playlist ? ['accept'] : ['range', 'if-range', 'if-none-match', 'if-modified-since', 'accept']) {
       const v = req.headers[h];
@@ -558,22 +586,22 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
 
     const ac = new AbortController();
     res.on('close', () => ac.abort());
-    let up: Response;
+    let upRes: Response;
     const tUp = performance.now();
     try {
-      up = await f(requestUrl, { method: req.method, headers, signal: ac.signal, redirect: 'manual' });
+      upRes = await f(requestUrl, { method: req.method, headers, signal: ac.signal, redirect: 'manual' });
     } catch {
       countCode('502');
       return end(res, 502, 'bad gateway', 'text/plain', extra);
     }
-    countCode(String(up.status));
-    if (up.status >= 300 && up.status < 400 && up.status !== 304) return end(res, 502, 'bad gateway', 'text/plain', extra);
+    countCode(String(upRes.status));
+    if (upRes.status >= 300 && upRes.status < 400 && upRes.status !== 304) return end(res, 502, 'bad gateway', 'text/plain', extra);
 
     const out: Record<string, string> = {};
     for (const h of PASS_RESPONSE_HEADERS) {
       // fetch decodes content-encoding transparently, so the upstream length no longer describes the body
-      if (h === 'content-length' && up.headers.get('content-encoding')) continue;
-      const v = up.headers.get(h);
+      if (h === 'content-length' && upRes.headers.get('content-encoding')) continue;
+      const v = upRes.headers.get(h);
       if (v) out[h] = v;
     }
     out['x-content-type-options'] = 'nosniff';
@@ -586,7 +614,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
     } else if (download) {
       out['cache-control'] = 'no-store'; // licensed content behind a cookie: never stored by a cache, no CORS headers
       out['vary'] = 'Cookie';
-    } else if (IMAGE_PATH.test(path) && up.status < 400) {
+    } else if (up.image.test(path) && upRes.status < 400) {
       // Images are static per `tag` (Jellyfin's image tag changes with the image): with a tag the URL is immutable, without one
       // the browser revalidates after a day. Always private: never in shared caches such as NPM (access is per user).
       // Everything else (playlists, segments, streams) stays uncacheable unless Jellyfin says otherwise.
@@ -596,17 +624,17 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
       out['cache-control'] = (out['cache-control'] ?? 'no-store').replace(/\bpublic\b/i, 'private');
     }
 
-    if (playlist && up.status === 200) {
+    if (playlist && upRes.status === 200) {
       // buffered (<8 MB) so every URI can be checked: Jellyfin may emit api_key params or absolute URLs
-      const len = Number(up.headers.get('content-length') ?? 0);
+      const len = Number(upRes.headers.get('content-length') ?? 0);
       if (len > CAST_PLAYLIST_MAX) return end(res, 502, 'bad gateway', 'text/plain', extra);
       if (req.method === 'HEAD') {
         delete out['content-length'];
         res.writeHead(200, out);
         return void res.end();
       }
-      const buf = Buffer.from(await up.arrayBuffer());
-      const clean = buf.length > CAST_PLAYLIST_MAX ? null : sanitizePlaylist(buf.toString('utf8'), url.pathname);
+      const buf = Buffer.from(await upRes.arrayBuffer());
+      const clean = buf.length > CAST_PLAYLIST_MAX ? null : sanitizePlaylist(buf.toString('utf8'), url.pathname, up.stripQuery);
       if (clean === null) {
         countCode('502');
         return end(res, 502, 'bad gateway', 'text/plain', extra);
@@ -619,11 +647,11 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
       return void res.end(body);
     }
 
-    res.writeHead(up.status, out);
-    if (!up.body || req.method === 'HEAD') return void res.end();
+    res.writeHead(upRes.status, out);
+    if (!upRes.body || req.method === 'HEAD') return void res.end();
 
     m.active++;
-    const body = Readable.fromWeb(up.body as never);
+    const body = Readable.fromWeb(upRes.body as never);
     body.on('data', (c: Buffer) => { m.bytes += c.length; if (download) m.dlBytes += c.length; });
     const done = () => {
       m.active--;

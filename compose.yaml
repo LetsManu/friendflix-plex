@@ -70,6 +70,7 @@ services:
       OIDC_ISSUER: ${OIDC_ISSUER:?}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      MEDIA_SERVER: ${MEDIA_SERVER:-jellyfin}
       JELLYFIN_URL: ${JELLYFIN_URL:?}
       JELLYFIN_ADMIN_API_KEY: ${JELLYFIN_ADMIN_API_KEY:-}
       OIDC_ALLOW_INSECURE: ${OIDC_ALLOW_INSECURE:-false}
@@ -132,6 +133,7 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     environment:
+      MEDIA_SERVER: ${MEDIA_SERVER:-jellyfin}
       JELLYFIN_URL: ${JELLYFIN_URL:?}
       BACKEND_URL: http://backend:3000
       INTERNAL_SECRET: ${INTERNAL_SECRET:-}

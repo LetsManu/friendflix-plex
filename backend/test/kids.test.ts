@@ -80,10 +80,10 @@ const jfIdOf = async (profileId: string) => (await env.pool.query<{ j: string }>
 
 describe('kids profiles', () => {
   it('kidsPolicy: lower of role cap and kids cap, unrated hidden; a normal profile clears the unrated block', () => {
-    expect(kidsPolicy({ kids: true, kids_max_rating: 12 }, null)).toEqual({ MaxParentalRating: 12, BlockUnratedItems: ['Movie', 'Series', 'Trailer'] });
-    expect(kidsPolicy({ kids: true, kids_max_rating: 12 }, 6)).toMatchObject({ MaxParentalRating: 6 });
-    expect(kidsPolicy({ kids: true, kids_max_rating: 0 }, 12)).toMatchObject({ MaxParentalRating: 0 });
-    expect(kidsPolicy({ kids: false, kids_max_rating: 6 }, null)).toEqual({ BlockUnratedItems: [] });
+    expect(kidsPolicy({ kids: true, kids_max_rating: 12 }, null)).toEqual({ maxRating: 12, blockUnrated: ['Movie', 'Series', 'Trailer'] });
+    expect(kidsPolicy({ kids: true, kids_max_rating: 12 }, 6)).toMatchObject({ maxRating: 6 });
+    expect(kidsPolicy({ kids: true, kids_max_rating: 0 }, 12)).toMatchObject({ maxRating: 0 });
+    expect(kidsPolicy({ kids: false, kids_max_rating: 6 }, null)).toEqual({ blockUnrated: [] });
   });
 
   it('owner creates a kids profile; the cap reaches its Jellyfin user and filters items, detail and search server-side', async () => {

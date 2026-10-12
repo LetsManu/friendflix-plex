@@ -84,7 +84,7 @@ describe('JellyfinService.item() memo', () => {
     await svc.setFavorite(U1, B, true);
     await svc.item(U1, A);
     expect(itemCalls()).toBe(n + 1);
-    await svc.report(U1, 'Playing/Progress', { ItemId: A });
+    await svc.report(U1, { event: 'progress', itemId: A, mediaSourceId: 'ms', playSessionId: 'ps', positionTicks: 0, paused: false });
     await svc.item(U1, A);
     expect(itemCalls()).toBe(n + 2);
   });

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { FOOTER_COLUMNS } from '#lib/menu';
+  import { linkShown, serverCaps } from '#lib/capabilities';
   import Logo from '#lib/Logo.svelte';
   import { LOCALES, locale, t, type Locale } from '#lib/i18n';
   import { saveLanguage } from '#lib/stores';
@@ -20,7 +21,7 @@
     {#if !kids}
       <nav class="cols" aria-label={$t('shell.footer.more')}>
         {#each FOOTER_COLUMNS as col, i (i)}
-          <ul>{#each col as [href, label] (href)}<li><a {href}>{$t(label)}</a></li>{/each}</ul>
+          <ul>{#each col.filter(([href]) => linkShown($serverCaps, href)) as [href, label] (href)}<li><a {href}>{$t(label)}</a></li>{/each}</ul>
         {/each}
       </nav>
     {/if}

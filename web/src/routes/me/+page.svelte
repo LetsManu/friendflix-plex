@@ -5,6 +5,7 @@
   import Row from '#lib/Row.svelte';
   import { avatarBg, initial } from '#lib/avatars';
   import { groupLinks, linksFor } from '#lib/menu';
+  import { linkShown, serverCaps } from '#lib/capabilities';
   import { logout } from '#lib/session';
   import { goto } from '$app/navigation';
   import { locale, localeName, t, type TKey } from '#lib/i18n';
@@ -30,7 +31,7 @@
     try { await goto(`/item/${(await api('/api/library/random?type=Movie')).item.id}`); } catch { await goto('/browse/movies'); }
   }
   $: canDownload = Boolean(me?.downloads?.allowed);
-  $: groups = groupLinks(linksFor(canDownload));
+  $: groups = groupLinks(linksFor(canDownload).filter(([href]) => linkShown($serverCaps, href)));
   $: admin = Boolean(me?.isAdmin && me?.profile?.isOwner);
   $: shown = notes ? (allNotes ? notes : notes.slice(0, 5)) : [];
   $: tiles = [['/watchlist', 'shell.menu.myList', 'plus'], ...(canDownload ? [['/downloads', 'shell.menu.downloads', 'download']] : []), ['/lists', 'shell.menu.lists', 'list'], ['/history', 'shell.menu.history', 'calendar']] as Array<[string, TKey, string]>;

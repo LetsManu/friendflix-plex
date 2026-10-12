@@ -7,7 +7,7 @@ import { seerrHooks } from '../hooks.js';
 import { approvePoll, createPoll, InvalidOptions, pollTick, resolveRequestedPolls } from '../polls.js';
 import { m } from '../i18n.js';
 import { notify } from '../notify.js';
-import { JellyfinError } from '../jellyfin/client.js';
+import { MediaError } from '../media/types.js';
 import { SeerrError } from '../seerr/client.js';
 import { requireGrownUp } from '../kids.js';
 import { requireAdmin, requireUser } from '../session.js';
@@ -23,8 +23,8 @@ async function itemOr(ctx: Ctx, reply: FastifyReply, user: JfUser, id: string) {
   try {
     return await ctx.jf.item(user, id);
   } catch (e) {
-    if (e instanceof JellyfinError && (e.status === 404 || e.status === 400)) return void reply.code(404).send({ error: 'not_found' });
-    if (e instanceof JellyfinError && e.status === 403) return void reply.code(403).send({ error: 'forbidden' });
+    if (e instanceof MediaError && (e.status === 404 || e.status === 400)) return void reply.code(404).send({ error: 'not_found' });
+    if (e instanceof MediaError && e.status === 403) return void reply.code(403).send({ error: 'forbidden' });
     throw e;
   }
 }
@@ -51,7 +51,7 @@ export function pollRoutes(app: FastifyInstance, ctx: Ctx) {
     try {
       return { id: await createPoll(ctx, req.user!.id, b) };
     } catch (e) {
-      if (e instanceof InvalidOptions || (e instanceof JellyfinError && (e.status === 404 || e.status === 400 || e.status === 403)) || (e instanceof SeerrError && e.status === 404)) return reply.code(400).send({ error: 'invalid_options' });
+      if (e instanceof InvalidOptions || (e instanceof MediaError && (e.status === 404 || e.status === 400 || e.status === 403)) || (e instanceof SeerrError && e.status === 404)) return reply.code(400).send({ error: 'invalid_options' });
       throw e;
     }
   });

@@ -100,10 +100,10 @@ describe('invites', () => {
 
   it('a failed provisioning releases the invite', async () => {
     const token = (await adm('POST', '/api/admin/invites', { role: 'friend', ttlHours: 1 })).json().link.split('/').pop();
-    const orig = env.ctx.jf.client.createUser.bind(env.ctx.jf.client);
-    env.ctx.jf.client.createUser = async () => { throw new Error('jellyfin down'); };
+    const orig = env.ctx.jf.admin.createIdentity;
+    env.ctx.jf.admin.createIdentity = async () => { throw new Error('jellyfin down'); };
     expect((await inviteLogin(token, 'f1')).statusCode).toBe(401);
-    env.ctx.jf.client.createUser = orig;
+    env.ctx.jf.admin.createIdentity = orig;
     expect((await inviteLogin(token, 'f1')).statusCode).toBe(302);
   });
 

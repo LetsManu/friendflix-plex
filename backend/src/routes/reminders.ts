@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
 import { seerrHooks } from '../hooks.js';
-import { JellyfinError } from '../jellyfin/client.js';
+import { MediaError } from '../media/types.js';
 import { fireTmdb, isAvailableEpisode } from '../reminders.js';
 import { portalStatus, SeerrError } from '../seerr/client.js';
 import { requireGrownUp } from '../kids.js';
@@ -50,7 +50,7 @@ export function reminderRoutes(app: FastifyInstance, ctx: Ctx) {
       try {
         ep = await ctx.jf.item(req.jfUser!, b.episodeId);
       } catch (e) {
-        if (e instanceof JellyfinError && (e.status === 404 || e.status === 400 || e.status === 403)) return reply.code(404).send({ error: 'not_found' });
+        if (e instanceof MediaError && (e.status === 404 || e.status === 400 || e.status === 403)) return reply.code(404).send({ error: 'not_found' });
         throw e;
       }
       if (ep.type !== 'Episode') return reply.code(400).send({ error: 'not_an_episode' });

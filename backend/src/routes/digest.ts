@@ -5,7 +5,7 @@ import type { Ctx } from '../ctx.js';
 import { digestSchedule, sendDigest, type DigestData } from '../digest.js';
 import { requireGrownUp } from '../kids.js';
 import { requireAdmin } from '../session.js';
-import type { ItemDto } from '../jellyfin/dto.js';
+import type { ItemDto } from '../media/types.js';
 import type { JfUser } from '../types.js';
 
 /** Items the viewer's own Jellyfin user may see (library permissions of the active profile apply), by id. */

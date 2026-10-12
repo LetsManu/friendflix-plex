@@ -191,8 +191,7 @@ export async function resolveCast(ctx: Ctx, ct: string, client: string): Promise
       const jfUser = jfUserFor(user, prof);
       v = {
         userId: user.id,
-        token: await ctx.jf.token(jfUser),
-        deviceId: ctx.jf.deviceId(jfUser),
+        ...(await ctx.jf.mediaAuth(jfUser)),
         maxBitrate: Math.min(role.maxBitrate, rec.maxBitrate),
         maxHeight: Math.min(role.maxHeight ?? CAST_MAX_HEIGHT, CAST_MAX_HEIGHT),
         kind: rec.kind ?? 'media',

@@ -1,5 +1,7 @@
 # Changelog
 ## [Unreleased]
+### Media server seam (no behaviour change)
+- Jellyfin now sits behind a neutral `MediaServer` interface (`backend/src/media/`) and a gateway `Upstream` adapter (`gateway/src/upstream/`), selected by `MEDIA_SERVER` (default and only value: `jellyfin`). Capabilities are sent in `/api/me` (`server`) and `GET /api/server`; the web hides unsupported UI (Jellyfin supports everything). See docs/architecture.md.
 ### Browser-Fehler & E2E
 - Browser error reporting: `POST /api/client-errors` (unauthenticated, rate limited, logged scrubbed, counted in `friendflix_client_errors_total`), `web/src/lib/telemetry.ts` + `hooks.client.ts` (dedupe 60 s, max 10 per page load, extension/ResizeObserver noise filtered). See docs/monitoring.md.
 - Playwright browser tests in `e2e/` (API fully mocked, run against the built web app; `npm run e2e`) and an `e2e` CI job.

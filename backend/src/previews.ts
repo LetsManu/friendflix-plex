@@ -16,14 +16,14 @@ export async function serviceUser(ctx: Pick<Ctx, 'db'>): Promise<UserRow | undef
   return (await ctx.db.query<UserRow>("select * from users where role = 'admin' and not disabled order by created_at limit 1")).rows[0];
 }
 
-/** Resolves a (possibly relative) playlist URI against the playlist's own path; returns path + query for ctx.jf.call. */
+/** Resolves a (possibly relative) playlist URI against the playlist's own path; returns path + query for ctx.jf.mediaFetch. */
 function resolve(base: string, uri: string): string {
   const u = new URL(uri, new URL(base, 'http://jf.invalid'));
   return u.pathname + u.search;
 }
 
 async function fetchOk(ctx: Ctx, user: UserRow, path: string): Promise<Response> {
-  const res = await ctx.jf.call(user, path);
+  const res = await ctx.jf.mediaFetch(user, path);
   if (!res.ok) throw new Error(`Jellyfin ${path.split('?')[0]} -> ${res.status}`);
   return res;
 }
@@ -52,16 +52,10 @@ async function build(ctx: Ctx, user: UserRow, id: string): Promise<{ bytes: numb
   const src = await pickSource(ctx, user, id);
   if (!src) throw new Error('no source');
   const info = await ctx.jf.playbackInfo(user, src.videoId, { maxBitrate: 1_500_000 });
-  const master = new URL(info.hlsUrl.replace(/^\/media/, ''), 'http://jf.invalid');
-  const q = master.searchParams;
   const audio = pickPreviewAudio(info.audioTracks);
-  if (audio) q.set('AudioStreamIndex', String(audio.index));
-  for (const [k, v] of Object.entries({
-    SegmentContainer: 'mp4', VideoCodec: 'h264', AudioCodec: 'aac', AllowVideoStreamCopy: 'false', AllowAudioStreamCopy: 'false',
-    VideoBitrate: '1200000', AudioBitrate: '128000', MaxWidth: '1280', TranscodingMaxAudioChannels: '2', MaxStreamingBitrate: '1500000',
-  })) q.set(k, v);
-  const masterPath = master.pathname + master.search;
-  const encoding = { deviceId: ctx.jf.deviceId(user), playSessionId: q.get('PlaySessionId') ?? info.playSessionId };
+  const { path: masterPath, playSessionId } = await ctx.jf.clipTranscode(user, info, {
+    audioIndex: audio?.index, fmp4: true, videoBitrate: 1_200_000, audioBitrate: 128_000, maxWidth: 1280, stereo: true, maxBitrate: 1_500_000,
+  });
   try {
     const lines = (p: string) => p.split(/\r?\n/).map((l) => l.trim());
     const variant = lines(await (await fetchOk(ctx, user, masterPath)).text()).find((l) => l && !l.startsWith('#'));
@@ -83,7 +77,7 @@ async function build(ctx: Ctx, user: UserRow, id: string): Promise<{ bytes: numb
     await rename(tmp, file);
     return { bytes: out.length, audioLang: audio ? lang(audio) || null : null };
   } finally {
-    await ctx.jf.call(user, `/Videos/ActiveEncodings?${new URLSearchParams(encoding)}`, { method: 'DELETE' }).catch(() => undefined);
+    await ctx.jf.stopEncoding(user, playSessionId);
   }
 }
 

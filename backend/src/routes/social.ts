@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
-import type { ItemDto } from '../jellyfin/dto.js';
+import type { ItemDto } from '../media/types.js';
 import { requireGrownUp } from '../kids.js';
 import { requireUser } from '../session.js';
 import type { UserRow } from '../types.js';
