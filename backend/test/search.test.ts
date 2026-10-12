@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { makeEnv, type TestEnv } from './helpers.js';
 
 const P = 'a'.repeat(32), HID = 'b'.repeat(32), MOV = 'c'.repeat(32), SER = 'd'.repeat(32), EP = 'e'.repeat(32), NOITEMS = 'f'.repeat(32), FILM = '1'.repeat(32);
-const movie = { Id: MOV, Name: 'Alien', Type: 'Movie', ProductionYear: 1979, CommunityRating: 8.4, Genres: ['Horror'] };
+const movie = { Id: MOV, Name: 'Ashfall', Type: 'Movie', ProductionYear: 1979, CommunityRating: 8.4, Genres: ['Horror'] };
 let env: TestEnv;
 let s: { cookies: Record<string, string>; csrf: string };
 const fail = new Set<string>(); // which sub-requests answer 500
@@ -14,10 +14,10 @@ beforeAll(async () => {
     'GET /Items': (u) => {
       const t = u.searchParams.get('includeItemTypes');
       if (fail.has(t ?? '')) return { status: 500 };
-      if (t === 'Episode') return { json: { Items: [{ Id: EP, Name: 'Alien Folge', Type: 'Episode' }] } };
+      if (t === 'Episode') return { json: { Items: [{ Id: EP, Name: 'Ashfall Folge', Type: 'Episode' }] } };
       if (u.searchParams.get('personIds') === NOITEMS) return { json: { Items: [] } };
       if (u.searchParams.get('personIds')) return { json: { Items: [movie] } };
-      return { json: { Items: [movie, { Id: SER, Name: 'Alien Serie', Type: 'Series' }], TotalRecordCount: 2 } };
+      return { json: { Items: [movie, { Id: SER, Name: 'Ashfall Serie', Type: 'Series' }], TotalRecordCount: 2 } };
     },
     'GET /Persons': () => (fail.has('Persons') ? { status: 500 } : { json: { Items: [{ Id: P, Name: 'Sigourney', ImageTags: { Primary: 'x' } }, { Id: HID, Name: 'Sig Zwei' }] } }),
     'GET /Genres': () => { genreHits++; return fail.has('Genres') ? { status: 500 } : { json: { Items: genres.map((Name) => ({ Name })) } }; },
@@ -36,16 +36,16 @@ const get = (url: string) => env.app.inject({ url, cookies: s.cookies });
 
 describe('GET /api/search', () => {
   it('returns grouped results', async () => {
-    const r = await get('/api/search?q=Alien');
+    const r = await get('/api/search?q=Ashfall');
     expect(r.statusCode).toBe(200);
     const b = r.json();
-    expect(b.q).toBe('Alien');
-    expect(b.titles.map((i: any) => i.name)).toEqual(['Alien', 'Alien Serie']);
+    expect(b.q).toBe('Ashfall');
+    expect(b.titles.map((i: any) => i.name)).toEqual(['Ashfall', 'Ashfall Serie']);
     expect(b.episodes.map((i: any) => i.id)).toEqual([EP]);
     expect(b.people).toEqual([{ id: P, name: 'Sigourney', image: true }, { id: HID, name: 'Sig Zwei', image: false }]);
     expect(b.genres).toEqual([]);
     expect(b.partial).toBe(false);
-    const c = env.jfCalls.filter((x) => x.path === '/Items' && x.search.includes('searchTerm=Alien'));
+    const c = env.jfCalls.filter((x) => x.path === '/Items' && x.search.includes('searchTerm=Ashfall'));
     expect(c.some((x) => x.search.includes('limit=24') && x.search.includes('Movie%2CSeries'))).toBe(true);
     expect(c.some((x) => x.search.includes('limit=8') && x.search.includes('includeItemTypes=Episode'))).toBe(true);
     expect(env.jfCalls.some((x) => x.path === '/Persons' && x.search.includes('limit=12') && x.search.includes('userId='))).toBe(true);
@@ -76,7 +76,7 @@ describe('GET /api/search', () => {
 
   it('partial when one sub-request fails', async () => {
     fail.add('Episode');
-    const b = (await get('/api/search?q=Alien')).json();
+    const b = (await get('/api/search?q=Ashfall')).json();
     fail.clear();
     expect(b.partial).toBe(true);
     expect(b.episodes).toEqual([]);
@@ -86,7 +86,7 @@ describe('GET /api/search', () => {
   it('502 when everything fails', async () => {
     for (const k of ['Movie,Series', 'Episode', 'Persons', 'Genres']) fail.add(k);
     await env.kv.del(`genres:${(await env.pool.query('select jellyfin_user_id j from users limit 1')).rows[0].j}:Movie,Series`);
-    const r = await get('/api/search?q=Alien');
+    const r = await get('/api/search?q=Ashfall');
     fail.clear();
     expect(r.statusCode).toBe(502);
     expect(r.json().error).toBe('jellyfin');
@@ -97,7 +97,7 @@ describe('GET /api/search', () => {
     expect((await get('/api/search?q=%20a%20')).statusCode).toBe(400);
     expect((await get('/api/search')).statusCode).toBe(400);
     expect((await get(`/api/search?q=${'x'.repeat(101)}`)).statusCode).toBe(400);
-    expect((await env.app.inject('/api/search?q=Alien')).statusCode).toBe(401);
+    expect((await env.app.inject('/api/search?q=Ashfall')).statusCode).toBe(401);
   });
 });
 

@@ -9,7 +9,7 @@ test.describe('home (phone 390x844)', () => {
     await expect(tabbar.getByRole('link')).not.toHaveCount(0);
     await expect(page.getByRole('navigation', { name: 'Hauptnavigation' })).toBeHidden();
 
-    const because = row(page, 'Weil du „Inception“ gesehen hast');
+    const because = row(page, 'Weil du „Inkwell“ gesehen hast');
     await because.scrollIntoViewIfNeeded();
     await expect(because.locator('.pc').first()).toBeVisible();
     // Weiterschauen keeps 16:9 cards on the phone

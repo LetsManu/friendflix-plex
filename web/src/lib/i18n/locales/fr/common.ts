@@ -30,8 +30,8 @@ const fr: Translation<typeof de> = {
   duration: { hm: '{h} h {m} min', h: '{h} h', m: '{m} min', s: '{s} s' },
   rating: {
     rate: 'Noter',
-    notForMe: 'Pas pour moi',
-    like: 'J’aime',
+    notForMe: 'Bof',
+    like: 'Bien',
     love: 'J’adore !',
     rated: 'Noté : {label} – modifier la note',
     remove: '{label} (supprimer la note)',

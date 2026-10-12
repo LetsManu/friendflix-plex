@@ -191,14 +191,14 @@ const es: Translation<typeof de> = {
     empty: 'Aún no hay nada aquí. Marca títulos con el corazón para reunirlos aquí.',
   },
   watchlist: {
-    title: 'Mi lista',
+    title: 'Guardados',
     tabs: { planned: 'Pendientes', dropped: 'Abandonados' },
     tabsAria: 'Tipo de lista',
     saveFailed: 'No se pudo guardar.',
     emptyPlanned: 'Aún no hay nada aquí. Añade títulos con el signo más.',
     emptyDropped: 'No hay títulos abandonados. Desaparecen de «Continuar viendo», pero se conservan aquí.',
     confirmAria: '¿Quitar «{name}»?',
-    confirm: '¿Quitar «{name}» por completo de Mi lista?',
+    confirm: '¿Quitar «{name}» por completo de Guardados?',
     yesRemove: 'Sí, quitar',
     restore: 'Retomar',
     removeAria: 'Quitar {name}',
@@ -217,7 +217,7 @@ const es: Translation<typeof de> = {
     wholeSeries: 'Toda la serie',
   },
   stats: {
-    title: 'Tu Wrapped',
+    title: 'Tu resumen del año',
     share: 'Compartir como imagen',
     watched: 'visto',
     distinctTitles: 'títulos distintos',
@@ -245,7 +245,7 @@ const es: Translation<typeof de> = {
     },
   },
   wrapped: {
-    heading: 'Wrapped {year}',
+    heading: 'Resumen del año {year}',
     hoursUnit: 'h',
     minutesRest: '{m} min',
     watched: 'visto',
@@ -254,7 +254,7 @@ const es: Translation<typeof de> = {
     top3: 'MI TOP 3',
     minutes: '{n} min',
     achievements: '{earned} de {total} logros desbloqueados',
-    shareTitle: 'Mi Wrapped de FriendFlix {year}',
+    shareTitle: 'Mi resumen del año en FriendFlix {year}',
   },
   digest: {
     title: 'Resumen semanal',

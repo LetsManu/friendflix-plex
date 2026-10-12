@@ -4,13 +4,13 @@ import { row } from '../helpers.js';
 test.describe('preview sheet (phone)', () => {
   test('tapping a poster opens the preview sheet; Escape closes it and returns focus', async ({ page }) => {
     await page.goto('/');
-    const poster = row(page, 'Weil du „Inception“ gesehen hast').locator('.pc a').first();
+    const poster = row(page, 'Weil du „Inkwell“ gesehen hast').locator('.pc a').first();
     await poster.scrollIntoViewIfNeeded();
     await poster.tap();
 
     const sheet = page.getByRole('dialog', { name: /^Vorschau: / });
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByRole('heading', { level: 2, name: 'Interstellar' })).toBeVisible();
+    await expect(sheet.getByRole('heading', { level: 2, name: 'Interlace' })).toBeVisible();
     await expect(page).toHaveURL(/\/$/); // the sheet does not navigate
     await expect(sheet.getByRole('button', { name: 'Schließen' })).toBeFocused();
 
@@ -21,7 +21,7 @@ test.describe('preview sheet (phone)', () => {
 
   test('the close button and the backdrop dismiss the sheet', async ({ page }) => {
     await page.goto('/');
-    const poster = row(page, 'Weil du „Inception“ gesehen hast').locator('.pc a').first();
+    const poster = row(page, 'Weil du „Inkwell“ gesehen hast').locator('.pc a').first();
     await poster.scrollIntoViewIfNeeded();
     const sheet = page.getByRole('dialog', { name: /^Vorschau: / });
 

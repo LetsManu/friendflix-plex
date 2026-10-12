@@ -223,7 +223,7 @@
   .health ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: .6rem; }
   .health a, .hsk { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; min-height: 64px; padding: .7rem .9rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; transition: background var(--t-fast); }
   .hsk { flex-direction: column; align-items: flex-start; justify-content: center; }
-  .health a:hover { background: #202020; }
+  .health a:hover { background: #1b2127; }
   .hi { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.08); flex: none; }
   .hl { flex: 1; min-width: 6rem; font-weight: 600; font-size: .92rem; }
 

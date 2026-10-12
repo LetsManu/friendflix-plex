@@ -93,7 +93,7 @@
 <style>
   .me { max-width: 1000px; margin: 0 auto; }
   .prof { display: flex; align-items: center; gap: 1.1rem; padding: .6rem 0 1.2rem; }
-  .face { width: 72px; height: 72px; flex: none; border-radius: 8px; display: grid; place-items: center; font-size: 2rem; font-weight: 800; box-shadow: 0 0 0 1px rgba(255,255,255,.12); background: linear-gradient(135deg, #ff3b52, #7a0a17); }
+  .face { width: 72px; height: 72px; flex: none; border-radius: 24%; display: grid; place-items: center; font-size: 2rem; font-weight: 800; box-shadow: 0 0 0 1px rgba(255,255,255,.12); background: linear-gradient(135deg, #ff6b81, #9a2440); }
   .who { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; gap: .1rem; }
   .who b { font-size: 1.4rem; line-height: 1.2; overflow-wrap: anywhere; }
   .sk { width: 9rem; height: 1.6rem; }
@@ -108,7 +108,7 @@
   .rowbtn { width: 100%; display: flex; align-items: center; justify-content: flex-start; gap: .8rem; min-height: 48px; padding: .5rem 1rem; background: transparent; border-radius: 0; font-weight: 400; color: inherit; }
   .rowbtn:hover:not(:disabled) { background: rgba(255,255,255,.05); }
   .rowbtn :global(svg:last-child) { margin-left: auto; color: var(--mut); }
-  .tiles2 a:hover { background: #363636; }
+  .tiles2 a:hover { background: #2e363f; }
   .ti { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.08); }
   section { margin-bottom: 1.4rem; }
   .sech { display: flex; align-items: baseline; justify-content: space-between; }
@@ -132,6 +132,6 @@
   .groups { display: grid; grid-template-columns: 1fr; gap: 0; }
   @media (min-width: 900px) { .groups { grid-template-columns: repeat(3, 1fr); gap: 1.2rem; align-items: start; } }
   .out { width: 100%; justify-content: flex-start; gap: .8rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-height: 52px; padding: 0 1rem; color: #fff; margin-top: .2rem; }
-  .out:hover:not(:disabled) { background: #262626; }
+  .out:hover:not(:disabled) { background: #20262d; }
   @media (min-width: 900px) { .out { width: auto; } }
 </style>

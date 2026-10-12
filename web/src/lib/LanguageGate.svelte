@@ -4,7 +4,7 @@
   import Logo from '#lib/Logo.svelte';
 
   /**
-   * Language choice shown once (Netflix-like, full screen):
+   * Language choice shown once (full screen):
    * - `instance`: first admin visit without a stored instance default (bilingual title, not skippable)
    * - `profile`: first login of a profile without a stored language (skippable: keeps the instance default)
    * The texts of the picker preview the highlighted language.
@@ -65,16 +65,16 @@
 </div>
 
 <style>
-  .lg { position: fixed; inset: 0; z-index: 120; background: var(--bg, #141414); overflow-y: auto; display: grid; place-items: center; padding: 4.5rem var(--pad-x) 2rem; }
+  .lg { position: fixed; inset: 0; z-index: 120; background: var(--bg, #101418); overflow-y: auto; display: grid; place-items: center; padding: 4.5rem var(--pad-x) 2rem; }
   .brand { position: absolute; top: 1.2rem; left: var(--pad-x); display: inline-flex; }
   .inner { width: min(760px, 100%); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
   h1 { font-size: clamp(1.7rem, 4vw, 2.8rem); font-weight: 500; margin: 0; }
   .en { color: var(--mut); }
   p { margin: 0; max-width: 560px; line-height: 1.5; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .7rem; width: 100%; margin-top: .8rem; }
-  .opt { position: relative; flex-direction: column; gap: .2rem; min-height: 84px; background: var(--surface-2, #2a2a2a); border: 2px solid transparent; border-radius: 8px; color: #e5e5e5; font-size: 1.15rem; font-weight: 600; }
-  .opt:hover:not(:disabled) { background: #363636; }
-  .opt.on, .opt.on:hover:not(:disabled) { border-color: #fff; background: #3a3a3a; color: #fff; }
+  .opt { position: relative; flex-direction: column; gap: .2rem; min-height: 84px; background: var(--surface-2, #242b33); border: 2px solid transparent; border-radius: 8px; color: #e5e5e5; font-size: 1.15rem; font-weight: 600; }
+  .opt:hover:not(:disabled) { background: #2e363f; }
+  .opt.on, .opt.on:hover:not(:disabled) { border-color: #fff; background: #323a43; color: #fff; }
   .opt:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
   .code { font-size: .72rem; letter-spacing: .12em; color: var(--mut); font-weight: 500; }
   .acts { display: flex; gap: .8rem; flex-wrap: wrap; justify-content: center; margin-top: .8rem; }

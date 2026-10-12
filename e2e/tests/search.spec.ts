@@ -17,15 +17,15 @@ test.describe('search', () => {
     await expect(input).toHaveValue('nolan');
     await expect(input).toBeFocused();
     await expect(page).toHaveURL(/\/search\?q=nolan$/);
-    await expect(page.getByRole('link', { name: 'Christopher Nolan' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Carl Norden' })).toBeVisible();
     await expect(page.locator('section[aria-labelledby="st"] article.card')).toHaveCount(6);
 
     // keep typing: a longer query replaces the results, input is still intact
     await input.fill('');
-    await input.pressSequentially('dark', { delay: 40 });
-    await expect(page).toHaveURL(/q=dark$/);
-    await expect(page.locator('section[aria-labelledby="st"] article.card')).toHaveCount(2); // "The Dark Knight", "Dark"
-    await expect(input).toHaveValue('dark');
+    await input.pressSequentially('dahl', { delay: 40 });
+    await expect(page).toHaveURL(/q=dahl$/);
+    await expect(page.locator('section[aria-labelledby="st"] article.card')).toHaveCount(1); // "Dahlia"
+    await expect(input).toHaveValue('dahl');
 
     await input.press('Escape');
     await expect(input).toHaveValue('');

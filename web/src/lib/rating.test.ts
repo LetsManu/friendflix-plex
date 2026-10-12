@@ -11,9 +11,9 @@ describe('rating', () => {
     expect(nextThumb(0, 2)).toBe(2); expect(nextThumb(1, -1)).toBe(-1);
   });
   it('labels and focus', () => {
-    expect(RATING_OPTIONS.map((o) => o.label)).toEqual(['Nicht mein Fall', 'Gefällt mir', 'Super']);
+    expect(RATING_OPTIONS.map((o) => o.label)).toEqual(['Naja', 'Gut', 'Geliebt']);
     expect(thumbLabel(0)).toBe('Bewerten');
-    expect(thumbLabel(2)).toContain('Super');
+    expect(thumbLabel(2)).toContain('Geliebt');
     expect(focusIndex(0)).toBe(1); expect(focusIndex(-1)).toBe(0); expect(focusIndex(2)).toBe(2);
   });
 });

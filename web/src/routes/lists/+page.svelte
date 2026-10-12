@@ -116,8 +116,8 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-top: 1rem; }
   .list { display: block; background: var(--surface); border-radius: var(--radius); overflow: hidden; color: inherit; text-decoration: none; }
   .list:hover, .list:focus-visible { outline: 2px solid var(--acc); }
-  .mosaic { display: grid; grid-template-columns: 1fr 1fr; aspect-ratio: 16 / 9; background: #1a1a1a; }
-  .mosaic img, .mosaic span { width: 100%; height: 100%; object-fit: cover; display: block; background: #262626; }
+  .mosaic { display: grid; grid-template-columns: 1fr 1fr; aspect-ratio: 16 / 9; background: #151a20; }
+  .mosaic img, .mosaic span { width: 100%; height: 100%; object-fit: cover; display: block; background: #20262d; }
   .info { padding: .7rem .8rem .9rem; }
   .badge { margin-left: .4rem; font-size: .72rem; border: 1px solid rgba(255,255,255,.4); padding: 0 .4rem; border-radius: 3px; }
   .muted { color: var(--mut); font-size: .85rem; margin-top: .25rem; }
@@ -126,7 +126,7 @@
   .emo-in { width: 5rem; text-align: center; font-size: 1.2rem; }
   .swatches { display: flex; gap: .45rem; flex-wrap: wrap; align-items: center; }
   .sw { width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
-  .sw.on { border-color: #fff; box-shadow: 0 0 0 2px var(--acc, #e50914); }
+  .sw.on { border-color: #fff; box-shadow: 0 0 0 2px var(--acc, #ff4f6d); }
   .mosaic { position: relative; }
   .mosaic .tcover { position: absolute; inset: auto 0 0 auto; width: auto; height: auto; padding: .15rem .55rem; border-radius: 8px 0 0 0; font-size: 1.3rem; line-height: 1.4; }
   .manage { margin-top: 2.5rem; max-width: 760px; } .manage h2 { margin: 0 0 .3rem; font-size: 1.15rem; }

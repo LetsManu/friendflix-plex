@@ -88,7 +88,7 @@
   .muted { opacity: .8; }
   .grp { width: min(40rem, 100%); text-align: left; display: flex; flex-direction: column; gap: .5rem; margin-top: 1rem; }
   h2 { margin: 0 0 .25rem; font-size: 1.1rem; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem .9rem; border: 1px solid #333; border-radius: 6px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem .9rem; border: 1px solid #2b333c; border-radius: 6px; }
   .meta { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
   .warn { color: #ffb347; font-size: .85rem; }
   .flex { display: flex; gap: .6rem; }

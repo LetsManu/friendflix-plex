@@ -88,7 +88,7 @@
   .seasonbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .6rem; }
   h2 { margin: 0; font-size: 1.4rem; }
   .sel { position: relative; display: inline-block; }
-  select { appearance: none; -webkit-appearance: none; background: #242424; border: 1px solid #4d4d4d; padding-right: 2.2rem; font-weight: 600; cursor: pointer; }
+  select { appearance: none; -webkit-appearance: none; background: #1f262c; border: 1px solid #3c4650; padding-right: 2.2rem; font-weight: 600; cursor: pointer; }
   select:hover { border-color: #fff; }
   .chev { position: absolute; right: .7rem; top: 50%; transform: translateY(-50%); pointer-events: none; }
   ol { list-style: none; padding: 0; margin: 0; }
@@ -99,9 +99,9 @@
   .eprow:last-child { border-bottom: 0; }
   .eprow.cur { background: rgba(255, 255, 255, .06); box-shadow: inset 3px 0 0 var(--acc); border-radius: 4px; }
   .ep { display: grid; grid-template-columns: 2.6rem 160px 1fr auto; gap: 1rem; align-items: center; padding: 1rem .8rem; border-radius: 4px; transition: background var(--t-fast); }
-  .ep:hover { background: #2a2a2a; }
+  .ep:hover { background: #242b33; }
   .n { font-size: 1.6rem; color: var(--mut); text-align: center; font-weight: 300; }
-  .th { position: relative; aspect-ratio: 16 / 9; background: #222; border-radius: 4px; overflow: hidden; display: block; }
+  .th { position: relative; aspect-ratio: 16 / 9; background: #1c2228; border-radius: 4px; overflow: hidden; display: block; }
   .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .th img.spoil { filter: blur(14px); transform: scale(1.1); }
   .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255, 255, 255, .3); }

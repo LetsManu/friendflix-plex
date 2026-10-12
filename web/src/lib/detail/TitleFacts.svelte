@@ -28,7 +28,7 @@
 <style>
   .tf { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin: .1rem 0 .5rem; }
   .tf :global(.qc) { margin: 0; }
-  .pill { padding: .1rem .5rem; border-radius: 3px; background: var(--acc); color: #fff; font-size: .72rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+  .pill { padding: .1rem .5rem; border-radius: 3px; background: var(--acc-fill); color: #fff; font-size: .72rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
   .pill.leave { background: #b3261e; }
   .until { color: var(--mut); font-size: .85rem; }
 </style>

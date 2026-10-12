@@ -11,8 +11,8 @@ const it: Translation<typeof de> = {
     home: 'Home',
     series: 'Serie TV',
     movies: 'Film',
-    new: 'Nuovi e popolari',
-    myList: 'La mia lista',
+    new: 'Nuovi e in arrivo',
+    myList: 'Watchlist',
     categories: 'Categorie',
   },
   mobile: {
@@ -21,8 +21,8 @@ const it: Translation<typeof de> = {
     forName: 'Per {name}',
     search: 'Cerca',
     downloads: 'Download',
-    me: 'Il mio FriendFlix',
-    meUnread: { one: 'Il mio FriendFlix, {n} nuova notifica', many: 'Il mio FriendFlix, {n} nuove notifiche', other: 'Il mio FriendFlix, {n} nuove notifiche' },
+    me: 'Il mio spazio',
+    meUnread: { one: 'Il mio spazio, {n} nuova notifica', many: 'Il mio spazio, {n} nuove notifiche', other: 'Il mio spazio, {n} nuove notifiche' },
     tabbar: 'Navigazione mobile',
   },
   cats: {
@@ -50,12 +50,12 @@ const it: Translation<typeof de> = {
     labelWho: 'Menu del profilo ({name})',
     loadingProfiles: 'Caricamento profili…',
     withPin: 'con PIN',
-    manageProfiles: 'Gestisci profili',
+    manageProfiles: 'Modifica profili',
     logout: 'Esci da FriendFlix',
   },
   menu: {
-    me: 'Il mio FriendFlix',
-    myList: 'La mia lista',
+    me: 'Il mio spazio',
+    myList: 'Watchlist',
     tonight: 'Stasera',
     favorites: 'Preferiti',
     lists: 'Liste',
@@ -68,7 +68,7 @@ const it: Translation<typeof de> = {
     vote: 'Serata film',
     now: 'In riproduzione',
     calendar: 'Calendario',
-    stats: 'Wrapped',
+    stats: 'Riepilogo dell’anno',
     remote: 'Telecomando',
     settings: 'Impostazioni',
     accountSettings: 'Account e impostazioni',
@@ -82,8 +82,8 @@ const it: Translation<typeof de> = {
   },
   tabs: {
     home: 'Home',
-    new: 'Nuovi e popolari',
-    me: 'Il mio FriendFlix',
+    new: 'Nuovi e in arrivo',
+    me: 'Il mio spazio',
   },
   offline: {
     bar: 'Sei offline.',
@@ -124,7 +124,7 @@ const it: Translation<typeof de> = {
     languageT: 'Lingua',
     languageD: 'La lingua di FriendFlix si imposta per ogni profilo in <a href="/settings#language">Impostazioni</a>.',
     moreT: 'Tutto il resto',
-    moreD: 'Liste, watch party, serata film, calendario, richieste e impostazioni si trovano in <a href="/me">Il mio FriendFlix</a>.',
+    moreD: 'Liste, watch party, serata film, calendario, richieste e impostazioni si trovano in <a href="/me">Il mio spazio</a>.',
   },
 };
 export default it;

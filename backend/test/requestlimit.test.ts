@@ -14,7 +14,7 @@ beforeAll(async () => {
     seerr: {
       'GET /api/v1/user': () => ({ json: { results: [...imported].map((j, i) => ({ id: 10 + i, jellyfinUserId: j })) } }),
       'POST /api/v1/user/import-from-jellyfin': (_u, _i, b) => { imported.add(b.jellyfinUserIds[0]); return { json: [{ id: 9 }] }; },
-      'GET /api/v1/movie/\\d+': () => ({ json: { title: 'Dune', posterPath: '/dune.jpg' } }),
+      'GET /api/v1/movie/\\d+': () => ({ json: { title: 'Dunmoor', posterPath: '/dune.jpg' } }),
       'POST /api/v1/request': () => (fail ? { status: 500, json: {} } : { json: { id: ++rid, status: 1, media: { status: 2 } } }),
     },
   });

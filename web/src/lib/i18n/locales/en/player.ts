@@ -167,7 +167,7 @@ const en: Translation<typeof de> = {
   },
   watch: {
     back: 'Back',
-    stillTitle: 'Are you still watching?',
+    stillTitle: 'Still there?',
     stillText: 'Autoplay is paused. Up next: {ep}',
     keepWatching: 'Continue watching',
     next: 'Next episode',

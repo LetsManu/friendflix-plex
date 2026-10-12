@@ -51,7 +51,7 @@ export const COVER_COLORS = ['#7a1f3d', '#a33b20', '#9a6a00', '#2f6b3a', '#1f5f7
 /** CSS gradient for the header / row accent of a themed list (neutral dark when no colour is set). */
 export const coverGradient = (color: string | null | undefined): string => {
   const c = color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#3d4450';
-  return `linear-gradient(135deg, ${c} 0%, color-mix(in srgb, ${c} 45%, #141414) 55%, #141414 100%)`;
+  return `linear-gradient(135deg, ${c} 0%, color-mix(in srgb, ${c} 45%, #101418) 55%, #101418 100%)`;
 };
 /** Moves entry `from` to `to` (returns a new array). */
 export function moveItem<T>(a: readonly T[], from: number, to: number): T[] {

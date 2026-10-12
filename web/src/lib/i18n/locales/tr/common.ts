@@ -30,9 +30,9 @@ const tr: Translation<typeof de> = {
   duration: { hm: '{h} sa {m} dk', h: '{h} sa', m: '{m} dk', s: '{s} sn' },
   rating: {
     rate: 'Puanla',
-    notForMe: 'Bana göre değil',
-    like: 'Beğendim',
-    love: 'Harika',
+    notForMe: 'İdare eder',
+    like: 'İyi',
+    love: 'Bayıldım',
     rated: 'Puanın: {label} – puanı değiştir',
     remove: '{label} (puanı kaldır)',
     saveFailed: 'Puan kaydedilemedi.',

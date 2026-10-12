@@ -5,21 +5,21 @@ import { row } from '../helpers.js';
 test.describe('home: more "Weil du ... geschaut hast" rows', () => {
   test('are interleaved between the other rows, not stacked, and never repeat titles of the first rows', async ({ page }) => {
     const rows = [
-      { because: { id: 'a', name: 'Dune' }, items: items.slice(3, 7) },
-      { because: { id: 'b', name: 'Arrival' }, items: items.slice(7, 12) }, // items[8] is the series of a "Weiterschauen" episode and dropped: 4 titles are left
-      { because: { id: 'c', name: 'Tenet' }, items: items.slice(0, 4) }, // < 4 titles are left once duplicates are removed: hidden
+      { because: { id: 'a', name: 'Dunmoor' }, items: items.slice(3, 7) },
+      { because: { id: 'b', name: 'Arbor' }, items: items.slice(7, 12) }, // items[8] is the series of a "Weiterschauen" episode and dropped: 4 titles are left
+      { because: { id: 'c', name: 'Tamarind' }, items: items.slice(0, 4) }, // < 4 titles are left once duplicates are removed: hidden
     ];
     await page.route('**/api/hubs', (r) => r.fulfill({ json: { hubs: [] } })); // brand hubs are covered by their own spec
-    await page.route('**/api/library/because', (r) => r.fulfill({ json: { because: { name: 'Inception' }, items: items.slice(0, 2) } }));
+    await page.route('**/api/library/because', (r) => r.fulfill({ json: { because: { name: 'Inkwell' }, items: items.slice(0, 2) } }));
     await page.route('**/api/library/because-more', (r) => r.fulfill({ json: { rows } }));
     await page.goto('/');
-    const a = row(page, 'Weil du „Dune“ geschaut hast'), b = row(page, 'Weil du „Arrival“ geschaut hast');
+    const a = row(page, 'Weil du „Dunmoor“ geschaut hast'), b = row(page, 'Weil du „Arbor“ geschaut hast');
     await expect(a).toBeAttached();
     await expect(b).toBeAttached();
-    await expect(row(page, 'Weil du „Tenet“ geschaut hast')).toHaveCount(0);
+    await expect(row(page, 'Weil du „Tamarind“ geschaut hast')).toHaveCount(0);
     // rows are separated by at least one other row
     const order = await page.locator('section.row h2').allTextContents();
-    const i = order.findIndex((x) => x.includes('Dune')), j = order.findIndex((x) => x.includes('Arrival'));
+    const i = order.findIndex((x) => x.includes('Dunmoor')), j = order.findIndex((x) => x.includes('Arbor'));
     expect(j - i).toBeGreaterThan(1);
     // the extra rows never repeat titles of "Weiterschauen" (item 3 is in there)
     await expect(a.getByRole('link', { name: new RegExp(items[2]!.name) })).toHaveCount(0);

@@ -1,5 +1,5 @@
 /**
- * Area "home": home page, rows, billboard, cards, hover pop-out, phone preview sheet, Neu & beliebt, browse, library,
+ * Area "home": home page, rows, billboard, cards, hover pop-out, phone preview sheet, Neu & demnächst, browse, library,
  * collections, search. German is the typed source (see docs/i18n.md).
  */
 export default {
@@ -19,10 +19,10 @@ export default {
     preview: 'Vorschau: {name}',
     actionsFor: 'Aktionen für {name}',
     moreActionsFor: 'Mehr Aktionen für {name}',
-    myList: 'Meine Liste',
-    addToList: 'Zu Meine Liste',
-    addToListLong: 'Zu Meine Liste hinzufügen',
-    removeFromList: 'Von Meine Liste entfernen',
+    myList: 'Merkliste',
+    addToList: 'Zur Merkliste',
+    addToListLong: 'Zur Merkliste hinzufügen',
+    removeFromList: 'Von der Merkliste entfernen',
     favAdd: 'Als Favorit markieren',
     favRemove: 'Favorit entfernen',
     removeResume: 'Aus Weiterschauen entfernen',
@@ -50,7 +50,7 @@ export default {
   hero: {
     label: 'Empfehlung',
     rankTop10: 'in den Top 10 nach Bewertung',
-    match: '{pct}% Match',
+    match: '{pct} % für dich',
     moreInfo: 'Weitere Infos',
     replay: 'Vorschau erneut abspielen',
     replayTitle: 'Erneut abspielen',
@@ -71,12 +71,12 @@ export default {
     latest: 'Neu hinzugefügt',
     trending: 'Diese Woche bei uns',
     featured: '{name} · Empfohlen von {owner}',
-    myList: 'Meine Liste',
+    myList: 'Merkliste',
     upcomingWish: 'Demnächst – jetzt wünschen',
     top10: 'Top 10 nach Bewertung',
     libraryFailed: 'Bibliothek konnte nicht geladen werden.',
   },
-  /** upcoming releases (UpcomingRow, Neu & beliebt) */
+  /** upcoming releases (UpcomingRow, Neu & demnächst) */
   upcoming: {
     title: 'Demnächst im Kino',
     wish: 'Wünschen',
@@ -105,7 +105,7 @@ export default {
   },
   /** /new */
   new: {
-    title: 'Neu & beliebt',
+    title: 'Neu & demnächst',
     tabs: 'Bereich',
     soon: 'Demnächst',
     week: 'Diese Woche bei uns',

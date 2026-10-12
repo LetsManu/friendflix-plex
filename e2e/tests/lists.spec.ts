@@ -12,7 +12,7 @@ test.describe('lists (desktop)', () => {
 
   test('ListMenu on the item page adds the title to a list', async ({ page, api }) => {
     await page.goto('/item/' + MOVIE2.id);
-    await expect(page.getByRole('heading', { level: 1, name: 'Interstellar' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Interlace' })).toBeVisible();
     await page.getByRole('button', { name: 'Mehr', exact: true }).click(); // the list menu lives in "⋯ Mehr" on the detail view
     await page.getByRole('button', { name: 'Zu Liste hinzufügen', exact: true }).click();
     const pop = page.getByRole('dialog', { name: 'Zu Liste hinzufügen' });

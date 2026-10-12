@@ -10,7 +10,7 @@ let peopleHits = 0;
 
 const raw: Record<string, Record<string, unknown>> = {
   [MOV]: {
-    Id: MOV, Name: 'Alien', Type: 'Movie', ProductionYear: 1979, OfficialRating: 'FSK-16', CommunityRating: 8.4, Genres: ['Horror', 'Sci-Fi'],
+    Id: MOV, Name: 'Ashfall', Type: 'Movie', ProductionYear: 1979, OfficialRating: 'FSK-16', CommunityRating: 8.4, Genres: ['Horror', 'Sci-Fi'],
     People: [
       { Id: P(1), Name: 'Sigourney Weaver', Role: 'Ripley', Type: 'Actor', PrimaryImageTag: 't1' },
       { Id: P(2), Name: 'Tom Skerritt', Role: 'Dallas', Type: 'Actor' },
@@ -18,7 +18,7 @@ const raw: Record<string, Record<string, unknown>> = {
       { Id: P(4), Name: "Dan O'Bannon", Type: 'Writer' },
       { Id: P(1), Name: 'Sigourney Weaver', Role: 'Ripley (voice)', Type: 'Actor' },
     ],
-    Studios: [{ Name: '20th Century Studios', Id: 'x' }, { Name: 'Brandywine' }], Tags: ['space', 'alien'],
+    Studios: [{ Name: 'Twelfth Street Studios', Id: 'x' }, { Name: 'Brookline' }], Tags: ['space', 'alien'],
     Chapters: [
       { StartPositionTicks: 6_000_000_000, Name: 'Die Nostromo', ImageTag: 'c2' },
       { StartPositionTicks: 0, Name: 'Chapter 1', ImageTag: 'c1' },
@@ -27,7 +27,7 @@ const raw: Record<string, Record<string, unknown>> = {
     ],
   },
   [SER]: {
-    Id: SER, Name: 'Dark', Type: 'Series', Genres: ['Drama', 'Mystery'],
+    Id: SER, Name: 'Dahlia', Type: 'Series', Genres: ['Drama', 'Mystery'],
     People: [
       { Id: P(10), Name: 'Louis Hofmann', Role: 'Jonas Kahnwald', Type: 'Actor', PrimaryImageTag: 'a' },
       { Id: P(11), Name: 'Lisa Vicari', Role: 'Martha Nielsen', Type: 'Actor' },
@@ -37,7 +37,7 @@ const raw: Record<string, Record<string, unknown>> = {
     Studios: [{ Name: 'Wiedemann & Berg' }], Tags: ['time travel'],
   },
   [EP]: {
-    Id: EP, Name: 'Geheimnisse', Type: 'Episode', SeriesId: SER, SeriesName: 'Dark', IndexNumber: 1, ParentIndexNumber: 1, Genres: [],
+    Id: EP, Name: 'Geheimnisse', Type: 'Episode', SeriesId: SER, SeriesName: 'Dahlia', IndexNumber: 1, ParentIndexNumber: 1, Genres: [],
     People: [
       { Id: P(10), Name: 'Louis Hofmann', Role: 'Jonas', Type: 'Actor' },
       { Id: P(20), Name: 'Gast Eins', Role: 'Polizist', Type: 'GuestStar', PrimaryImageTag: 'g' },
@@ -74,12 +74,12 @@ describe('GET /api/items/:id/castinfo', () => {
     const r = await get(`/api/items/${MOV}/castinfo`);
     expect(r.statusCode).toBe(200);
     const b = r.json();
-    expect(b.item).toEqual({ id: MOV, name: 'Alien', type: 'Movie', year: 1979, rating: 'FSK-16', communityRating: 8.4 });
+    expect(b.item).toEqual({ id: MOV, name: 'Ashfall', type: 'Movie', year: 1979, rating: 'FSK-16', communityRating: 8.4 });
     expect(b.cast).toEqual([{ id: P(1), name: 'Sigourney Weaver', role: 'Ripley', image: true }, { id: P(2), name: 'Tom Skerritt', role: 'Dallas', image: false }]);
     expect(b.guests).toEqual([]);
     expect(b.directors).toEqual([{ id: P(3), name: 'Ridley Scott', image: true }]);
     expect(b.writers.map((p: { name: string }) => p.name)).toEqual(["Dan O'Bannon"]);
-    expect(b.studios).toEqual(['20th Century Studios', 'Brandywine']);
+    expect(b.studios).toEqual(['Twelfth Street Studios', 'Brookline']);
     expect(b.tags).toEqual(['space', 'alien']);
     expect(b.genres).toEqual(['Horror', 'Sci-Fi']);
     // the credits lookup runs with the viewer's own server identity (its access rules apply)
@@ -90,7 +90,7 @@ describe('GET /api/items/:id/castinfo', () => {
 
   it('episode: series regulars as cast, everyone else on the episode as guest star, episode crew, series facts', async () => {
     const b = (await get(`/api/items/${EP}/castinfo`)).json();
-    expect(b.item).toMatchObject({ id: EP, type: 'Episode', seriesId: SER, seriesName: 'Dark' });
+    expect(b.item).toMatchObject({ id: EP, type: 'Episode', seriesId: SER, seriesName: 'Dahlia' });
     expect(b.cast.map((p: { role: string }) => p.role)).toEqual(['Jonas Kahnwald', 'Martha Nielsen']);
     expect(b.guests).toEqual([{ id: P(20), name: 'Gast Eins', role: 'Polizist', image: true }, { id: P(21), name: 'Nur Hier', role: 'Bäcker', image: false }]);
     expect(b.directors.map((p: { name: string }) => p.name)).toEqual(['Episoden Regie']);

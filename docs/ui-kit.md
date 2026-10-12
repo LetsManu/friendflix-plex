@@ -5,6 +5,25 @@ One set of building blocks for consumer and admin pages. Everything uses the tok
 focus ring (TV: bigger ring) and respects `prefers-reduced-motion` (CSS rule in `app.css`; Svelte transitions use
 `dur()` from `ui/motion.ts`). All texts come from the i18n area `ui` (7 languages).
 
+## Colour tokens
+
+Defined in `web/src/app.css`; components prefer the tokens; one-off shades only for gradients and overlays.
+
+| Token | Value | Use |
+|---|---|---|
+| `--bg` / `--bg-deep` | `#101418` / `#000` | page background (blue-black) / player and intro |
+| `--surface`, `--card` | `#161b21` | panels, cards, menus |
+| `--surface-2` | `#242b33` | raised surfaces, badges, inputs hover |
+| `--line` | `#2a323b` | borders and dividers |
+| `--fg` / `--mut` | `#f5f5f5` / `#b3bac2` | text / secondary text (9:1 on `--bg`) |
+| `--acc` | `#ff4f6d` (coral) | accent for text, rings, progress bars, focus glow (5.8:1 on `--bg`) |
+| `--acc-hover` | `#e63e5c` | hover for accent-coloured text and links |
+| `--acc-fill`, `--acc-fill-hover` | `#d6325a`, `#c9304d` | **filled** buttons and badges that carry white text |
+
+Contrast decision: white text on plain coral `#ff4f6d` is only 3.2:1, below the 4.5:1 needed for small text. Filled surfaces
+therefore use the darker coral `--acc-fill` (white on it: 4.7:1, hover 5.2:1); the lighter coral stays for text and graphics
+on dark surfaces (3:1 is enough for non-text, and 5.8:1 for text). The logo tile is a coral gradient `#ff6b81` to `#e23c5b`.
+
 ## Rules
 
 - **Every mutation** goes through `runAction` (busy flag per row, optimistic change + rollback, toast).

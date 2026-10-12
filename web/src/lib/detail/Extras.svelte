@@ -33,9 +33,9 @@
 <style>
   .ex { list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
   @media (max-width: 340px) { .ex { grid-template-columns: minmax(0, 1fr); } }
-  a { display: flex; flex-direction: column; height: 100%; background: #2f2f2f; border-radius: 6px; overflow: hidden; transition: background var(--t-fast), transform var(--t-med) var(--ease); }
-  a:hover, a:focus-visible { background: #3a3a3a; }
-  .im { position: relative; display: block; aspect-ratio: 16 / 9; background: #222; }
+  a { display: flex; flex-direction: column; height: 100%; background: #2a323b; border-radius: 6px; overflow: hidden; transition: background var(--t-fast), transform var(--t-med) var(--ease); }
+  a:hover, a:focus-visible { background: #323a43; }
+  .im { position: relative; display: block; aspect-ratio: 16 / 9; background: #1c2228; }
   .im img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .pl { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; opacity: .9; }
   .pl :global(svg) { padding: .55rem; box-sizing: content-box; background: rgba(0, 0, 0, .55); border: 2px solid rgba(255, 255, 255, .8); border-radius: 50%; }

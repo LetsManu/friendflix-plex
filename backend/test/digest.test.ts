@@ -154,14 +154,14 @@ describe('digestTick', () => {
   it('includes availability notices, recommendations and friends ratings of the window', async () => {
     created = [];
     await env.pool.query(
-      `insert into notifications(user_id, kind, title, link, dedupe, created_at) values ($1,'available','„Dune“ ist jetzt verfügbar',$2,'t1',$3), ($1,'reminder','„Alt“ ist jetzt verfügbar','/requests','t2',$4)`,
+      `insert into notifications(user_id, kind, title, link, dedupe, created_at) values ($1,'available','„Dunmoor“ ist jetzt verfügbar',$2,'t1',$3), ($1,'reminder','„Alt“ ist jetzt verfügbar','/requests','t2',$4)`,
       [adminId, `/item/${'c'.repeat(32)}`, recent(), old()]);
-    await env.pool.query("insert into recommendations(from_user,to_user,item_id,item_name,note,created_at) values ($1,$2,$3,'Heat','top',$4)", [friendId, adminId, 'd'.repeat(32), recent()]);
-    await env.pool.query("insert into ratings(user_id,item_id,item_name,stars,created_at) values ($1,$2,'Alien',5,$3)", [friendId, 'e'.repeat(32), recent()]);
+    await env.pool.query("insert into recommendations(from_user,to_user,item_id,item_name,note,created_at) values ($1,$2,$3,'Hearth','top',$4)", [friendId, adminId, 'd'.repeat(32), recent()]);
+    await env.pool.query("insert into ratings(user_id,item_id,item_name,stars,created_at) values ($1,$2,'Ashfall',5,$3)", [friendId, 'e'.repeat(32), recent()]);
     expect(await digestTick(env.ctx, now)).toBe(1); // only the admin has anything
     const d = (await env.pool.query('select data from digests where user_id=$1', [adminId])).rows[0].data;
-    expect(d.available).toEqual([{ title: '„Dune“ ist jetzt verfügbar', link: `/item/${'c'.repeat(32)}`, itemId: 'c'.repeat(32) }]);
-    expect(d.recommendations.map((r: any) => [r.name, r.kind])).toEqual([['Heat', 'recommended'], ['Alien', 'friends']]);
+    expect(d.available).toEqual([{ title: '„Dunmoor“ ist jetzt verfügbar', link: `/item/${'c'.repeat(32)}`, itemId: 'c'.repeat(32) }]);
+    expect(d.recommendations.map((r: any) => [r.name, r.kind])).toEqual([['Hearth', 'recommended'], ['Ashfall', 'friends']]);
     expect((await digestNotes(adminId))[0].title).toBe('Dein Wochenrückblick');
   });
 });

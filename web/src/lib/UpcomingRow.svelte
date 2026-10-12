@@ -61,7 +61,7 @@
   .track { display: flex; gap: .6rem; overflow-x: auto; padding: 0 var(--pad-x) .8rem; scrollbar-width: thin; scroll-snap-type: x proximity; }
   .c, .ph { flex: 0 0 150px; scroll-snap-align: start; } .ph { aspect-ratio: 2 / 3; }
   .c { background: var(--surface); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
-  .c img, .noimg { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; background: #222; display: grid; place-items: center; text-align: center; padding: .4rem; }
+  .c img, .noimg { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; background: #1c2228; display: grid; place-items: center; text-align: center; padding: .4rem; }
   /* Cards stretch to the tallest one; the text block fills the card and the action sits at the bottom, so all buttons line up */
   .t { flex: 1; padding: .5rem .6rem .7rem; display: flex; flex-direction: column; gap: .25rem; font-size: .85rem; }
   .name { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.6em; line-height: 1.3; } /* always two lines of space */

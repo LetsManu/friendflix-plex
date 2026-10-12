@@ -5,8 +5,8 @@
   import { t } from '#lib/i18n';
 
   /**
-   * Netflix-style rating: one round thumb button that expands (hover / click / keyboard focus / tap) into
-   * "Nicht mein Fall" (-1), "Gefällt mir" (1) and "Super" (2). Clicking the active option resets to 0.
+   * Rating: one round thumb button that expands (hover / click / keyboard focus / tap) into
+   * "Naja" (-1), "Gut" (1) and "Geliebt" (2). Clicking the active option resets to 0.
    * Saves via PUT /api/items/:id/thumb {value} (optimistic, reverted on error) and emits `change`.
    */
   export let itemId: string;
@@ -152,18 +152,18 @@
   .lab .trig::after { display: none; }
   .tx { font-size: .75rem; font-weight: 500; color: var(--mut); white-space: nowrap; }
   .lab .trig.hid { opacity: 1; }
-  /* option pill: centred over the trigger (Netflix), grows out of it */
-  .pill { position: absolute; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: .25rem; padding: .3rem; border-radius: 999px; background: #232323; box-shadow: 0 6px 22px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.1); animation: rb-in 140ms var(--ease, ease-out) both; }
+  /* option pill: centred over the trigger, grows out of it */
+  .pill { position: absolute; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: .25rem; padding: .3rem; border-radius: 999px; background: #1d2329; box-shadow: 0 6px 22px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.1); animation: rb-in 140ms var(--ease, ease-out) both; }
   .pill.up { top: auto; bottom: calc(100% + 6px); transform: translateX(-50%); animation-name: rb-up; }
   .opt { border-color: transparent; background: transparent; }
   .opt:hover:not(:disabled) { background: rgba(255,255,255,.14); }
   .opt.on { color: #fff; background: rgba(255,255,255,.18); }
   .opt svg { transition: transform 120ms var(--ease, ease-out); }
   .opt:hover svg, .opt:focus-visible svg { transform: scale(1.15); }
-  .tip { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); white-space: nowrap; padding: .3rem .6rem; border-radius: 4px; background: #e6e6e6; color: #141414; font-size: .78rem; font-weight: 700; pointer-events: none; opacity: 0; transition: opacity 100ms; }
+  .tip { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); white-space: nowrap; padding: .3rem .6rem; border-radius: 4px; background: #e6e6e6; color: #101418; font-size: .78rem; font-weight: 700; pointer-events: none; opacity: 0; transition: opacity 100ms; }
   .opt:hover .tip, .opt:focus-visible .tip { opacity: 1; }
   .msg { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 31; pointer-events: none; }
-  .msg span { display: block; white-space: nowrap; padding: .2rem .55rem; border-radius: 6px; background: rgba(20,20,20,.94); border: 1px solid var(--err, #e5646e); color: #fff; font-size: .75rem; font-weight: 600; }
+  .msg span { display: block; white-space: nowrap; padding: .2rem .55rem; border-radius: 6px; background: rgba(16,20,24,.94); border: 1px solid var(--err, #e5646e); color: #fff; font-size: .75rem; font-weight: 600; }
   @keyframes rb-in { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } }
   @keyframes rb-up { from { opacity: 0; transform: translateX(-50%) translateY(6px); } }
   @media (pointer: coarse) {

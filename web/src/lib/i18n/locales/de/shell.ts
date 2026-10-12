@@ -11,8 +11,8 @@ export default {
     home: 'Start',
     series: 'Serien',
     movies: 'Filme',
-    new: 'Neu & beliebt',
-    myList: 'Meine Liste',
+    new: 'Neu & demnächst',
+    myList: 'Merkliste',
     categories: 'Kategorien',
   },
   mobile: {
@@ -21,8 +21,8 @@ export default {
     forName: 'Für {name}',
     search: 'Suche',
     downloads: 'Downloads',
-    me: 'Mein FriendFlix',
-    meUnread: { one: 'Mein FriendFlix, {n} neue Benachrichtigung', other: 'Mein FriendFlix, {n} neue Benachrichtigungen' },
+    me: 'Mein Bereich',
+    meUnread: { one: 'Mein Bereich, {n} neue Benachrichtigung', other: 'Mein Bereich, {n} neue Benachrichtigungen' },
     tabbar: 'Mobile Navigation',
   },
   cats: {
@@ -50,13 +50,13 @@ export default {
     labelWho: 'Profilmenü ({name})',
     loadingProfiles: 'Lade Profile …',
     withPin: 'mit PIN',
-    manageProfiles: 'Profile verwalten',
+    manageProfiles: 'Profile bearbeiten',
     logout: 'Von FriendFlix abmelden',
   },
   /** link labels of the avatar menu, /me and the footer (lib/menu.ts) */
   menu: {
-    me: 'Mein FriendFlix',
-    myList: 'Meine Liste',
+    me: 'Mein Bereich',
+    myList: 'Merkliste',
     tonight: 'Heute Abend',
     favorites: 'Favoriten',
     lists: 'Listen',
@@ -69,7 +69,7 @@ export default {
     vote: 'Filmabend',
     now: 'Läuft gerade',
     calendar: 'Kalender',
-    stats: 'Wrapped',
+    stats: 'Jahresrückblick',
     remote: 'Fernbedienung',
     settings: 'Einstellungen',
     accountSettings: 'Konto & Einstellungen',
@@ -83,8 +83,8 @@ export default {
   },
   tabs: {
     home: 'Start',
-    new: 'Neu & beliebt',
-    me: 'Mein FriendFlix',
+    new: 'Neu & demnächst',
+    me: 'Mein Bereich',
   },
   offline: {
     bar: 'Du bist offline.',
@@ -125,6 +125,6 @@ export default {
     languageT: 'Sprache',
     languageD: 'Die Sprache von FriendFlix stellst du pro Profil unter <a href="/settings#language">Einstellungen</a> ein.',
     moreT: 'Alles Weitere',
-    moreD: 'Listen, Watch-Party, Filmabend, Kalender, Wünsche und Einstellungen findest du unter <a href="/me">Mein FriendFlix</a>.',
+    moreD: 'Listen, Watch-Party, Filmabend, Kalender, Wünsche und Einstellungen findest du unter <a href="/me">Mein Bereich</a>.',
   },
 } as const;

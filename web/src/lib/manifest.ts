@@ -11,8 +11,8 @@ const BASE = {
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#141414",
-  "theme_color": "#141414",
+  "background_color": "#101418",
+  "theme_color": "#101418",
   "categories": [
     "entertainment"
   ],

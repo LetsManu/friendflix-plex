@@ -49,7 +49,7 @@ flowchart TB
   BE -.-> X
   classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
   classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
-  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef app fill:#4a1a24,stroke:#ff4f6d,stroke-width:1px,color:#fff5f7
   classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
   classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
   classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff

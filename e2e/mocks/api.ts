@@ -82,7 +82,7 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     if (p === '/api/dropped') return J({ items: [...st.dropped].map(find).filter(Boolean) });
     if (p === '/api/library/resume') return J({ items: [episodes[0], items[2]] });
     if (p === '/api/library/nextup') return J({ items: [episodes[1]] });
-    if (p === '/api/library/because') return J({ because: { name: 'Inception' }, items: items.slice(1, 12) });
+    if (p === '/api/library/because') return J({ because: { name: 'Inkwell' }, items: items.slice(1, 12) });
     if (p === '/api/library/because-more') return J({ rows: [] }); // specs that need the extra "Weil du ..." rows mock it themselves
     if (p === '/api/recommendations') return J({ items: items.slice(5, 10) });
     if (p === '/api/library/friends-rated') return J({ items: items.slice(2, 8) });
@@ -93,7 +93,7 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     if (p === '/api/library/views') return J({ items: [{ id: hex(900), name: 'Filme' }, { id: hex(901), name: 'Serien' }] });
     if (p === '/api/library/genres') return J({ genres: ['Action', 'Drama', 'Krimi', 'Sci-Fi', 'Thriller'] });
     if (p === '/api/library/languages') return J({ audio: [{ code: 'deu', count: 10 }, { code: 'eng', count: 8 }, { code: 'jpn', count: 3 }], subs: [{ code: 'deu', count: 9 }, { code: 'eng', count: 7 }] });
-    if (p === '/api/library/collections') return J({ items: [], studios: ['Warner', 'A24'] });
+    if (p === '/api/library/collections') return J({ items: [], studios: ['Wardell', 'Aster 9'] });
     if (p === '/api/library/random') return J({ item: items[0] });
     if (p === '/api/library/items') {
       let l = items;
@@ -107,11 +107,11 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     }
     if (p === '/api/search') {
       const q = (sp.get('q') || '').toLowerCase();
-      if (q.includes('nolan')) return J({ q, titles: nolan, episodes: [], people: [{ id: hex(300), name: 'Christopher Nolan', image: true }, { id: hex(305), name: 'Jonathan Nolan', image: false }], genres: [], partial: false });
+      if (q.includes('nolan')) return J({ q, titles: nolan, episodes: [], people: [{ id: hex(300), name: 'Carl Norden', image: true }, { id: hex(305), name: 'Jon Norden', image: false }], genres: [], partial: false });
       const titles = items.filter((i) => i.name.toLowerCase().includes(q));
       return J({ q, titles, episodes: q.includes('break') ? episodes.slice(0, 3) : [], people: [], genres: q.startsWith('dra') ? ['Drama'] : [], partial: false });
     }
-    if ((mm = p.match(/^\/api\/people\/(.+)$/))) return J({ person: { id: mm[1], name: 'Christopher Nolan', overview: 'Britisch-amerikanischer Regisseur.', birthYear: 1970, image: true }, items: nolan });
+    if ((mm = p.match(/^\/api\/people\/(.+)$/))) return J({ person: { id: mm[1], name: 'Carl Norden', overview: 'Britisch-amerikanischer Regisseur.', birthYear: 1970, image: true }, items: nolan });
     if (p === '/api/friends') return J({ friends: [{ id: 'u2', name: 'Anna', sharesHistory: true }, { id: 'u3', name: 'Ben', sharesHistory: false }] });
     if (p === '/api/seerr/search') return J({ results: [] });
     if (p === '/api/seerr/upcoming') return J({ results: [] });
@@ -235,13 +235,13 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
       }
     }
     if ((mm = p.match(/^\/api\/items\/([^/]+)$/))) {
-      const it = find(mm[1]!) ?? byName('Inception');
+      const it = find(mm[1]!) ?? byName('Inkwell');
       return J({ item: withFav(it), inWatchlist: st.watch.has(it.id), thumb: 0, langs: { audio: ['deu', 'eng'], subs: ['deu'] } });
     }
 
     if (/^\/api\/comments\/[^/]+$/.test(p) && m === 'DELETE') return J({ ok: true });
 
-    // profiles (gate "Wer schaut gerade?" and the avatar menu)
+    // profiles (gate "Wer ist heute dabei?" and the avatar menu)
     if (p === '/api/profiles') return J({ profiles: PROFILES, max: 5, activeId: 'p1' });
     if ((mm = p.match(/^\/api\/profiles\/([^/]+)\/select$/)) && m === 'POST') return J({ ok: true });
 

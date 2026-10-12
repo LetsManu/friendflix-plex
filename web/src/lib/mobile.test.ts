@@ -19,7 +19,7 @@ describe('mobile helpers', () => {
   it('share + paths', () => {
     expect(itemPath({ id: 'e1', type: 'Episode', seriesId: 's1' })).toBe('/item/s1');
     expect(itemPath({ id: 'm1', type: 'Movie' })).toBe('/item/m1');
-    expect(shareData({ id: 'm1', name: 'Dune', type: 'Movie' }, 'https://x.test')).toEqual({ title: 'Dune', text: 'Dune auf FriendFlix', url: 'https://x.test/item/m1' });
+    expect(shareData({ id: 'm1', name: 'Dunmoor', type: 'Movie' }, 'https://x.test')).toEqual({ title: 'Dunmoor', text: 'Dunmoor auf FriendFlix', url: 'https://x.test/item/m1' });
     expect(playPath({ id: 's', type: 'Series' })).toBe('/item/s');
     expect(playPath({ id: 'm', type: 'Movie' })).toBe('/watch/m');
   });

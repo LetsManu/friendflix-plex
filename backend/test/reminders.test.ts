@@ -100,10 +100,10 @@ describe('reminders', () => {
     await env.pool.query('truncate reminders');
     await env.pool.query('truncate notifications');
     const [ua, ub] = [await uid('Admin'), await uid('Bea')];
-    await env.pool.query("insert into seerr_requests(seerr_request_id,user_id,media_type,tmdb_id,title) values (77,$1,'movie',700,'Dune 3')", [ub]);
+    await env.pool.query("insert into seerr_requests(seerr_request_id,user_id,media_type,tmdb_id,title) values (77,$1,'movie',700,'Dunmoor 3')", [ub]);
     for (const w of [a, b]) expect((await call(w, 'POST', '/api/reminders', { mediaType: 'movie', tmdbId: 700 })).statusCode).toBe(200);
     library.set('movie:700', MOVIE);
-    const hook = () => env.app.inject({ method: 'POST', url: '/internal/webhook/seerr', headers: secret, payload: { notification_type: 'MEDIA_AVAILABLE', subject: 'Dune 3', media: { media_type: 'movie', tmdbId: '700' }, request: { request_id: '77' } } });
+    const hook = () => env.app.inject({ method: 'POST', url: '/internal/webhook/seerr', headers: secret, payload: { notification_type: 'MEDIA_AVAILABLE', subject: 'Dunmoor 3', media: { media_type: 'movie', tmdbId: '700' }, request: { request_id: '77' } } });
     expect((await hook()).statusCode).toBe(200);
     await hook();
     const rem = await notes('reminder');
@@ -118,7 +118,7 @@ describe('reminders', () => {
 
   it('personal push never reaches Discord or the global ntfy topic', async () => {
     expect(ext.filter((e) => e.url.includes('discord') && e.body.includes('Film'))).toEqual([]);
-    expect(ext.filter((e) => e.body.includes('Dune 3') && e.body.includes('ist jetzt verfügbar') && !e.url.includes('discord'))).toEqual([]);
+    expect(ext.filter((e) => e.body.includes('Dunmoor 3') && e.body.includes('ist jetzt verfügbar') && !e.url.includes('discord'))).toEqual([]);
   });
 
   it('tick fallback finds titles via Jellyfin', async () => {
@@ -212,7 +212,7 @@ describe('reminders', () => {
     await env.pool.query('truncate reminders');
     await env.pool.query('truncate notifications');
     const ua = await uid('Admin');
-    await env.pool.query("insert into seerr_requests(seerr_request_id,user_id,media_type,tmdb_id,title) values (88,$1,'movie',1100,'Heat 2')", [ua]);
+    await env.pool.query("insert into seerr_requests(seerr_request_id,user_id,media_type,tmdb_id,title) values (88,$1,'movie',1100,'Hearth 2')", [ua]);
     library.set('movie:1100', MOVIE);
     expect((await call(a, 'POST', '/api/reminders', { mediaType: 'movie', tmdbId: 1100 })).statusCode).toBe(200);
     await reminderTick(env.ctx); // no avail-88 notice was ever created -> the reminder must notify

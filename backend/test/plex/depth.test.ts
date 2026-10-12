@@ -154,7 +154,7 @@ describe('Plex depth over the mirror (chapters, traits, credits, continuing seri
     expect(c.studios).toEqual(['Big Studio']);
     expect(c.tags).toEqual(['Heist']);
     // the show carries the cast; its episodes have no own people (the castinfo route takes the regulars from the series)
-    expect((await e.ms.credits(admin, item(3))).people[0]).toEqual({ id: tag(10), name: 'Dario Molaro', role: 'Sam', type: 'Actor', image: false });
+    expect((await e.ms.credits(admin, item(3))).people[0]).toEqual({ id: tag(10), name: 'Teo Brandvik', role: 'Sam', type: 'Actor', image: false });
     expect((await e.ms.credits(admin, item(5))).people).toEqual([]);
     await expect(e.ms.credits(child, item(lib.adult!))).rejects.toMatchObject({ status: 404 });
   });

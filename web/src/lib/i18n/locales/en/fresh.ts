@@ -38,7 +38,7 @@ const dict: Translation<typeof de> = {
   admin: {
     tab: 'Leaving soon',
     title: 'Leaving soon',
-    intro: 'These titles have a date on which they leave the library. Two weeks before, the cards show a notice; a week and a day before, everyone who has the title on My List or in Continue Watching gets a notification. Nothing is deleted – the date is only an announcement, and expired entries disappear on their own.',
+    intro: 'These titles have a date on which they leave the library. Two weeks before, the cards show a notice; a week and a day before, everyone who has the title on your watchlist or in Continue Watching gets a notification. Nothing is deleted – the date is only an announcement, and expired entries disappear on their own.',
     addTitle: 'Add a title',
     search: 'Search for a title',
     searchPlaceholder: 'Movie or series …',

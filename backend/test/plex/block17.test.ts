@@ -63,7 +63,7 @@ describe('Block 17 / 18 on Plex behind the FriendFlix routes', () => {
     expect(r.directors).toEqual([expect.objectContaining({ name: 'Dee Director' })]);
     expect(r.studios).toEqual(['Big Studio']);
     const ep = (await call('GET', `/api/items/${item(5)}/castinfo`)).json();
-    expect(ep.cast[0]).toMatchObject({ name: 'Dario Molaro', role: 'Sam' });
+    expect(ep.cast[0]).toMatchObject({ name: 'Teo Brandvik', role: 'Sam' });
     expect(ep.guests).toEqual([]);
   });
 

@@ -9,9 +9,9 @@ export default {
     continue: 'Weiter',
     /** resume line of a series: "S2:F5 · Noch 23 Min." */
     episodeCode: 'S{s}:F{e}',
-    myList: 'Meine Liste',
-    addToList: 'Zu Meine Liste hinzufügen',
-    removeFromList: 'Von Meine Liste entfernen',
+    myList: 'Merkliste',
+    addToList: 'Zur Merkliste hinzufügen',
+    removeFromList: 'Von der Merkliste entfernen',
     soundOn: 'Ton einschalten',
     soundOff: 'Ton ausschalten',
     cancel: 'Abbrechen',
@@ -120,8 +120,8 @@ export default {
   },
   more: {
     title: 'Mehr davon',
-    add: '{name} zu Meine Liste hinzufügen',
-    remove: '{name} von Meine Liste entfernen',
+    add: '{name} zur Merkliste hinzufügen',
+    remove: '{name} von der Merkliste entfernen',
     saveFailed: 'Konnte nicht gespeichert werden.',
   },
   cast: {

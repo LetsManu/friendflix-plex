@@ -318,7 +318,7 @@ describe('home row Bald nicht mehr verfügbar', () => {
 });
 
 describe('leaving soon: notifications and clean-up', () => {
-  it('notifies the account once per stage, only for My List / Continue Watching and only when every profile can see the title', async () => {
+  it('notifies the account once per stage, only for Watchlist / Continue Watching and only when every profile can see the title', async () => {
     const uid = (await env.pool.query<{ id: string }>("select id from users where name = 'Fia'")).rows[0]!.id;
     const owner = (await env.pool.query<{ id: string }>('select id from profiles where user_id = $1 and is_owner', [uid])).rows[0]!.id;
     await env.pool.query('delete from leaving_soon');

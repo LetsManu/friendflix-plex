@@ -10,8 +10,8 @@ const en: Translation<typeof de> = {
     home: 'Home',
     series: 'TV Shows',
     movies: 'Movies',
-    new: 'New & Popular',
-    myList: 'My List',
+    new: 'New & Upcoming',
+    myList: 'Watchlist',
     categories: 'Categories',
   },
   mobile: {
@@ -20,8 +20,8 @@ const en: Translation<typeof de> = {
     forName: 'For {name}',
     search: 'Search',
     downloads: 'Downloads',
-    me: 'My FriendFlix',
-    meUnread: { one: 'My FriendFlix, {n} new notification', other: 'My FriendFlix, {n} new notifications' },
+    me: 'My space',
+    meUnread: { one: 'My space, {n} new notification', other: 'My space, {n} new notifications' },
     tabbar: 'Mobile navigation',
   },
   cats: {
@@ -49,12 +49,12 @@ const en: Translation<typeof de> = {
     labelWho: 'Profile menu ({name})',
     loadingProfiles: 'Loading profiles …',
     withPin: 'with PIN',
-    manageProfiles: 'Manage profiles',
+    manageProfiles: 'Edit profiles',
     logout: 'Sign out of FriendFlix',
   },
   menu: {
-    me: 'My FriendFlix',
-    myList: 'My List',
+    me: 'My space',
+    myList: 'Watchlist',
     tonight: 'Tonight',
     favorites: 'Favourites',
     lists: 'Lists',
@@ -67,7 +67,7 @@ const en: Translation<typeof de> = {
     vote: 'Movie night',
     now: 'Watching now',
     calendar: 'Calendar',
-    stats: 'Wrapped',
+    stats: 'Year in review',
     remote: 'Remote control',
     settings: 'Settings',
     accountSettings: 'Account & settings',
@@ -81,8 +81,8 @@ const en: Translation<typeof de> = {
   },
   tabs: {
     home: 'Home',
-    new: 'New & Popular',
-    me: 'My FriendFlix',
+    new: 'New & Upcoming',
+    me: 'My space',
   },
   offline: {
     bar: 'You are offline.',
@@ -123,7 +123,7 @@ const en: Translation<typeof de> = {
     languageT: 'Language',
     languageD: 'Set the FriendFlix language per profile in <a href="/settings#language">Settings</a>.',
     moreT: 'Everything else',
-    moreD: 'Lists, watch party, movie night, calendar, requests and settings are in <a href="/me">My FriendFlix</a>.',
+    moreD: 'Lists, watch party, movie night, calendar, requests and settings are in <a href="/me">My space</a>.',
   },
 };
 export default en;

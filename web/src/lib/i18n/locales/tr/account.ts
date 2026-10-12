@@ -5,8 +5,8 @@ import type { Translation } from '../../types';
 const tr: Translation<typeof de> = {
   profiles: {
     pageTitle: 'Profiller',
-    who: 'Kim izliyor?',
-    manage: 'Profilleri yönet',
+    who: 'Bugün kimler var?',
+    manage: 'Profilleri düzenle',
     done: 'Bitti',
     loadFailed: 'Profiller yüklenemedi.',
     edit: 'Düzenle',
@@ -49,9 +49,9 @@ const tr: Translation<typeof de> = {
     delete: 'Sil',
   },
   me: {
-    title: 'FriendFlix’im',
+    title: 'Alanım',
     switchProfile: 'Profil değiştir',
-    manageProfiles: 'Profilleri yönet',
+    manageProfiles: 'Profilleri düzenle',
     quick: 'Hızlı erişim',
     notifications: 'Bildirimler',
     less: 'Daha az',
@@ -84,7 +84,7 @@ const tr: Translation<typeof de> = {
     lead: 'Tüm cihazlarında geçerlidir. Yalnızca seni etkiler.',
     autoplayNext: 'Sonraki bölümü otomatik başlat',
     autoplayNextHint: '8 saniyelik geri sayımla, istediğin zaman iptal edilebilir.',
-    stillWatching: '“Hâlâ izliyor musun?” diye sor',
+    stillWatching: '“Orada mısın?” diye sor',
     stillWatchingHint: 'Art arda birkaç bölümden sonra hiçbir işlem yapılmazsa (veya uzun bir aradan sonra) kendiliğinden devam etmek yerine kısaca sorulur.',
     stillWatchingEpisodes: 'İşlem yapılmadan … bölümden sonra sor',
     spoiler: 'Spoiler koruması',

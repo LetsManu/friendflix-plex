@@ -1,6 +1,6 @@
 import { tr, type TKey } from '#lib/i18n';
 
-/** Netflix-style three-step rating: -1 "Nicht mein Fall", 1 "Gefällt mir", 2 "Super", 0 = no rating. */
+/** Three-step rating: -1 "Naja", 1 "Gut", 2 "Geliebt", 0 = no rating. */
 export type Thumb = -1 | 0 | 1 | 2;
 
 interface RatingOption { value: Exclude<Thumb, 0>; key: TKey; icon: 'down' | 'up' | 'double'; /** translated label (current language) */ readonly label: string }
@@ -26,5 +26,5 @@ export function thumbLabel(v: Thumb): string {
   return o ? tr('common.rating.rated', { label: o.label }) : tr('common.rating.rate');
 }
 
-/** index of the option keyboard focus starts on when the picker opens (the active one, else "Gefällt mir") */
+/** index of the option keyboard focus starts on when the picker opens (the active one, else "Gut") */
 export const focusIndex = (v: Thumb): number => Math.max(0, RATING_OPTIONS.findIndex((x) => x.value === (v === 0 ? 1 : v)));

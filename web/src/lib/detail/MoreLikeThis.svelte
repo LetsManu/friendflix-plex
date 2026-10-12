@@ -63,8 +63,8 @@
   @media (max-width: 899px) { .grid3, .grid3.modal { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 340px) { .grid3, .grid3.modal { grid-template-columns: minmax(0, 1fr); } }
   .sk { aspect-ratio: 16 / 12; }
-  .mc { background: #2f2f2f; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
-  .im { position: relative; display: block; aspect-ratio: 16 / 9; background: #222; }
+  .mc { background: #2a323b; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
+  .im { position: relative; display: block; aspect-ratio: 16 / 9; background: #1c2228; }
   .im img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .im img.contain { object-fit: contain; }
   .dur { position: absolute; right: .5rem; top: .5rem; background: rgba(0, 0, 0, .65); padding: .05rem .45rem; border-radius: 3px; font-size: .75rem; font-weight: 600; }

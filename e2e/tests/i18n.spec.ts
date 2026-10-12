@@ -8,9 +8,9 @@ test.describe('UI language', () => {
     await page.goto('/settings');
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
     const nav = page.getByRole('navigation', { name: 'Hauptnavigation' });
-    await expect(nav.getByRole('link')).toHaveText(['Start', 'Serien', 'Filme', 'Neu & beliebt', 'Meine Liste']);
+    await expect(nav.getByRole('link')).toHaveText(['Start', 'Serien', 'Filme', 'Neu & demnächst', 'Merkliste']);
     await page.locator('#ui-lang').selectOption('en');
-    await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link')).toHaveText(['Home', 'TV Shows', 'Movies', 'New & Popular', 'My List']);
+    await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link')).toHaveText(['Home', 'TV Shows', 'Movies', 'New & Upcoming', 'Watchlist']);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(page.getByRole('heading', { level: 1, name: 'Playback settings' })).toBeVisible();
     expect(api.log.some((l) => l.startsWith('PUT /api/prefs/language {"language":"en"}'))).toBe(true);
@@ -20,7 +20,7 @@ test.describe('UI language', () => {
     await page.getByRole('button', { name: /Profile menu/ }).click();
     await expect(page.getByRole('menu', { name: 'Profile menu' }).getByRole('menuitem', { name: 'Sign out of FriendFlix' })).toBeVisible();
     await page.keyboard.press('Escape');
-    await page.getByRole('link', { name: 'My List', exact: true }).first().click();
+    await page.getByRole('link', { name: 'Watchlist', exact: true }).first().click();
     await expect(page).toHaveURL(/\/watchlist$/);
     const footer = page.getByRole('contentinfo');
     await expect(footer.getByRole('link', { name: 'Watch party' })).toBeAttached();

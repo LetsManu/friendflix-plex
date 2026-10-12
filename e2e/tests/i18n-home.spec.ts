@@ -20,11 +20,11 @@ test.describe('home + detail in English', () => {
 
   test('detail page: labels, language line, cast and ratings', async ({ page }) => {
     await page.goto('/item/' + LOCKED_ID);
-    await expect(page.getByRole('heading', { level: 1, name: 'Inception' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Inkwell' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Cast & Crew' })).toBeVisible();
     await expect(page.getByText('Audio: German, English · Subtitles: German')).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: /^Ratings/ })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 2, name: 'About Inception' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'About Inkwell' })).toBeVisible();
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/detail-en.png`, fullPage: true });
   });
 
@@ -41,7 +41,7 @@ test.describe('home + detail in English', () => {
     for (const label of ['1990s', '7+ stars', 'Audio: German']) await expect(chips.getByRole('button', { name: new RegExp(label.replace('+', '\\+')) })).toBeVisible();
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/browse-en.png` });
     await page.goto('/new');
-    await expect(page.getByRole('heading', { level: 1, name: 'New & Popular' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'New & Upcoming' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Coming soon' })).toBeVisible();
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/new-en.png` });
   });

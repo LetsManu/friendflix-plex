@@ -8,9 +8,9 @@ const fr: Translation<typeof de> = {
     resume: 'Reprendre',
     continue: 'Continuer',
     episodeCode: 'S{s}:E{e}',
-    myList: 'Ma liste',
-    addToList: 'Ajouter à Ma liste',
-    removeFromList: 'Retirer de Ma liste',
+    myList: 'Mes envies',
+    addToList: 'Ajouter à Mes envies',
+    removeFromList: 'Retirer de Mes envies',
     soundOn: 'Activer le son',
     soundOff: 'Couper le son',
     cancel: 'Annuler',
@@ -115,8 +115,8 @@ const fr: Translation<typeof de> = {
   },
   more: {
     title: 'Dans le même genre',
-    add: 'Ajouter {name} à Ma liste',
-    remove: 'Retirer {name} de Ma liste',
+    add: 'Ajouter {name} à Mes envies',
+    remove: 'Retirer {name} de Mes envies',
     saveFailed: 'Enregistrement impossible.',
   },
   cast: {

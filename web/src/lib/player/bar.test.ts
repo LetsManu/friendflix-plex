@@ -13,16 +13,16 @@ describe('firstInfoBody', () => {
 
 describe('barTitles', () => {
   it('formats episodes and films', () => {
-    expect(barTitles({ name: 'Pilot', seriesName: 'Breaking Bad', indexNumber: 1, parentIndexNumber: 1 })).toEqual({ title: 'Breaking Bad', sub: 'S1:F1 Pilot' });
-    expect(barTitles({ name: 'Pilot', seriesName: 'Breaking Bad', indexNumber: 3 })).toEqual({ title: 'Breaking Bad', sub: 'F3 Pilot' });
-    expect(barTitles({ name: 'Inception', type: 'Movie' })).toEqual({ title: 'Inception', sub: '' });
+    expect(barTitles({ name: 'Pilot', seriesName: 'Bright Valley', indexNumber: 1, parentIndexNumber: 1 })).toEqual({ title: 'Bright Valley', sub: 'S1:F1 Pilot' });
+    expect(barTitles({ name: 'Pilot', seriesName: 'Bright Valley', indexNumber: 3 })).toEqual({ title: 'Bright Valley', sub: 'F3 Pilot' });
+    expect(barTitles({ name: 'Inkwell', type: 'Movie' })).toEqual({ title: 'Inkwell', sub: '' });
     expect(barTitles(null)).toEqual({ title: '', sub: '' });
   });
   it('uses the episode code of the UI language (no German "F" in English)', async () => {
     await setLocale('en');
     try {
-      expect(barTitles({ name: 'Pilot', seriesName: 'Breaking Bad', indexNumber: 1, parentIndexNumber: 2 }).sub).toBe('S2:E1 Pilot');
-      expect(barTitles({ name: 'Pilot', seriesName: 'Breaking Bad', indexNumber: 4 }).sub).toBe('E4 Pilot');
+      expect(barTitles({ name: 'Pilot', seriesName: 'Bright Valley', indexNumber: 1, parentIndexNumber: 2 }).sub).toBe('S2:E1 Pilot');
+      expect(barTitles({ name: 'Pilot', seriesName: 'Bright Valley', indexNumber: 4 }).sub).toBe('E4 Pilot');
     } finally { await setLocale('de'); }
   });
   it('speed labels', () => {

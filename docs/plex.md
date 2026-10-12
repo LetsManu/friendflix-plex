@@ -52,7 +52,7 @@ flowchart TB
   BE -->|"library sync"| PX
   classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
   classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
-  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef app fill:#4a1a24,stroke:#ff4f6d,stroke-width:1px,color:#fff5f7
   classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
   classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
   classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
@@ -60,7 +60,7 @@ flowchart TB
   linkStyle default stroke:#8b949e,stroke-width:1.4px
   style PUB fill:none,stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4
   style LAN fill:none,stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4
-  style HOST fill:none,stroke:#e50914,stroke-width:1px,stroke-dasharray:4 4
+  style HOST fill:none,stroke:#ff4f6d,stroke-width:1px,stroke-dasharray:4 4
 ```
 
 > 🟥 FriendFlix · 🟩 media server · 🟦 other service · 🟪 reverse proxy · 🟨 data store · ⬛ viewers / outside · dashed frame = network or boundary · thick line = video stream · dotted = optional / via public URL
@@ -84,7 +84,7 @@ sequenceDiagram
     actor browser as 📺 Browser
     participant web as 🖥️ web
   end
-  box rgba(229,9,20,0.07) FriendFlix
+  box rgba(255,79,109,0.07) FriendFlix
     participant backend as ⚙️ backend
     participant gateway as 📡 gateway
   end
@@ -239,7 +239,7 @@ What the preview implements (checked by the test suite against the fake Plex ser
 | Leaving soon, story so far, themed lists, calm mode, clear voices, phone shortcuts and badge | Works | FriendFlix features; "story so far" uses Plex's season and episode summaries (none without a metadata agent) |
 | Admin pages (overview, people, content, live streams, previews, leaving soon) | Works | "Live streams" lists FriendFlix playback only; "Stop" ends the Plex transcode session, a direct-play file cannot be interrupted |
 | "More like this" | Limited | Computed by FriendFlix from shared genres and cast, not Plex's own recommendations |
-| Continue watching, my list, favourites, ratings, history | Works | In FriendFlix; nothing is written to Plex |
+| Continue watching, watchlist, favourites, ratings, history | Works | In FriendFlix; nothing is written to Plex |
 | Direct play | Works | Browser-compatible files (MP4/WebM, H.264/VP9/AV1, AAC/MP3/Opus/FLAC) within the role's limits |
 | Adaptive streaming (HLS) | Works | Plex universal transcoder (MPEG-TS segments), session-bound URLs through the gateway |
 | Role limits | Works | Bitrate and height caps when the transcode starts; roles without transcoding get Direct Play only (otherwise `403 transcoding_not_allowed`); max. streams per account and per profile |

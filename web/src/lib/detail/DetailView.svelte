@@ -291,7 +291,7 @@
   }
   const onVisibility = () => { if (document.hidden) { stopHero(); cancelAuto(); } };
 
-  // ---- phone layout (Netflix app): video on top, title + full-width buttons + labelled icon row below ----
+  // ---- phone layout (phone app layout): video on top, title + full-width buttons + labelled icon row below ----
   let phone = false;
   onMount(() => {
     void refreshTvOnline();
@@ -327,7 +327,7 @@
           <svelte:element this={heroTitleTag()} id={titleId} class:sr-only={item.logo && !logoFailed} class="ttl">{item.name}</svelte:element>
           {#if item.logo && !logoFailed}<img class="tlogo" src={logoUrl(item.id)} alt="" on:error={() => (logoFailed = true)} />{/if}
           <div class="btns">
-            <a class="btn light play" data-autofocus href={playHref} on:pointerenter={prefetchPlayer} on:focus={prefetchPlayer}><Icon name="play" size={24} />{playLabel}</a>
+            <a class="btn pill play" data-autofocus href={playHref} on:pointerenter={prefetchPlayer} on:focus={prefetchPlayer}><Icon name="play" size={24} />{playLabel}</a>
             <button type="button" class="rb" class:on={inList} aria-pressed={inList} aria-label={inList ? $t('detail.view.removeFromList') : $t('detail.view.addToList')} title={$t('detail.view.myList')} on:click={toggleMine}><Icon name={inList ? 'check' : 'plus'} size={22} /></button>
             <RatingButton itemId={item.id} bind:value={thumb} size={44} on:change={onThumb} />
             <MoreActions actions={moreActions} variant="ring" title={item.name} up={variant === 'modal'}>
@@ -369,7 +369,7 @@
         {#if len}<span>{len}</span>{/if}
       </p>
       <TitleFacts {facts} episode={item.type === 'Episode'} />
-      <a class="btn light play wide" data-autofocus href={playHref} on:touchstart|passive={prefetchPlayer} on:focus={prefetchPlayer}><Icon name="play" size={24} />{playLabel}</a>
+      <a class="btn pill play wide" data-autofocus href={playHref} on:touchstart|passive={prefetchPlayer} on:focus={prefetchPlayer}><Icon name="play" size={24} />{playLabel}</a>
       {#if item.type !== 'Series'}<DownloadButton itemId={item.id} block />{:else if playTarget}<DownloadButton itemId={playTarget} seriesId={item.id} block />{/if}
       {#if resumeLine}<p class="resume">{resumeLine}</p>{/if}
       <p class="ov">{overview || $t('detail.view.noOverview')}</p>
@@ -495,7 +495,7 @@
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
 
   /* ---- hero ---- */
-  .hero { position: relative; overflow: hidden; background: #0e0e0e; }
+  .hero { position: relative; overflow: hidden; background: #0a0d10; }
   .vm .hero { aspect-ratio: 16 / 9; }
   .vp .hero { height: clamp(440px, 56.25vw, 86vh); }
   .bg, .hv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 22%; }
@@ -524,8 +524,8 @@
   .mslot :global(.status) { margin: 0; }
   .mslot :global(.lang) { margin: 0; }
 
-  /* auto start countdown (top right of the hero, like the Netflix "next" hint) */
-  .auto { position: absolute; z-index: 4; right: 2rem; bottom: 5.4rem; display: flex; align-items: center; gap: .7rem; padding: .45rem .5rem .45rem .7rem; border-radius: 6px; background: rgba(20, 20, 20, .88); box-shadow: 0 6px 22px rgba(0, 0, 0, .6); font-weight: 600; }
+  /* auto start countdown (top right of the hero, the "next" hint) */
+  .auto { position: absolute; z-index: 4; right: 2rem; bottom: 5.4rem; display: flex; align-items: center; gap: .7rem; padding: .45rem .5rem .45rem .7rem; border-radius: 6px; background: rgba(16,20,24, .88); box-shadow: 0 6px 22px rgba(0, 0, 0, .6); font-weight: 600; }
   .vp .auto { right: var(--pad-x); bottom: 6rem; }
   .auto svg { width: 30px; height: 30px; transform: rotate(-90deg); }
   .auto circle { fill: none; stroke-width: 3.5; }
@@ -541,7 +541,7 @@
   .meta { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; color: #d2d2d2; margin: .4rem 0 .6rem; font-size: 1.05rem; }
   .match { color: var(--ok); font-weight: 700; }
   .fresh { color: var(--ok); font-weight: 700; }
-  .age { border: 1px solid rgba(255, 255, 255, .45); padding: 0 .4rem; font-size: .85rem; line-height: 1.5; }
+  .age { border: 1px solid rgba(255, 255, 255, .45); border-radius: 6px; padding: 0 .45rem; font-size: .85rem; line-height: 1.5; }
   .small { font-size: .85rem; margin: -.2rem 0 .6rem; }
   .ov { margin: .8rem 0; line-height: 1.55; overflow-wrap: anywhere; }
   .rec { display: grid; gap: .8rem; margin-top: .8rem; }
@@ -565,9 +565,9 @@
   .star.on { color: #f5c518; }
   .dv :global(.reactions), .dv :global(.cast) { margin-top: 2rem; }
 
-  /* ---- phone (Netflix app): 16:9 media on top, everything else below it ---- */
+  /* ---- phone: 16:9 media on top, everything else below it ---- */
   .phone .hero { height: auto; aspect-ratio: 16 / 9; }
-  .phone.vp { padding-top: var(--nav-h); } /* the video starts below the app bar (Netflix app), so nothing covers it */
+  .phone.vp { padding-top: var(--nav-h); } /* the video starts below the app bar , so nothing covers it */
   .phone .fade { background: linear-gradient(to top, rgba(0, 0, 0, .35), transparent 40%); }
   .phone .snd { right: .7rem; bottom: .7rem; width: 44px; height: 44px; }
   .pcap { display: flex; flex-direction: column; gap: .6rem; padding: .8rem 1rem .2rem; background: var(--dv-bg); }

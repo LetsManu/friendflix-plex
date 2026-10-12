@@ -131,7 +131,7 @@
     catch { fav = !want; flash(); }
     favBusy = false;
   }
-  // everything that is not Play / Meine Liste / Bewerten / Details lives in "⋯ Mehr"
+  // everything that is not Play / Merkliste / Bewerten / Details lives in "⋯ Mehr"
   let actions: MoreAction[] = [];
   $: actions = [
     { id: 'fav', label: fav ? $t('home.card.favRemove') : $t('home.card.favAdd'), icon: 'heart', pressed: fav, run: toggleFav },
@@ -212,7 +212,7 @@
 <style>
   .hp { position: fixed; z-index: 65; background: var(--surface); border-radius: 8px; box-shadow: 0 14px 40px rgba(0,0,0,.75), 0 0 0 1px rgba(255,255,255,.06); overflow: hidden; transform-origin: 0 0; visibility: hidden; color: var(--fg); }
   .hp.ready { visibility: visible; }
-  .media { position: relative; background: #0e0e0e; overflow: hidden; }
+  .media { position: relative; background: #0a0d10; overflow: hidden; }
   .media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
   .media img.contain { object-fit: contain; }
   .blur { inset: -10%; width: 120%; height: 120%; filter: blur(18px) brightness(.55); }
@@ -220,11 +220,11 @@
   .pv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
   .shade { position: absolute; inset: 0; background: linear-gradient(transparent 50%, rgba(24,24,24,.95)); pointer-events: none; }
   .cap { position: absolute; left: .9rem; right: 3.4rem; bottom: .6rem; font-weight: 800; font-size: 1.05rem; line-height: 1.2; text-shadow: 0 1px 8px #000; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none; }
-  .newep { position: absolute; left: .7rem; top: .6rem; padding: .1rem .45rem; border-radius: 3px; background: var(--acc); color: #fff; font-size: .68rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+  .newep { position: absolute; left: .7rem; top: .6rem; padding: .1rem .45rem; border-radius: 3px; background: var(--acc-fill); color: #fff; font-size: .68rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
   .newep.leave { background: #b3261e; }
-  .snd { position: absolute; right: .7rem; bottom: .6rem; z-index: 2; width: 32px; min-height: 32px; height: 32px; padding: 0; border-radius: 50%; background: rgba(20,20,20,.7); border: 1.5px solid rgba(255,255,255,.6); color: #fff; }
+  .snd { position: absolute; right: .7rem; bottom: .6rem; z-index: 2; width: 32px; min-height: 32px; height: 32px; padding: 0; border-radius: 50%; background: rgba(16,20,24,.7); border: 1.5px solid rgba(255,255,255,.6); color: #fff; }
   .snd::after { content: ''; position: absolute; inset: -6px; }
-  .snd:hover:not(:disabled) { background: rgba(20,20,20,.9); border-color: #fff; }
+  .snd:hover:not(:disabled) { background: rgba(16,20,24,.9); border-color: #fff; }
   .progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.3); }
   .progress i { display: block; height: 100%; background: var(--acc); }
   .info { padding: .75rem .9rem 1rem; }
@@ -232,13 +232,13 @@
   .round { width: 34px; min-height: 34px; height: 34px; padding: 0; border-radius: 50%; background: rgba(42,42,42,.6); border: 2px solid rgba(255,255,255,.5); color: #fff; display: grid; place-items: center; position: relative; }
   .round::after { content: ''; position: absolute; inset: -5px; border-radius: 50%; }
   .round:hover:not(:disabled) { border-color: #fff; background: rgba(42,42,42,.9); }
-  .round.play { background: #fff; color: #000; border-color: #fff; }
-  .round.play:hover { background: rgba(255,255,255,.8); }
+  .round.play { background: var(--acc-fill); color: #fff; border-color: var(--acc-fill); }
+  .round.play:hover { background: var(--acc-fill-hover); border-color: var(--acc-fill-hover); }
   .right { margin-left: auto; display: flex; gap: .4rem; align-items: center; }
   .media img.hi { opacity: 0; transition: opacity .15s linear; }
   .media img.hi.on { opacity: 1; }
   .fb { min-height: 0; }
-  .fb span { display: inline-block; margin-top: .4rem; padding: .2rem .55rem; border-radius: 6px; background: rgba(20,20,20,.92); border: 1px solid var(--err, #e5646e); font-size: .78rem; font-weight: 600; }
+  .fb span { display: inline-block; margin-top: .4rem; padding: .2rem .55rem; border-radius: 6px; background: rgba(16,20,24,.92); border: 1px solid var(--err, #e5646e); font-size: .78rem; font-weight: 600; }
   .meta { display: flex; gap: .6rem; align-items: center; margin-top: .7rem; font-size: .8rem; color: #d2d2d2; flex-wrap: wrap; }
   .match { color: var(--ok); font-weight: 700; }
   .fresh { color: var(--ok); font-weight: 700; }

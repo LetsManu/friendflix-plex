@@ -1,9 +1,9 @@
-/** Profiles, PIN pad, Mein FriendFlix, settings, language choice (devices, downloads, offline, invite follow in phase B). */
+/** Profiles, PIN pad, Mein Bereich, settings, language choice (devices, downloads, offline, invite follow in phase B). */
 export default {
   profiles: {
     pageTitle: 'Profile',
-    who: 'Wer schaut gerade?',
-    manage: 'Profile verwalten',
+    who: 'Wer ist heute dabei?',
+    manage: 'Profile bearbeiten',
     done: 'Fertig',
     loadFailed: 'Die Profile konnten nicht geladen werden.',
     edit: 'Bearbeiten',
@@ -46,9 +46,9 @@ export default {
     delete: 'Löschen',
   },
   me: {
-    title: 'Mein FriendFlix',
+    title: 'Mein Bereich',
     switchProfile: 'Profil wechseln',
-    manageProfiles: 'Profile verwalten',
+    manageProfiles: 'Profile bearbeiten',
     quick: 'Schnellzugriff',
     notifications: 'Benachrichtigungen',
     less: 'Weniger',
@@ -83,7 +83,7 @@ export default {
     lead: 'Gelten auf allen deinen Geräten. Sie betreffen nur dich.',
     autoplayNext: 'Nächste Folge automatisch starten',
     autoplayNextHint: 'Mit 8-Sekunden-Countdown, jederzeit abbrechbar.',
-    stillWatching: '„Schaust du noch?“ nachfragen',
+    stillWatching: '„Noch da?“ nachfragen',
     stillWatchingHint: 'Nach mehreren Folgen am Stück ohne Eingabe (oder nach langer Pause) wird nicht automatisch weitergespielt, sondern kurz nachgefragt.',
     stillWatchingEpisodes: 'Nachfragen nach … Folgen ohne Eingabe',
     spoiler: 'Spoilerschutz',
@@ -149,7 +149,7 @@ export default {
       testFailed: 'Test fehlgeschlagen.',
     },
   },
-  /** "Meine Liste" / favourites could not be saved (stores.ts SAVE_FAILED) */
+  /** "Merkliste" / favourites could not be saved (stores.ts SAVE_FAILED) */
   listSaveFailed: 'Konnte nicht gespeichert werden.',
   logout: {
     downloadsTitle: 'Auch die Downloads auf diesem Gerät löschen?',

@@ -151,7 +151,7 @@
   .brand { position: absolute; top: 1.2rem; left: var(--pad-x); display: inline-flex; }
   .step { margin: 0; color: var(--mut); font-size: .9rem; letter-spacing: .06em; text-transform: uppercase; }
   .dots { display: flex; gap: .4rem; margin: .5rem 0 1.4rem; }
-  .dots i { width: 28px; height: 4px; border-radius: 99px; background: #444; transition: background var(--t-med); }
+  .dots i { width: 28px; height: 4px; border-radius: 99px; background: #3b444e; transition: background var(--t-med); }
   .dots i.on { background: var(--acc); }
   .card { width: min(520px, 100%); display: flex; flex-direction: column; align-items: center; gap: .7rem; animation: rise .35s var(--ease); }
   .card.wide { width: min(1040px, 100%); }
@@ -174,7 +174,7 @@
   .pick:hover:not(:disabled), .pick:focus-visible { background: var(--surface-2); box-shadow: 0 0 0 3px #fff; }
   .pick.on { box-shadow: 0 0 0 4px var(--acc); }
   .pick.on img { opacity: .55; }
-  .tick { position: absolute; inset: auto .45rem .45rem auto; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--acc); color: #fff; }
+  .tick { position: absolute; inset: auto .45rem .45rem auto; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--acc-fill); color: #fff; }
   .skel { aspect-ratio: 2 / 3; border-radius: 8px; background: var(--surface-2); }
   .count { margin: .4rem 0 0; color: var(--mut); }
   /* kids: brighter, rounder, bigger */

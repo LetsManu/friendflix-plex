@@ -27,12 +27,12 @@ export default {
   series: 'Serien',
   /** run times, see fmtDuration() */
   duration: { hm: '{h} Std. {m} Min.', h: '{h} Std.', m: '{m} Min.', s: '{s} Sek.' },
-  /** Netflix-style rating (RatingButton, rating.ts) */
+  /** Three-step rating (RatingButton, rating.ts) */
   rating: {
     rate: 'Bewerten',
-    notForMe: 'Nicht mein Fall',
-    like: 'Gefällt mir',
-    love: 'Super',
+    notForMe: 'Naja',
+    like: 'Gut',
+    love: 'Geliebt',
     rated: 'Bewertet: {label} – Bewertung ändern',
     remove: '{label} (Bewertung entfernen)',
     saveFailed: 'Bewertung konnte nicht gespeichert werden.',

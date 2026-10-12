@@ -11,8 +11,8 @@ const tr: Translation<typeof de> = {
     home: 'Ana Sayfa',
     series: 'Diziler',
     movies: 'Filmler',
-    new: 'Yeni ve Popüler',
-    myList: 'Listem',
+    new: 'Yeni ve Yakında',
+    myList: 'İzleme listesi',
     categories: 'Kategoriler',
   },
   mobile: {
@@ -21,8 +21,8 @@ const tr: Translation<typeof de> = {
     forName: '{name} için',
     search: 'Ara',
     downloads: 'İndirilenler',
-    me: 'FriendFlix’im',
-    meUnread: { one: 'FriendFlix’im, {n} yeni bildirim', other: 'FriendFlix’im, {n} yeni bildirim' },
+    me: 'Alanım',
+    meUnread: { one: 'Alanım, {n} yeni bildirim', other: 'Alanım, {n} yeni bildirim' },
     tabbar: 'Mobil gezinme',
   },
   cats: {
@@ -50,12 +50,12 @@ const tr: Translation<typeof de> = {
     labelWho: 'Profil menüsü ({name})',
     loadingProfiles: 'Profiller yükleniyor …',
     withPin: 'PIN korumalı',
-    manageProfiles: 'Profilleri yönet',
+    manageProfiles: 'Profilleri düzenle',
     logout: 'FriendFlix oturumunu kapat',
   },
   menu: {
-    me: 'FriendFlix’im',
-    myList: 'Listem',
+    me: 'Alanım',
+    myList: 'İzleme listesi',
     tonight: 'Bu akşam',
     favorites: 'Favoriler',
     lists: 'Listeler',
@@ -82,8 +82,8 @@ const tr: Translation<typeof de> = {
   },
   tabs: {
     home: 'Ana Sayfa',
-    new: 'Yeni ve Popüler',
-    me: 'FriendFlix’im',
+    new: 'Yeni ve Yakında',
+    me: 'Alanım',
   },
   offline: {
     bar: 'Çevrimdışısın.',
@@ -124,7 +124,7 @@ const tr: Translation<typeof de> = {
     languageT: 'Dil',
     languageD: 'FriendFlix dilini her profil için <a href="/settings#language">Ayarlar</a>’dan seçersin.',
     moreT: 'Diğer her şey',
-    moreD: 'Listeler, birlikte izleme, film gecesi, takvim, istekler ve ayarlar <a href="/me">FriendFlix’im</a> altında.',
+    moreD: 'Listeler, birlikte izleme, film gecesi, takvim, istekler ve ayarlar <a href="/me">Alanım</a> altında.',
   },
 };
 export default tr;

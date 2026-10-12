@@ -59,7 +59,7 @@ describe('Spanish dictionary', () => {
   it('has no empty texts and no German leftovers in the UI-critical words', () => {
     for (const [k, v] of Object.entries(tr)) for (const s of texts(v)) expect(s.trim().length, k).toBeGreaterThan(0);
     expect((es.shell as { nav: { home: string; series: string; movies: string; new: string; myList: string } }).nav).toMatchObject({
-      home: 'Inicio', series: 'Series', movies: 'Películas', new: 'Novedades populares', myList: 'Mi lista',
+      home: 'Inicio', series: 'Series', movies: 'Películas', new: 'Novedades y próximamente', myList: 'Guardados',
     });
   });
 });

@@ -54,7 +54,7 @@ export interface Member extends MemberInfo {
 export class Room {
   readonly members = new Map<string, Member>();
   state: PartyState;
-  /** who may play/pause/seek: only the host, or everybody (like Amazon Watch Party's "everyone can control") */
+  /** who may play/pause/seek: only the host, or everybody ("everyone can control" mode) */
   mode: ControlMode = 'host';
   started: boolean;
   emptySince?: number;

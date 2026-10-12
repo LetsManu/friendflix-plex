@@ -16,7 +16,7 @@ test.describe('discovery (phone)', () => {
     await expect(leaving).toBeAttached();
     await leaving.scrollIntoViewIfNeeded();
     await expect(leaving.locator('.pc').first().getByText('Nur noch 2 Tage')).toBeVisible();
-    const because = row(page, 'Weil du „Inception“ gesehen hast');
+    const because = row(page, 'Weil du „Inkwell“ gesehen hast');
     await because.scrollIntoViewIfNeeded();
     await expect(because.locator('.pc .newep').first()).toBeVisible();
     await expect.poll(() => noHorizontalOverflow(page)).toBe(true);
@@ -27,7 +27,7 @@ test.describe('discovery (phone)', () => {
     await page.route(`**/api/items/${breaking.id}/facts`, (r) => r.fulfill({ json: { fresh: 'finale', leaving: { leavesAt: day(5), days: 5 }, traits: { resolution: '4k', hdr: 'dolbyvision', audio: 'atmos' } } }));
     await page.route(`**/api/items/${breaking.id}/story`, (r) => r.fulfill({ json: { story: { reason: 'longBreak', weeks: 8, episode: { id: 'e'.repeat(32), name: 'Das Ende', season: 1, index: 7, overview: 'Walter trifft eine folgenschwere Entscheidung.' }, next: { id: 'f'.repeat(32), season: 1, index: 8 } } } }));
     await page.goto('/item/' + breaking.id);
-    await expect(page.getByRole('heading', { level: 1, name: 'Breaking Bad' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Bright Valley' })).toBeVisible();
     await expect(page.locator('.tf').getByText('Staffelfinale')).toBeVisible();
     await expect(page.locator('.tf').getByText('Nur noch 5 Tage')).toBeVisible();
     await expect(page.locator('.tf').getByRole('list', { name: 'Bild und Ton' }).getByText('Dolby Atmos')).toBeVisible();

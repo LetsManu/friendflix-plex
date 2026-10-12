@@ -6,12 +6,12 @@ import { noHorizontalOverflow } from '../helpers.js';
 test.describe('item page', () => {
   test('shows cast, status picker, friends strip and language line', async ({ page, api }) => {
     await page.goto('/item/' + LOCKED_ID);
-    await expect(page.getByRole('heading', { level: 1, name: 'Inception' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Inkwell' })).toBeVisible();
 
     const cast = page.locator('section.cast');
     await expect(cast.getByRole('heading', { level: 2, name: 'Besetzung & Crew' })).toBeVisible();
-    await expect(cast.getByText('Leonardo DiCaprio')).toBeVisible();
-    await expect(cast.getByText('Tom Hardy')).toBeVisible();
+    await expect(cast.getByText('Lena Doria')).toBeVisible();
+    await expect(cast.getByText('Tomas Hart')).toBeVisible();
 
     const friends = page.locator('section.fr');
     await expect(friends.getByText('Anna Beispiel')).toBeVisible();
@@ -19,7 +19,7 @@ test.describe('item page', () => {
 
     await expect(page.getByText('Ton: Deutsch, Englisch · Untertitel: Deutsch')).toBeVisible();
 
-    // status picker lives in "⋯ Mehr": "Inception" is planned (on the watchlist); switching to "Abgebrochen" persists
+    // status picker lives in "⋯ Mehr": "Inkwell" is planned (on the watchlist); switching to "Abgebrochen" persists
     await page.getByRole('button', { name: 'Mehr', exact: true }).click();
     const status = page.getByRole('group', { name: 'Status' });
     const planned = status.getByRole('button', { name: 'Geplant' });
@@ -78,18 +78,18 @@ test.describe('item page', () => {
     const urls: string[] = [];
     page.on('request', (r) => urls.push(r.url()));
     await page.goto('/item/' + SERIES.id);
-    await expect(page.getByRole('heading', { level: 1, name: 'Breaking Bad' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Bright Valley' })).toBeVisible();
     await expect(page.getByText('Folge 1', { exact: false }).first()).toBeVisible();
     // next-up is asked for this series only (not filtered from the global top 20)
     expect(urls.some((u) => u.includes(`/api/library/nextup?seriesId=${SERIES.id}`))).toBe(true);
   });
 
-  test('one rating button expands into three options and saves "Super" (2)', async ({ page }) => {
+  test('one rating button expands into three options and saves "Geliebt" (2)', async ({ page }) => {
     await page.goto('/item/' + LOCKED_ID);
-    await expect(page.getByRole('heading', { level: 1, name: 'Inception' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Inkwell' })).toBeVisible();
     await page.getByRole('button', { name: 'Bewerten', exact: true }).first().hover(); // desktop: the options grow out of the button on hover
     const put = page.waitForRequest((r) => r.method() === 'PUT' && r.url().includes(`/api/items/${LOCKED_ID}/thumb`));
-    await page.getByRole('button', { name: 'Super', exact: true }).click();
+    await page.getByRole('button', { name: 'Geliebt', exact: true }).click();
     expect((await put).postDataJSON()).toEqual({ value: 2 });
   });
 

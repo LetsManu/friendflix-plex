@@ -48,8 +48,8 @@ test.describe('kids profile', () => {
     const field = page.getByRole('searchbox', { name: 'Titel suchen' });
     await expect(field).toBeFocused();
     await expect(page.getByText('Tippe mindestens zwei Buchstaben.')).toBeVisible();
-    await field.fill('inc');
-    await expect(page).toHaveURL(/\/kids\/search\?q=inc$/);
+    await field.fill('ink');
+    await expect(page).toHaveURL(/\/kids\/search\?q=ink$/);
     await expect(page.locator('.grid .tile').first()).toBeVisible();
     await field.fill('zzzz');
     await expect(page.getByText('Dazu haben wir leider nichts gefunden.')).toBeVisible();
@@ -60,7 +60,7 @@ test.describe('kids profile', () => {
     const social: string[] = [];
     page.on('request', (r) => { if (/\/api\/(friends|party|notifications|items\/[^/]+\/(ratings|reactions|friends))/.test(r.url())) social.push(r.url()); });
     await page.goto('/item/' + LOCKED_ID);
-    await expect(page.getByRole('heading', { level: 1, name: 'Inception' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Inkwell' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Bewerten', exact: true }).first()).toBeVisible(); // own thumbs stay (recommendations)
     await expect(page.getByRole('heading', { name: /^Bewertungen/ })).toHaveCount(0);
     await expect(page.getByRole('group', { name: 'Deine Reaktion' })).toHaveCount(0);

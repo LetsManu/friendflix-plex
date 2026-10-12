@@ -23,7 +23,7 @@
   export let poster = false;
   const dispatch = createEventDispatcher<{
     remove: Item;
-    /** "Meine Liste" was toggled for this card (after the server accepted it) */
+    /** "Merkliste" was toggled for this card (after the server accepted it) */
     listtoggle: { item: Item; inList: boolean };
     /** favourite was toggled (after the server accepted it) */
     favchange: { item: Item; favorite: boolean };
@@ -113,7 +113,7 @@
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 
-  // ---- feedback for failed saves (heart / Meine Liste); role="status" region over the thumbnail ----
+  // ---- feedback for failed saves (heart / Merkliste); role="status" region over the thumbnail ----
   let fb = '', fbT: ReturnType<typeof setTimeout>, favBusy = false;
   function flash() { fb = tr('home.card.saveFailed'); clearTimeout(fbT); fbT = setTimeout(() => (fb = ''), 4500); }
   onDestroy(() => clearTimeout(fbT));
@@ -178,7 +178,7 @@
 
 <style>
   .card { position: relative; width: 100%; transform-origin: center; transition: transform var(--t-med) var(--ease) 0s; }
-  .thumb { display: block; position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden; transition: transform var(--t-fast) var(--ease); background: linear-gradient(135deg, #2b2b2b, #1a1a1a); }
+  .thumb { display: block; position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden; transition: transform var(--t-fast) var(--ease); background: linear-gradient(135deg, #242b33, #151a20); }
   .thumb:active { transform: scale(.97); }
   .thumb:focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: var(--radius); }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -189,11 +189,11 @@
   .poster .thumb::after { background: linear-gradient(transparent 70%, rgba(0,0,0,.6)); }
   .poster .cap { font-size: .8rem; }
   .fb { position: absolute; left: .5rem; right: .5rem; top: 2.2rem; z-index: 4; pointer-events: none; }
-  .fb span { display: inline-block; padding: .25rem .6rem; border-radius: 6px; background: rgba(20,20,20,.92); border: 1px solid var(--err, #e5646e); color: #fff; font-size: .78rem; font-weight: 600; }
+  .fb span { display: inline-block; padding: .25rem .6rem; border-radius: 6px; background: rgba(16,20,24,.92); border: 1px solid var(--err, #e5646e); color: #fff; font-size: .78rem; font-weight: 600; }
   .rm::after { content: ''; position: absolute; inset: -8px; } /* >=44px hit area, visual size unchanged */
   .brand { position: absolute; left: .45rem; top: .4rem; z-index: 2; pointer-events: none; display: flex; align-items: center; gap: .3rem; }
-  .neu { padding: .05rem .4rem; border-radius: 3px; background: rgba(20,20,20,.78); color: #fff; font-size: .66rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-  .newep { position: absolute; left: .45rem; top: .45rem; z-index: 2; pointer-events: none; padding: .1rem .45rem; border-radius: 3px; background: var(--acc); color: #fff; font-size: .68rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+  .neu { padding: .05rem .4rem; border-radius: 3px; background: rgba(16,20,24,.78); color: #fff; font-size: .66rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  .newep { position: absolute; left: .45rem; top: .45rem; z-index: 2; pointer-events: none; padding: .1rem .45rem; border-radius: 3px; background: var(--acc-fill); color: #fff; font-size: .68rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
   .newep.leave { background: #b3261e; }
   .blur { position: absolute; inset: -10%; width: 120%; height: 120%; object-fit: cover; filter: blur(18px) brightness(.55); }
   .thumb img.spoil { filter: blur(14px); transform: scale(1.1); }
@@ -204,14 +204,14 @@
   .cap { z-index: 1; }
   .progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.3); z-index: 2; }
   .progress i { display: block; height: 100%; background: var(--acc); }
-  .rm { display: none; position: absolute; right: .4rem; top: .4rem; z-index: 3; width: 28px; min-height: 28px; height: 28px; padding: 0; border-radius: 50%; background: rgba(20,20,20,.7); border: 1.5px solid rgba(255,255,255,.6); color: #fff; place-items: center; }
+  .rm { display: none; position: absolute; right: .4rem; top: .4rem; z-index: 3; width: 28px; min-height: 28px; height: 28px; padding: 0; border-radius: 50%; background: rgba(16,20,24,.7); border: 1.5px solid rgba(255,255,255,.6); color: #fff; place-items: center; }
   /* desktop: the card stays static; the pop-out (HoverPreview) is rendered in <body>. Subtle brightness only. */
   @media (hover: hover) and (pointer: fine) {
     .thumb { transition: transform var(--t-fast) var(--ease), filter var(--t-fast); }
     .card:hover .thumb { filter: brightness(1.12); }
   }
   .mb { display: none; position: absolute; right: 0; bottom: 0; z-index: 3; width: 44px; min-height: 44px; height: 44px; padding: 0; background: none; border: 0; color: #fff; place-items: center; }
-  .mb span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(20,20,20,.7); border: 1.5px solid rgba(255,255,255,.6); font-size: 1rem; line-height: 1; padding-bottom: .3rem; }
+  .mb span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(16,20,24,.7); border: 1.5px solid rgba(255,255,255,.6); font-size: 1rem; line-height: 1; padding-bottom: .3rem; }
   @media (hover: none), (pointer: coarse) { .rm { display: grid; } .mb { display: grid; } .cap { right: 2.8rem; } }
   .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 84; }
   .sheet { outline: none; position: fixed; z-index: 85; left: 0; right: 0; bottom: 0; max-width: 560px; margin: 0 auto; background: var(--surface); border-radius: 14px 14px 0 0; padding: .6rem .6rem calc(.6rem + env(safe-area-inset-bottom)); box-shadow: 0 -10px 40px rgba(0,0,0,.7); display: flex; flex-direction: column; gap: .1rem; }

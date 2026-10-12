@@ -203,9 +203,9 @@
 <style>
   .gap { height: .5rem; }
   .top { display: grid; gap: .25rem; margin: 0 calc(var(--pad-x) * -1); }
-  .top a { display: flex; align-items: center; gap: .9rem; min-height: 72px; padding: 0 var(--pad-x) 0 0; background: #1c1c1c; }
-  .top a:active { background: #262626; }
-  .top img { width: 146px; height: 82px; flex: none; object-fit: cover; background: #2a2a2a; }
+  .top a { display: flex; align-items: center; gap: .9rem; min-height: 72px; padding: 0 var(--pad-x) 0 0; background: #161b21; }
+  .top a:active { background: #20262d; }
+  .top img { width: 146px; height: 82px; flex: none; object-fit: cover; background: #242b33; }
   .tt { flex: 1; min-width: 0; font-weight: 600; font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pl { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; border: 2px solid #fff; padding-left: 2px; }
   .hint { margin: 0 0 .5rem; }
@@ -214,7 +214,7 @@
   .wishmsg { min-height: 1.4em; margin: 0 0 .5rem; color: var(--mut); }
   .wl { display: grid; gap: .6rem; max-width: 640px; }
   .wl li { display: flex; align-items: center; gap: .8rem; background: var(--surface-2); border-radius: 6px; padding: .5rem; }
-  .wl img, .ph { width: 56px; height: 84px; flex: none; object-fit: cover; border-radius: 4px; background: #333; }
+  .wl img, .ph { width: 56px; height: 84px; flex: none; object-fit: cover; border-radius: 4px; background: #2b333c; }
   .wi { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
   .wl button, .badge { min-height: 44px; min-width: 44px; flex: none; }
   .badge { display: inline-flex; align-items: center; padding: 0 .8rem; border: 1px solid rgba(255,255,255,.4); border-radius: 99px; font-size: .85rem; }
@@ -226,7 +226,7 @@
   ul { list-style: none; padding: 0; margin: 0; }
   .chips { display: flex; flex-wrap: wrap; gap: .5rem; }
   .chip { display: inline-flex; align-items: center; min-height: 44px; padding: 0 1rem; border-radius: 99px; background: var(--surface-2); color: var(--fg); font-weight: 500; border: 0; cursor: pointer; }
-  .chip:hover { background: #3a3a3a; }
+  .chip:hover { background: #323a43; }
   .people { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: .5rem; }
   .people a { display: flex; flex-direction: column; align-items: center; gap: .4rem; width: 96px; min-height: 44px; text-align: center; }
   .av { width: 80px; height: 80px; border-radius: 50%; overflow: hidden; background: var(--surface-2); display: grid; place-items: center; font-weight: 700; font-size: 1.4rem; color: var(--mut); }

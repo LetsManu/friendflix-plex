@@ -38,7 +38,7 @@ const dict: Translation<typeof de> = {
   admin: {
     tab: 'Pronto se va',
     title: 'Pronto dejará de estar disponible',
-    intro: 'Estos títulos tienen una fecha en la que salen de la mediateca. Dos semanas antes las tarjetas muestran un aviso; una semana y un día antes, quienes tienen el título en «Mi lista» o en «Seguir viendo» reciben una notificación. No se borra nada: la fecha es solo un anuncio y las entradas caducadas desaparecen solas.',
+    intro: 'Estos títulos tienen una fecha en la que salen de la mediateca. Dos semanas antes las tarjetas muestran un aviso; una semana y un día antes, quienes tienen el título en «Guardados» o en «Seguir viendo» reciben una notificación. No se borra nada: la fecha es solo un anuncio y las entradas caducadas desaparecen solas.',
     addTitle: 'Añadir un título',
     search: 'Buscar un título',
     searchPlaceholder: 'Película o serie …',

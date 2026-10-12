@@ -11,8 +11,8 @@ const es: Translation<typeof de> = {
     home: 'Inicio',
     series: 'Series',
     movies: 'Películas',
-    new: 'Novedades populares',
-    myList: 'Mi lista',
+    new: 'Novedades y próximamente',
+    myList: 'Guardados',
     categories: 'Categorías',
   },
   mobile: {
@@ -21,8 +21,8 @@ const es: Translation<typeof de> = {
     forName: 'Para {name}',
     search: 'Buscar',
     downloads: 'Descargas',
-    me: 'Mi FriendFlix',
-    meUnread: { one: 'Mi FriendFlix, {n} notificación nueva', many: 'Mi FriendFlix, {n} notificaciones nuevas', other: 'Mi FriendFlix, {n} notificaciones nuevas' },
+    me: 'Mi espacio',
+    meUnread: { one: 'Mi espacio, {n} notificación nueva', many: 'Mi espacio, {n} notificaciones nuevas', other: 'Mi espacio, {n} notificaciones nuevas' },
     tabbar: 'Navegación móvil',
   },
   cats: {
@@ -50,12 +50,12 @@ const es: Translation<typeof de> = {
     labelWho: 'Menú de perfil ({name})',
     loadingProfiles: 'Cargando perfiles …',
     withPin: 'con PIN',
-    manageProfiles: 'Administrar perfiles',
+    manageProfiles: 'Editar perfiles',
     logout: 'Cerrar sesión en FriendFlix',
   },
   menu: {
-    me: 'Mi FriendFlix',
-    myList: 'Mi lista',
+    me: 'Mi espacio',
+    myList: 'Guardados',
     tonight: 'Esta noche',
     favorites: 'Favoritos',
     lists: 'Listas',
@@ -68,7 +68,7 @@ const es: Translation<typeof de> = {
     vote: 'Noche de cine',
     now: 'En reproducción',
     calendar: 'Calendario',
-    stats: 'Wrapped',
+    stats: 'Resumen del año',
     remote: 'Mando a distancia',
     settings: 'Ajustes',
     accountSettings: 'Cuenta y ajustes',
@@ -82,8 +82,8 @@ const es: Translation<typeof de> = {
   },
   tabs: {
     home: 'Inicio',
-    new: 'Novedades populares',
-    me: 'Mi FriendFlix',
+    new: 'Novedades y próximamente',
+    me: 'Mi espacio',
   },
   offline: {
     bar: 'Estás sin conexión.',
@@ -124,7 +124,7 @@ const es: Translation<typeof de> = {
     languageT: 'Idioma',
     languageD: 'El idioma de FriendFlix se elige por perfil en <a href="/settings#language">Ajustes</a>.',
     moreT: 'Todo lo demás',
-    moreD: 'Listas, watch party, noche de cine, calendario, peticiones y ajustes están en <a href="/me">Mi FriendFlix</a>.',
+    moreD: 'Listas, watch party, noche de cine, calendario, peticiones y ajustes están en <a href="/me">Mi espacio</a>.',
   },
 };
 export default es;

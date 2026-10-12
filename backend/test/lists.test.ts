@@ -4,8 +4,8 @@ import { makeEnv, type TestEnv } from './helpers.js';
 
 const A = 'a'.repeat(32), B = 'b'.repeat(32), H = 'c'.repeat(32), SERIES = 'd'.repeat(32), EP = 'e'.repeat(32), BOX = '9'.repeat(32);
 const CATALOG: Record<string, Record<string, unknown>> = {
-  [A]: { Id: A, Name: 'Alien', Type: 'Movie' },
-  [B]: { Id: B, Name: 'Brazil', Type: 'Movie' },
+  [A]: { Id: A, Name: 'Ashfall', Type: 'Movie' },
+  [B]: { Id: B, Name: 'Brasswind', Type: 'Movie' },
   [H]: { Id: H, Name: 'Hidden', Type: 'Movie' },
   [SERIES]: { Id: SERIES, Name: 'Serie', Type: 'Series' },
   [BOX]: { Id: BOX, Name: 'Box', Type: 'BoxSet' },
@@ -88,7 +88,7 @@ describe('shared lists', () => {
     expect(d.list.role).toBe('viewer');
     expect(d.members.map((m: any) => [m.name, m.role])).toEqual([['Admin', 'owner'], ['Bea', 'viewer'], ['Cid', 'editor']]);
     const alien = d.items.find((i: any) => i.id === A);
-    expect(alien).toMatchObject({ name: 'Alien', note: 'Muss man sehen', addedBy: { id: cidId, name: 'Cid' } });
+    expect(alien).toMatchObject({ name: 'Ashfall', note: 'Muss man sehen', addedBy: { id: cidId, name: 'Cid' } });
     expect(d.items.find((i: any) => i.id === SERIES).addedBy.name).toBe('Admin');
     expect((await call(bea, 'DELETE', `/api/lists/${id}/items/${A}`)).statusCode).toBe(403);
     expect((await call(alice, 'GET', '/api/lists')).json().lists[0]).toMatchObject({ itemCount: 2, memberCount: 3 });

@@ -182,7 +182,7 @@ const pl: Translation<typeof de> = {
   },
   watch: {
     back: 'Wstecz',
-    stillTitle: 'Nadal oglądasz?',
+    stillTitle: 'Jesteś tam?',
     stillText: 'Automatyczne odtwarzanie zostało wstrzymane. Następny: {ep}',
     keepWatching: 'Oglądaj dalej',
     next: 'Następny odcinek',

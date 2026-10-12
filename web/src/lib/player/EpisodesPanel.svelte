@@ -91,20 +91,20 @@
 </div>
 
 <style>
-  .eps { width: min(560px, 94vw); max-height: min(70vh, 640px); display: flex; flex-direction: column; background: rgba(20,20,20,.98); border: 1px solid #3a3a3a; border-radius: 6px; box-shadow: 0 12px 30px #000; overflow: hidden; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .7rem .8rem .5rem 1rem; border-bottom: 1px solid #2c2c2c; }
+  .eps { width: min(560px, 94vw); max-height: min(70vh, 640px); display: flex; flex-direction: column; background: rgba(16,20,24,.98); border: 1px solid #323a43; border-radius: 6px; box-shadow: 0 12px 30px #000; overflow: hidden; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .7rem .8rem .5rem 1rem; border-bottom: 1px solid #252c34; }
   header b { font-size: 1.15rem; }
-  .sel select { font-size: 1.05rem; font-weight: 700; background: #262626; color: #fff; border: 1px solid #555; border-radius: 4px; min-height: 44px; padding: 0 .8rem; }
+  .sel select { font-size: 1.05rem; font-weight: 700; background: #20262d; color: #fff; border: 1px solid #4a5560; border-radius: 4px; min-height: 44px; padding: 0 .8rem; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .icx { background: transparent; padding: 0; width: 44px; min-height: 44px; color: var(--mut); border-radius: 50%; }
   .icx:hover:not(:disabled) { background: rgba(255,255,255,.12); color: #fff; }
   ul { list-style: none; margin: 0; padding: .3rem; overflow-y: auto; overscroll-behavior: contain; }
   .ep { display: flex; align-items: center; gap: .8rem; width: 100%; min-height: 52px; padding: .55rem .7rem; background: transparent; color: #d2d2d2; border-radius: 4px; text-align: left; font-weight: 400; justify-content: flex-start; position: relative; }
   .ep:hover:not(:disabled), .ep:focus-visible { background: rgba(255,255,255,.1); color: #fff; }
-  .ep.cur { background: #2a2a2a; color: #fff; align-items: flex-start; border: 1px solid #4a4a4a; }
+  .ep.cur { background: #242b33; color: #fff; align-items: flex-start; border: 1px solid #46505a; }
   .no { flex: none; min-width: 1.6rem; font-size: 1.05rem; font-weight: 700; color: var(--mut); text-align: center; }
   .cur .no { color: #fff; padding-top: .2rem; }
-  .th { position: relative; flex: none; width: 128px; aspect-ratio: 16 / 9; border-radius: 4px; overflow: hidden; background: #333; }
+  .th { position: relative; flex: none; width: 128px; aspect-ratio: 16 / 9; border-radius: 4px; overflow: hidden; background: #2b333c; }
   .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .th i, .bar i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--acc); }
   .tx { display: grid; gap: .2rem; min-width: 0; flex: 1; }

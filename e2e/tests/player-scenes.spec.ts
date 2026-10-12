@@ -38,9 +38,9 @@ test.describe('player: scenes, cast & info, sound', () => {
     await expect.poll(() => page.evaluate(() => document.querySelector('video')!.paused)).toBe(false);
     await page.locator('body').press('i');
     const peek = page.getByRole('complementary', { name: 'Besetzung auf einen Blick' });
-    await expect(peek.getByText('Leonardo DiCaprio')).toBeVisible();
+    await expect(peek.getByText('Lena Doria')).toBeVisible();
     await expect(peek.getByText('Dom Cobb')).toBeVisible();
-    await expect(peek.getByText('Michael Caine')).toBeVisible(); // the first guest stars are part of the peek
+    await expect(peek.getByText('Mikael Kain')).toBeVisible(); // the first guest stars are part of the peek
     expect(await page.evaluate(() => document.querySelector('video')!.paused)).toBe(false); // playback goes on
     await shot(page, 'desktop-peek');
     await expect(peek).toHaveCount(0, { timeout: 8000 }); // hides by itself
@@ -54,11 +54,11 @@ test.describe('player: scenes, cast & info, sound', () => {
     await expect(ci.getByRole('heading', { name: 'Hintergrund' })).toBeVisible();
     await expect(ci.getByText('Syncopy und Legendary Pictures')).toBeVisible();
     await expect(ci.getByText('dream · heist')).toBeVisible();
-    await expect(ci.getByRole('link', { name: 'Christopher Nolan' }).first()).toHaveAttribute('href', `/person/${'b'.repeat(32)}`);
+    await expect(ci.getByRole('link', { name: 'Carl Norden' }).first()).toHaveAttribute('href', `/person/${'b'.repeat(32)}`);
     await shot(page, 'desktop-castinfo');
 
     // person sheet: other titles of the library (the playing one is left out) + link to the person page
-    await ci.getByRole('button', { name: 'Leonardo DiCaprio, mehr Titel anzeigen' }).click();
+    await ci.getByRole('button', { name: 'Lena Doria, mehr Titel anzeigen' }).click();
     await expect(ci.getByText('spielt Dom Cobb')).toBeVisible();
     await expect(ci.getByRole('link', { name: 'Alle Titel und Infos' })).toHaveAttribute('href', `/person/${CAST.cast[0]!.id}`);
     const others = nolan.filter((i) => i.id !== MOVIE.id);
@@ -75,7 +75,7 @@ test.describe('player: scenes, cast & info, sound', () => {
     await page.goto('/watch/' + MOVIE.id);
     await videoReady(page);
     await page.evaluate(async () => { const v = document.querySelector('video')!; await v.play().catch(() => undefined); v.pause(); });
-    await expect(page.getByRole('complementary', { name: 'Besetzung & Infos' }).getByText('Joseph Gordon-Levitt')).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Besetzung & Infos' }).getByText('Josef Gordan')).toBeVisible();
     await page.evaluate(() => document.querySelector('video')!.play().catch(() => undefined));
     await expect(page.getByRole('complementary', { name: 'Besetzung & Infos' })).toHaveCount(0);
   });
@@ -90,7 +90,7 @@ test.describe('player: scenes, cast & info, sound', () => {
     await page.keyboard.press('Enter');
     const ci = page.getByRole('complementary', { name: 'Besetzung & Infos' });
     await expect(ci).toBeVisible();
-    await expect(ci.getByRole('button', { name: 'Leonardo DiCaprio, mehr Titel anzeigen' })).toBeFocused();
+    await expect(ci.getByRole('button', { name: 'Lena Doria, mehr Titel anzeigen' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(ci).toHaveCount(0);
   });

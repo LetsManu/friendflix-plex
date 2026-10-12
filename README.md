@@ -13,7 +13,7 @@
   <a href="https://github.com/LetsManu/friendflix/actions/workflows/ci.yml"><img src="https://github.com/LetsManu/friendflix-plex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/status-in%20development%20%7C%20preview-orange" alt="Status: in development / preview">
   <img src="https://img.shields.io/badge/self--hosted-Docker-2496ED" alt="Self-hosted with Docker">
-  <img src="https://img.shields.io/badge/languages-7-e50f2a" alt="7 languages">
+  <img src="https://img.shields.io/badge/languages-7-ff4f6d" alt="7 languages">
 </p>
 
 <p align="center"><img src="docs/images/en/hero.jpg" alt="FriendFlix home page with a large billboard and rows of titles" width="900"></p>
@@ -42,7 +42,7 @@ Watching · Discovering · Together · Family and kids · Phone and TV · Admin
 
 #### A home page that feels like a real streaming service
 
-A large billboard with the title logo, then rows such as *Continue Watching*, *Next Episode*, *Recommended by friends*, *Rated by friends*, *Popular this week*, *Because you watched …*, *Top 10* and *My List*. Hover over a card and it pops out with the most important actions: play, add to your list, rate, more info.
+A large billboard with the title logo, then rows such as *Continue Watching*, *Next Episode*, *Recommended by friends*, *Rated by friends*, *Popular this week*, *Because you watched …*, *Top 10* and *Watchlist*. Hover over a card and it pops out with the most important actions: play, add to your list, rate, more info.
 
 Small **labels** on the cards tell you what is new – *New*, *New episode*, *New season*, *Season finale*, *New series*. When the admin knows that a title is about to leave the library, its card says "Only 6 days left" and a **Leaving soon** row collects those titles; everyone who has one on their list or in *Continue Watching* gets a reminder a week and a day before. Nothing is deleted – the date is only an announcement.
 
@@ -87,7 +87,7 @@ Skip intro and credits (where Plex has markers, see [limits](#plex-vs-jellyfin-w
 - **Recommendations**: recommend titles to friends, see what friends rated and watched this week, shared lists with editors and readers, curated rows from the admin.
 - **Wishes**: missing something? Wish for it right from the search (through the request service, with its own local request user per FriendFlix account) and get notified when it arrives – with a monthly limit per role. "Remind me" for upcoming titles.
 - **Stay in the loop**: notifications in the app, as web push on every device, via ntfy or Discord, and an optional weekly digest.
-- **The fun extras**: reactions and short reviews (visible only after you watched it), ratings, stats, achievements and a shareable "Wrapped" card of your viewing stats.
+- **The fun extras**: reactions and short reviews (visible only after you watched it), ratings, stats, achievements and a shareable "year in review" card of your viewing stats.
 
 ### Family and kids
 
@@ -106,7 +106,7 @@ Up to five profiles per account, each with its own history, list, favourites, la
 
 ### Phone and TV
 
-An app-like layout with a bottom tab bar, a preview sheet when you tap a poster, and full details one swipe away. FriendFlix can be installed to the home screen (PWA) – with long-press **shortcuts** (Continue Watching, My List, Search, Downloads), an icon **badge** with your unread notifications and the app name and description in your language.
+An app-like layout with a bottom tab bar, a preview sheet when you tap a poster, and full details one swipe away. FriendFlix can be installed to the home screen (PWA) – with long-press **shortcuts** (Continue Watching, Watchlist, Search, Downloads), an icon **badge** with your unread notifications and the app name and description in your language.
 
 <table>
   <tr>
@@ -170,7 +170,7 @@ The FriendFlix interface is the same; what differs is what Plex can deliver. Sta
 | Extras tab (trailers, special features) | Limited | Only what Plex has as local extras |
 | Simulcast page (airing now, anime filter) | Limited | Relies on Plex air dates; not verified yet |
 | Per-series audio/subtitle memory, anime original-audio default | Works | Stored by FriendFlix; the audio switch itself is subject to the per-account audio limit below |
-| Continue watching, favourites, my list, ratings, history | Works | Stored in FriendFlix; FriendFlix never writes watch state to Plex |
+| Continue watching, favourites, watchlist, ratings, history | Works | Stored in FriendFlix; FriendFlix never writes watch state to Plex |
 | Direct play and adaptive streaming (HLS) | Works | Via the Plex transcoder; 4K/HDR/hardware transcoding depends on your Plex setup; role limits (bitrate, height, transcoding off, max. streams) enforced by FriendFlix |
 | Subtitles | Limited | Text subtitles only; embedded tracks are extracted and converted to WebVTT by FriendFlix (ffmpeg); no PGS, no subtitle search |
 | Audio track selection | Limited | Plex keeps it per Plex account. FriendFlix serializes stream starts; it collides with other Plex apps using the same account – use a dedicated Plex account/token |
@@ -323,13 +323,13 @@ flowchart TB
   P -.->|"auth.example.com"| AK
   classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
   classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
-  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef app fill:#4a1a24,stroke:#ff4f6d,stroke-width:1px,color:#fff5f7
   classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
   classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
   classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
   classDef fork fill:#4a1d3c,stroke:#e070b0,stroke-width:1px,stroke-dasharray:4 3,color:#fff0f8
   linkStyle default stroke:#8b949e,stroke-width:1.4px
-  style FF fill:none,stroke:#e50914,stroke-width:1px,stroke-dasharray:4 4
+  style FF fill:none,stroke:#ff4f6d,stroke-width:1px,stroke-dasharray:4 4
 ```
 
 > 🟥 FriendFlix · 🟩 media server · 🟦 other service · 🟪 reverse proxy · 🟨 data store · ⬛ viewers / outside · dashed frame = network or boundary · thick line = video stream · dotted = optional / via public URL
@@ -405,6 +405,6 @@ npm run e2e                                     # Playwright: builds the web app
 
 Copyright © 2026 Manuel Weißböck. All rights reserved – see [LICENSE](LICENSE).
 
-### Trademark note
+### Trademarks
 
-Plex is a trademark of Plex, Inc.; this project is not affiliated with or endorsed by Plex. Jellyfin is named only to describe compatibility.
+Netflix, Disney+, Prime Video, Crunchyroll, Plex, Jellyfin and other names are trademarks of their respective owners. FriendFlix for Plex is an independent open-source project and is not affiliated with, sponsored or endorsed by any of them. "for Plex" only describes compatibility; the project uses no Plex logo and is not an official Plex product.

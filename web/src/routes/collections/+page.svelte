@@ -17,4 +17,4 @@
 {#if items === null}<div class="tiles">{#each Array(6) as _}<div class="skeleton" style="aspect-ratio:16/9"></div>{/each}</div>
 {:else if !items.length}<p class="muted">{$t('home.collections.empty')}</p>
 {:else}<div class="tiles">{#each items as i (i.id)}<div class="slot"><Card item={i} /></div>{/each}</div>{/if}
-<style>.chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.5rem; } .chip { background: var(--surface-2); padding: .5rem 1rem; border-radius: 99px; min-height: 44px; display: inline-flex; align-items: center; } .chip:hover { background: #3a3a3a; }</style>
+<style>.chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.5rem; } .chip { background: var(--surface-2); padding: .5rem 1rem; border-radius: 99px; min-height: 44px; display: inline-flex; align-items: center; } .chip:hover { background: #323a43; }</style>

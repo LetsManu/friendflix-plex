@@ -30,9 +30,9 @@ const it: Translation<typeof de> = {
   duration: { hm: '{h} h {m} min', h: '{h} h', m: '{m} min', s: '{s} s' },
   rating: {
     rate: 'Valuta',
-    notForMe: 'Non fa per me',
-    like: 'Mi piace',
-    love: 'Lo adoro',
+    notForMe: 'Così così',
+    like: 'Bene',
+    love: 'Adorato',
     rated: 'Valutazione: {label} – modifica la valutazione',
     remove: '{label} (rimuovi la valutazione)',
     saveFailed: 'Impossibile salvare la valutazione.',

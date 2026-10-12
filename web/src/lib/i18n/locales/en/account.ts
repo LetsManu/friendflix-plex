@@ -4,8 +4,8 @@ import type { Translation } from '../../types';
 const en: Translation<typeof de> = {
   profiles: {
     pageTitle: 'Profiles',
-    who: 'Who’s watching?',
-    manage: 'Manage profiles',
+    who: 'Who’s here today?',
+    manage: 'Edit profiles',
     done: 'Done',
     loadFailed: 'Could not load the profiles.',
     edit: 'Edit',
@@ -48,9 +48,9 @@ const en: Translation<typeof de> = {
     delete: 'Delete',
   },
   me: {
-    title: 'My FriendFlix',
+    title: 'My space',
     switchProfile: 'Switch profile',
-    manageProfiles: 'Manage profiles',
+    manageProfiles: 'Edit profiles',
     quick: 'Shortcuts',
     notifications: 'Notifications',
     less: 'Less',
@@ -83,7 +83,7 @@ const en: Translation<typeof de> = {
     lead: 'They apply on all your devices and only affect you.',
     autoplayNext: 'Autoplay next episode',
     autoplayNextHint: 'With an 8-second countdown you can cancel at any time.',
-    stillWatching: 'Ask “Are you still watching?”',
+    stillWatching: 'Ask “Still there?”',
     stillWatchingHint: 'After several episodes in a row without any input (or after a long pause), playback asks before continuing.',
     stillWatchingEpisodes: 'Ask after … episodes without input',
     spoiler: 'Spoiler protection',

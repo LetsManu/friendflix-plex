@@ -24,7 +24,7 @@
   .prog { display: grid; gap: .3rem; min-width: 0; }
   .top { display: flex; justify-content: space-between; gap: .5rem; font-size: .85rem; color: var(--mut); }
   .val { font-variant-numeric: tabular-nums; color: var(--fg); }
-  .track { height: 6px; background: #3a3a3a; border-radius: 99px; overflow: hidden; position: relative; }
+  .track { height: 6px; background: #323a43; border-radius: 99px; overflow: hidden; position: relative; }
   i { display: block; height: 100%; border-radius: inherit; background: var(--acc); transition: width var(--t-med) var(--ease); }
   .ok i { background: var(--ok); } .warn i { background: var(--warn); } .err i { background: var(--err); }
   i.indet { width: 35%; animation: ff-indet 1.2s ease-in-out infinite; }

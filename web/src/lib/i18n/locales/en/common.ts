@@ -29,9 +29,9 @@ const en: Translation<typeof de> = {
   duration: { hm: '{h} h {m} min', h: '{h} h', m: '{m} min', s: '{s} sec' },
   rating: {
     rate: 'Rate',
-    notForMe: 'Not for me',
-    like: 'I like this',
-    love: 'Love this!',
+    notForMe: 'Meh',
+    like: 'Good',
+    love: 'Loved it',
     rated: 'Rated: {label} – change rating',
     remove: '{label} (remove rating)',
     saveFailed: 'Could not save your rating.',

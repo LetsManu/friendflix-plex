@@ -30,7 +30,7 @@ describe('i18n core', () => {
     expect(getLocale()).toBe('de');
     expect(get(ready)).toBe(true);
     expect(tr('shell.nav.home')).toBe('Start');
-    expect(get(t)('shell.nav.new')).toBe('Neu & beliebt');
+    expect(get(t)('shell.nav.new')).toBe('Neu & demnächst');
   });
 
   it('interpolates {name} and formats numbers for the locale', () => {
@@ -42,12 +42,12 @@ describe('i18n core', () => {
   });
 
   it('plural via Intl.PluralRules (n)', async () => {
-    expect(tr('shell.mobile.meUnread', { n: 1 })).toBe('Mein FriendFlix, 1 neue Benachrichtigung');
-    expect(tr('shell.mobile.meUnread', { n: 3 })).toBe('Mein FriendFlix, 3 neue Benachrichtigungen');
+    expect(tr('shell.mobile.meUnread', { n: 1 })).toBe('Mein Bereich, 1 neue Benachrichtigung');
+    expect(tr('shell.mobile.meUnread', { n: 3 })).toBe('Mein Bereich, 3 neue Benachrichtigungen');
     expect(tr('account.profiles.maxProfiles', { n: 5 })).toBe('Es sind höchstens 5 Profile möglich.');
     await setLocale('en');
-    expect(tr('shell.mobile.meUnread', { n: 1 })).toBe('My FriendFlix, 1 new notification');
-    expect(tr('shell.mobile.meUnread', { n: 2 })).toBe('My FriendFlix, 2 new notifications');
+    expect(tr('shell.mobile.meUnread', { n: 1 })).toBe('My space, 1 new notification');
+    expect(tr('shell.mobile.meUnread', { n: 2 })).toBe('My space, 2 new notifications');
   });
 
   it('lazy loads a language and switches the stores without reload', async () => {
@@ -80,7 +80,7 @@ describe('i18n core', () => {
     const saved = fr.shell.nav.myList;
     delete fr.shell.nav.myList; // simulate a key the French file does not have yet: German shows through
     await setLocale('fr');
-    try { expect(tr('shell.nav.myList')).toBe('Meine Liste'); } finally { fr.shell.nav.myList = saved; }
+    try { expect(tr('shell.nav.myList')).toBe('Merkliste'); } finally { fr.shell.nav.myList = saved; }
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     expect(trDynamic('shell.nav.doesNotExist')).toBe('shell.nav.doesNotExist');
     expect(trDynamic('shell.nav')).toBe('shell.nav'); // a group is not a message

@@ -6,9 +6,9 @@ test.describe('home (desktop)', () => {
     await page.goto('/');
     const nav = page.getByRole('navigation', { name: 'Hauptnavigation' });
     await expect(nav.getByRole('link', { name: 'Start' })).toHaveAttribute('aria-current', 'page');
-    for (const name of ['Serien', 'Filme', 'Neu & beliebt', 'Meine Liste']) await expect(nav.getByRole('link', { name })).toBeVisible();
+    for (const name of ['Serien', 'Filme', 'Neu & demnächst', 'Merkliste']) await expect(nav.getByRole('link', { name })).toBeVisible();
 
-    for (const title of ['Weiterschauen', 'Weil du „Inception“ gesehen hast', 'Diese Woche bei uns', 'Top 10 nach Bewertung']) {
+    for (const title of ['Weiterschauen', 'Weil du „Inkwell“ gesehen hast', 'Diese Woche bei uns', 'Top 10 nach Bewertung']) {
       await expect(row(page, title)).toBeAttached();
     }
     await expect(row(page, 'Weiterschauen').locator('article.card')).toHaveCount(2);

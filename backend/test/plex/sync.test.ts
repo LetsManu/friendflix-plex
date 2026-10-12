@@ -68,7 +68,7 @@ describe('PlexSync', () => {
     expect(types).toEqual([{ type: 'clip', n: 1 }, { type: 'collection', n: 1 }, { type: 'episode', n: 6 }, { type: 'movie', n: 2 }, { type: 'season', n: 2 }, { type: 'show', n: 1 }]);
     expect((await pool.query('select section_id, type, title from plex_sections order by section_id')).rows).toEqual([{ section_id: 1, type: 'movie', title: 'Movies' }, { section_id: 2, type: 'show', title: 'TV' }]);
     const actors = (await pool.query("select tag, tag_id, role from plex_tags where rating_key = 3 and kind = 'actor' order by pos limit 2")).rows;
-    expect(actors).toEqual([{ tag: 'Dario Molaro', tag_id: '10', role: 'Sam' }, { tag: 'Davide Carfora', tag_id: '11', role: 'Tom' }]);
+    expect(actors).toEqual([{ tag: 'Teo Brandvik', tag_id: '10', role: 'Sam' }, { tag: 'Joss Marlowe', tag_id: '11', role: 'Tom' }]);
     expect((await pool.query('select guids from plex_items where rating_key = 3')).rows[0].guids).toEqual(['tvdb://370160']);
     expect((await pool.query('select item_key from plex_collection_items where collection_key = 12 order by pos')).rows.map((r) => r.item_key)).toEqual(['1', '2']);
     const media = JSON.stringify((await pool.query('select media from plex_items where media is not null')).rows);
@@ -95,12 +95,12 @@ describe('PlexSync', () => {
     await ms.start(rt(events));
     await ms.sync.run();
     expect(events).toEqual([]);
-    const m = fake.addMovie({ title: 'New Film', rating: 'PG', guids: ['tmdb://603', 'imdb://tt0133093'] });
-    const s = fake.addShow({ title: 'New Show', rating: 'TV-14', episodes: 1, guids: ['tmdb://1399'] });
+    const m = fake.addMovie({ title: 'New Film', rating: 'PG', guids: ['tmdb://4603', 'imdb://tt0004603'] });
+    const s = fake.addShow({ title: 'New Show', rating: 'TV-14', episodes: 1, guids: ['tmdb://4399'] });
     await ms.sync.run();
     expect(events).toEqual(expect.arrayContaining([
-      { type: 'itemAdded', itemId: item(m), itemType: 'Movie', tmdbId: 603 },
-      { type: 'itemAdded', itemId: item(s.show), itemType: 'Series', tmdbId: 1399 },
+      { type: 'itemAdded', itemId: item(m), itemType: 'Movie', tmdbId: 4603 },
+      { type: 'itemAdded', itemId: item(s.show), itemType: 'Series', tmdbId: 4399 },
       { type: 'itemAdded', itemId: item(s.episodes[0]!), itemType: 'Episode', seriesId: item(s.show), season: 1, episode: 1 },
     ]));
     expect(events.length).toBe(3);

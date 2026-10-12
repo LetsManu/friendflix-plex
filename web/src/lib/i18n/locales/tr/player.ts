@@ -167,7 +167,7 @@ const tr: Translation<typeof de> = {
   },
   watch: {
     back: 'Geri',
-    stillTitle: 'Hâlâ izliyor musun?',
+    stillTitle: 'Orada mısın?',
     stillText: 'Otomatik oynatma duraklatıldı. Sıradaki: {ep}',
     keepWatching: 'İzlemeye devam et',
     next: 'Sonraki bölüm',

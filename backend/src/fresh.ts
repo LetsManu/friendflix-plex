@@ -205,7 +205,7 @@ type Db = Pick<Ctx, 'db' | 'cfg' | 'fetchImpl' | 'jf' | 'kv'>;
 let leavingBusy = false;
 
 /**
- * Hourly: removes expired dates, then notifies (inbox, push, own ntfy topic) the accounts that have a leaving title on My List or in
+ * Hourly: removes expired dates, then notifies (inbox, push, own ntfy topic) the accounts that have a leaving title on the watchlist or in
  * Continue Watching: once in the last week and once on the last two days. A notification goes to the account, and notifications are
  * visible on every profile except kids profiles, so it is only sent when EVERY non-kids profile of the account can see the title.
  */

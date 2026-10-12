@@ -47,8 +47,8 @@ export interface LeavingRow { itemId: string; name: string | null; type: string 
 /** local calendar day `offset` days from today (YYYY-MM-DD) */
 export const leaveDay = (offset: number): string => { const d = new Date(); d.setDate(d.getDate() + offset); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const LEAVING_TITLES: Record<string, [string, string, number]> = {
-  '00000000000000000000000000000001': ['Inception', 'Movie', 2010], '00000000000000000000000000000002': ['Interstellar', 'Movie', 2014],
-  '00000000000000000000000000000003': ['The Dark Knight', 'Movie', 2008], '00000000000000000000000000000004': ['Dunkirk', 'Movie', 2017],
+  '00000000000000000000000000000001': ['Inkwell', 'Movie', 2010], '00000000000000000000000000000002': ['Interlace', 'Movie', 2014],
+  '00000000000000000000000000000003': ['The Dawn Keeper', 'Movie', 2008], '00000000000000000000000000000004': ['Dunwick', 'Movie', 2017],
 };
 const leavingRow = (itemId: string, days: number, note: string | null): LeavingRow => {
   const t = LEAVING_TITLES[itemId];
@@ -66,12 +66,12 @@ export function adminState(): AdminState {
     users,
     devices: Array.from({ length: 8 }, (_, i) => ({ user_id: auid(i + 2), device_id: `dev-${i}-0123456789ab`, label: ['Chrome auf Windows', 'Safari auf iPhone', 'LG webOS TV', 'Firefox auf Linux'][i % 4]!, approved: i > 3, last_seen: ago(i * 11 + 1), name: NAMES[i]! })),
     requests: [
-      { id: 101, title: 'Dune: Part Two', mediaType: 'movie', requestedBy: 'Anna Beispiel', status: 'angefragt', createdAt: ago(3) },
-      { id: 102, title: 'Severance', mediaType: 'tv', requestedBy: 'Ben Test', status: 'angefragt', createdAt: ago(9) },
-      { id: 103, title: 'Past Lives', mediaType: 'movie', requestedBy: 'Clara Fischer', status: 'angefragt', createdAt: ago(20) },
-      { id: 104, title: 'Shōgun', mediaType: 'tv', requestedBy: 'David Müller', status: 'angefragt', createdAt: ago(30) },
-      { id: 105, title: 'The Bear', mediaType: 'tv', requestedBy: 'Clara Fischer', status: 'genehmigt', createdAt: ago(50) },
-      { id: 106, title: 'Perfect Days', mediaType: 'movie', requestedBy: 'Emma Schneider', status: 'verfügbar', createdAt: ago(90) },
+      { id: 101, title: 'Dunmoor: Part Two', mediaType: 'movie', requestedBy: 'Anna Beispiel', status: 'angefragt', createdAt: ago(3) },
+      { id: 102, title: 'Sundial', mediaType: 'tv', requestedBy: 'Ben Test', status: 'angefragt', createdAt: ago(9) },
+      { id: 103, title: 'Paper Lanterns', mediaType: 'movie', requestedBy: 'Clara Fischer', status: 'angefragt', createdAt: ago(20) },
+      { id: 104, title: 'Silkroad', mediaType: 'tv', requestedBy: 'David Müller', status: 'angefragt', createdAt: ago(30) },
+      { id: 105, title: 'The Bramble', mediaType: 'tv', requestedBy: 'Clara Fischer', status: 'genehmigt', createdAt: ago(50) },
+      { id: 106, title: 'Quiet Mornings', mediaType: 'movie', requestedBy: 'Emma Schneider', status: 'verfügbar', createdAt: ago(90) },
     ],
     invites: [
       { id: auid(201), role: 'friend', note: 'Für Annas Bruder', expires_at: fut(30), used_at: null, used_by_name: null },
@@ -89,19 +89,19 @@ export function adminState(): AdminState {
       { id: 43, at: ago(49), action: 'user.provisioned', target: auid(13), meta: {}, actor: null, target_name: 'Leon Richter' },
       { id: 42, at: ago(60), action: 'system.update', target: null, meta: { from: 'a', to: 'b' }, actor: 'Tester', target_name: null },
     ],
-    polls: [{ id: 'p1', title: 'Filmabend Freitag', creator: 'Anna Beispiel', winnerOptionId: 'o2', closesAt: ago(2), options: [{ id: 'o1', title: 'Heat', votes: 2, inLibrary: true }, { id: 'o2', title: 'Dune: Part Two', votes: 5, inLibrary: false }] }],
+    polls: [{ id: 'p1', title: 'Filmabend Freitag', creator: 'Anna Beispiel', winnerOptionId: 'o2', closesAt: ago(2), options: [{ id: 'o1', title: 'Hearth', votes: 2, inLibrary: true }, { id: 'o2', title: 'Dunmoor: Part Two', votes: 5, inLibrary: false }] }],
     lists: [
       { id: '11111111-1111-4111-8111-111111111111', name: 'Filmabend', owner: { id: auid(2), name: 'Anna' }, itemCount: 12, featured: true },
       { id: '22222222-2222-4222-8222-222222222222', name: 'Annas Klassiker', owner: { id: auid(3), name: 'Ben' }, itemCount: 4, featured: false },
     ],
     hubs: [
-      { id: 'h1', name: 'Marvel', source: 'studio', sourceValue: 'Marvel Studios', enabled: true },
-      { id: 'h2', name: 'Pixar', source: 'studio', sourceValue: 'Pixar', accent: '#3a7bd5', enabled: false },
+      { id: 'h1', name: 'Mythos', source: 'studio', sourceValue: 'Mythos Studios', enabled: true },
+      { id: 'h2', name: 'Pinecone', source: 'studio', sourceValue: 'Pinecone', accent: '#3a7bd5', enabled: false },
     ],
     previews: previewItems.map((p) => ({ ...p })),
     live: [
-      { userId: auid(2), userName: 'Anna Beispiel', profileName: 'Anna', playSessionId: 'ps-anna', itemId: 'it1', title: 'Heat', seriesName: null, type: 'Movie', positionTicks: 30 * 6e8, runtimeTicks: 170 * 6e8, isPaused: false, updatedAt: ago(0), source: 'portal' },
-      { userId: auid(3), userName: 'Ben Test', profileName: null, playSessionId: 'ps-ben', itemId: 'it2', title: 'Pilot', seriesName: 'Severance', type: 'Episode', positionTicks: 10 * 6e8, runtimeTicks: 55 * 6e8, isPaused: true, updatedAt: ago(0), source: 'portal' },
+      { userId: auid(2), userName: 'Anna Beispiel', profileName: 'Anna', playSessionId: 'ps-anna', itemId: 'it1', title: 'Hearth', seriesName: null, type: 'Movie', positionTicks: 30 * 6e8, runtimeTicks: 170 * 6e8, isPaused: false, updatedAt: ago(0), source: 'portal' },
+      { userId: auid(3), userName: 'Ben Test', profileName: null, playSessionId: 'ps-ben', itemId: 'it2', title: 'Pilot', seriesName: 'Sundial', type: 'Episode', positionTicks: 10 * 6e8, runtimeTicks: 55 * 6e8, isPaused: true, updatedAt: ago(0), source: 'portal' },
     ],
     seerrUp: true,
     summaryFails: false,
@@ -265,7 +265,7 @@ export function adminRoute(st: AdminState, m: string, p: string, sp: URLSearchPa
   if (p === '/api/admin/hubs' && m === 'GET') return J({ max: 8, hubs: st.hubs });
   if (p === '/api/admin/hubs' && m === 'POST') { const h = { id: 'h' + (st.hubs.length + 1), ...body }; st.hubs.push(h); return J({ hub: h }); }
   if (p === '/api/admin/hubs/order' && m === 'PUT') { st.hubs = (body.ids as string[]).map((id) => st.hubs.find((h) => h.id === id)!).filter(Boolean); return ok(); }
-  if (p === '/api/admin/hubs/suggestions') return J({ suggestions: ['Action', 'Drama', 'Krimi', 'Sci-Fi', 'A24', 'Warner'].map((n, i) => ({ name: n, count: 10 + i, source: i < 4 ? 'genre' : 'studio', sourceValue: n, used: false })) });
+  if (p === '/api/admin/hubs/suggestions') return J({ suggestions: ['Action', 'Drama', 'Krimi', 'Sci-Fi', 'Aster 9', 'Wardell'].map((n, i) => ({ name: n, count: 10 + i, source: i < 4 ? 'genre' : 'studio', sourceValue: n, used: false })) });
   if ((mm = p.match(/^\/api\/admin\/hubs\/([^/]+)$/))) {
     if (m === 'DELETE') { st.hubs = st.hubs.filter((h) => h.id !== mm![1]); return ok(); }
     if (m === 'PUT') { const h = st.hubs.find((x) => x.id === mm![1]); if (h) Object.assign(h, body); return J({ hub: h }); }
@@ -314,7 +314,7 @@ export function adminRoute(st: AdminState, m: string, p: string, sp: URLSearchPa
     if (m === 'POST') return ok();
     return J({ running: false, done: 6, total: 6, startedAt: ago(3), finishedAt: ago(2), results: [{ itemId: 'a'.repeat(32), name: 'Kaputter Film', type: 'Movie', ok: false, status: 500, ms: 900, bytes: 0, error: 'HTTP 500 transcoder failed' }, ...Array.from({ length: 5 }, (_, i) => ({ itemId: String(i).repeat(32), name: 'Film ' + i, type: 'Movie', ok: true, status: 200, ms: 800 + i * 90, bytes: 1, error: null }))] });
   }
-  if (p === '/api/admin/downloads') return J({ enabled: true, maxBytes: 50 * 1024 ** 3, diskBytes: 12.4 * 1024 ** 3, jobCounts: { ready: 3, preparing: 1 }, jobs: [{ id: auid(400), item_id: 'abcdef0123456789abcdef0123456789', title: 'Inception', series_name: null, quality: 'hd', audio_lang: 'deu', status: 'preparing', seg_done: 40, seg_total: 100, bytes: 1e9, error: null, created_at: ago(2), updated_at: ago(1), licenses: 2 }], licenses: [{ id: auid(401), user_name: 'Anna', device_label: 'iPhone', item_id: 'x', title: 'Inception', series_name: null, quality: 'hd', status: 'fetched', created_at: ago(30), expires_at: fut(500) }] });
+  if (p === '/api/admin/downloads') return J({ enabled: true, maxBytes: 50 * 1024 ** 3, diskBytes: 12.4 * 1024 ** 3, jobCounts: { ready: 3, preparing: 1 }, jobs: [{ id: auid(400), item_id: 'abcdef0123456789abcdef0123456789', title: 'Inkwell', series_name: null, quality: 'hd', audio_lang: 'deu', status: 'preparing', seg_done: 40, seg_total: 100, bytes: 1e9, error: null, created_at: ago(2), updated_at: ago(1), licenses: 2 }], licenses: [{ id: auid(401), user_name: 'Anna', device_label: 'iPhone', item_id: 'x', title: 'Inkwell', series_name: null, quality: 'hd', status: 'fetched', created_at: ago(30), expires_at: fut(500) }] });
   if ((mm = p.match(/^\/api\/admin\/downloads\/([^/]+)$/)) && m === 'DELETE') return ok();
   if (p === '/api/admin/digest') {
     if (m === 'PUT') return J({ enabled: body.enabled, day: body.day, hour: body.hour, source: 'admin', lastRun: null });

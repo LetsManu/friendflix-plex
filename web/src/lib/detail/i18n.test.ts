@@ -44,7 +44,7 @@ describe('areas home + detail', () => {
     expect(runtimeLabel({ type: 'Series' })).toBe('Series');
     expect(releaseLabel('2026-03-05T00:00:00Z')).toBe('Releases on 5 March 2026');
     expect(releaseLabel(undefined)).toBe('Date to be announced');
-    expect(shareData({ id: 'm1', name: 'Dune', type: 'Movie' }, 'https://x.test').text).toBe('Dune on FriendFlix');
+    expect(shareData({ id: 'm1', name: 'Dunmoor', type: 'Movie' }, 'https://x.test').text).toBe('Dunmoor on FriendFlix');
     expect(langLine({ audio: ['deu'], subs: ['eng'] })).toBe('Audio: German · Subtitles: English');
     expect(remainingLabel(30 * T, 53 * T)).toBe('23 min left');
     expect(countdownLabel('episode', 3)).toBe('Episode starts in 3 …');

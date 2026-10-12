@@ -35,7 +35,7 @@
   @media (prefers-reduced-motion: reduce) { .peek { animation: none; } }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .4rem; }
   li { display: flex; align-items: center; gap: .6rem; min-width: 0; font-size: .86rem; line-height: 1.2; }
-  li img, .ph { flex: none; width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #333; }
+  li img, .ph { flex: none; width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #2b333c; }
   li span { display: grid; min-width: 0; } li b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   li small { color: #bdbdbd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .more { pointer-events: auto; margin-top: .45rem; width: 100%; min-height: 36px; padding: .2rem .4rem; background: rgba(255,255,255,.1); color: #fff; font-size: .8rem; font-weight: 600; border-radius: 6px; }
