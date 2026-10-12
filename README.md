@@ -20,7 +20,7 @@
 
 **FriendFlix for Plex** is a private streaming portal that sits in front of your **Plex Media Server** (your media) and an optional request service (wishes). Your friends get a polished, familiar streaming experience on their laptop, phone and TV – with profiles, downloads, watch parties and recommendations from each other. They never see Plex or the request service directly, and you stay in control of who gets in. Nobody needs a plex.tv account.
 
-> **Status: in development / preview.** The Plex support is being built right now and **does not work yet** – nothing below is a promise of a released feature until the first preview release is published (see [Releases](https://github.com/LetsManu/friendflix-plex/releases) and [CHANGELOG.md](CHANGELOG.md)). The screenshots show the FriendFlix interface as it exists upstream.
+> **Status: preview, not released.** The Plex support is implemented on the development branch and tested against a fake Plex server built from real Plex Media Server 1.43 answers, but it is **not released** and has hardly run against real servers yet – no images are published until the first preview release (see [Releases](https://github.com/LetsManu/friendflix-plex/releases) and [CHANGELOG.md](CHANGELOG.md)). Volunteers: [test against a real Plex server](docs/plex.md#test-against-a-real-plex-server). The screenshots show the FriendFlix interface as it exists upstream.
 >
 > **This is a fork.** FriendFlix for Plex is a fork of [FriendFlix](https://github.com/LetsManu/friendflix) that talks to Plex instead of Jellyfin. **Using Jellyfin? Use the upstream project: [LetsManu/friendflix](https://github.com/LetsManu/friendflix).**
 
@@ -111,7 +111,7 @@ The interface speaks **English, German, French, Spanish, Italian, Turkish and Po
 
 - **Self-hosted.** Everything runs on your own server. FriendFlix has no ads and no third-party analytics.
 - **Invite only.** New people join with one-time invitation links. Sign-in goes through your Authentik with **mandatory multi-factor authentication**, and new devices can require approval.
-- **Plex and the request service stay hidden.** Friends only ever talk to the portal. The Plex admin token lives only in the gateway and is never sent to a browser; video is streamed through a gateway that checks every request.
+- **Plex and the request service stay hidden.** Friends only ever talk to the portal. The Plex token lives only in the backend and the gateway and is never sent to a browser; video is streamed through a gateway that checks every request.
 - **No plex.tv accounts for your friends.** FriendFlix manages its users itself; Plex only sees one server-side token. It works without Plex Pass.
 - **You decide what friends see.** "Share history" (off by default) and "Share ratings" are switched in each person's settings; "Popular this week" only shows counts, never who watched. Reactions to a title only appear once you have watched it, and optional spoiler protection hides thumbnails and descriptions of unwatched episodes.
 - **Trailers without tracking.** Trailers for titles that are not in the library play in the privacy-friendly `youtube-nocookie.com` player and only load after a click.
@@ -120,26 +120,31 @@ The interface speaks **English, German, French, Spanish, Italian, Turkish and Po
 
 ## Plex vs. Jellyfin: what works
 
-The FriendFlix interface is the same; what differs is what Plex can deliver. Planned status for the Plex version (verified against a real Plex Media Server 1.43):
+The FriendFlix interface is the same; what differs is what Plex can deliver. Status of the preview (Plex behaviour verified against a real Plex Media Server 1.43, implementation tested against a fake built from its answers):
 
 | Feature | Plex | Note |
 |---|---|---|
-| Profiles, kids profiles, age limits, PIN | Works | Stored and enforced by FriendFlix (kids age caps 0/6/12 on every list, search and title); age ratings come from Plex (`contentRating`), unknown ratings are blocked for capped and kids profiles |
-| Library, search, detail pages, cast, images | Works | Title logos depend on what Plex provides; falls back to the title text |
+| Profiles, kids profiles, age limits, PIN | Works | Stored and enforced by FriendFlix (kids age caps 0/6/12 on every list, search, title and media request); age ratings come from Plex (`contentRating`), unknown ratings are blocked for capped and kids profiles |
+| Library access per role | Works | By Plex library name (renaming a library in Plex needs a role update) |
+| Library, search, detail pages, images | Works | Title logos depend on what Plex provides; falls back to the title text |
+| Cast | Limited | Names and roles, no person images |
+| "More like this" | Limited | Computed by FriendFlix from shared genres and cast |
 | Brand hubs, "Because you watched …" rows, episode comments, onboarding | Works | FriendFlix features; hubs are built from Plex collections/genres/tags |
 | Extras tab (trailers, special features) | Limited | Only what Plex has as local extras |
 | Simulcast page (airing now, anime filter) | Limited | Relies on Plex air dates; not verified yet |
 | Per-series audio/subtitle memory, anime original-audio default | Works | Stored by FriendFlix; the audio switch itself is subject to the per-account audio limit below |
-| Skip preview ("next time on …") | Not available | Plex has no such markers |
 | Continue watching, favourites, my list, ratings, history | Works | Stored in FriendFlix; FriendFlix never writes watch state to Plex |
-| Direct play and adaptive streaming (HLS) | Works | Via the Plex transcoder; 4K/HDR/hardware transcoding depends on your Plex setup |
-| Subtitles | Works | Extracted and converted to WebVTT by FriendFlix; image-based (PGS) not offered |
-| Audio track selection | Limited | Plex keeps it per Plex account. FriendFlix serializes stream starts; it can collide with other Plex apps using the same account – use a dedicated token |
-| Skip intro / credits | Limited | Needs markers from Plex, which needs **Plex Pass**. Without it the button never appears. Recap/preview skipping: not available |
+| Direct play and adaptive streaming (HLS) | Works | Via the Plex transcoder; 4K/HDR/hardware transcoding depends on your Plex setup; role limits (bitrate, height, transcoding off, max. streams) enforced by FriendFlix |
+| Subtitles | Limited | Text subtitles only; embedded tracks are extracted and converted to WebVTT by FriendFlix (ffmpeg); no PGS, no subtitle search |
+| Audio track selection | Limited | Plex keeps it per Plex account. FriendFlix serializes stream starts; it collides with other Plex apps using the same account – use a dedicated Plex account/token |
+| Skip intro / credits | Limited | Needs markers from Plex, which needs **Plex Pass**. Without it the button never appears |
+| Skip recap / preview ("next time on …") | Not available | Plex has no such markers |
 | Scrub preview thumbnails | Limited | Single frames, only if "video preview thumbnails" are enabled in Plex |
-| Downloads, TV mode, Chromecast, watch parties, recommendations, notifications | Works | FriendFlix features, independent of the media server |
+| Downloads | Works | Original file if browser-ready, otherwise transcoded by Plex and remuxed by FriendFlix |
+| Chromecast | Works | Including text subtitles (signed FriendFlix subtitle URLs) |
+| TV mode, watch parties, recommendations, notifications | Works | FriendFlix features, independent of the media server |
 | "Upcoming episodes" | Not available | Plex does not offer it |
-| Wishes / request service | Limited | Per-user mapping of requests is degraded |
+| Wishes / request service | Not working yet | The Seerr user mapping relies on Jellyfin user ids |
 | nginx "Plan B" media path | Not available | Not supported with Plex |
 
 Details, setup and troubleshooting: [docs/plex.md](docs/plex.md).
@@ -150,7 +155,7 @@ Details, setup and troubleshooting: [docs/plex.md](docs/plex.md).
 
 Everything below is technical. The Plex setup guide is [docs/plex.md](docs/plex.md) ([Deutsch](docs/de/plex.md)); the detailed operating docs are in German (see [Documentation](#documentation)).
 
-> **Preview:** the Plex backend, `compose.plex.yaml` and the images below are **planned / in development** and not released yet. The steps describe the target setup of the first preview release.
+> **Preview:** the Plex backend and `compose.plex.yaml` exist, but there is no release and the images below are not published yet. Until then, build the images yourself (`docker compose -f compose.yaml -f compose.plex.yaml build`) and use a test instance.
 
 **Setup guide:** step-by-step installation from an empty server to the first invited friend – [docs/setup.md](docs/setup.md); Authentik (installation, provider, flows, invitations) – [docs/authentik.md](docs/authentik.md).
 
@@ -166,15 +171,16 @@ Everything below is technical. The Plex setup guide is [docs/plex.md](docs/plex.
 
 ### Quick start
 
-The production stack will pull prebuilt images from `ghcr.io/letsmanu/friendflix-plex-{backend,web,gateway}` (planned); there is no build on the server. **Coming with the first preview release** – the commands do not work yet.
+The production stack pulls prebuilt images from `ghcr.io/letsmanu/friendflix-plex-{backend,web,gateway}`; there is no build on the server. The images are published with the first preview release – before that, `docker compose ... up` cannot pull them.
 
 ```bash
 git clone https://github.com/LetsManu/friendflix-plex.git && cd friendflix-plex
 cp .env.example .env
 openssl rand -base64 32    # -> APP_ENC_KEY
 openssl rand -hex 24       # -> INTERNAL_SECRET, WEBHOOK_SECRET, METRICS_TOKEN (one value each)
-$EDITOR .env               # PUBLIC_URL, passwords, OIDC_*, MEDIA_SERVER=plex, PLEX_URL, PLEX_TOKEN, SEERR_*
+$EDITOR .env               # PUBLIC_URL, passwords, OIDC_*, PLEX_URL, PLEX_TOKEN, SEERR_*
 docker login ghcr.io -u <user>                                 # only if the packages are private (PAT with read:packages)
+docker compose -f compose.prod.yaml -f compose.plex.yaml config --quiet   # validate
 docker compose -f compose.prod.yaml -f compose.plex.yaml up -d    # compose.plex.yaml only connects to your existing Plex server
 docker compose -f compose.prod.yaml -f compose.plex.yaml --profile backup up -d backup   # optional: nightly database backups
 docker compose -f compose.prod.yaml -f compose.plex.yaml ps                         # everything "healthy"
@@ -193,7 +199,7 @@ The gateway must reach `PLEX_URL`; use the local address of your Plex server (de
 
 ### Configuration
 
-Template: [.env.example](.env.example). Every variable can also be read from a file with the `_FILE` suffix (Docker secrets, see [compose.secrets.yaml](compose.secrets.yaml)). Defaults are the ones in [compose.prod.yaml](compose.prod.yaml). Plex variables below belong to the planned `compose.plex.yaml`.
+Template: [.env.example](.env.example). Every variable can also be read from a file with the `_FILE` suffix (Docker secrets, see [compose.secrets.yaml](compose.secrets.yaml)). Defaults are the ones in [compose.prod.yaml](compose.prod.yaml). Plex variables below are passed by `compose.plex.yaml` (which also sets `MEDIA_SERVER=plex`).
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -203,9 +209,9 @@ Template: [.env.example](.env.example). Every variable can also be read from a f
 | `INTERNAL_SECRET`, `WEBHOOK_SECRET` | – (required, ≥ 16 chars) | Backend ↔ gateway secret; media server/request service webhooks |
 | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | – (required) | Authentik OIDC provider |
 | `MEDIA_SERVER` | `jellyfin` upstream; `plex` here | `plex` selects the Plex backend (one media server per instance) |
-| `PLEX_URL` | – (required with `plex`) | URL of your Plex server as seen by the gateway, e.g. `http://192.168.1.10:32400` |
-| `PLEX_TOKEN` or `PLEX_TOKEN_FILE` | – (required with `plex`) | Plex admin token. Only the gateway uses it; never sent to browsers |
-| `JELLYFIN_URL`, `JELLYFIN_ADMIN_API_KEY` | – (upstream / `MEDIA_SERVER=jellyfin` only) | Not used with Plex |
+| `PLEX_URL` | – (required with `plex`) | URL of your Plex server as seen by backend and gateway, e.g. `http://192.168.1.10:32400` or `http://host.docker.internal:32400` |
+| `PLEX_TOKEN` or `PLEX_TOKEN_FILE` | – (required with `plex`) | Plex token (a dedicated Plex account is recommended). Only backend and gateway use it; never sent to browsers |
+| `JELLYFIN_URL`, `JELLYFIN_ADMIN_API_KEY` | – (upstream / `MEDIA_SERVER=jellyfin` only) | Not used with Plex; leave empty |
 | `SEERR_URL`, `SEERR_API_KEY` | – (required as upstream) | Internal request service URL and API key |
 | `ADMIN_GROUP` | `friendflix-admins` | Authentik group whose members become portal admins |
 | `BIND_ADDR` | `127.0.0.1` | Host address the three ports are published on – never a public interface |
@@ -254,7 +260,7 @@ flowchart LR
 ```
 
 - Only the proxy is public. `web`, `backend` and `gateway` are published on `127.0.0.1` only; the request service has no ports at all and lives on the internal `media` network (your Plex server stays where it is and is only reached by the gateway and backend), Postgres and Redis on the internal `db` network.
-- All video data (playlists, segments, direct play, images, subtitles, downloads, Chromecast) flows through the gateway: no buffering, HTTP range, the Plex token only in the gateway, path allowlist, fixed upstream, bitrate cap per role.
+- All video data (playlists, segments, direct play, images, subtitles, downloads, Chromecast) flows through the gateway: no buffering, HTTP range, the Plex token only in the gateway (and the backend), path allowlist, fixed upstream, bitrate cap per role.
 - Containers run non-root with a read-only root filesystem, `cap_drop: ALL` and `no-new-privileges`. Strict CSP, CSRF tokens, rate limits, audit log.
 - Plex-specific: FriendFlix mirrors the Plex library into Postgres and enforces profiles, age limits and access itself; the gateway rewrites Plex transcoder playlists so clients never see Plex URLs or tokens. The upstream alternative "Plan B" (nginx serves `/media/` itself) is **not supported** with Plex.
 
@@ -304,7 +310,7 @@ npm run e2e                                     # Playwright: builds the web app
 
 - One backend replica: watch-party rooms, rate limits and remote-control rooms live in memory.
 - Image-based subtitles (PGS) are not offered; text subtitles are delivered as WebVTT.
-- Plex (see the [table above](#plex-vs-jellyfin-what-works) and [docs/plex.md](docs/plex.md)): skip intro/credits only with Plex Pass markers (never recap/preview); scrub previews are single frames and need preview thumbnails enabled in Plex; no "upcoming episodes"; audio track selection is per Plex account (stream starts are serialized, use a dedicated token); subtitles are extracted and converted by FriendFlix; the server must be claimed and a token is required; the request service's per-user mapping is degraded; Plan B is not supported.
+- Plex (see the [table above](#plex-vs-jellyfin-what-works) and [docs/plex.md](docs/plex.md)): skip intro/credits only with Plex Pass markers (never recap/preview); scrub previews are single frames and need preview thumbnails enabled in Plex; no "upcoming episodes"; audio track selection is per Plex account (stream starts are serialized, use a dedicated token); subtitles are extracted and converted by FriendFlix; the server must be claimed and a token is required; wishes (request service) do not work yet; Plan B is not supported.
 - The Plex implementation relies on partly undocumented Plex APIs, verified against Plex Media Server 1.43; other versions may behave differently.
 - Request service and Authentik APIs differ between versions – after upgrades see [docs/operations.md](docs/operations.md) and [docs/integrations.md](docs/integrations.md).
 - Profiles live in FriendFlix, not in Plex: they do not appear in Plex's user list and need no plex.tv account.

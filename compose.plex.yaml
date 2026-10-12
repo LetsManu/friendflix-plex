@@ -1,0 +1,49 @@
+# FriendFlix for Plex (preview) - override for compose.prod.yaml (or compose.yaml): connects the portal to an EXISTING Plex Media
+# Server instead of Jellyfin. There is no Plex container here, and Plan B (compose.planb.yaml / NPM serving /media itself) is not
+# supported with Plex.
+#
+#   docker compose -f compose.prod.yaml -f compose.plex.yaml config      # check
+#   docker compose -f compose.prod.yaml -f compose.plex.yaml up -d
+#   (or put COMPOSE_FILE=compose.prod.yaml:compose.plex.yaml into .env and use plain `docker compose up -d`)
+#
+# .env (see the "FriendFlix for Plex" block in .env.example):
+#   PLEX_URL=http://192.168.1.10:32400       required; how backend + gateway reach Plex (LAN IP, host.docker.internal, or a
+#                                            container name on a shared network). Plex on this Docker host: http://host.docker.internal:32400
+#   PLEX_TOKEN=...                           required; the token of the Plex account FriendFlix uses (ONE token for everybody).
+#                                            Recommended: a dedicated Plex account with access to the libraries FriendFlix should show.
+#                                            As a Docker secret instead: PLEX_TOKEN_FILE (compose.secrets.yaml style, see below).
+#   JELLYFIN_URL / JELLYFIN_ADMIN_API_KEY      not needed with Plex (leave empty).
+#
+# The Plex token only ever lives in the backend and gateway environment: it is sent to Plex as a header and never reaches a browser.
+services:
+  backend:
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-plex-backend:${FF_TAG:-latest}
+    environment:
+      MEDIA_SERVER: plex
+      PLEX_URL: ${PLEX_URL:?set PLEX_URL in .env (e.g. http://192.168.1.10:32400)}
+      PLEX_TOKEN: ${PLEX_TOKEN:-}
+      PLEX_TOKEN_FILE: ${PLEX_TOKEN_FILE:-}
+      JELLYFIN_URL: !reset null
+      JELLYFIN_ADMIN_API_KEY: !reset null
+      JELLYFIN_ADMIN_API_KEY_FILE: !reset null # set by compose.secrets.yaml; unused with Plex
+    # reach a Plex server that runs directly on the Docker host (PLEX_URL=http://host.docker.internal:32400)
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  gateway:
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-plex-gateway:${FF_TAG:-latest}
+    environment:
+      MEDIA_SERVER: plex
+      PLEX_URL: ${PLEX_URL:?set PLEX_URL in .env (e.g. http://192.168.1.10:32400)}
+      PLEX_TOKEN: ${PLEX_TOKEN:-}
+      PLEX_TOKEN_FILE: ${PLEX_TOKEN_FILE:-}
+      JELLYFIN_URL: !reset null
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  web:
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-plex-web:${FF_TAG:-latest}
+
+# Token as a Docker secret instead of PLEX_TOKEN (optional):
+#   printf '%s' 'your-plex-token' > secrets/plex_token && chmod 600 secrets/plex_token
+#   .env: PLEX_TOKEN_FILE=/run/secrets/plex_token   (leave PLEX_TOKEN empty)
+#   and add to this file:  top level `secrets: { plex_token: { file: ./secrets/plex_token } }`,
+#   plus `secrets: [plex_token]` under backend and gateway (with compose.secrets.yaml: append plex_token to its backend list).

@@ -114,7 +114,7 @@ export function profileRoutes(app: FastifyInstance, ctx: Ctx) {
       if (kidsChange) {
         // the cap lives in the Jellyfin policy of the profile's user (enforced by Jellyfin for every item, list, search and stream)
         try {
-          await applyRole(ctx, u.jellyfin_user_id!, req.user!.role, req.user!.disabled, { IsHidden: true });
+          await applyRole(ctx, u.jellyfin_user_id!, req.user!.role, req.user!.disabled, { hidden: true });
         } catch {
           await ctx.db.query('update profiles set kids=$2, kids_max_rating=$3 where id=$1', [p.id, p.kids, p.kids_max_rating]);
           return reply.code(502).send({ error: 'jellyfin' });

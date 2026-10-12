@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
-import { JellyfinError } from '../jellyfin/client.js';
+import { MediaError } from '../media/types.js';
 import { MAX_FEATURED, MAX_FEATURED_ITEMS, MAX_ITEMS, MAX_MEMBERS, MAX_OWNED, canEdit, isFeatured, listRole, type ListAccess, type ListRole } from '../lists.js';
 import { m } from '../i18n.js';
 import { notify } from '../notify.js';
@@ -170,7 +170,7 @@ export function listRoutes(app: FastifyInstance, ctx: Ctx) {
       item = await ctx.jf.item(req.jfUser!, b.itemId); // proves the caller can see it
       if (item.type === 'Episode' && item.seriesId) item = await ctx.jf.item(req.jfUser!, item.seriesId);
     } catch (e) {
-      if (e instanceof JellyfinError) return reply.code(404).send({ error: 'not_found' });
+      if (e instanceof MediaError) return reply.code(404).send({ error: 'not_found' });
       throw e;
     }
     if (item.type !== 'Movie' && item.type !== 'Series') return reply.code(400).send({ error: 'bad_type' });

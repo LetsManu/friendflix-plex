@@ -1,0 +1,278 @@
+{
+  "_comment": "Plex adapter (fork). Shared by backend (backend/src/plex/mediapaths.ts) and gateway (gateway/src/upstream/plex.ts) tests. 'allow'/'deny' = cookie allowlist, 'direct' = original streams, 'cast' = Chromecast subset, 'signatures' = HMAC bindings with 'secret' (part = direct stream, trickplay = BIF frames: separate domains), 'authorize' = adapter decision when the backend allows the item (checkItem true), 'rewrite' = public path + query -> Plex request.",
+  "secret": "vector-secret-vector-secret",
+  "token": "PLEXTOKEN-must-never-leak",
+  "signatures": {
+    "part": [
+      {
+        "item": "9f1e0000000000000000000000000001",
+        "part": "9f1e3000000000000000000000000001",
+        "sig": "4b41171923ff56494539b7288707b65a"
+      },
+      {
+        "item": "9f1e0000000000000000000000000025",
+        "part": "9f1e3000000000000000000000000063",
+        "sig": "c77c59da7fa958e8b04880b6991368ab"
+      },
+      {
+        "item": "9f1e0000000000000000000000000025",
+        "part": "9f1e3000000000000000000000000001",
+        "sig": "fe3a9ccdbd5f5a6db2ace411484dfaed"
+      }
+    ],
+    "session": [
+      {
+        "item": "9f1e0000000000000000000000000001",
+        "nonce": "0123456789abcdef",
+        "session": "0123456789abcdef-fa711c7604858bc04fecd673"
+      },
+      {
+        "item": "9f1e0000000000000000000000000025",
+        "nonce": "fedcba9876543210",
+        "session": "fedcba9876543210-1ec6b1ab812cd285bef066c7"
+      }
+    ],
+    "trickplay": [
+      {
+        "item": "9f1e0000000000000000000000000001",
+        "part": "9f1e3000000000000000000000000001",
+        "sig": "4119f60c549b545c7cfe5176502b5e49"
+      },
+      {
+        "item": "9f1e0000000000000000000000000025",
+        "part": "9f1e3000000000000000000000000063",
+        "sig": "5055db56cca470fda07a285e4f80d03f"
+      },
+      {
+        "item": "9f1e0000000000000000000000000025",
+        "part": "9f1e3000000000000000000000000001",
+        "sig": "d8f6ec8c5d02be1b2057301538cdda83"
+      }
+    ]
+  },
+  "allow": [
+    "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/index.m3u8",
+    "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/00000.ts",
+    "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/123456.ts",
+    "/Videos/9f1e0000000000000000000000000001/stream",
+    "/Videos/9f1e0000000000000000000000000001/stream.mkv",
+    "/Videos/9f1e0000000000000000000000000001/9f1e3000000000000000000000000001/Trickplay/2000/0.jpg",
+    "/Videos/9f1e0000000000000000000000000001/9f1e3000000000000000000000000001/Trickplay/10000/123.jpg",
+    "/Items/9f1e0000000000000000000000000001/Images/Primary",
+    "/Items/9f1e0000000000000000000000000001/Images/Backdrop/0",
+    "/Items/9f1e0000000000000000000000000001/Images/Logo",
+    "/Items/9f1e0000000000000000000000000001/Images/Thumb",
+    "/Items/9f1e0000000000000000000000000001/Images/Banner"
+  ],
+  "direct": [
+    "/Videos/9f1e0000000000000000000000000001/stream",
+    "/Videos/9f1e0000000000000000000000000001/stream.mp4"
+  ],
+  "deny": [
+    "",
+    "/System/Info",
+    "/library/metadata/1",
+    "/library/parts/1/0/file",
+    "/video/:/transcode/universal/start.m3u8",
+    "/Videos/9f1e0000000000000000000000000001/master.m3u8",
+    "/Videos/9f1e0000000000000000000000000001/main.m3u8",
+    "/Videos/9f1e0000000000000000000000000001/hls1/main/0.ts",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/stream",
+    "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Primary",
+    "/Items/9f1e1000000000000000000000000005/Images/Primary",
+    "/Items/9F1E0000000000000000000000000001/Images/Primary",
+    "/Videos/9f1e3000000000000000000000000001/stream",
+    "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/00000.vtt",
+    "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/../../x",
+    "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/..%2f..%2fx",
+    "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef0123456789abcdef/00000.ts",
+    "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/index.m3u8/extra",
+    "/Videos/9f1e0000000000000000000000000001/9f1e3000000000000000000000000001/Trickplay/2000/0.png",
+    "/Videos/9f1e0000000000000000000000000001/9f1e0000000000000000000000000001/Trickplay/2000/0.jpg",
+    "/Videos/9f1e0000000000000000000000000001/9f1e3000000000000000000000000001/Trickplay/20/0.jpg",
+    "/Videos/9f1e0000000000000000000000000001/9f1e3000000000000000000000000001/Subtitles/3/0/Stream.vtt",
+    "/Items/9f1e0000000000000000000000000001/Images/Primary/../../../System",
+    "//evil.example/Items/9f1e0000000000000000000000000001/Images/Primary",
+    "/Items/9f1e0000000000000000000000000001/Images/Primary%00.png",
+    "/Items/9f1e0000000000000000000000000001/Download"
+  ],
+  "cast": {
+    "allow": [
+      "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/index.m3u8",
+      "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/00012.ts",
+      "/Items/9f1e0000000000000000000000000001/Images/Primary",
+      "/Items/9f1e0000000000000000000000000001/Images/Backdrop"
+    ],
+    "deny": [
+      "/Videos/9f1e0000000000000000000000000001/stream",
+      "/Videos/9f1e0000000000000000000000000001/stream.mp4",
+      "/Videos/9f1e0000000000000000000000000001/9f1e3000000000000000000000000001/Trickplay/2000/0.jpg",
+      "/Items/9f1e0000000000000000000000000001/Images/Logo",
+      "/Items/9f1e0000000000000000000000000001/Images/Primary/0",
+      "/Videos/9f1e0000000000000000000000000001/master.m3u8"
+    ]
+  },
+  "authorize": [
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/index.m3u8",
+      "query": "",
+      "allow": true
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/00003.ts",
+      "query": "",
+      "allow": true
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000025/hls/0123456789abcdef-fa711c7604858bc04fecd673/00003.ts",
+      "query": "",
+      "allow": false,
+      "_why": "session bound to another item"
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-000000000000000000000000/00003.ts",
+      "query": "",
+      "allow": false
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/stream",
+      "query": "MediaSourceId=9f1e3000000000000000000000000001&sig=4b41171923ff56494539b7288707b65a",
+      "allow": true
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/stream",
+      "query": "mediasourceid=9f1e3000000000000000000000000001&SIG=4b41171923ff56494539b7288707b65a",
+      "allow": true
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/stream",
+      "query": "MediaSourceId=9f1e3000000000000000000000000001",
+      "allow": false
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/stream",
+      "query": "MediaSourceId=9f1e3000000000000000000000000063&sig=4b41171923ff56494539b7288707b65a",
+      "allow": false,
+      "_why": "foreign part"
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000025/stream",
+      "query": "MediaSourceId=9f1e3000000000000000000000000001&sig=4b41171923ff56494539b7288707b65a",
+      "allow": false,
+      "_why": "signature of another item"
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/stream",
+      "query": "MediaSourceId=9f1e3000000000000000000000000001&sig=4b41171923ff56494539b7288707b65a&MediaSourceId=9f1e3000000000000000000000000063",
+      "allow": false,
+      "_why": "repeated key"
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/stream",
+      "query": "MediaSourceId=9f1e0000000000000000000000000001&sig=4b41171923ff56494539b7288707b65a",
+      "allow": false
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/9f1e3000000000000000000000000001/Trickplay/2000/7.jpg",
+      "query": "sig=4b41171923ff56494539b7288707b65a",
+      "allow": false,
+      "_why": "a direct-stream signature never unlocks trickplay"
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/9f1e3000000000000000000000000001/Trickplay/2000/7.jpg",
+      "query": "sig=4119f60c549b545c7cfe5176502b5e49",
+      "allow": true
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/9f1e3000000000000000000000000001/Trickplay/2000/7.jpg",
+      "query": "",
+      "allow": false
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000025/9f1e3000000000000000000000000001/Trickplay/2000/7.jpg",
+      "query": "sig=4119f60c549b545c7cfe5176502b5e49",
+      "allow": false
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000025/9f1e3000000000000000000000000001/Trickplay/2000/7.jpg",
+      "query": "sig=fe3a9ccdbd5f5a6db2ace411484dfaed",
+      "allow": false,
+      "_why": "a direct-stream signature never unlocks trickplay"
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000025/9f1e3000000000000000000000000001/Trickplay/2000/7.jpg",
+      "query": "sig=d8f6ec8c5d02be1b2057301538cdda83",
+      "allow": true
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Primary",
+      "query": "maxWidth=300",
+      "allow": true
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/stream",
+      "query": "MediaSourceId=9f1e3000000000000000000000000001&sig=4119f60c549b545c7cfe5176502b5e49",
+      "allow": false,
+      "_why": "a trickplay signature never unlocks the original file"
+    }
+  ],
+  "rewrite": [
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/index.m3u8",
+      "query": "X-Plex-Token=PLEXTOKEN-must-never-leak&foo=1",
+      "upstream": "/video/:/transcode/universal/session/0123456789abcdef-fa711c7604858bc04fecd673/base/index.m3u8"
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/hls/0123456789abcdef-fa711c7604858bc04fecd673/00042.ts",
+      "query": "",
+      "upstream": "/video/:/transcode/universal/session/0123456789abcdef-fa711c7604858bc04fecd673/base/00042.ts"
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/stream",
+      "query": "MediaSourceId=9f1e3000000000000000000000000063&sig=c77c59da7fa958e8b04880b6991368ab&download=1",
+      "upstream": "/library/parts/99/0/file"
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/stream",
+      "query": "static=true&MediaSourceId=9f1e3000000000000000000000000001",
+      "upstream": "/library/parts/1/0/file"
+    },
+    {
+      "path": "/Videos/9f1e0000000000000000000000000001/9f1e3000000000000000000000000063/Trickplay/2000/7.jpg",
+      "query": "sig=cee16a783faac03a2232b81ff24c036b",
+      "upstream": "/library/parts/99/indexes/sd/14000"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000025/Images/Primary",
+      "query": "maxWidth=300&quality=85",
+      "upstream": "/photo/:/transcode?url=%2Flibrary%2Fmetadata%2F37%2Fthumb&width=300&height=1200&minSize=0&upscale=0&quality=85"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Backdrop",
+      "query": "maxWidth=1600&quality=80&tag=1791799951",
+      "upstream": "/photo/:/transcode?url=%2Flibrary%2Fmetadata%2F1%2Fart%2F1791799951&width=1600&height=6400&minSize=0&upscale=0&quality=80"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Primary",
+      "query": "tag=c1791800022&maxHeight=600",
+      "upstream": "/photo/:/transcode?url=%2Flibrary%2Fmetadata%2F1%2Fthumb&width=2400&height=600&minSize=0&upscale=0",
+      "_why": "composite collection posters are never served (they show members the viewer may not see)"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Logo",
+      "query": "maxWidth=700&quality=90",
+      "upstream": "/photo/:/transcode?url=%2Flibrary%2Fmetadata%2F1%2FclearLogo&width=700&height=2800&minSize=0&upscale=0&quality=90"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Primary",
+      "query": "maxWidth=99999&url=http%3A%2F%2Fevil",
+      "upstream": "/photo/:/transcode?url=%2Flibrary%2Fmetadata%2F1%2Fthumb&width=3840&height=15360&minSize=0&upscale=0"
+    },
+    {
+      "path": "/Items/9f1e0000000000000000000000000001/Images/Primary",
+      "query": "tag=m9f1e0000000000000000000000000025&maxHeight=600",
+      "upstream": "/photo/:/transcode?url=%2Flibrary%2Fmetadata%2F37%2Fthumb&width=2400&height=600&minSize=0&upscale=0",
+      "_why": "collection poster = a member the viewer may see (authorize checks that member too)"
+    }
+  ]
+}

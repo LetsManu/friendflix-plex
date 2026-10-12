@@ -5,6 +5,7 @@
   import Icon from '#lib/Icon.svelte';
   import { get } from 'svelte/store';
   import { prefs } from '#lib/stores';
+  import { segmentShown, serverCaps } from '#lib/capabilities';
   import { subClasses } from '#lib/substyle';
   import { noteInteraction } from '#lib/stillwatching';
   import { nowPlaying } from '#lib/remote';
@@ -654,7 +655,7 @@
     castOff = onCastEvent(handleCast);
     if (!partyMode) void initCast();
     loadBookmarks();
-    api(`/api/items/${itemId}/segments`).then((r) => (segments = (r.segments as typeof segments).map((x) => ({ ...x, type: String(x.type).toLowerCase() })))).catch(() => undefined);
+    if ($serverCaps.segments.length) api(`/api/items/${itemId}/segments`).then((r) => (segments = (r.segments as typeof segments).map((x) => ({ ...x, type: String(x.type).toLowerCase() })).filter((x) => segmentShown($serverCaps, x.type)))).catch(() => undefined);
     progressTimer = setInterval(() => { if (started && !stopped) send('progress'); }, 10_000);
     pipOk = Boolean(document.pictureInPictureEnabled) && !video?.disablePictureInPicture;
     activityTimer = setInterval(() => {
@@ -829,7 +830,7 @@
                 {/if}
                 <div><h3>{$t('player.subs.title')}</h3>
                   <button class="mi" class:on={subIndex === -1} on:click={() => { setSubtitle(-1); menu = ''; }}>{#if subIndex === -1}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{$t('common.off')}</button>
-                  <button class="mi" on:click={() => { menu = ''; subDlg = true; subResults = null; subMsg = ''; }}><Icon name="search" size={16} />{$t('player.subs.searchMenu')}</button>
+                  {#if $serverCaps.subtitleSearch}<button class="mi" on:click={() => { menu = ''; subDlg = true; subResults = null; subMsg = ''; }}><Icon name="search" size={16} />{$t('player.subs.searchMenu')}</button>{/if}
                   {#each info.subtitles as s}<button class="mi" class:on={subIndex === s.index} on:click={() => { setSubtitle(s.index); menu = ''; }}>{#if subIndex === s.index}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{s.title}</button>{/each}
                 </div>
               </div>

@@ -388,3 +388,92 @@ describe('cast disabled', () => {
     }
   });
 });
+
+/** capabilities.subtitleExtract: PlaybackDto subtitles point at /api/items/…/stream.vtt, which the receiver reaches via a signed cast URL. */
+describe('cast: FriendFlix-served subtitles (subtitleExtract)', () => {
+  type Jf = typeof env.ctx.jf;
+  const subCalls: Array<{ user: string; args: unknown[] }> = [];
+  let restore: () => void = () => {};
+  beforeAll(() => {
+    const jf = env.ctx.jf as { -readonly [K in keyof Jf]: Jf[K] };
+    const prev = { caps: jf.capabilities, prepare: jf.preparePlayback, sub: jf.subtitleStream };
+    jf.capabilities = { ...prev.caps, subtitleExtract: true };
+    jf.preparePlayback = async (_u, info) => ({ ...info, subtitles: info.subtitles.map((s) => ({ ...s, url: `/api/items/${ID}/subtitle/${info.mediaSourceId}/${s.index}/stream.vtt` })) });
+    jf.subtitleStream = async (u, ...args) => {
+      subCalls.push({ user: u.jellyfin_username, args });
+      return new Response('WEBVTT\n\n00:00.000 --> 00:01.000\nHallo\n');
+    };
+    restore = () => Object.assign(jf, { capabilities: prev.caps, preparePlayback: prev.prepare, subtitleStream: prev.sub });
+  });
+  afterAll(() => restore());
+  const fetchSub = (url: string) => env.app.inject({ method: 'GET', url: url.replace('https://portal.example.com', '') });
+
+  it('the cast session carries a signed /api/cast/subtitle URL without the media token, served without a cookie', async () => {
+    const { r, j, ct } = await create();
+    expect(r.statusCode).toBe(200);
+    const url: string = j.subtitles[0].url;
+    expect(url).toMatch(new RegExp(`^https://portal\\.example\\.com/api/cast/subtitle/[0-9a-f-]{36}/${j.castId}/\\d+/[\\w-]{43}/${ID}/${MS}/2/stream\\.vtt$`));
+    expect(url).not.toContain(ct);
+    subCalls.length = 0;
+    const s = await fetchSub(url);
+    expect(s.statusCode).toBe(200);
+    expect(s.body).toContain('WEBVTT');
+    expect(s.headers['content-type']).toBe('text/vtt; charset=utf-8');
+    expect(s.headers['access-control-allow-origin']).toBe('*'); // the receiver runs on another origin
+    expect(s.headers['cross-origin-resource-policy']).toBe('cross-origin');
+    expect(s.headers['cache-control']).toBe('no-store');
+    expect(subCalls).toEqual([{ user: expect.any(String), args: [ID, MS, 2, 'vtt'] }]);
+    // other API responses keep the same-origin resource policy
+    expect((await call(admin, 'GET', '/api/cast/config')).headers['cross-origin-resource-policy']).toBe('same-origin');
+  });
+  it('only the signed track of the token\'s item: tampered signature / track / media source / payload -> 404', async () => {
+    const { j } = await create();
+    const url: string = j.subtitles[0].url;
+    const [, uid, cid, exp, sig] = /\/api\/cast\/subtitle\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)\//.exec(url)! as unknown as string[];
+    const other = await create(); // a second live token of the same account
+    for (const bad of [
+      url.replace(`/${sig}/`, `/${sig!.slice(0, -1)}${sig!.endsWith('A') ? 'B' : 'A'}/`),
+      url.replace('/2/stream.vtt', '/3/stream.vtt'),
+      url.replace(`/${MS}/`, `/${'c'.repeat(32)}/`),
+      url.replace(`/${exp}/`, `/${Number(exp) + 3600}/`), // longer life
+      url.replace(`/${cid}/`, `/${other.j.castId}/`), // another token
+      url.replace(`/${uid}/`, `/${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}/`),
+      url.replace(`/${sig}/`, `/${sig}x/`),
+    ]) expect((await fetchSub(bad)).statusCode, bad).toBe(404);
+  });
+  it('dies with its cast token (revoke) and when the item is no longer visible', async () => {
+    const a = await create();
+    const url: string = a.j.subtitles[0].url;
+    expect((await fetchSub(url)).statusCode).toBe(200);
+    visible = false;
+    env.ctx.jf.forgetItems(); // item() is memoised
+    try {
+      expect((await fetchSub(url)).statusCode).toBe(404);
+    } finally {
+      visible = true;
+    }
+    expect((await call(admin, 'DELETE', `/api/cast/session/${a.j.castId}`)).statusCode).toBe(200);
+    expect((await fetchSub(url)).statusCode).toBe(404);
+  });
+  it('expires with the token\'s absolute cap and is off with cast disabled or without subtitleExtract', async () => {
+    const { j } = await create();
+    const url: string = j.subtitles[0].url;
+    const was = env.ctx.cfg.CAST_ENABLED;
+    env.ctx.cfg.CAST_ENABLED = 'false';
+    try {
+      expect((await fetchSub(url)).statusCode).toBe(404);
+    } finally {
+      env.ctx.cfg.CAST_ENABLED = was;
+    }
+    const jf = env.ctx.jf as { capabilities: Jf['capabilities'] };
+    const caps = jf.capabilities;
+    jf.capabilities = { ...caps, subtitleExtract: false };
+    try {
+      expect((await fetchSub(url)).statusCode).toBe(404);
+    } finally {
+      jf.capabilities = caps;
+    }
+    skipClock(7 * 3600 * 1000);
+    expect((await fetchSub(url)).statusCode).toBe(404);
+  });
+});

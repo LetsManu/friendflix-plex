@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
-import { JellyfinError } from '../jellyfin/client.js';
-import type { ItemDto } from '../jellyfin/dto.js';
+import { MediaError, type ItemDto } from '../media/types.js';
 import { requireUser } from '../session.js';
 import { id32, wrap as sharedWrap } from './_shared.js';
 
@@ -28,8 +27,8 @@ export function searchRoutes(app: FastifyInstance, ctx: Ctx) {
     ] as Array<Promise<unknown>>;
     const settled = await Promise.allSettled(real);
     const bad = settled.filter((s) => s.status === 'rejected') as PromiseRejectedResult[];
-    for (const b of bad) if (!(b.reason instanceof JellyfinError)) throw b.reason;
-    if (bad.length === settled.length) return reply.code(502).send({ error: 'jellyfin', status: (bad[0]!.reason as JellyfinError).status });
+    for (const b of bad) if (!(b.reason instanceof MediaError)) throw b.reason;
+    if (bad.length === settled.length) return reply.code(502).send({ error: 'jellyfin', status: (bad[0]!.reason as MediaError).status });
     const ok = <T>(i: number, fallback: T): T => (settled[i]!.status === 'fulfilled' ? (settled[i] as PromiseFulfilledResult<T>).value : fallback);
     const off = year ? 0 : 1; // no episode request for a year query
     const needle = q.toLowerCase();
@@ -45,20 +44,11 @@ export function searchRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.get('/api/people/:id', pre, wrap(async (req, reply) => {
     const id = id32.parse((req.params as { id: string }).id);
-    const raw = await ctx.jf.person(req.jfUser!, id);
-    if (raw.Type !== 'Person') return reply.code(404).send({ error: 'not_found' });
+    const person = await ctx.jf.person(req.jfUser!, id);
+    if (!person) return reply.code(404).send({ error: 'not_found' });
     // persons only present in libraries the viewer cannot see have no visible items -> not revealed
     const { items } = await ctx.jf.items(req.jfUser!, { person: id, types: 'Movie,Series', sort: 'PremiereDate,SortName', desc: true, limit: 100 });
     if (!items.length) return reply.code(404).send({ error: 'not_found' });
-    const birth = raw.PremiereDate ? new Date(raw.PremiereDate).getUTCFullYear() : NaN;
-    return {
-      person: {
-        id: raw.Id as string, name: raw.Name as string,
-        ...(raw.Overview ? { overview: raw.Overview as string } : {}),
-        ...(Number.isFinite(birth) ? { birthYear: birth } : {}),
-        image: Boolean(raw.ImageTags?.Primary),
-      },
-      items,
-    };
+    return { person, items };
   }));
 }

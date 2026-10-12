@@ -1,4 +1,4 @@
-import type { ItemDto } from './jellyfin/dto.js';
+import type { ItemDto } from './media/types.js';
 
 /** Percent watched, from ticks when possible, else Jellyfin's PlayedPercentage. */
 function pct(i: ItemDto): number | undefined {

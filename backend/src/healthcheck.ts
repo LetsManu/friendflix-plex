@@ -16,7 +16,7 @@ const lines = (p: string) => p.split(/\r?\n/).map((l) => l.trim());
 /** Test-transcodes one segment of an item (a series: its first episode) exactly like a preview clip would. */
 export async function probe(ctx: Ctx, user: UserRow, item: { id: string; type: string }): Promise<Pick<CheckResult, 'ok' | 'status' | 'bytes' | 'error'>> {
   let status: number | null = null;
-  let encoding: { deviceId: string; playSessionId: string } | undefined;
+  let playSessionId: string | undefined;
   try {
     let videoId = item.id;
     if (item.type === 'Series') {
@@ -25,13 +25,11 @@ export async function probe(ctx: Ctx, user: UserRow, item: { id: string; type: s
       videoId = ep.id;
     }
     const info = await ctx.jf.playbackInfo(user, videoId, { maxBitrate: 1_500_000 });
-    const master = new URL(info.hlsUrl.replace(/^\/media/, ''), 'http://jf.invalid');
-    const q = master.searchParams;
-    for (const [k, v] of Object.entries({ AllowVideoStreamCopy: 'false', AllowAudioStreamCopy: 'false', VideoBitrate: '1200000', AudioBitrate: '128000', MaxWidth: '1280' })) q.set(k, v);
-    const masterPath = master.pathname + master.search;
-    encoding = { deviceId: ctx.jf.deviceId(user), playSessionId: q.get('PlaySessionId') ?? info.playSessionId };
+    const clip = await ctx.jf.clipTranscode(user, info, { videoBitrate: 1_200_000, audioBitrate: 128_000, maxWidth: 1280 });
+    const masterPath = clip.path;
+    playSessionId = clip.playSessionId;
     const get = async (path: string) => {
-      const res = await ctx.jf.call(user, path, { signal: AbortSignal.timeout(SEG_TIMEOUT_MS) });
+      const res = await ctx.jf.mediaFetch(user, path, { signal: AbortSignal.timeout(SEG_TIMEOUT_MS) });
       status = res.status;
       if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`.trim());
       return res;
@@ -47,7 +45,7 @@ export async function probe(ctx: Ctx, user: UserRow, item: { id: string; type: s
   } catch (e) {
     return { ok: false, status, bytes: 0, error: (e instanceof Error ? e.message : String(e)).slice(0, 200) };
   } finally {
-    if (encoding) await ctx.jf.call(user, `/Videos/ActiveEncodings?${new URLSearchParams(encoding)}`, { method: 'DELETE' }).catch(() => undefined);
+    if (playSessionId) await ctx.jf.stopEncoding(user, playSessionId);
   }
 }
 

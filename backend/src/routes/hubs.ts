@@ -2,8 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { audit } from '../audit.js';
 import type { Ctx } from '../ctx.js';
-import { JellyfinError } from '../jellyfin/client.js';
-import { toItemDto, type ItemDto } from '../jellyfin/dto.js';
+import { MediaError, type ItemDto } from '../media/types.js';
 import { onPolicyChange } from '../hooks.js';
 import { requireAdmin, requireUser } from '../session.js';
 import type { JfUser } from '../types.js';
@@ -16,7 +15,6 @@ type SourceKind = (typeof SOURCES)[number];
 /** the home page shows a single row of tiles: more than this would not fit anyway */
 export const MAX_HUBS = 8;
 const ROW_LIMIT = 20;
-const FIELDS = 'Overview,Genres,OfficialRating,CommunityRating,PremiereDate,DateCreated,ProductionYear,ChildCount,RunTimeTicks,DateLastMediaAdded';
 /** per-user "does this hub contain anything I may see" memo; keeps GET /api/hubs cheap (one Jellyfin call per hub, once per TTL) */
 const VISIBLE_TTL_MS = 120_000;
 const VISIBLE_MAX = 1000;
@@ -55,19 +53,11 @@ export function hubRoutes(app: FastifyInstance, ctx: Ctx) {
   const adminWrite = { ...admin, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } };
   const guard: WrapOptions = { zod: 'issues', notFound: [400, 403, 404] };
 
-  /** Jellyfin query of everything a hub contains, as the given user (so access rules and parental ratings apply). */
+  /** Everything a hub contains, queried as the given user (so access rules and parental ratings apply). */
   async function query(user: JfUser, h: Pick<HubRow, 'source_kind' | 'source_value'>, o: { types?: string; sort: string; desc?: boolean; limit: number; start?: number }) {
-    const p = new URLSearchParams({
-      userId: user.jellyfin_user_id, recursive: 'true', fields: FIELDS, enableTotalRecordCount: 'true',
-      includeItemTypes: o.types ?? 'Movie,Series', sortBy: o.sort, sortOrder: o.desc ? 'Descending' : 'Ascending',
-      limit: String(o.limit), startIndex: String(o.start ?? 0),
-    });
-    if (h.source_kind === 'studio') p.set('studios', h.source_value);
-    else if (h.source_kind === 'genre') p.set('genres', h.source_value);
-    else if (h.source_kind === 'tag') p.set('tags', h.source_value);
-    else p.set('parentId', h.source_value);
-    const r = await ctx.jf.json<{ Items: any[]; TotalRecordCount?: number }>(user, `/Items?${p}`);
-    return { items: r.Items.map(toItemDto) as ItemDto[], total: r.TotalRecordCount ?? r.Items.length };
+    const k = h.source_kind;
+    const source = k === 'studio' ? { studio: h.source_value } : k === 'genre' ? { genre: h.source_value } : k === 'tag' ? { tag: h.source_value } : { parentId: h.source_value };
+    return ctx.jf.items(user, { ...o, ...source });
   }
 
   const visible = new Map<string, { exp: number; p: Promise<boolean> }>();
@@ -77,7 +67,7 @@ export function hubRoutes(app: FastifyInstance, ctx: Ctx) {
     const hit = visible.get(key);
     if (hit && hit.exp > Date.now()) return hit.p;
     const p = query(user, h, { sort: 'SortName', limit: 1 }).then((r) => r.total > 0, (e) => {
-      if (e instanceof JellyfinError && (e.status === 400 || e.status === 403 || e.status === 404)) return false;
+      if (e instanceof MediaError && (e.status === 400 || e.status === 403 || e.status === 404)) return false;
       throw e;
     });
     visible.set(key, { exp: Date.now() + VISIBLE_TTL_MS, p });
@@ -119,7 +109,7 @@ export function hubRoutes(app: FastifyInstance, ctx: Ctx) {
       query(user, hub, { types: 'Movie', sort: 'PremiereDate,SortName', desc: true, limit: ROW_LIMIT }),
       query(user, hub, { types: 'Series', sort: 'PremiereDate,SortName', desc: true, limit: ROW_LIMIT }),
     ]).catch((e) => {
-      if (e instanceof JellyfinError && (e.status === 400 || e.status === 403 || e.status === 404)) return null;
+      if (e instanceof MediaError && (e.status === 400 || e.status === 403 || e.status === 404)) return null;
       throw e;
     }) ?? [];
     if (!news || news.total === 0) return reply.code(404).send({ error: 'not_found' }); // nothing visible: same answer as a hub that does not exist
@@ -160,13 +150,7 @@ export function hubRoutes(app: FastifyInstance, ctx: Ctx) {
     const key = `${user.jellyfin_user_id}|${id}`;
     let hit = extrasMemo.get(key);
     if (!hit || hit.exp <= Date.now()) {
-      const list = async (path: string): Promise<ItemDto[]> => {
-        const res = await ctx.jf.call(user, `/Items/${id}/${path}?userId=${user.jellyfin_user_id}`);
-        if (!res.ok) return [];
-        const j = (await res.json().catch(() => [])) as unknown;
-        return Array.isArray(j) ? j.map(toItemDto) : [];
-      };
-      const p = Promise.all([list('LocalTrailers'), list('SpecialFeatures')]).then(([trailers, extras]) => {
+      const p = Promise.all([ctx.jf.trailers(user, id), ctx.jf.extras(user, id)]).then(([trailers, extras]) => {
         const seen = new Set<string>();
         return [...trailers.map((i) => ({ ...i, kind: 'trailer' as const })), ...extras.map((i) => ({ ...i, kind: 'extra' as const }))]
           .filter((i) => i.id && !seen.has(i.id) && seen.add(i.id)).slice(0, 60);
@@ -203,13 +187,8 @@ export function hubRoutes(app: FastifyInstance, ctx: Ctx) {
   /** Ideas from the library: biggest studios / genres and the collections (nothing is created automatically). */
   app.get('/api/admin/hubs/suggestions', admin, wrap(async (req) => {
     const user = req.jfUser!;
-    const counted = async (path: string) => {
-      const r = await ctx.jf.json<{ Items: Array<{ Name: string; MovieCount?: number; SeriesCount?: number; ChildCount?: number }> }>(user,
-        `${path}${path.includes('?') ? '&' : '?'}userId=${user.jellyfin_user_id}&includeItemTypes=Movie,Series&recursive=true&fields=ItemCounts&limit=200`).catch(() => ({ Items: [] }));
-      return r.Items.map((x) => ({ name: x.Name, count: (x.MovieCount ?? 0) + (x.SeriesCount ?? 0) || x.ChildCount || 0 }))
-        .sort((a, b) => b.count - a.count).slice(0, 12);
-    };
-    const [studios, genres, collections] = await Promise.all([counted('/Studios'), counted('/Genres'), ctx.jf.collections(user).catch(() => [])]);
+    const counted = async (kind: 'studio' | 'genre') => (await ctx.jf.facets(user, kind).catch(() => [])).sort((a, b) => b.count - a.count).slice(0, 12);
+    const [studios, genres, collections] = await Promise.all([counted('studio'), counted('genre'), ctx.jf.collections(user).catch(() => [])]);
     const used = new Set((await ctx.db.query<{ k: string }>(`select source_kind || ':' || lower(source_value) k from brand_hubs`)).rows.map((r) => r.k));
     const mark = <T extends { name: string }>(kind: SourceKind, list: T[], value: (x: T) => string) => list.map((x) => ({ ...x, source: kind, sourceValue: value(x), used: used.has(`${kind}:${value(x).toLowerCase()}`) }));
     return {

@@ -1,0 +1,90 @@
+{
+ "MediaContainer": {
+  "size": 3,
+  "allowSync": true,
+  "art": "/:/resources/show-fanart.jpg",
+  "identifier": "com.plexapp.plugins.library",
+  "key": "3",
+  "librarySectionID": 2,
+  "librarySectionTitle": "TV",
+  "librarySectionUUID": "7902c27a-98a6-4fae-bc4c-49aa03f2ad9c",
+  "mediaTagPrefix": "/system/bundle/media/flags/",
+  "mediaTagVersion": 1786914632,
+  "nocache": true,
+  "parentIndex": 1,
+  "parentTitle": "MAD TEST",
+  "parentYear": 2019,
+  "thumb": "/library/metadata/3/thumb/1791799954",
+  "title1": "TV",
+  "title2": "MAD TEST",
+  "viewGroup": "season",
+  "viewMode": 65593,
+  "Directory": [
+   {
+    "leafCount": 6,
+    "thumb": "/library/metadata/3/thumb/1791799954",
+    "viewedLeafCount": 0,
+    "key": "/library/metadata/3/allLeaves",
+    "title": "All episodes"
+   }
+  ],
+  "Metadata": [
+   {
+    "ratingKey": "4",
+    "key": "/library/metadata/4/children",
+    "parentRatingKey": "3",
+    "guid": "local://4",
+    "parentGuid": "plex://show/6164d61b3727d6d857325229",
+    "parentSlug": "mad-test",
+    "type": "season",
+    "title": "Season 1",
+    "parentKey": "/library/metadata/3",
+    "parentTitle": "MAD TEST",
+    "summary": "",
+    "index": 1,
+    "parentIndex": 1,
+    "parentYear": 2019,
+    "thumb": "/library/metadata/3/thumb/1791799954",
+    "parentThumb": "/library/metadata/3/thumb/1791799954",
+    "leafCount": 3,
+    "viewedLeafCount": 0,
+    "addedAt": 1791799952,
+    "Image": [
+     {
+      "alt": "Season 1",
+      "type": "coverPoster",
+      "url": "/library/metadata/3/thumb/1791799954"
+     }
+    ]
+   },
+   {
+    "ratingKey": "8",
+    "key": "/library/metadata/8/children",
+    "parentRatingKey": "3",
+    "guid": "local://8",
+    "parentGuid": "plex://show/6164d61b3727d6d857325229",
+    "parentSlug": "mad-test",
+    "type": "season",
+    "title": "Season 2",
+    "parentKey": "/library/metadata/3",
+    "parentTitle": "MAD TEST",
+    "summary": "",
+    "index": 2,
+    "parentIndex": 1,
+    "parentYear": 2019,
+    "thumb": "/library/metadata/3/thumb/1791799954",
+    "parentThumb": "/library/metadata/3/thumb/1791799954",
+    "leafCount": 3,
+    "viewedLeafCount": 0,
+    "addedAt": 1791799953,
+    "Image": [
+     {
+      "alt": "Season 2",
+      "type": "coverPoster",
+      "url": "/library/metadata/3/thumb/1791799954"
+     }
+    ]
+   }
+  ]
+ }
+}

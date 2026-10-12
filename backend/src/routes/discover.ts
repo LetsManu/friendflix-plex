@@ -3,8 +3,7 @@ import { stat } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
-import { JellyfinError } from '../jellyfin/client.js';
-import type { ItemDto } from '../jellyfin/dto.js';
+import { MediaError, type ItemDto } from '../media/types.js';
 import { m } from '../i18n.js';
 import { notify } from '../notify.js';
 import { clipPath, previews } from '../previews.js';
@@ -278,7 +277,7 @@ export function discoverRoutes(app: FastifyInstance, ctx: Ctx) {
     try {
       return await ctx.jf.item(user, id);
     } catch (e) {
-      if (e instanceof JellyfinError && (e.status === 404 || e.status === 403)) return null;
+      if (e instanceof MediaError && (e.status === 404 || e.status === 403)) return null;
       throw e;
     }
   };

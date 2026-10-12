@@ -39,7 +39,7 @@ export async function metricsPlugin(app: FastifyInstance, opts: { ctx: Ctx }) {
     downloadDisk.set(await one("select coalesce(sum(bytes), 0) n from download_jobs where status = 'ready' and quality <> 'original'").catch(() => 0));
     up.set({ dependency: 'postgres' }, (await c.db.query('select 1').then(() => 1, () => 0)));
     up.set({ dependency: 'redis' }, (await c.kv.ping().catch(() => false)) ? 1 : 0);
-    up.set({ dependency: 'jellyfin' }, (await c.jf.client.ping().catch(() => false)) ? 1 : 0);
+    up.set({ dependency: 'jellyfin' }, (await c.jf.admin.ping().catch(() => false)) ? 1 : 0);
     reply.header('content-type', registry.contentType);
     return registry.metrics();
   });

@@ -24,31 +24,14 @@ async function claim(ctx: Db, id: string): Promise<boolean> {
   return (r.rowCount ?? 0) > 0;
 }
 
-/** A real (non-placeholder) episode: Jellyfin lists announced episodes as Virtual / missing. */
-export async function isAvailableEpisode(ctx: Pick<Ctx, 'jf'>, user: JfUser, ids: string[]): Promise<Set<string>> {
-  const out = new Set<string>();
-  if (!ids.length) return out;
-  const p = new URLSearchParams({ userId: user.jellyfin_user_id, ids: ids.join(','), isMissing: 'false', recursive: 'true', includeItemTypes: 'Episode', fields: 'LocationType' });
-  const r = await ctx.jf.json<{ Items?: Array<{ Id: string; LocationType?: string }> }>(user, `/Items?${p}`);
-  for (const i of r.Items ?? []) if (i.LocationType !== 'Virtual') out.add(i.Id);
-  return out;
-}
+/** A real (not merely announced) episode. */
+export const isAvailableEpisode = (ctx: Pick<Ctx, 'jf'>, user: JfUser, ids: string[]): Promise<Set<string>> => ctx.jf.availableEpisodes(user, ids);
 
 /** A series counts as available once at least one real (non-placeholder) episode exists. */
-export async function seriesHasEpisode(ctx: Pick<Ctx, 'jf'>, seriesId: string): Promise<boolean> {
-  const p = new URLSearchParams({ parentId: seriesId, recursive: 'true', includeItemTypes: 'Episode', isMissing: 'false', limit: '1', fields: 'LocationType' });
-  const r = await ctx.jf.client.adminJson<{ Items?: Array<{ LocationType?: string }> }>(`/Items?${p}`);
-  return (r.Items ?? []).some((i) => i.LocationType !== 'Virtual');
-}
+export const seriesHasEpisode = (ctx: Pick<Ctx, 'jf'>, seriesId: string): Promise<boolean> => ctx.jf.seriesHasEpisode(seriesId);
 
-/** Jellyfin gives an episode a NEW id when its file arrives (the announced one was a placeholder): find it by season + number. */
-async function realEpisodeIds(ctx: Pick<Ctx, 'jf'>, user: JfUser, seriesId: string, season: number): Promise<Map<number, string>> {
-  const p = new URLSearchParams({ userId: user.jellyfin_user_id, season: String(season), isMissing: 'false', fields: 'LocationType' });
-  const r = await ctx.jf.json<{ Items?: Array<{ Id: string; IndexNumber?: number; LocationType?: string }> }>(user, `/Shows/${seriesId}/Episodes?${p}`);
-  const out = new Map<number, string>();
-  for (const i of r.Items ?? []) if (i.LocationType !== 'Virtual' && i.IndexNumber != null && !out.has(i.IndexNumber)) out.set(i.IndexNumber, i.Id);
-  return out;
-}
+/** An episode may get a NEW id when its file arrives (the announced one was a placeholder): find it by season + number. */
+const realEpisodeIds = (ctx: Pick<Ctx, 'jf'>, user: JfUser, seriesId: string, season: number): Promise<Map<number, string>> => ctx.jf.seasonEpisodeIds(user, seriesId, season);
 
 /** A movie / series with this TMDB id is now in the library: notify everybody who asked to be reminded (once). */
 export async function fireTmdb(ctx: Db & Pick<Ctx, 'jf'>, mediaType: string, tmdbId: number, jfItemId?: string): Promise<number> {

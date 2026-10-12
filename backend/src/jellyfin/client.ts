@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { MediaError } from '../media/types.js';
 import type { RoleTemplate } from '../roles.js';
 import { timed } from '../timing.js';
 
@@ -24,11 +25,8 @@ export interface AuthResult {
   User: { Id: string; Name: string };
 }
 
-export class JellyfinError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-  }
-}
+/** Jellyfin HTTP failure; routes only check the server-neutral MediaError base class. */
+export class JellyfinError extends MediaError {}
 
 /** Maps a role template to the Jellyfin UserPolicy fields we manage. */
 export function policyFromTemplate(t: RoleTemplate, folderIds: string[] | null): Record<string, unknown> {
@@ -59,8 +57,13 @@ export class JellyfinClient {
     readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
+  /** Server-relative path (+ query) -> absolute URL. Anything else (absolute or protocol-relative URL, backslashes) is refused. */
   url(path: string) {
-    return new URL(path.replace(/^\//, ''), this.baseUrl.replace(/\/?$/, '/')).toString();
+    if (!/^\/(?![/\\])/.test(path) || path.includes('\\') || /[\x00-\x1f]/.test(path)) throw new JellyfinError(400, 'Jellyfin: only server-relative paths');
+    const base = new URL(this.baseUrl.replace(/\/?$/, '/'));
+    const u = new URL(path.replace(/^\//, ''), base);
+    if (u.origin !== base.origin) throw new JellyfinError(400, 'Jellyfin: only server-relative paths');
+    return u.toString();
   }
 
   private adminHeaders() {

@@ -1,14 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
-import { JellyfinError } from '../jellyfin/client.js';
+import { MediaError, type ItemDto } from '../media/types.js';
 import { clearLive, countLive, getLive, listLive, setLive } from '../live.js';
 import { effectiveRole } from '../roles.js';
 import { requireGrownUp } from '../kids.js';
 import { requireUser } from '../session.js';
 import { playbackHooks } from '../hooks.js';
 import { tidyResume } from '../resume.js';
-import { toTrickplayDto, type ItemDto } from '../jellyfin/dto.js';
 import { createHash } from 'node:crypto';
 import { itemsByIds, libraryBecause } from './discover.js';
 import { id32 as itemId, wrap as sharedWrap } from './_shared.js';
@@ -95,7 +94,7 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
         const byId = new Map(got.map((i) => [i.id, i]));
         return { items: page.map((id) => byId.get(id)).filter((x): x is ItemDto => Boolean(x)), total: ids.length, ...(capped ? { capped: true as const } : {}) };
       } catch (e) {
-        if (e instanceof JellyfinError) throw e;
+        if (e instanceof MediaError) throw e;
         // corrupt cache entry: recompute
       }
     }
@@ -220,6 +219,17 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
     const lr = (await ctx.db.query<{ audio: string[]; subs: string[] }>('select audio, subs from item_langs where item_id=$1', [item.type === 'Episode' && item.seriesId ? item.seriesId : id])).rows[0];
     return { item, inWatchlist, thumb: th.rows[0]?.value ?? 0, ...(lr ? { langs: { audio: lr.audio, subs: lr.subs } } : {}) };
   }));
+  // Subtitles served by FriendFlix (capabilities.subtitleExtract: PlaybackDto subtitle URLs point here); works for every server.
+  app.get('/api/items/:id/subtitle/:ms/:index/stream.vtt', pre, sharedWrap(async (req, reply) => {
+    const p = z.object({ id: itemId, ms: z.string().regex(/^[\w-]{1,64}$/), index: z.coerce.number().int().min(0).max(999) }).parse(req.params);
+    await ctx.jf.item(req.jfUser!, p.id); // 404/403 for items the profile cannot see
+    const res = await ctx.jf.subtitleStream(req.jfUser!, p.id, p.ms, p.index, 'vtt');
+    if (!res.ok) return reply.code(404).send({ error: 'not_found' });
+    const body = Buffer.from(await res.arrayBuffer());
+    if (body.length > 10 * 1024 * 1024) return reply.code(502).send({ error: 'jellyfin', reason: 'too_large' });
+    return reply.header('content-type', 'text/vtt; charset=utf-8').header('cache-control', 'private, no-store').send(body);
+  }, { zod: 'plain', notFound: [400, 403, 404] }));
+
   app.get('/api/items/:id/segments', pre, wrap(async (req) => ({ segments: await ctx.jf.segments(req.jfUser!, itemId.parse((req.params as any).id)) })));
   app.get('/api/items/:id/similar', pre, wrap(async (req) => ({ items: await ctx.jf.similar(req.jfUser!, itemId.parse((req.params as any).id)) })));
   app.get('/api/library/because', pre, wrap(async (req) => libraryBecause(ctx, req.jfUser!, req.profile!.id)));
@@ -269,10 +279,11 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
     if ((await countLive(ctx, req.user!.id)) >= role.maxStreams) return reply.code(429).send({ error: 'max_streams', max: role.maxStreams });
     const cap = Math.min(role.maxBitrate, b.maxBitrate ?? role.maxBitrate); // the viewer may lower the quality, never raise it above the role limit
     // PlaybackInfo and the resume-position/trickplay lookup run in parallel (one Jellyfin /Items call instead of two sequential ones)
-    const [info, meta] = await Promise.all([
-      ctx.jf.playbackInfo(req.jfUser!, b.itemId, { maxBitrate: cap, maxHeight: role.maxHeight, startTicks: b.startTicks, audioIndex: b.audioIndex, audioLang: b.audioLang, noDirect: Boolean(role.maxHeight) || (!role.download && ctx.cfg.DIRECT_PLAY_REQUIRES_DOWNLOAD === 'true') }),
-      ctx.jf.playMeta(req.jfUser!, b.itemId),
-    ]);
+    const opts = { maxBitrate: cap, maxHeight: role.maxHeight, startTicks: b.startTicks, audioIndex: b.audioIndex, audioLang: b.audioLang, noDirect: Boolean(role.maxHeight) || (!role.download && ctx.cfg.DIRECT_PLAY_REQUIRES_DOWNLOAD === 'true') };
+    const [first, meta] = await Promise.all([ctx.jf.playbackInfo(req.jfUser!, b.itemId, opts), ctx.jf.playMeta(req.jfUser!, b.itemId)]);
+    let info = first;
+    // optional server step before the player loads the master playlist (decision call, audio/subtitle selection); Jellyfin has none
+    if (ctx.jf.preparePlayback) info = await ctx.jf.preparePlayback(req.jfUser!, info, opts);
     info.roleMaxBitrate = role.maxBitrate;
     let resume = b.startTicks ?? meta?.positionTicks;
     if (resume === undefined) {
@@ -282,7 +293,7 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
       if (resume === undefined) return reply.code(502).send({ error: 'jellyfin', reason: 'resume_unknown' });
     }
     info.resumeTicks = resume;
-    info.trickplay = toTrickplayDto(b.itemId, info.mediaSourceId, meta?.trickplay);
+    info.trickplay = meta?.trickplay(info.mediaSourceId);
     return info;
   }));
 
@@ -309,9 +320,10 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
       }
       const prev = live.updatedAt;
       live = { ...live, positionTicks: ticks, isPaused: b.isPaused, updatedAt: Date.now() };
-      await ctx.jf.report(req.jfUser!, kind, {
-        ItemId: b.itemId, MediaSourceId: b.mediaSourceId, PlaySessionId: b.playSessionId, PositionTicks: ticks, IsPaused: b.isPaused,
-        AudioStreamIndex: b.audioIndex, SubtitleStreamIndex: b.subtitleIndex, PlayMethod: b.playMethod ?? 'DirectStream',
+      await ctx.jf.report(req.jfUser!, {
+        event: kind === 'Playing' ? 'start' : kind === 'Playing/Stopped' ? 'stop' : 'progress',
+        itemId: b.itemId, mediaSourceId: b.mediaSourceId, playSessionId: b.playSessionId, positionTicks: ticks, paused: b.isPaused,
+        audioIndex: b.audioIndex, subtitleIndex: b.subtitleIndex, playMethod: b.playMethod,
       });
       if (kind === 'Playing/Stopped') await clearLive(ctx, user.id, b.playSessionId);
       else await setLive(ctx, live);

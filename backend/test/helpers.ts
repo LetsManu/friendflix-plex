@@ -10,6 +10,8 @@ import { MemoryKV } from '../src/kv.js';
 import { SeerrClient } from '../src/seerr/client.js';
 import type { OidcClaims } from '../src/oidc.js';
 import { DEFAULT_ROLES } from '../src/roles.js';
+import { PLEX_TOKEN, PLEX_URL, plexServer, type PlexFake } from './plexfake.js';
+import type { PlexMediaServer } from '../src/plex/service.js';
 
 export const TEST_DB = process.env.TEST_DATABASE_URL ?? 'postgres://postgres@localhost:5433/ff_test';
 export const ENC_KEY = Buffer.alloc(32, 7).toString('base64');
@@ -18,7 +20,7 @@ export const cfg: Config = {
   PORT: 3000, PUBLIC_URL: 'https://portal.example.com', DATABASE_URL: TEST_DB, REDIS_URL: 'redis://x', SESSION_TTL_SECONDS: 600, SESSION_IDLE_SECONDS: 300,
   APP_ENC_KEY: ENC_KEY, INTERNAL_SECRET: 'internal-secret-123456', WEBHOOK_SECRET: 'webhook-secret-123456', ADMIN_GROUP: 'friendflix-admins',
   OIDC_ISSUER: 'https://auth.example.com/', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's',
-  JELLYFIN_URL: 'http://jellyfin:8096', JELLYFIN_ADMIN_API_KEY: 'adminkey', SEERR_URL: 'http://seerr:5055', SEERR_API_KEY: 'seerrkey',
+  MEDIA_SERVER: 'jellyfin', JELLYFIN_URL: 'http://jellyfin:8096', JELLYFIN_ADMIN_API_KEY: 'adminkey', SEERR_URL: 'http://seerr:5055', SEERR_API_KEY: 'seerrkey',
   NTFY_URL: undefined, DISCORD_WEBHOOK_URL: undefined, METRICS_TOKEN: undefined, AUTHENTIK_URL: undefined, AUTHENTIK_API_TOKEN: undefined,
   AUTHENTIK_ENROLL_FLOW: undefined, ROLE_TEMPLATES: undefined, OIDC_ALLOW_INSECURE: 'false', BACKGROUND_JOBS: 'false',
   PREVIEW_DIR: '/tmp/ff-test-previews', PREVIEW_WARM: 'false',
@@ -66,6 +68,8 @@ export interface TestEnv {
   kv: MemoryKV;
   login: (claims?: OidcClaims) => Promise<{ cookies: Record<string, string>; csrf: string }>;
   close: () => Promise<void>;
+  /** makeEnv(…, { server: 'plex' }): the Plex implementation (ctx.jf) and its fake server (already synced once) */
+  plex?: { ms: PlexMediaServer; fake: PlexFake };
 }
 
 export const ADMIN: OidcClaims = { sub: 'sub-admin', email: 'admin@example.com', name: 'Admin', groups: ['friendflix-admins'] };
@@ -82,13 +86,13 @@ export function defaultJellyfin(): Record<string, Handler> {
   };
 }
 
-export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extra & { ctxPatch?: (c: Ctx) => void; seerr?: Record<string, Handler> } = {}): Promise<TestEnv> {
+export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extra & { ctxPatch?: (c: Ctx) => void; seerr?: Record<string, Handler>; server?: 'plex'; plexFake?: PlexFake } = {}): Promise<TestEnv> {
   const pool = await resetDb();
   const kv = new MemoryKV();
   const jfCalls: Call[] = [];
   const seerrCalls: Call[] = [];
   const claims = { current: ADMIN };
-  const client = new JellyfinClient(cfg.JELLYFIN_URL, cfg.JELLYFIN_ADMIN_API_KEY, fakeHttp({ ...defaultJellyfin(), ...extraJf }, jfCalls));
+  const client = new JellyfinClient(cfg.JELLYFIN_URL!, cfg.JELLYFIN_ADMIN_API_KEY!, fakeHttp({ ...defaultJellyfin(), ...extraJf }, jfCalls));
   const encKey = keyFromBase64(ENC_KEY);
   const ctx: Ctx = {
     cfg, kv, db: pool, encKey, fetchImpl: fetch,
@@ -100,6 +104,13 @@ export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extr
       finish: async () => ({ authTime: Math.floor(Date.now() / 1000), ...claims.current }), // a fresh IdP login unless a test sets authTime
     },
   };
+  let plex: TestEnv['plex'];
+  if (extra.server === 'plex') {
+    plex = plexServer(pool, kv, extra.plexFake);
+    ctx.cfg = { ...cfg, MEDIA_SERVER: 'plex', PLEX_URL, PLEX_TOKEN };
+    ctx.jf = plex.ms;
+    await plex.ms.sync.run();
+  }
   extra.ctxPatch?.(ctx);
   const app = await buildApp(ctx, extra);
   const dev: { v?: string } = {};
@@ -114,6 +125,6 @@ export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extr
     const me = await app.inject({ url: '/api/me', cookies: { ff_sid: sid } });
     return { cookies: { ff_sid: sid }, csrf: me.json().csrfToken as string };
   };
-  return { ctx, app, pool, jfCalls, seerrCalls, claims, kv, login, close: async () => { await app.close(); await pool.end(); } };
+  return { ctx, app, pool, jfCalls, seerrCalls, claims, kv, login, plex, close: async () => { await plex?.ms.stop(); await app.close(); await pool.end(); } };
 }
 

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import type { Ctx } from './ctx.js';
 import { encrypt, hashPin, randomPassword } from './crypto.js';
-import { JellyfinError } from './jellyfin/client.js';
+import { MediaError, type IdentityPolicy } from './media/types.js';
 import { effectiveRole } from './roles.js';
 import { applyRole } from './users.js';
 import type { JfUser, ProfileRow, UserRow } from './types.js';
@@ -61,15 +61,15 @@ export async function ownerProfile(ctx: Pick<Ctx, 'db'>, user: Pick<UserRow, 'id
  * Jellyfin policy fields a kids profile adds on top of its role: the lower of role cap and kids cap, unrated titles hidden.
  * A normal profile user gets the unrated block cleared again (it may have been a kids profile before).
  */
-export function kidsPolicy(p: Pick<ProfileRow, 'kids' | 'kids_max_rating'>, roleCap: number | null): Record<string, unknown> {
-  if (!p.kids) return { BlockUnratedItems: [] };
-  return { MaxParentalRating: roleCap === null ? p.kids_max_rating : Math.min(roleCap, p.kids_max_rating), BlockUnratedItems: [...KIDS_BLOCK_UNRATED] };
+export function kidsPolicy(p: Pick<ProfileRow, 'kids' | 'kids_max_rating'>, roleCap: number | null): NonNullable<IdentityPolicy['parental']> {
+  if (!p.kids) return { blockUnrated: [] };
+  return { maxRating: roleCap === null ? p.kids_max_rating : Math.min(roleCap, p.kids_max_rating), blockUnrated: [...KIDS_BLOCK_UNRATED] };
 }
 
-/** kidsPolicy() for a Jellyfin user id: {} for an account's own Jellyfin user (owner profiles are never kids profiles). */
-export async function kidsPolicyFor(ctx: Pick<Ctx, 'db'>, jellyfinUserId: string, roleCap: number | null): Promise<Record<string, unknown>> {
+/** kidsPolicy() for a Jellyfin user id: undefined for an account's own Jellyfin user (owner profiles are never kids profiles). */
+export async function kidsPolicyFor(ctx: Pick<Ctx, 'db'>, jellyfinUserId: string, roleCap: number | null): Promise<IdentityPolicy['parental']> {
   const r = await ctx.db.query<Pick<ProfileRow, 'kids' | 'kids_max_rating'>>('select kids, kids_max_rating from profiles where jellyfin_user_id=$1', [jellyfinUserId]);
-  return r.rows[0] ? kidsPolicy(r.rows[0], roleCap) : {};
+  return r.rows[0] ? kidsPolicy(r.rows[0], roleCap) : undefined;
 }
 
 /** The kids profile a device last ran (switching away from it needs a PIN, a new login on the device lands on it again). */
@@ -127,12 +127,12 @@ export async function createProfile(ctx: Ctx, user: UserRow, b: { name: string; 
 
   const password = randomPassword();
   const base = `${jfSafe(user.jellyfin_username)}-${jfSafe(name) || 'profil'}`.slice(0, 40);
-  let jf: { Id: string } | undefined;
+  let jf: { id: string } | undefined;
   let jfName = base;
   for (let attempt = 0; attempt < 4 && !jf; attempt++) {
     jfName = attempt === 0 ? base : `${base}${Math.floor(100 + Math.random() * 900)}`;
     try {
-      jf = await ctx.jf.client.createUser(jfName, password);
+      jf = await ctx.jf.admin.createIdentity(jfName, password);
     } catch {
       if (attempt === 3) throw new ProfileError(502, 'jellyfin');
     }
@@ -140,7 +140,7 @@ export async function createProfile(ctx: Ctx, user: UserRow, b: { name: string; 
   try {
     const kids = { kids: Boolean(b.kids), kids_max_rating: b.maxRating ?? 12 };
     // the row does not exist yet: the kids fields go in as extra policy (applyRole adds them itself on every later re-apply)
-    await applyRole(ctx, jf!.Id, user.role, user.disabled, { IsHidden: true, ...(kids.kids ? kidsPolicy(kids, (await effectiveRole(ctx, user.role))?.maxParentalRating ?? null) : {}) });
+    await applyRole(ctx, jf!.id, user.role, user.disabled, { hidden: true, ...(kids.kids ? { parental: kidsPolicy(kids, (await effectiveRole(ctx, user.role))?.maxParentalRating ?? null) } : {}) });
     const id = randomUUID();
     const pool = ctx.db as pg.Pool;
     const c = await pool.connect();
@@ -155,7 +155,7 @@ export async function createProfile(ctx: Ctx, user: UserRow, b: { name: string; 
       const ins = await c.query<ProfileRow>(
         `insert into profiles(id, user_id, name, avatar, pin_hash, jellyfin_user_id, jellyfin_username, jellyfin_pw_enc, kids, kids_max_rating)
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *`,
-        [id, user.id, name, b.avatar ?? 'red', b.pin ? hashPin(b.pin) : null, jf!.Id, jfName, encrypt(ctx.encKey, password), kids.kids, kids.kids_max_rating],
+        [id, user.id, name, b.avatar ?? 'red', b.pin ? hashPin(b.pin) : null, jf!.id, jfName, encrypt(ctx.encKey, password), kids.kids, kids.kids_max_rating],
       );
       await c.query('commit');
       return ins.rows[0]!;
@@ -166,9 +166,9 @@ export async function createProfile(ctx: Ctx, user: UserRow, b: { name: string; 
       c.release();
     }
   } catch (e) {
-    await ctx.jf.client.deleteUser(jf!.Id).catch(() => undefined); // roll back the orphaned Jellyfin user
+    await ctx.jf.admin.deleteIdentity(jf!.id).catch(() => undefined); // roll back the orphaned Jellyfin user
     if (e instanceof ProfileError) throw e;
-    if (e instanceof JellyfinError) throw new ProfileError(502, 'jellyfin');
+    if (e instanceof MediaError) throw new ProfileError(502, 'jellyfin');
     if ((e as { code?: string }).code === '23505') throw new ProfileError(409, 'name_taken');
     throw e;
   }
@@ -178,8 +178,8 @@ export async function createProfile(ctx: Ctx, user: UserRow, b: { name: string; 
 export async function deleteProfile(ctx: Ctx, p: ProfileRow): Promise<void> {
   if (p.is_owner) throw new ProfileError(400, 'owner_not_deletable');
   if (p.jellyfin_user_id) {
-    const res = await ctx.jf.client.adminFetch(`/Users/${p.jellyfin_user_id}`, { method: 'DELETE' }).catch(() => null);
-    if (!res || (!res.ok && res.status !== 404)) throw new ProfileError(502, 'jellyfin');
+    const ok = await ctx.jf.admin.deleteIdentity(p.jellyfin_user_id).then(() => true, () => false);
+    if (!ok) throw new ProfileError(502, 'jellyfin');
   }
   await ctx.db.query('delete from profiles where id=$1', [p.id]);
   await ctx.kv.del(`jft:${p.id}`);

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createGateway } from './gateway.js';
+import { checkUpstreamConfig, selectUpstream } from './upstream/index.js';
 
 /** Reads VAR or the file referenced by VAR_FILE (Docker secrets). */
 const need = (k: string) => {
@@ -9,8 +10,11 @@ const need = (k: string) => {
   return v;
 };
 
+const upstream = selectUpstream(process.env.MEDIA_SERVER);
+checkUpstreamConfig(upstream, process.env); // like the backend's config validation: refuse to start with a clear error
 const { server } = createGateway({
-  jellyfinUrl: need('JELLYFIN_URL'),
+  upstream,
+  upstreamUrl: need(upstream.urlEnv),
   backendUrl: need('BACKEND_URL'),
   internalSecret: need('INTERNAL_SECRET'),
   downloadDir: process.env.DOWNLOAD_DIR || undefined,

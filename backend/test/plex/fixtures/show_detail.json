@@ -1,0 +1,142 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "allowSync": true,
+  "identifier": "com.plexapp.plugins.library",
+  "librarySectionID": 2,
+  "librarySectionTitle": "TV",
+  "librarySectionUUID": "7902c27a-98a6-4fae-bc4c-49aa03f2ad9c",
+  "mediaTagPrefix": "/system/bundle/media/flags/",
+  "mediaTagVersion": 1786914632,
+  "Metadata": [
+   {
+    "ratingKey": "3",
+    "key": "/library/metadata/3/children",
+    "guid": "plex://show/6164d61b3727d6d857325229",
+    "slug": "mad-test",
+    "type": "show",
+    "title": "MAD TEST",
+    "librarySectionTitle": "TV",
+    "librarySectionID": 2,
+    "librarySectionKey": "/library/sections/2",
+    "contentRating": "TV-PG",
+    "summary": "",
+    "index": 1,
+    "year": 2019,
+    "thumb": "/library/metadata/3/thumb/1791799954",
+    "duration": 900000,
+    "originallyAvailableAt": "2019-10-01",
+    "leafCount": 6,
+    "viewedLeafCount": 0,
+    "childCount": 2,
+    "addedAt": 1791799952,
+    "updatedAt": 1791799954,
+    "Image": [
+     {
+      "alt": "MAD TEST",
+      "type": "coverPoster",
+      "url": "/library/metadata/3/thumb/1791799954"
+     }
+    ],
+    "UltraBlurColors": {
+     "topLeft": "590711",
+     "topRight": "a92125",
+     "bottomRight": "693eb4",
+     "bottomLeft": "3b5a9d"
+    },
+    "Genre": [
+     {
+      "id": 5,
+      "filter": "genre=5",
+      "tag": "Mini-Series"
+     },
+     {
+      "id": 6,
+      "filter": "genre=6",
+      "tag": "Horror"
+     },
+     {
+      "id": 7,
+      "filter": "genre=7",
+      "tag": "Crime"
+     },
+     {
+      "id": 8,
+      "filter": "genre=8",
+      "tag": "Suspense"
+     },
+     {
+      "id": 9,
+      "filter": "genre=9",
+      "tag": "Thriller"
+     }
+    ],
+    "Guid": [
+     {
+      "id": "tvdb://370160"
+     }
+    ],
+    "Role": [
+     {
+      "id": 10,
+      "filter": "actor=10",
+      "tag": "Dario Molaro",
+      "tagKey": "6164d61b3727d6d85732522a",
+      "role": "Sam"
+     },
+     {
+      "id": 11,
+      "filter": "actor=11",
+      "tag": "Davide Carfora",
+      "tagKey": "6164d61b3727d6d85732522b",
+      "role": "Tom"
+     },
+     {
+      "id": 12,
+      "filter": "actor=12",
+      "tag": "Fabiana Persico",
+      "tagKey": "6164d61b3727d6d85732522c",
+      "role": "Barbara"
+     },
+     {
+      "id": 13,
+      "filter": "actor=13",
+      "tag": "Diandra Elettra Moscogiuri",
+      "tagKey": "0000000000000000000000a1",
+      "role": "Sofia"
+     },
+     {
+      "id": 14,
+      "filter": "actor=14",
+      "tag": "Marilia Marciello",
+      "tagKey": "6164d61b3727d6d85732522d",
+      "role": "Viola"
+     },
+     {
+      "id": 15,
+      "filter": "actor=15",
+      "tag": "Alexander Nozza",
+      "tagKey": "6164d61b3727d6d85732522e",
+      "role": "Andrea"
+     },
+     {
+      "id": 16,
+      "filter": "actor=16",
+      "tag": "Anisha Kanhye",
+      "tagKey": "6164d61b3727d6d85732522f",
+      "role": "Ranisha"
+     }
+    ],
+    "Location": [
+     {
+      "path": "/media/TV/Test Show (2019)"
+     }
+    ],
+    "Extras": {
+     "size": 0
+    },
+    "Related": {}
+   }
+  ]
+ }
+}

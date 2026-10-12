@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { audit } from '../audit.js';
 import type { Ctx } from '../ctx.js';
-import { JellyfinError } from '../jellyfin/client.js';
+import { MediaError } from '../media/types.js';
 import { requireUser } from '../session.js';
 import { id32 } from './_shared.js';
 
@@ -45,7 +45,7 @@ export function sceneRoutes(app: FastifyInstance, ctx: Ctx) {
       await ctx.jf.item(req.jfUser!, id); // access check with the user's own token
       return { results: await ctx.jf.searchSubtitles(id, lang) };
     } catch (e) {
-      if (e instanceof JellyfinError && e.status === 404) return reply.code(404).send({ error: 'not_found' });
+      if (e instanceof MediaError && e.status === 404) return reply.code(404).send({ error: 'not_found' });
       return reply.code(502).send({ error: 'subtitle_provider_unavailable' });
     }
   });

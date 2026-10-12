@@ -1,4 +1,5 @@
 import type { Ctx } from './ctx.js';
+import type { ItemDto } from './media/types.js';
 import { m, userLanguage, type Text } from './i18n.js';
 import { localizeStored, notify } from './notify.js';
 import type { UserRow } from './types.js';
@@ -52,21 +53,14 @@ export function weekKey(slot: Date): string {
   return `${slot.getFullYear()}-${String(slot.getMonth() + 1).padStart(2, '0')}-${String(slot.getDate()).padStart(2, '0')}`;
 }
 
-interface RawItem { Id: string; Name: string; Type: string; SeriesId?: string; SeriesName?: string; ParentIndexNumber?: number; IndexNumber?: number; DateCreated?: string; ProductionYear?: number }
-
 /** Newest library items (as the account's own Jellyfin user sees them) created since `since`. */
-async function newItems(ctx: Ctx, user: UserRow, since: Date, until: Date): Promise<RawItem[]> {
-  const out: RawItem[] = [];
+async function newItems(ctx: Ctx, user: UserRow, since: Date, until: Date): Promise<ItemDto[]> {
+  const out: ItemDto[] = [];
   for (let start = 0; start < SCAN_CAP; start += PAGE) {
-    const p = new URLSearchParams({
-      userId: user.jellyfin_user_id, recursive: 'true', includeItemTypes: 'Movie,Episode', sortBy: 'DateCreated', sortOrder: 'Descending',
-      limit: String(PAGE), startIndex: String(start), fields: 'DateCreated,PremiereDate,ProductionYear',
-    });
-    const r = await ctx.jf.json<{ Items?: RawItem[] }>(user, `/Items?${p}`);
-    const page = r.Items ?? [];
+    const page = await ctx.jf.addedItems(user, { start, limit: PAGE });
     let older = false;
     for (const i of page) {
-      const t = i.DateCreated ? Date.parse(i.DateCreated) : NaN;
+      const t = i.dateCreated ? Date.parse(i.dateCreated) : NaN;
       if (Number.isNaN(t)) continue;
       if (t < since.getTime()) { older = true; continue; }
       if (t <= until.getTime()) out.push(i);
@@ -79,8 +73,8 @@ async function newItems(ctx: Ctx, user: UserRow, since: Date, until: Date): Prom
 /** Builds the week's summary for one account; null when there is nothing to report. */
 export async function buildDigest(ctx: Ctx, user: UserRow, since: Date, until: Date): Promise<DigestData | null> {
   const raw = await newItems(ctx, user, since, until);
-  const movies = raw.filter((i) => i.Type === 'Movie');
-  const eps = raw.filter((i) => i.Type === 'Episode' && i.SeriesId);
+  const movies = raw.filter((i) => i.type === 'Movie');
+  const eps = raw.filter((i) => i.type === 'Episode' && i.seriesId);
 
   const followed = new Set((await ctx.db.query<{ series_id: string }>('select series_id from series_follows where user_id=$1', [user.id])).rows.map((r) => r.series_id));
   const nextUp = await ctx.jf.nextUp(user).catch(() => []);
@@ -88,13 +82,13 @@ export async function buildDigest(ctx: Ctx, user: UserRow, since: Date, until: D
 
   const groups = new Map<string, DigestData['newEpisodes'][number]>();
   for (const e of eps) {
-    let g = groups.get(e.SeriesId!);
+    let g = groups.get(e.seriesId!);
     if (!g) {
-      g = { seriesId: e.SeriesId!, seriesName: e.SeriesName ?? '', count: 0, followed: followed.has(e.SeriesId!), episodes: [] };
-      groups.set(e.SeriesId!, g);
+      g = { seriesId: e.seriesId!, seriesName: e.seriesName ?? '', count: 0, followed: followed.has(e.seriesId!), episodes: [] };
+      groups.set(e.seriesId!, g);
     }
     g.count++;
-    if (g.episodes.length < MAX_EPISODES_PER_SERIES) g.episodes.push({ id: e.Id, name: e.Name, season: e.ParentIndexNumber, episode: e.IndexNumber });
+    if (g.episodes.length < MAX_EPISODES_PER_SERIES) g.episodes.push({ id: e.id, name: e.name, season: e.parentIndexNumber, episode: e.indexNumber });
   }
   const sorted = [...groups.values()].sort((a, b) => Number(b.followed) - Number(a.followed) || b.count - a.count || a.seriesName.localeCompare(b.seriesName));
   const newEpisodes = sorted.slice(0, MAX_SERIES);
@@ -132,9 +126,9 @@ export async function buildDigest(ctx: Ctx, user: UserRow, since: Date, until: D
   const data: DigestData = {
     since: since.toISOString(),
     until: until.toISOString(),
-    newMovies: movies.slice(0, MAX_MOVIES).map((m) => ({ id: m.Id, name: m.Name, year: m.ProductionYear })),
+    newMovies: movies.slice(0, MAX_MOVIES).map((m) => ({ id: m.id, name: m.name, year: m.year })),
     newMovieCount: movies.length,
-    movieIds: movies.slice(0, MAX_MOVIE_IDS).map((m) => m.Id),
+    movieIds: movies.slice(0, MAX_MOVIE_IDS).map((m) => m.id),
     newEpisodes,
     newEpisodeCount: eps.length,
     seriesCounts: Object.fromEntries(sorted.map((g) => [g.seriesId, g.count])),

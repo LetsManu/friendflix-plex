@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
+import { MEDIA_SERVERS } from './media/index.js';
 
 /** Reads VAR, or the file referenced by VAR_FILE (Docker secrets). */
 function withFileSecrets(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -33,8 +34,14 @@ const schema = z.object({
   OIDC_ISSUER: z.string().url(),
   OIDC_CLIENT_ID: z.string().min(1),
   OIDC_CLIENT_SECRET: z.string().min(1),
-  JELLYFIN_URL: z.string().url(),
-  JELLYFIN_ADMIN_API_KEY: z.string().min(1),
+  /** which media server implementation backs this instance (one per instance), see docs/architecture.md "Media server seam" */
+  MEDIA_SERVER: z.enum(MEDIA_SERVERS).default('jellyfin'),
+  /** required when MEDIA_SERVER=jellyfin (see the check below) */
+  JELLYFIN_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()), // compose passes '' when unset
+  JELLYFIN_ADMIN_API_KEY: opt,
+  /** required when MEDIA_SERVER=plex: base URL of the existing Plex Media Server and its admin token (backend + gateway only) */
+  PLEX_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
+  PLEX_TOKEN: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   SEERR_URL: z.string().url(),
   SEERR_API_KEY: z.string().min(1),
   NTFY_URL: opt, // e.g. https://ntfy.example.com/friendflix
@@ -97,8 +104,20 @@ const schema = z.object({
   API_COMPRESSION: z.enum(['true', 'false']).default('true'),
 });
 
+/** Settings each media server kind needs (another kind adds its own entry). */
+const MEDIA_REQUIRED: Record<(typeof MEDIA_SERVERS)[number], Array<keyof z.infer<typeof schema>>> = {
+  jellyfin: ['JELLYFIN_URL', 'JELLYFIN_ADMIN_API_KEY'],
+  plex: ['PLEX_URL', 'PLEX_TOKEN'],
+};
+
+const checked = schema.superRefine((c, ctx) => {
+  for (const k of MEDIA_REQUIRED[c.MEDIA_SERVER] ?? []) {
+    if (c[k] === undefined) ctx.addIssue({ code: 'custom', path: [k], message: `${k} is required for MEDIA_SERVER=${c.MEDIA_SERVER}` });
+  }
+});
+
 export type Config = z.infer<typeof schema>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  return schema.parse(withFileSecrets(env));
+  return checked.parse(withFileSecrets(env));
 }

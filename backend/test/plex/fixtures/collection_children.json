@@ -1,0 +1,133 @@
+{
+ "MediaContainer": {
+  "size": 2,
+  "Metadata": [
+   {
+    "ratingKey": "1",
+    "key": "/library/metadata/1",
+    "guid": "local://1",
+    "type": "movie",
+    "title": "Test Movie One",
+    "librarySectionTitle": "Movies",
+    "librarySectionID": 1,
+    "librarySectionKey": "/library/sections/1",
+    "contentRating": "PG-13",
+    "summary": "",
+    "year": 2020,
+    "thumb": "/library/metadata/1/thumb/1791799951",
+    "art": "/library/metadata/1/art/1791799951",
+    "duration": 60021,
+    "addedAt": 1791799937,
+    "updatedAt": 1791799951,
+    "Media": [
+     {
+      "id": 1,
+      "duration": 60021,
+      "bitrate": 1902,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "h264",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "videoProfile": "constrained baseline",
+      "Part": [
+       {
+        "id": 1,
+        "key": "/library/parts/1/1791799937/file.mkv",
+        "duration": 60021,
+        "file": "/media/Movies/Test Movie One (2020)/Test Movie One (2020).mkv",
+        "size": 14268835,
+        "container": "mkv",
+        "videoProfile": "constrained baseline"
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Test Movie One",
+      "type": "coverPoster",
+      "url": "/library/metadata/1/thumb/1791799951"
+     },
+     {
+      "alt": "Test Movie One",
+      "type": "background",
+      "url": "/library/metadata/1/art/1791799951"
+     }
+    ],
+    "Collection": [
+     {
+      "tag": "Both Movies"
+     }
+    ]
+   },
+   {
+    "ratingKey": "2",
+    "key": "/library/metadata/2",
+    "guid": "local://2",
+    "type": "movie",
+    "title": "Test Movie Two",
+    "librarySectionTitle": "Movies",
+    "librarySectionID": 1,
+    "librarySectionKey": "/library/sections/1",
+    "contentRating": "R",
+    "summary": "",
+    "year": 2021,
+    "thumb": "/library/metadata/2/thumb/1791799952",
+    "art": "/library/metadata/2/art/1791799952",
+    "duration": 60021,
+    "addedAt": 1791799942,
+    "updatedAt": 1791799952,
+    "Media": [
+     {
+      "id": 2,
+      "duration": 60021,
+      "bitrate": 615,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "hevc",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "videoProfile": "main",
+      "Part": [
+       {
+        "id": 2,
+        "key": "/library/parts/2/1791799942/file.mkv",
+        "duration": 60021,
+        "file": "/media/Movies/Test Movie Two HEVC (2021)/Test Movie Two HEVC (2021).mkv",
+        "size": 4612236,
+        "container": "mkv",
+        "videoProfile": "main"
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Test Movie Two",
+      "type": "coverPoster",
+      "url": "/library/metadata/2/thumb/1791799952"
+     },
+     {
+      "alt": "Test Movie Two",
+      "type": "background",
+      "url": "/library/metadata/2/art/1791799952"
+     }
+    ],
+    "Collection": [
+     {
+      "tag": "Both Movies"
+     }
+    ]
+   }
+  ]
+ }
+}

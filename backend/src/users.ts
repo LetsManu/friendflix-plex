@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { audit } from './audit.js';
 import type { Ctx } from './ctx.js';
 import { encrypt, randomPassword } from './crypto.js';
-import { policyFromTemplate } from './jellyfin/client.js';
+import type { IdentityPolicy } from './media/types.js';
 import { effectiveRole } from './roles.js';
 import { kidsPolicyFor } from './profiles.js';
 import type { OidcClaims } from './oidc.js';
@@ -21,19 +21,13 @@ export async function getUserBySub(ctx: Ctx, sub: string): Promise<UserRow | nul
 
 const safeName = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, '').slice(0, 24) || 'freund';
 
-/** Resolves a role template's library names to Jellyfin media folder IDs and writes the Jellyfin policy. */
-export async function applyRole(ctx: Ctx, jellyfinUserId: string, role: string, disabled = false, extra: Record<string, unknown> = {}) {
+/** Writes the role template (plus hidden flag / kids caps) as the media server policy of one identity. */
+export async function applyRole(ctx: Ctx, jellyfinUserId: string, role: string, disabled = false, extra: Pick<IdentityPolicy, 'hidden' | 'parental'> = {}) {
   const t = await effectiveRole(ctx, role);
   if (!t) throw new Error(`unknown role ${role}`);
-  let ids: string[] | null = null;
-  if (t.libraries !== 'all') {
-    const folders = await ctx.jf.client.mediaFolders();
-    const want = new Set(t.libraries.map((n) => n.toLowerCase()));
-    ids = folders.filter((f) => want.has(f.Name.toLowerCase())).map((f) => f.Id);
-  }
   // a kids profile keeps its parental cap through every re-apply (role edits, admin promotion, startup job)
   const kids = await kidsPolicyFor(ctx, jellyfinUserId, t.maxParentalRating);
-  await ctx.jf.client.setPolicy(jellyfinUserId, { ...policyFromTemplate(t, ids), IsDisabled: disabled, ...extra, ...kids });
+  await ctx.jf.admin.applyPolicy(jellyfinUserId, { template: t, disabled, ...extra, ...(kids ? { parental: kids } : {}) });
 }
 
 /**
@@ -43,18 +37,18 @@ export async function applyRole(ctx: Ctx, jellyfinUserId: string, role: string, 
 export async function provisionUser(ctx: Ctx, claims: OidcClaims, role: string): Promise<UserRow> {
   const base = safeName(claims.name ?? claims.email?.split('@')[0] ?? 'freund');
   const password = randomPassword();
-  let jf: { Id: string } | undefined;
+  let jf: { id: string } | undefined;
   let jfName = base;
   for (let attempt = 0; attempt < 4 && !jf; attempt++) {
     jfName = attempt === 0 ? base : `${base}${Math.floor(100 + Math.random() * 900)}`;
     try {
-      jf = await ctx.jf.client.createUser(jfName, password);
+      jf = await ctx.jf.admin.createIdentity(jfName, password);
     } catch (e) {
       if (attempt === 3) throw e;
     }
   }
   try {
-    await applyRole(ctx, jf!.Id, role);
+    await applyRole(ctx, jf!.id, role);
     const id = randomUUID();
     const pool = ctx.db as pg.Pool;
     const c = await pool.connect();
@@ -64,7 +58,7 @@ export async function provisionUser(ctx: Ctx, claims: OidcClaims, role: string):
       const r = await c.query<UserRow>(
         `insert into users(id, authentik_sub, email, name, role, jellyfin_user_id, jellyfin_username, jellyfin_pw_enc)
          values ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,
-        [id, claims.sub, claims.email ?? null, claims.name ?? jfName, role, jf!.Id, jfName, encrypt(ctx.encKey, password)],
+        [id, claims.sub, claims.email ?? null, claims.name ?? jfName, role, jf!.id, jfName, encrypt(ctx.encKey, password)],
       );
       row = r.rows[0]!;
       await c.query('insert into profiles(id, user_id, name, is_owner) values ($1,$1,$2,true)', [id, row.name.slice(0, 20).trim() || 'Profil']);
@@ -78,7 +72,7 @@ export async function provisionUser(ctx: Ctx, claims: OidcClaims, role: string):
     await audit(ctx, id, 'user.provisioned', id, { role, jellyfin: jfName });
     return row;
   } catch (e) {
-    await ctx.jf.client.deleteUser(jf!.Id).catch(() => undefined); // roll back the orphaned Jellyfin account
+    await ctx.jf.admin.deleteIdentity(jf!.id).catch(() => undefined); // roll back the orphaned Jellyfin account
     throw e;
   }
 }
@@ -92,7 +86,7 @@ export async function reapplyRole(ctx: Ctx, role: string): Promise<number> {
     [role],
   );
   let failed = 0;
-  for (const u of r.rows) await applyRole(ctx, u.jellyfin_user_id, role, false, u.hidden ? { IsHidden: true } : {}).catch(() => { failed++; });
+  for (const u of r.rows) await applyRole(ctx, u.jellyfin_user_id, role, false, { hidden: u.hidden }).catch(() => { failed++; });
   return failed;
 }
 

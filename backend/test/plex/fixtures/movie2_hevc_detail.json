@@ -1,0 +1,172 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "allowSync": true,
+  "identifier": "com.plexapp.plugins.library",
+  "librarySectionID": 1,
+  "librarySectionTitle": "Movies",
+  "librarySectionUUID": "2cfc5463-1624-43a8-8e68-cab72d941e06",
+  "mediaTagPrefix": "/system/bundle/media/flags/",
+  "mediaTagVersion": 1786914632,
+  "Metadata": [
+   {
+    "ratingKey": "2",
+    "key": "/library/metadata/2",
+    "guid": "local://2",
+    "type": "movie",
+    "title": "Test Movie Two",
+    "librarySectionTitle": "Movies",
+    "librarySectionID": 1,
+    "librarySectionKey": "/library/sections/1",
+    "contentRating": "R",
+    "summary": "",
+    "year": 2021,
+    "thumb": "/library/metadata/2/thumb/1791799952",
+    "art": "/library/metadata/2/art/1791799952",
+    "duration": 60021,
+    "addedAt": 1791799942,
+    "updatedAt": 1791799952,
+    "Media": [
+     {
+      "id": 2,
+      "duration": 60021,
+      "bitrate": 615,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "hevc",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "videoProfile": "main",
+      "Part": [
+       {
+        "id": 2,
+        "key": "/library/parts/2/1791799942/file.mkv",
+        "duration": 60021,
+        "file": "/media/Movies/Test Movie Two HEVC (2021)/Test Movie Two HEVC (2021).mkv",
+        "size": 4612236,
+        "container": "mkv",
+        "videoProfile": "main",
+        "Stream": [
+         {
+          "id": 6,
+          "streamType": 1,
+          "codec": "hevc",
+          "index": 0,
+          "bitrate": 615,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "bitDepth": 8,
+          "chromaLocation": "left",
+          "chromaSubsampling": "4:2:0",
+          "codedHeight": 368,
+          "codedWidth": 640,
+          "colorRange": "tv",
+          "frameRate": 24.0,
+          "height": 360,
+          "level": 63,
+          "profile": "main",
+          "refFrames": 1,
+          "scanType": "progressive",
+          "width": 640,
+          "displayTitle": "SD",
+          "extendedDisplayTitle": "SD (HEVC Main)"
+         },
+         {
+          "id": 7,
+          "streamType": 2,
+          "selected": true,
+          "default": true,
+          "codec": "aac",
+          "index": 1,
+          "channels": 1,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "samplingRate": 48000,
+          "title": "English",
+          "displayTitle": "English (AAC Mono)",
+          "extendedDisplayTitle": "English (AAC Mono)"
+         },
+         {
+          "id": 8,
+          "streamType": 2,
+          "codec": "aac",
+          "index": 2,
+          "channels": 1,
+          "language": "日本語",
+          "languageTag": "ja",
+          "languageCode": "jpn",
+          "samplingRate": 48000,
+          "title": "Japanese",
+          "displayTitle": "日本語 (AAC Mono)",
+          "extendedDisplayTitle": "Japanese (日本語 AAC Mono)"
+         },
+         {
+          "id": 9,
+          "streamType": 3,
+          "codec": "srt",
+          "index": 3,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "title": "EmbeddedEng",
+          "displayTitle": "English",
+          "extendedDisplayTitle": "EmbeddedEng (English SRT)"
+         },
+         {
+          "id": 10,
+          "key": "/library/streams/10",
+          "streamType": 3,
+          "file": "/media/Movies/Test Movie Two HEVC (2021)/Test Movie Two HEVC (2021).en.srt",
+          "codec": "srt",
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "format": "srt",
+          "displayTitle": "English",
+          "extendedDisplayTitle": "English (SRT External)"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Test Movie Two",
+      "type": "coverPoster",
+      "url": "/library/metadata/2/thumb/1791799952"
+     },
+     {
+      "alt": "Test Movie Two",
+      "type": "background",
+      "url": "/library/metadata/2/art/1791799952"
+     }
+    ],
+    "Collection": [
+     {
+      "id": 22,
+      "filter": "collection=22",
+      "tag": "Both Movies",
+      "guid": "collection://20fba9c6-66d5-4ce9-8026-fc54ac746a38"
+     }
+    ],
+    "Field": [
+     {
+      "locked": true,
+      "name": "contentRating"
+     },
+     {
+      "locked": true,
+      "name": "collection"
+     }
+    ]
+   }
+  ]
+ }
+}

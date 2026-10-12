@@ -1,0 +1,165 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "allowSync": true,
+  "identifier": "com.plexapp.plugins.library",
+  "librarySectionID": 2,
+  "librarySectionTitle": "TV",
+  "librarySectionUUID": "7902c27a-98a6-4fae-bc4c-49aa03f2ad9c",
+  "mediaTagPrefix": "/system/bundle/media/flags/",
+  "mediaTagVersion": 1786914632,
+  "Metadata": [
+   {
+    "ratingKey": "5",
+    "key": "/library/metadata/5",
+    "parentRatingKey": "4",
+    "grandparentRatingKey": "3",
+    "guid": "local://5",
+    "parentGuid": "local://4",
+    "grandparentGuid": "plex://show/6164d61b3727d6d857325229",
+    "grandparentSlug": "mad-test",
+    "type": "episode",
+    "title": "Episode 1",
+    "grandparentKey": "/library/metadata/3",
+    "parentKey": "/library/metadata/4",
+    "librarySectionTitle": "TV",
+    "librarySectionID": 2,
+    "librarySectionKey": "/library/sections/2",
+    "grandparentTitle": "MAD TEST",
+    "parentTitle": "Season 1",
+    "contentRating": "TV-PG",
+    "summary": "",
+    "index": 1,
+    "parentIndex": 1,
+    "year": 2019,
+    "thumb": "/library/metadata/5/thumb/1791799953",
+    "grandparentThumb": "/library/metadata/3/thumb/1791799954",
+    "duration": 60021,
+    "addedAt": 1791799938,
+    "updatedAt": 1791799953,
+    "Media": [
+     {
+      "id": 3,
+      "duration": 60021,
+      "bitrate": 1902,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "h264",
+      "videoResolution": "sd",
+      "container": "mkv",
+      "videoFrameRate": "24p",
+      "videoProfile": "constrained baseline",
+      "Part": [
+       {
+        "id": 3,
+        "key": "/library/parts/3/1791799938/file.mkv",
+        "duration": 60021,
+        "file": "/media/TV/Test Show (2019)/Season 01/Test Show (2019) - s01e01.mkv",
+        "size": 14268462,
+        "container": "mkv",
+        "videoProfile": "constrained baseline",
+        "Stream": [
+         {
+          "id": 11,
+          "streamType": 1,
+          "codec": "h264",
+          "index": 0,
+          "bitrate": 1902,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "bitDepth": 8,
+          "chromaLocation": "left",
+          "chromaSubsampling": "4:2:0",
+          "codedHeight": 368,
+          "codedWidth": 640,
+          "frameRate": 24.0,
+          "hasScalingMatrix": false,
+          "height": 360,
+          "level": 30,
+          "profile": "constrained baseline",
+          "refFrames": 1,
+          "scanType": "progressive",
+          "width": 640,
+          "displayTitle": "SD",
+          "extendedDisplayTitle": "SD (H.264 Constrained Baseline)"
+         },
+         {
+          "id": 12,
+          "streamType": 2,
+          "selected": true,
+          "default": true,
+          "codec": "aac",
+          "index": 1,
+          "channels": 1,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "samplingRate": 48000,
+          "title": "English",
+          "displayTitle": "English (AAC Mono)",
+          "extendedDisplayTitle": "English (AAC Mono)"
+         },
+         {
+          "id": 13,
+          "streamType": 2,
+          "codec": "aac",
+          "index": 2,
+          "channels": 1,
+          "language": "日本語",
+          "languageTag": "ja",
+          "languageCode": "jpn",
+          "samplingRate": 48000,
+          "title": "Japanese",
+          "displayTitle": "日本語 (AAC Mono)",
+          "extendedDisplayTitle": "Japanese (日本語 AAC Mono)"
+         },
+         {
+          "id": 14,
+          "streamType": 3,
+          "codec": "srt",
+          "index": 3,
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "title": "EmbeddedEng",
+          "displayTitle": "English",
+          "extendedDisplayTitle": "EmbeddedEng (English SRT)"
+         },
+         {
+          "id": 23,
+          "key": "/library/streams/23",
+          "streamType": 3,
+          "file": "/media/TV/Test Show (2019)/Season 01/Test Show (2019) - s01e01.en.srt",
+          "codec": "srt",
+          "language": "English",
+          "languageTag": "en",
+          "languageCode": "eng",
+          "format": "srt",
+          "displayTitle": "English",
+          "extendedDisplayTitle": "English (SRT External)"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Episode 1",
+      "type": "coverPoster",
+      "url": "/library/metadata/3/thumb/1791799954"
+     },
+     {
+      "alt": "Episode 1",
+      "type": "snapshot",
+      "url": "/library/metadata/5/thumb/1791799953"
+     }
+    ]
+   }
+  ]
+ }
+}

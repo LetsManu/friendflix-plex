@@ -1,0 +1,109 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "identifier": "com.plexapp.plugins.library",
+  "mediaTagPrefix": "/system/bundle/media/flags/",
+  "mediaTagVersion": 1786914632,
+  "Metadata": [
+   {
+    "ratingKey": "14",
+    "key": "/library/metadata/14",
+    "guid": "file:///media/Movies/Test%20Movie%20One%20(2020)/Test%20Movie%20One%20(2020)-trailer.mp4",
+    "type": "clip",
+    "title": "Test Movie One (2020)",
+    "summary": "",
+    "index": 1,
+    "thumb": "/library/metadata/14/thumb/1791800590",
+    "art": "/library/metadata/1/art/1791800590",
+    "subtype": "trailer",
+    "duration": 5000,
+    "addedAt": 1791800590,
+    "updatedAt": 1791800590,
+    "extraType": 1,
+    "Media": [
+     {
+      "id": 10,
+      "duration": 5000,
+      "bitrate": 231,
+      "width": 320,
+      "height": 180,
+      "aspectRatio": 1.78,
+      "audioChannels": 1,
+      "audioCodec": "aac",
+      "videoCodec": "h264",
+      "videoResolution": "sd",
+      "container": "mp4",
+      "videoFrameRate": "24p",
+      "optimizedForStreaming": 1,
+      "audioProfile": "lc",
+      "has64bitOffsets": false,
+      "videoProfile": "high 4:4:4 predictive",
+      "Part": [
+       {
+        "id": 10,
+        "key": "/library/parts/10/0/file.mp4",
+        "duration": 5000,
+        "file": "/media/Movies/Test Movie One (2020)/Test Movie One (2020)-trailer.mp4",
+        "size": 144105,
+        "audioProfile": "lc",
+        "container": "mp4",
+        "has64bitOffsets": false,
+        "optimizedForStreaming": true,
+        "videoProfile": "high 4:4:4 predictive",
+        "Stream": [
+         {
+          "id": 46,
+          "streamType": 1,
+          "default": true,
+          "codec": "h264",
+          "index": 0,
+          "bitrate": 154,
+          "bitDepth": 8,
+          "chromaLocation": "left",
+          "chromaSubsampling": "4:4:4",
+          "codedHeight": 192,
+          "codedWidth": 320,
+          "frameRate": 24.0,
+          "hasScalingMatrix": false,
+          "height": 180,
+          "level": 12,
+          "profile": "high 4:4:4 predictive",
+          "refFrames": 1,
+          "scanType": "progressive",
+          "streamIdentifier": "1",
+          "width": 320,
+          "displayTitle": "SD",
+          "extendedDisplayTitle": "SD (H.264 High 4:4:4 Predictive)"
+         },
+         {
+          "id": 47,
+          "streamType": 2,
+          "selected": true,
+          "default": true,
+          "codec": "aac",
+          "index": 1,
+          "channels": 1,
+          "bitrate": 69,
+          "audioChannelLayout": "mono",
+          "profile": "lc",
+          "samplingRate": 44100,
+          "streamIdentifier": "2",
+          "displayTitle": "Unknown (AAC Mono)",
+          "extendedDisplayTitle": "Unknown (AAC Mono)"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "Image": [
+     {
+      "alt": "Test Movie One (2020)",
+      "type": "coverPoster",
+      "url": "/library/metadata/14/thumb/1791800590"
+     }
+    ]
+   }
+  ]
+ }
+}

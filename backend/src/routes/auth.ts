@@ -15,6 +15,7 @@ import { DEVICE_COOKIE } from '../devices.js';
 import { freshAuth, RESET_PIN_MAX_AGE } from '../oidc.js';
 import { applyRole, getUserBySub, provisionUser } from '../users.js';
 import { profileOnboarded } from './prefs.js';
+import { publicCapabilities } from '../media/types.js';
 import { FALLBACK_LANGUAGE, instanceLanguage, languageFromAcceptLanguage, profileLanguage, roleLabel } from '../i18n.js';
 
 const OIDC_COOKIE = 'ff_oidc';
@@ -108,7 +109,7 @@ export function authRoutes(app: FastifyInstance, ctx: Ctx) {
       } else if (isAdmin && user.role !== 'admin') {
         await ctx.db.query("update users set role='admin' where id=$1", [user.id]);
         const owned = await accountJellyfinIds(ctx, user.id);
-        for (const jid of owned) await applyRole(ctx, jid, 'admin', false, jid === user.jellyfin_user_id ? {} : { IsHidden: true });
+        for (const jid of owned) await applyRole(ctx, jid, 'admin', false, { hidden: jid !== user.jellyfin_user_id });
         user.role = 'admin';
       }
       if (user.disabled) return reply.code(403).send({ error: 'disabled' });
@@ -174,8 +175,14 @@ export function authRoutes(app: FastifyInstance, ctx: Ctx) {
       defaultLanguageSet: instLang !== null,
       /** best supported match of the browser's Accept-Language, or null (only a suggestion for the picker) */
       suggestedLanguage: languageFromAcceptLanguage(req.headers['accept-language']),
+      /** media server kind + what it supports: the client hides UI for anything missing (see media/types.ts) */
+      server: { kind: ctx.jf.kind, capabilities: publicCapabilities(ctx.jf.capabilities) },
     };
   });
+
+  app.get('/api/server', { preHandler: requireUser(ctx, { allowPendingDevice: true, allowNoProfile: true, skipProfileHeader: true }) }, async () => (
+    { kind: ctx.jf.kind, capabilities: publicCapabilities(ctx.jf.capabilities) }
+  ));
 
   // State-changing: CSRF header must match the session token (also enforced globally for /api).
   app.post('/auth/logout', async (req, reply) => {

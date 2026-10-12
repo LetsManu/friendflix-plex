@@ -1,5 +1,11 @@
 # Changelog
 ## [Unreleased]
+### Security: download visibility
+- Offline downloads: `/internal/authz {sid, dl}` now re-checks that the licence's profile can still see the item (`ctx.jf.item` as that profile, memoised 5 s) and revokes the licence when it cannot. Matters for media servers that use one shared token; Jellyfin already enforced this upstream.
+- `compose.yaml` / `compose.prod.yaml`: `JELLYFIN_URL` is no longer forced with `:?`, so another media server's override needs no placeholder. The backend still refuses to start for `MEDIA_SERVER=jellyfin` without `JELLYFIN_URL` / `JELLYFIN_ADMIN_API_KEY` (an empty `JELLYFIN_URL` gives the same "is required" message), the gateway with `missing env JELLYFIN_URL`.
+### Media server seam (no behaviour change)
+- Jellyfin now sits behind a neutral `MediaServer` interface (`backend/src/media/`) and a gateway `Upstream` adapter (`gateway/src/upstream/`), selected by `MEDIA_SERVER` (default and only value: `jellyfin`). Capabilities are sent in `/api/me` (`server`) and `GET /api/server`; the web hides unsupported UI (Jellyfin supports everything). See docs/architecture.md.
+- Seam follow-ups for other servers (Jellyfin unchanged): the media factory gets the shared Postgres pool (`MediaDeps.db`); gateway adapters may define `validateConfig(env)` (gateway refuses to start on problems) and `playlist(body, ctx)` (rewrites HLS playlists on the cookie and the cast path); FriendFlix-served subtitles (`capabilities.subtitleExtract`) reach the Chromecast through a signed `/api/cast/subtitle/…` URL bound to the cast token; `/internal/authz-nginx` answers 501 `plan_b_unsupported` (logged once, counted as `result="unsupported"`) when the server has no Plan B support instead of failing with a 500. Seam tests no longer assume Jellyfin is the only registered kind.
 ### Browser-Fehler & E2E
 - Browser error reporting: `POST /api/client-errors` (unauthenticated, rate limited, logged scrubbed, counted in `friendflix_client_errors_total`), `web/src/lib/telemetry.ts` + `hooks.client.ts` (dedupe 60 s, max 10 per page load, extension/ResizeObserver noise filtered). See docs/monitoring.md.
 - Playwright browser tests in `e2e/` (API fully mocked, run against the built web app; `npm run e2e`) and an `e2e` CI job.

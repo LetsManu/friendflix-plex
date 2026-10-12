@@ -34,7 +34,7 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
       pendingPolls: await n("select count(*) n from polls where status='needs_approval'"),
       activeStreams: (await listLive(ctx)).length,
       partyRooms: parties.rooms.size,
-      jellyfin: await ctx.jf.client.ping(),
+      jellyfin: await ctx.jf.admin.ping(),
     };
   });
 
@@ -167,12 +167,12 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
       if (!Object.hasOwn(ctx.roles, b.role)) return reply.code(400).send({ error: 'unknown_role' });
       const ids = await accountJellyfinIds(ctx, id);
       const hidden = new Set(ids.filter((x) => x !== user.jellyfin_user_id));
-      for (const jid of ids) await applyRole(ctx, jid, b.role, b.disabled ?? user.disabled, hidden.has(jid) ? { IsHidden: true } : {}); // re-apply template to the Jellyfin account and all its profile users
+      for (const jid of ids) await applyRole(ctx, jid, b.role, b.disabled ?? user.disabled, { hidden: hidden.has(jid) }); // re-apply template to the Jellyfin account and all its profile users
       await ctx.db.query('update users set role=$1 where id=$2', [b.role, id]);
       await audit(ctx, req.user!.id, 'user.role', id, { from: user.role, to: b.role });
     }
     if (b.disabled !== undefined && b.disabled !== user.disabled) {
-      for (const jid of await accountJellyfinIds(ctx, id)) await ctx.jf.client.setPolicy(jid, { IsDisabled: b.disabled });
+      for (const jid of await accountJellyfinIds(ctx, id)) await ctx.jf.admin.setDisabled(jid, b.disabled);
       await ctx.db.query('update users set disabled=$1 where id=$2', [b.disabled, id]);
       if (b.disabled) await revokeSessions(ctx, id); // also revokes the account's offline licenses
       await audit(ctx, req.user!.id, b.disabled ? 'user.disable' : 'user.enable', id);
