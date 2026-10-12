@@ -35,7 +35,7 @@
   ul::-webkit-scrollbar { display: none; }
   li { flex: 0 0 clamp(168px, 46vw, 250px); scroll-snap-align: start; min-width: 0; }
   @media (min-width: 800px) { li { flex-basis: clamp(190px, 17vw, 270px); } }
-  .tile { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background-color: #222; background-image: var(--hb); border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 4px 14px rgba(0, 0, 0, .45); transition: transform var(--t-med) var(--ease), box-shadow var(--t-med) var(--ease), border-color var(--t-fast); }
+  .tile { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background-color: #1c2228; background-image: var(--hb); border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 4px 14px rgba(0, 0, 0, .45); transition: transform var(--t-med) var(--ease), box-shadow var(--t-med) var(--ease), border-color var(--t-fast); }
   .tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
   /* the name must stay readable on any artwork */
   .shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0, 0, 0, .72), rgba(0, 0, 0, .1) 62%); }

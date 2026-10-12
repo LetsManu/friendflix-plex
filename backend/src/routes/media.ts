@@ -253,7 +253,7 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
     if (!r.rows.length) return { items: [] };
     return { items: (await ctx.jf.items(req.jfUser!, { ids: r.rows.map((x) => x.item_id), types: 'Movie,Series,Episode', limit: 200 })).items };
   }));
-  // Lightweight id list so cards can show the "Meine Liste" state without loading every item.
+  // Lightweight id list so cards can show the "Merkliste" state without loading every item.
   app.get('/api/watchlist/ids', pre, async (req) => ({
     ids: (await ctx.db.query<{ item_id: string }>('select item_id from watchlist where profile_id=$1', [req.profile!.id])).rows.map((r) => r.item_id),
   }));

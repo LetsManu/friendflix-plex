@@ -38,7 +38,7 @@ const dict: Translation<typeof de> = {
   admin: {
     tab: 'Yakında kalkıyor',
     title: 'Yakında kaldırılacak',
-    intro: 'Bu yapımların kütüphaneden çıkacağı bir tarih belirlenmiştir. İki hafta önce kartlarda bir uyarı görünür; bir hafta ve bir gün önce yapımı “Listem”inde veya “İzlemeye devam et” bölümünde bulunan herkes bildirim alır. Hiçbir şey silinmez – tarih yalnızca bir duyurudur ve süresi dolan kayıtlar kendiliğinden kaybolur.',
+    intro: 'Bu yapımların kütüphaneden çıkacağı bir tarih belirlenmiştir. İki hafta önce kartlarda bir uyarı görünür; bir hafta ve bir gün önce yapımı “İzleme listesi”inde veya “İzlemeye devam et” bölümünde bulunan herkes bildirim alır. Hiçbir şey silinmez – tarih yalnızca bir duyurudur ve süresi dolan kayıtlar kendiliğinden kaybolur.',
     addTitle: 'Yapım ekle',
     search: 'Yapım ara',
     searchPlaceholder: 'Film veya dizi …',

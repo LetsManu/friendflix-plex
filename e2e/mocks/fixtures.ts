@@ -38,18 +38,18 @@ export const uuid = (n: number): string => `00000000-0000-4000-8000-${n.toString
 
 type Row = [name: string, type: 'Movie' | 'Series', year: number, genres: string[], rating: number];
 const ROWS: Row[] = [
-  ['Inception', 'Movie', 2010, ['Sci-Fi', 'Action'], 8.8],
-  ['Interstellar', 'Movie', 2014, ['Sci-Fi', 'Drama'], 8.7],
-  ['The Dark Knight', 'Movie', 2008, ['Action', 'Krimi'], 9.0],
-  ['Dunkirk', 'Movie', 2017, ['Drama', 'Krieg'], 7.8],
-  ['Memento', 'Movie', 2000, ['Thriller', 'Mystery'], 8.4],
-  ['Oppenheimer', 'Movie', 2023, ['Drama', 'Historie'], 8.3],
-  ['Pulp Fiction', 'Movie', 1994, ['Krimi', 'Drama'], 8.9],
+  ['Inkwell', 'Movie', 2010, ['Sci-Fi', 'Action'], 8.8],
+  ['Interlace', 'Movie', 2014, ['Sci-Fi', 'Drama'], 8.7],
+  ['The Dawn Keeper', 'Movie', 2008, ['Action', 'Krimi'], 9.0],
+  ['Dunwick', 'Movie', 2017, ['Drama', 'Krieg'], 7.8],
+  ['Meridian', 'Movie', 2000, ['Thriller', 'Mystery'], 8.4],
+  ['Orchard Lane', 'Movie', 2023, ['Drama', 'Historie'], 8.3],
+  ['Pulse Harbor', 'Movie', 1994, ['Krimi', 'Drama'], 8.9],
   ['Die Verurteilten', 'Movie', 1994, ['Drama'], 9.3],
-  ['Breaking Bad', 'Series', 2008, ['Drama', 'Krimi'], 9.5],
-  ['Dark', 'Series', 2017, ['Sci-Fi', 'Mystery'], 8.7],
-  ['Stranger Things', 'Series', 2016, ['Sci-Fi', 'Horror'], 8.6],
-  ['The Wire', 'Series', 2002, ['Krimi', 'Drama'], 9.3],
+  ['Bright Valley', 'Series', 2008, ['Drama', 'Krimi'], 9.5],
+  ['Dahlia', 'Series', 2017, ['Sci-Fi', 'Mystery'], 8.7],
+  ['Strange Harbor', 'Series', 2016, ['Sci-Fi', 'Horror'], 8.6],
+  ['The Wharf', 'Series', 2002, ['Krimi', 'Drama'], 9.3],
 ];
 
 export const items: MockItem[] = ROWS.map(([name, type, year, genres, communityRating], i) => ({
@@ -73,9 +73,9 @@ export const items: MockItem[] = ROWS.map(([name, type, year, genres, communityR
   langs: { audio: ['deu', 'eng'], subs: ['deu'] },
 }));
 export const byName = (name: string): MockItem => items.find((i) => i.name === name)!;
-export const MOVIE = items[0]!; // Inception
+export const MOVIE = items[0]!; // Inkwell
 export const MOVIE2 = items[1]!;
-export const SERIES = items[8]!; // Breaking Bad
+export const SERIES = items[8]!; // Bright Valley
 
 export const episodes: MockItem[] = Array.from({ length: 6 }, (_, i) => ({
   id: hex(100 + i),
@@ -100,14 +100,14 @@ export const episodes: MockItem[] = Array.from({ length: 6 }, (_, i) => ({
 }));
 
 export const people = [
-  { id: hex(300), name: 'Christopher Nolan', role: '', type: 'Director', image: true },
-  { id: hex(301), name: 'Leonardo DiCaprio', role: 'Cobb', type: 'Actor', image: true },
-  { id: hex(302), name: 'Elliot Page', role: 'Ariadne', type: 'Actor', image: false },
-  { id: hex(303), name: 'Tom Hardy', role: 'Eames', type: 'Actor', image: true },
-  { id: hex(304), name: 'Hans Zimmer', role: '', type: 'Composer', image: true },
+  { id: hex(300), name: 'Carl Norden', role: '', type: 'Director', image: true },
+  { id: hex(301), name: 'Lena Doria', role: 'Cobb', type: 'Actor', image: true },
+  { id: hex(302), name: 'Elsa Prell', role: 'Ariadne', type: 'Actor', image: false },
+  { id: hex(303), name: 'Tomas Hart', role: 'Eames', type: 'Actor', image: true },
+  { id: hex(304), name: 'Hans Zeller', role: '', type: 'Composer', image: true },
 ];
 
-export const nolan = items.filter((i) => ['Inception', 'Interstellar', 'The Dark Knight', 'Dunkirk', 'Memento', 'Oppenheimer'].includes(i.name));
+export const nolan = items.filter((i) => ['Inkwell', 'Interlace', 'The Dawn Keeper', 'Dunwick', 'Meridian', 'Orchard Lane'].includes(i.name));
 
 export const ME = {
   id: 'u1',

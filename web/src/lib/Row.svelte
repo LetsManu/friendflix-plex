@@ -17,7 +17,7 @@
   /** null = loading (skeleton) */
   export let items: Item[] | null;
   export let href = '';
-  /** big rank numbers next to portrait posters (Top 10 style) */
+  /** small rank chip on the corner of portrait posters */
   export let ranked = false;
   /** cards get an X button; the parent handles `remove` */
   export let removable = false;
@@ -135,7 +135,7 @@
   h2 { font-size: clamp(1.05rem, .55vw + .8rem, 1.45rem); font-weight: 600; margin: 0; letter-spacing: -.005em; line-height: 1.25; }
   /* page indicator (top right, only while the row is hovered) */
   .dots { display: flex; gap: 2px; list-style: none; margin: 0 0 .3rem; padding: 0; opacity: 0; transition: opacity var(--t-fast); }
-  .dots li { width: 12px; height: 2px; background: #4d4d4d; }
+  .dots li { width: 12px; height: 2px; background: #3c4650; }
   .dots li.on { background: #aaa; }
   .row:hover .dots, .row:focus-within .dots { opacity: 1; }
   h2 a { display: inline-flex; align-items: center; gap: .2rem; }
@@ -146,16 +146,14 @@
   .track::-webkit-scrollbar { display: none; }
   /* 100% = the track content box (inside the pad-x padding): exactly n cards per page, the neighbours peek in the padding */
   .slot { flex: 0 0 calc((100% - (var(--n) - 1) * var(--gap)) / var(--n)); scroll-snap-align: start; min-width: 0; }
-  /* Top 10: big outlined number on the left half, portrait poster on the right half of a normal slot */
-  .slot.ranked { display: flex; align-items: stretch; }
-  .slot.ranked :global(.card) { width: 52%; flex: none; }
-  .rank { flex: 1; display: flex; align-items: center; justify-content: flex-end; font-size: clamp(6rem, 13vw, 14rem); font-weight: 900; line-height: .7; color: var(--bg); -webkit-text-stroke: 4px #595959; text-align: right; margin-right: -.06em; letter-spacing: -.1em; overflow: hidden; user-select: none; position: relative; z-index: 0; }
+  /* ranked row: normal portrait posters with a small filled rank chip on the top-right corner */
+  .slot.ranked { position: relative; }
+  .rank { position: absolute; right: .45rem; top: .45rem; z-index: 3; display: inline-flex; align-items: center; justify-content: center; min-width: 1.7rem; height: 1.7rem; padding: 0 .5rem; border-radius: 99px; background: var(--acc-fill); color: #fff; font-size: .85rem; font-weight: 800; line-height: 1; box-shadow: 0 2px 8px rgba(0, 0, 0, .45); pointer-events: none; user-select: none; }
   .row:not(.near) :global(.skeleton::after) { animation: none; display: none; }
   .ph { aspect-ratio: 16 / 9; width: 100%; }
   .ph.poster { aspect-ratio: 2 / 3; }
-  .rk .ph.poster { width: 52%; margin-left: auto; }
-  .arrow { position: absolute; top: .4rem; bottom: .6rem; width: var(--pad-x); min-width: 44px; border-radius: 0; background: rgba(20, 20, 20, .55); opacity: 0; z-index: 7; padding: 0; }
-  .arrow:hover:not(:disabled) { background: rgba(20, 20, 20, .8); }
+  .arrow { position: absolute; top: .4rem; bottom: .6rem; width: var(--pad-x); min-width: 44px; border-radius: 0; background: rgba(16, 20, 24, .55); opacity: 0; z-index: 7; padding: 0; }
+  .arrow:hover:not(:disabled) { background: rgba(16, 20, 24, .8); }
   .arrow.left { left: 0; } .arrow.right { right: 0; }
   .arrow.hide { display: none; }
   .row:hover .arrow, .arrow:focus-visible { opacity: 1; }
@@ -170,9 +168,6 @@
   .row.m .track { padding: 0 var(--pad-x); margin: 0; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
   .row.m .slot { flex: 0 0 var(--pw); }
   .row.m .arrow { display: none; }
+  .row.m .rank { right: .3rem; top: .3rem; min-width: 1.5rem; height: 1.5rem; font-size: .78rem; }
   .row.m.land { --pw: calc((100vw - var(--pad-x)) / 2.15); }
-  .row.m .slot.ranked { flex-basis: calc(var(--pw) * 1.6); align-items: flex-end; }
-  .row.m .slot.ranked :global(.pc) { width: 62.5%; flex: none; }
-  .row.m .rank { flex: none; font-size: 5rem; width: 37.5%; -webkit-text-stroke: 2.5px #777; padding-right: .1rem; }
-  .row.m.rk .ph.poster { width: 100%; }
 </style>

@@ -38,7 +38,7 @@ const dict: Translation<typeof de> = {
   admin: {
     tab: 'Bientôt retiré',
     title: 'Bientôt indisponible',
-    intro: 'Ces titres ont une date à laquelle ils quittent la médiathèque. Deux semaines avant, les cartes affichent un avis ; une semaine et un jour avant, toutes les personnes qui ont le titre dans « Ma liste » ou dans « Reprendre » reçoivent une notification. Rien n’est supprimé – la date n’est qu’une annonce, et les entrées échues disparaissent d’elles-mêmes.',
+    intro: 'Ces titres ont une date à laquelle ils quittent la médiathèque. Deux semaines avant, les cartes affichent un avis ; une semaine et un jour avant, toutes les personnes qui ont le titre dans « Mes envies » ou dans « Reprendre » reçoivent une notification. Rien n’est supprimé – la date n’est qu’une annonce, et les entrées échues disparaissent d’elles-mêmes.',
     addTitle: 'Ajouter un titre',
     search: 'Rechercher un titre',
     searchPlaceholder: 'Film ou série …',

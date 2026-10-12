@@ -38,7 +38,7 @@ describe('statistics', () => {
 
   it('groups episodes by series and detects binge + hour achievements', async () => {
     for (let i = 1; i <= 3; i++) {
-      await env.pool.query(`insert into play_seconds(user_id,item_id,day,seconds,item_name,item_type,series_name) values ($1,$2,current_date,1500,$3,'Episode','Breaking Bad')`, [user.id, `e${i}`.padEnd(32, '0'), `Folge ${i}`]);
+      await env.pool.query(`insert into play_seconds(user_id,item_id,day,seconds,item_name,item_type,series_name) values ($1,$2,current_date,1500,$3,'Episode','Bright Valley')`, [user.id, `e${i}`.padEnd(32, '0'), `Folge ${i}`]);
     }
     const got = await evaluate(env.ctx, user.id);
     expect(got).toContain('binge');
@@ -48,7 +48,7 @@ describe('statistics', () => {
     expect(await evaluate(env.ctx, user.id)).toContain('hours_10');
     const s = (await get('/api/stats/me')).json();
     expect(s.topItems[0].name).toBe('Marathon');
-    expect(s.topItems.find((t: any) => t.name === 'Breaking Bad').minutes).toBe(75);
+    expect(s.topItems.find((t: any) => t.name === 'Bright Valley').minutes).toBe(75);
     expect(s.achievements.filter((a: any) => a.earnedAt).length).toBeGreaterThanOrEqual(3);
   });
 

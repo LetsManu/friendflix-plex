@@ -4,7 +4,6 @@
   import { prefetchPlayer } from '#lib/player/prefetch';
   import { prefetchModal } from '#lib/lazy';
   import Icon from '#lib/Icon.svelte';
-  import Logo from '#lib/Logo.svelte';
   import { openModal } from '#lib/modal';
   import { listIds, prefs, toggleList } from '#lib/stores';
   import { autoplayAllowed, billboardHeld, playPreview, previewOwner, stopPreview, toggleSound } from '#lib/preview';
@@ -20,7 +19,7 @@
   /** '' = "Abspielen" in the UI language */
   export let playLabel = '';
   export let more = true;
-  /** position in a ranking (1-10); shows the "#n" line like a Top-10 billboard. 0 = none */
+  /** position in a ranking (1-10); shows the "#n" pill with the ranking label. 0 = none */
   export let rank = 0;
   /** '' = "in den Top 10 nach Bewertung" in the UI language */
   export let rankLabel = '';
@@ -29,7 +28,7 @@
   const page = pageStore();
   let loaded = false, logoFailed = false, section: HTMLElement | undefined;
 
-  // ---- billboard preview: after a short pause the still image fades into the (muted) trailer, like Netflix ----
+  // ---- billboard preview: after a short pause the still image fades into the (muted) trailer ----
   const DELAY = 2500, QUIET_AFTER = 4000;
   let hv: HTMLVideoElement, playing = false, vmuted = true, ended = false, quiet = false, inView = true, paused = false;
   let timer: ReturnType<typeof setTimeout>, quietT: ReturnType<typeof setTimeout>, scheduledFor = '';
@@ -40,7 +39,7 @@
   $: if (item && loaded && item.id !== scheduledFor) schedule(item.id);
   let interrupted = false;
   $: if (playing && $previewOwner !== heroOwner) { playing = false; quiet = false; interrupted = $previewOwner !== ''; } // a hover card took over (or the preview failed)
-  // the hover preview is over: the billboard trailer comes back (from the start, like Netflix)
+  // the hover preview is over: the billboard trailer comes back (from the start)
   $: if (interrupted && $previewOwner === '' && item) { interrupted = false; clearTimeout(timer); const id = item.id; timer = setTimeout(() => void startHero(id), 1500); }
   $: syncHold(hold);
   function eligible() {
@@ -124,30 +123,30 @@
     <video bind:this={hv} class="hv" class:on={playing} playsinline aria-hidden="true" tabindex="-1" on:ended={onEnded} on:volumechange={() => (vmuted = hv.muted)} on:playing={() => (vmuted = hv.muted)}></video>
     <div class="shade"></div>
     <div class="content">
-      <p class="eyebrow"><Logo size={22} label="" shadow /><span>{kind}</span></p>
+      <p class="eyebrow"><span>{kind}</span></p>
       {#if item.logo && !logoFailed}
         <h1 class="logoh"><img class="tlogo" src={logoUrl(item.id)} alt={item.name} on:error={() => (logoFailed = true)} /></h1>
       {:else}<h1>{item.name}</h1>{/if}
       <div class="fadebox">
         {#if rank > 0}
-          <p class="rankline"><span class="top10" aria-hidden="true"><small>TOP</small>10</span>#{rank} {rankLabel || $t('home.hero.rankTop10')}</p>
+          <p class="rankline"><span class="top10">#{rank}</span> {rankLabel || $t('home.hero.rankTop10')}</p>
         {:else if tagline}<p class="rankline plain">{tagline}</p>{/if}
         <p class="meta">
           {#if item.communityRating}<span class="match">{$t('home.hero.match', { pct: Math.round(item.communityRating * 10) })}</span>{/if}
           {#if item.year}<span>{item.year}</span>{/if}
           {#if item.runtimeTicks && item.type !== 'Series'}<span>{$t('common.duration.m', { m: Math.round(item.runtimeTicks / 600_000_000) })}</span>{/if}
+          {#if item.rating}<span class="age" aria-label={$t('home.card.ageRating', { rating: item.rating })}>{item.rating}</span>{/if}
         </p>
         {#if item.overview}<p class="ov">{item.overview}</p>{/if}
       </div>
       <div class="btns">
-        <a class="btn light" data-autofocus href={playHref || (item.type === 'Series' ? `/item/${item.id}` : `/watch/${item.id}`)} on:pointerenter={prefetchPlayer} on:focus={prefetchPlayer}><Icon name="play" size={26} />{playText}</a>
-        {#if more}<a class="btn grey" href="/item/{item.id}" aria-haspopup="dialog" on:pointerenter={prefetchModal} on:focus={prefetchModal} on:click={(e) => { if (item) primeItem(item); openModal(e, `/item/${item!.id}`); }}><Icon name="info" size={26} />{$t('home.hero.moreInfo')}</a>{/if}
+        <a class="btn pill" data-autofocus href={playHref || (item.type === 'Series' ? `/item/${item.id}` : `/watch/${item.id}`)} on:pointerenter={prefetchPlayer} on:focus={prefetchPlayer}><Icon name="play" size={26} />{playText}</a>
+        {#if more}<a class="btn glass" href="/item/{item.id}" aria-haspopup="dialog" on:pointerenter={prefetchModal} on:focus={prefetchModal} on:click={(e) => { if (item) primeItem(item); openModal(e, `/item/${item!.id}`); }}><Icon name="info" size={26} />{$t('home.hero.moreInfo')}</a>{/if}
       </div>
     </div>
     <div class="side">
       {#if playing}<button class="snd" aria-label={vmuted ? $t('home.card.soundOn') : $t('home.card.soundOff')} aria-pressed={!vmuted} on:click={() => toggleSound(hv)}><Icon name={vmuted ? 'volume-off' : 'volume'} size={22} /></button>
       {:else if ended}<button class="snd" aria-label={$t('home.hero.replay')} title={$t('home.hero.replayTitle')} on:click={replay}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 12a8.5 8.5 0 102.6-6.1M3.5 4v4.5H8" /></svg></button>{/if}
-      {#if item.rating}<div class="agebox" aria-label={$t('home.card.ageRating', { rating: item.rating })}><span>{item.rating}</span></div>{/if}
     </div>
   {:else}
     <div class="skeleton fill"></div>
@@ -168,43 +167,41 @@
   .hv.on { opacity: 1; }
   /* first layer paints on top: the bottom fade must end in exactly var(--bg), otherwise the side vignette leaves a seam */
   .shade { position: absolute; inset: 0; background:
-      linear-gradient(to top, var(--bg) 0%, var(--bg) 3%, rgba(20,20,20,.9) 11%, transparent 42%),
+      linear-gradient(to top, var(--bg) 0%, var(--bg) 3%, rgba(16,20,24,.9) 11%, transparent 42%),
       linear-gradient(77deg, rgba(0,0,0,.82) 0%, rgba(0,0,0,.5) 30%, transparent 62%),
       linear-gradient(to bottom, rgba(0,0,0,.65), transparent 24%); }
   .content { position: absolute; left: var(--pad-x); bottom: 25%; max-width: min(42rem, 88vw); z-index: 2; }
-  .eyebrow { display: flex; align-items: center; gap: .55rem; margin: 0 0 .5rem; font-size: .78rem; font-weight: 700; letter-spacing: .4em; text-transform: uppercase; color: #d9d9d9; text-shadow: 0 1px 6px rgba(0,0,0,.7); }
+  .eyebrow { display: inline-flex; align-items: center; margin: 0 0 .6rem; padding: .22rem .8rem; border-radius: 999px; background: var(--surface); font-size: .85rem; font-weight: 600; color: var(--fg); }
   h1 { font-size: clamp(2.2rem, 5.6vw, 4.8rem); font-weight: 800; margin: 0 0 .8rem; text-shadow: 0 2px 18px rgba(0,0,0,.6); letter-spacing: -.02em; line-height: 1.02; }
   .logoh { margin: 0 0 1rem; }
   .tlogo { display: block; max-width: min(100%, 28rem); max-height: 10rem; object-fit: contain; object-position: left bottom; filter: drop-shadow(0 4px 18px rgba(0,0,0,.6)); }
   .rankline { display: flex; align-items: center; gap: .6rem; margin: 0 0 .5rem; font-size: clamp(1.1rem, 1.9vw, 1.6rem); font-weight: 700; text-shadow: 0 1px 8px rgba(0,0,0,.7); }
   .rankline.plain { font-weight: 600; font-size: clamp(1rem, 1.5vw, 1.25rem); color: #e8e8e8; }
-  .top10 { display: inline-grid; place-items: center; width: 1.9rem; height: 1.9rem; background: var(--acc); border-radius: 4px; font-size: 1rem; font-weight: 900; line-height: .85; padding-top: .1rem; } .top10 small { font-size: .5rem; letter-spacing: .08em; display: block; }
+  .top10 { display: inline-flex; align-items: center; justify-content: center; min-width: 2.4rem; height: 1.8rem; padding: 0 .7rem; background: var(--acc-fill); color: #fff; border-radius: 99px; font-size: .95rem; font-weight: 800; letter-spacing: .01em; text-shadow: none; }
   .meta { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; color: #d2d2d2; margin: 0 0 .7rem; font-weight: 500; }
   .match { color: var(--ok); font-weight: 700; }
   .ov { font-size: clamp(1rem, 1.45vw, 1.28rem); line-height: 1.5; margin: 0; max-width: 38rem; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-shadow: 0 1px 8px rgba(0,0,0,.8); }
   .btns { display: flex; gap: .8rem; flex-wrap: wrap; align-items: center; }
-  .btns .btn { font-size: 1.15rem; font-weight: 600; padding: .55rem 1.9rem .55rem 1.5rem; min-height: 52px; border-radius: 4px; }
-  .btn.grey { background: rgba(109,109,110,.7); color: #fff; padding-left: 1.4rem; }
-  .btn.grey:hover:not(:disabled) { background: rgba(109,109,110,.45); }
-  /* trailer running: synopsis + meta fade out, the title shrinks towards the buttons (Netflix billboard) */
+  .btns .btn { font-size: 1.15rem; font-weight: 600; padding: .55rem 1.9rem .55rem 1.5rem; min-height: 52px; border-radius: 999px; }
+  .age { border: 1px solid rgba(255,255,255,.5); border-radius: 6px; padding: 0 .45rem; font-size: .85rem; line-height: 1.5; }
+  /* trailer running: synopsis + meta fade out, the title shrinks towards the buttons */
   .fadebox { overflow: hidden; max-height: 24rem; transition: max-height .9s var(--ease), opacity .6s ease; }
   .fadebox > :last-child { margin-bottom: 1.4rem; }
   .hero.quiet .fadebox { max-height: 0; opacity: 0; }
   h1, .logoh { transform-origin: left bottom; transition: transform .9s var(--ease); }
   .hero.quiet h1, .hero.quiet .logoh { transform: scale(.72); }
   @media (prefers-reduced-motion: reduce) { .fadebox, h1, .logoh { transition: none; } }
-  /* age rating box on the right edge, like a TV network bug */
+  /* sound / replay button on the right edge */
   .side { position: absolute; right: 0; bottom: calc(25% + .35rem); z-index: 2; display: flex; align-items: center; gap: .9rem; }
   .snd { width: 46px; min-height: 46px; height: 46px; padding: 0; border-radius: 50%; background: rgba(42,42,42,.6); border: 2px solid rgba(255,255,255,.55); color: #fff; }
   .snd:hover:not(:disabled) { background: rgba(42,42,42,.9); border-color: #fff; }
-  .agebox { display: flex; align-items: center; min-height: 52px; padding: 0 var(--pad-x) 0 1.1rem; background: rgba(51,51,51,.6); border-left: 3px solid #dcdcdc; font-size: 1.1rem; font-weight: 600; letter-spacing: .02em; backdrop-filter: blur(4px); }
-  @media (max-width: 700px) { .hero { height: 68vh; margin-bottom: -5vh; } .content { bottom: 17%; } .btns .btn { padding: .5rem 1.1rem; font-size: 1rem; min-height: 46px; } .agebox { display: none; } .side { right: var(--pad-x); } .eyebrow { letter-spacing: .3em; } }
+  @media (max-width: 700px) { .hero { height: 68vh; margin-bottom: -5vh; } .content { bottom: 17%; } .btns .btn { padding: .5rem 1.1rem; font-size: 1rem; min-height: 46px; } .side { right: var(--pad-x); } }
 
   /* ---- phone billboard: centered poster card on a blurred copy of the poster ---- */
   .mh { position: relative; overflow: hidden; padding: calc(var(--nav-h) + .6rem) 0 1.4rem; background: var(--bg); }
   .blurbg { position: absolute; left: -10%; top: -6%; width: 120%; height: 78%; object-fit: cover; filter: blur(34px) saturate(1.5); opacity: .55; transform: translateZ(0); pointer-events: none; }
-  .mshade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(20,20,20,.25), rgba(20,20,20,.55) 45%, var(--bg) 92%); pointer-events: none; }
-  .pcard { position: relative; display: block; width: min(80vw, 360px); aspect-ratio: 2 / 3; margin: 0 auto; border-radius: 8px; overflow: hidden; background: #222; box-shadow: 0 14px 40px rgba(0,0,0,.65); z-index: 1; }
+  .mshade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(16,20,24,.25), rgba(16,20,24,.55) 45%, var(--bg) 92%); pointer-events: none; }
+  .pcard { position: relative; display: block; width: min(80vw, 360px); aspect-ratio: 2 / 3; margin: 0 auto; border-radius: 8px; overflow: hidden; background: #1c2228; box-shadow: 0 14px 40px rgba(0,0,0,.65); z-index: 1; }
   .pimg { width: 100%; height: 100%; object-fit: cover; display: block; }
   .pfade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.92) 0%, rgba(0,0,0,.55) 24%, transparent 52%); }
   .pinfo { position: absolute; left: 0; right: 0; bottom: 0; padding: 1rem .9rem .9rem; display: flex; flex-direction: column; align-items: center; gap: .45rem; text-align: center; }
@@ -212,11 +209,11 @@
   .ptitle { font-size: 1.6rem; font-weight: 800; line-height: 1.1; letter-spacing: -.02em; text-shadow: 0 2px 12px rgba(0,0,0,.7); }
   .pgenres { font-size: .85rem; font-weight: 600; color: #e6e6e6; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
   .pbtns { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; width: min(80vw, 360px); margin: .8rem auto 0; }
-  .pbtns > * { min-height: 46px; border-radius: 4px; font-weight: 700; font-size: 1rem; display: inline-flex; align-items: center; justify-content: center; gap: .45rem; padding: 0 .6rem; white-space: nowrap; }
-  .pplay { background: #fff; color: #000; }
-  .pplay:hover { background: rgba(255,255,255,.8); }
-  .plist { background: rgba(42,42,42,.92); color: #fff; }
-  .plist:hover:not(:disabled) { background: #3a3a3a; }
-  .pcard.ph { background: #1f1f1f; }
+  .pbtns > * { min-height: 46px; border-radius: 999px; font-weight: 700; font-size: 1rem; display: inline-flex; align-items: center; justify-content: center; gap: .45rem; padding: 0 .6rem; white-space: nowrap; }
+  .pplay { background: var(--acc-fill); color: #fff; }
+  .pplay:hover { background: var(--acc-fill-hover); }
+  .plist { background: rgba(255,255,255,.08); backdrop-filter: blur(8px); box-shadow: inset 0 0 0 1px rgba(255,255,255,.4); color: #fff; }
+  .plist:hover:not(:disabled) { background: rgba(255,255,255,.16); }
+  .pcard.ph { background: #1b2127; }
   .pph { height: 46px; }
 </style>

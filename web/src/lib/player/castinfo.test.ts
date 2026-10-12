@@ -4,9 +4,9 @@ import { facts, hasPeople, otherTitles, peekPeople, type CastInfoData } from './
 
 const p = (n: number, role?: string) => ({ id: String(n).padStart(32, '0'), name: `P${n}`, image: false, ...(role ? { role } : {}) });
 const base: CastInfoData = {
-  item: { id: 'e1', name: 'Folge', type: 'Episode', year: 2017, rating: 'FSK-12', communityRating: 8.46, seriesId: 's1', seriesName: 'Dark' },
+  item: { id: 'e1', name: 'Folge', type: 'Episode', year: 2017, rating: 'FSK-12', communityRating: 8.46, seriesId: 's1', seriesName: 'Dahlia' },
   cast: [p(1, 'Jonas'), p(2), p(3), p(4), p(5), p(6), p(7)], guests: [p(20, 'Polizist'), p(21), p(22)],
-  directors: [p(30)], writers: [], creators: [p(31), p(32)], studios: ['Netflix-frei', 'W&B'], genres: ['Drama'], tags: ['a', 'b'],
+  directors: [p(30)], writers: [], creators: [p(31), p(32)], studios: ['Studio Eins', 'W&B'], genres: ['Drama'], tags: ['a', 'b'],
 };
 
 describe('cast & info helpers', () => {

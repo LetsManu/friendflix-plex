@@ -50,8 +50,8 @@
 </div>
 
 <style>
-  .scn { width: min(600px, 94vw); max-height: min(70vh, 640px); display: flex; flex-direction: column; background: rgba(20,20,20,.98); border: 1px solid #3a3a3a; border-radius: 6px; box-shadow: 0 12px 30px #000; overflow: hidden; }
-  header { display: flex; align-items: center; gap: .6rem; padding: .6rem .6rem .5rem 1rem; border-bottom: 1px solid #2c2c2c; }
+  .scn { width: min(600px, 94vw); max-height: min(70vh, 640px); display: flex; flex-direction: column; background: rgba(16,20,24,.98); border: 1px solid #323a43; border-radius: 6px; box-shadow: 0 12px 30px #000; overflow: hidden; }
+  header { display: flex; align-items: center; gap: .6rem; padding: .6rem .6rem .5rem 1rem; border-bottom: 1px solid #252c34; }
   header b { font-size: 1.15rem; } header .muted { flex: 1; font-size: .85rem; }
   .icx { background: transparent; padding: 0; width: 44px; min-height: 44px; color: var(--mut); border-radius: 50%; }
   .icx:hover:not(:disabled) { background: rgba(255,255,255,.12); color: #fff; }
@@ -59,7 +59,7 @@
   .ch { display: grid; gap: .35rem; width: 100%; padding: .35rem; background: transparent; color: #d2d2d2; border-radius: 6px; text-align: left; justify-items: stretch; font-weight: 400; border: 2px solid transparent; }
   .ch:hover:not(:disabled), .ch:focus-visible { background: rgba(255,255,255,.1); color: #fff; }
   .ch.cur { border-color: var(--acc); color: #fff; }
-  .th { position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 16 / 9; border-radius: 4px; overflow: hidden; background: #2a2a2a; color: var(--mut); }
+  .th { position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 16 / 9; border-radius: 4px; overflow: hidden; background: #242b33; color: var(--mut); }
   .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .fr { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
   .th i { position: absolute; right: .3rem; bottom: .3rem; font-style: normal; font-size: .75rem; background: rgba(0,0,0,.75); padding: 0 .3rem; border-radius: 3px; color: #fff; font-variant-numeric: tabular-nums; }

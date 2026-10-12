@@ -17,17 +17,17 @@ beforeAll(async () => {
     },
     seerr: {
       'GET /api/v1/search': (u) => ({ json: { totalPages: 1, results: [
-        { id: 603, mediaType: 'movie', title: 'The Matrix', releaseDate: '1999-03-30', posterPath: '/abc123.jpg', mediaInfo: { status: 5 } },
+        { id: 603, mediaType: 'movie', title: 'The Lattice', releaseDate: '1999-03-30', posterPath: '/abc123.jpg', mediaInfo: { status: 5 } },
         { id: 1, mediaType: 'person', name: 'Someone' },
-        { id: 1396, mediaType: 'tv', name: 'Breaking Bad', firstAirDate: '2008-01-20' },
+        { id: 1396, mediaType: 'tv', name: 'Bright Valley', firstAirDate: '2008-01-20' },
       ], q: u.search } }),
       'GET /api/v1/user': () => ({ json: { results: [{ id: 7, jellyfinUserId: 'x' }, ...(imported ? [{ id: 9, jellyfinUserId: imported.toUpperCase() }] : [])] } }),
       'POST /api/v1/user/import-from-jellyfin': (_u, _i, b) => { imported = b.jellyfinUserIds[0]; return { json: [{ id: 9 }] }; },
-      'GET /api/v1/movie/\\d+': () => ({ json: { title: 'Dune', posterPath: '/dune.jpg', relatedVideos: videos, mediaInfo: movieStatus === 1 ? undefined : { status: movieStatus } } }),
+      'GET /api/v1/movie/\\d+': () => ({ json: { title: 'Dunmoor', posterPath: '/dune.jpg', relatedVideos: videos, mediaInfo: movieStatus === 1 ? undefined : { status: movieStatus } } }),
       'GET /api/v1/tv/\\d+': () => ({ json: { name: 'Show', relatedVideos: videos } }),
       'POST /api/v1/request': (_u, _i, b) => ({ json: { id: 42, status: 1, media: { status: 2 }, echo: b } }),
       'GET /api/v1/request/42': () => ({ json: { id: 42, status: 2, media: { status: 3 } } }),
-      'GET /api/v1/request': () => ({ json: { results: [{ id: 42, type: 'movie', status: 1, media: { status: 2, tmdbId: 438631, mediaType: 'movie' }, requestedBy: { displayName: 'x' }, createdAt: '2026-01-01' }], pageInfo: {} } }),
+      'GET /api/v1/request': () => ({ json: { results: [{ id: 42, type: 'movie', status: 1, media: { status: 2, tmdbId: 900001, mediaType: 'movie' }, requestedBy: { displayName: 'x' }, createdAt: '2026-01-01' }], pageInfo: {} } }),
       'POST /api/v1/request/42/approve': () => ({ json: {} }),
     },
   });
@@ -51,7 +51,7 @@ describe('seerr integration', () => {
   it('search hides persons, proxies posters, encodes spaces as %20', async () => {
     const r = (await call('GET', '/api/seerr/search?q=the%20matrix')).json();
     expect(r.results).toHaveLength(2);
-    expect(r.results[0]).toMatchObject({ title: 'The Matrix', status: 'verfuegbar', poster: '/api/seerr/image/abc123.jpg' });
+    expect(r.results[0]).toMatchObject({ title: 'The Lattice', status: 'verfuegbar', poster: '/api/seerr/image/abc123.jpg' });
     expect(env.seerrCalls.at(-1)!.search).toContain('query=the%20matrix');
     expect(env.seerrCalls.at(-1)!.auth).toBeUndefined(); // api key is a header, never in url/body
   });
@@ -60,18 +60,18 @@ describe('seerr integration', () => {
     expect((await call('GET', '/api/seerr/image/evil/path.jpg')).statusCode).toBe(400);
   });
   it('creates the request in the name of the mapped seerr user and stores the mapping', async () => {
-    const r = await call('POST', '/api/requests', { mediaType: 'movie', tmdbId: 438631 });
+    const r = await call('POST', '/api/requests', { mediaType: 'movie', tmdbId: 900001 });
     expect(r.statusCode).toBe(200);
     const post = env.seerrCalls.find((c) => c.method === 'POST' && c.path === '/api/v1/request')!;
-    expect(post.body).toMatchObject({ mediaType: 'movie', mediaId: 438631, userId: 9 });
+    expect(post.body).toMatchObject({ mediaType: 'movie', mediaId: 900001, userId: 9 });
     expect((await env.pool.query('select seerr_user_id from users')).rows[0].seerr_user_id).toBe(9);
-    expect((await env.pool.query('select title from seerr_requests')).rows[0].title).toBe('Dune');
+    expect((await env.pool.query('select title from seerr_requests')).rows[0].title).toBe('Dunmoor');
     const mine = (await call('GET', '/api/requests/mine')).json().requests;
-    expect(mine[0]).toMatchObject({ id: 42, status: 'in_arbeit', title: 'Dune' });
+    expect(mine[0]).toMatchObject({ id: 42, status: 'in_arbeit', title: 'Dunmoor' });
   });
   it('does not create duplicates', async () => {
     movieStatus = 3;
-    expect((await call('POST', '/api/requests', { mediaType: 'movie', tmdbId: 438631 })).statusCode).toBe(409);
+    expect((await call('POST', '/api/requests', { mediaType: 'movie', tmdbId: 900001 })).statusCode).toBe(409);
     movieStatus = 1;
   });
   it('admin lists and approves requests; requester is notified', async () => {
@@ -82,7 +82,7 @@ describe('seerr integration', () => {
     expect(n.map((x: any) => x.kind)).toContain('request_approve');
   });
   it('seerr webhook: secret required, MEDIA_AVAILABLE notifies requester and pushes ntfy/discord once', async () => {
-    const payload = { notification_type: 'MEDIA_AVAILABLE', subject: 'Dune (2021)', media: { media_type: 'movie', tmdbId: '438631' }, request: { request_id: '42' } };
+    const payload = { notification_type: 'MEDIA_AVAILABLE', subject: 'Dunmoor (2021)', media: { media_type: 'movie', tmdbId: '900001' }, request: { request_id: '42' } };
     expect((await env.app.inject({ method: 'POST', url: '/internal/webhook/seerr', payload })).statusCode).toBe(403);
     sent.length = 0;
     const ok = await env.app.inject({ method: 'POST', url: '/internal/webhook/seerr', headers: { authorization: cfg.WEBHOOK_SECRET }, payload });
@@ -91,7 +91,7 @@ describe('seerr integration', () => {
     await env.app.inject({ method: 'POST', url: '/internal/webhook/seerr', headers: { 'x-webhook-secret': cfg.WEBHOOK_SECRET }, payload });
     expect(sent).toHaveLength(2); // dedupe: no duplicate external pushes
     const n = (await call('GET', '/api/notifications')).json().notifications;
-    expect(n.some((x: any) => x.kind === 'available' && x.title.includes('Dune'))).toBe(true);
+    expect(n.some((x: any) => x.kind === 'available' && x.title.includes('Dunmoor'))).toBe(true);
     await call('POST', '/api/notifications/read');
     expect((await call('GET', '/api/notifications')).json().notifications.filter((x: any) => x.kind === 'available')[0].read).toBe(true);
   });

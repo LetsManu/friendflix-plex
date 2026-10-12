@@ -12,12 +12,12 @@ test.describe('admin content pages (desktop)', () => {
       await page.goto('/admin/requests');
       await expect(page.getByRole('heading', { level: 1, name: 'Wünsche' })).toBeVisible();
       const table = page.getByRole('table', { name: 'Wünsche' });
-      await expect(table.getByRole('row', { name: /Dune: Part Two/ })).toBeVisible();
+      await expect(table.getByRole('row', { name: /Dunmoor: Part Two/ })).toBeVisible();
       await expect(table).not.toContainText('angefragt');
-      await expect(table.getByRole('row', { name: /Dune: Part Two/ })).toContainText('Offen');
-      await table.getByRole('button', { name: '„Dune: Part Two“ freigeben' }).click();
-      await expect(toasts(page).getByText('„Dune: Part Two“ freigegeben.')).toBeVisible();
-      await expect(table.getByRole('row', { name: /Dune: Part Two/ })).toHaveCount(0);
+      await expect(table.getByRole('row', { name: /Dunmoor: Part Two/ })).toContainText('Offen');
+      await table.getByRole('button', { name: '„Dunmoor: Part Two“ freigeben' }).click();
+      await expect(toasts(page).getByText('„Dunmoor: Part Two“ freigegeben.')).toBeVisible();
+      await expect(table.getByRole('row', { name: /Dunmoor: Part Two/ })).toHaveCount(0);
       expect(api.log.some((l) => l.startsWith('POST /api/admin/requests/101/approve'))).toBe(true);
       await expect(page.getByRole('navigation', { name: 'Admin-Bereiche' }).getByRole('link', { name: /Wünsche.*3 offen/ })).toBeVisible();
     });
@@ -25,12 +25,12 @@ test.describe('admin content pages (desktop)', () => {
     test('decline waits for the toast: Undo restores the row and sends nothing, closing commits', async ({ page, api }) => {
       await page.goto('/admin/requests');
       const table = page.getByRole('table', { name: 'Wünsche' });
-      await table.getByRole('button', { name: '„Severance“ ablehnen' }).click();
-      await expect(table.getByRole('row', { name: /Severance/ })).toHaveCount(0);
+      await table.getByRole('button', { name: '„Sundial“ ablehnen' }).click();
+      await expect(table.getByRole('row', { name: /Sundial/ })).toHaveCount(0);
       await toasts(page).getByRole('button', { name: 'Rückgängig' }).click();
-      await expect(table.getByRole('row', { name: /Severance/ })).toBeVisible();
+      await expect(table.getByRole('row', { name: /Sundial/ })).toBeVisible();
       expect(api.log.some((l) => l.includes('/decline'))).toBe(false);
-      await table.getByRole('button', { name: '„Severance“ ablehnen' }).click();
+      await table.getByRole('button', { name: '„Sundial“ ablehnen' }).click();
       await toasts(page).getByRole('button', { name: 'Hinweis schließen' }).click();
       await expect.poll(() => api.log.some((l) => l.startsWith('POST /api/admin/requests/102/decline'))).toBe(true);
     });
@@ -38,7 +38,7 @@ test.describe('admin content pages (desktop)', () => {
     test('a waiting decline is committed at once when the page is left (other admin page, reload)', async ({ page, api }) => {
       await page.goto('/admin/requests');
       const table = page.getByRole('table', { name: 'Wünsche' });
-      await table.getByRole('button', { name: '„Severance“ ablehnen' }).click();
+      await table.getByRole('button', { name: '„Sundial“ ablehnen' }).click();
       await expect(toasts(page).getByRole('button', { name: 'Rückgängig' })).toBeVisible();
       await page.getByRole('navigation', { name: 'Admin-Bereiche' }).getByRole('link', { name: /Abstimmungen/ }).click();
       // well inside the 6 s undo window: the navigation flushed it
@@ -46,12 +46,12 @@ test.describe('admin content pages (desktop)', () => {
       await expect(toasts(page).getByRole('button', { name: 'Rückgängig' })).toHaveCount(0);
 
       await page.goto('/admin/requests');
-      await table.getByRole('button', { name: '„Past Lives“ ablehnen' }).click();
-      await expect(table.getByRole('row', { name: /Past Lives/ })).toHaveCount(0);
+      await table.getByRole('button', { name: '„Paper Lanterns“ ablehnen' }).click();
+      await expect(table.getByRole('row', { name: /Paper Lanterns/ })).toHaveCount(0);
       await page.reload();
       await expect.poll(() => api.log.some((l) => l.startsWith('POST /api/admin/requests/103/decline')), { timeout: 2500 }).toBe(true);
-      await expect(table.getByRole('row', { name: /Dune: Part Two/ })).toBeVisible();
-      await expect(table.getByRole('row', { name: /Past Lives/ })).toHaveCount(0);
+      await expect(table.getByRole('row', { name: /Dunmoor: Part Two/ })).toBeVisible();
+      await expect(table.getByRole('row', { name: /Paper Lanterns/ })).toHaveCount(0);
     });
 
     test('server paging and the status filter (deep-linkable)', async ({ page, api }) => {
@@ -65,7 +65,7 @@ test.describe('admin content pages (desktop)', () => {
       await expect(table.getByRole('row')).toHaveCount(10);
       await page.getByRole('combobox', { name: 'Status' }).selectOption('available');
       await expect(page).toHaveURL(/\?status=available$/);
-      await expect(table.getByRole('row', { name: /Perfect Days/ })).toContainText('Verfügbar');
+      await expect(table.getByRole('row', { name: /Quiet Mornings/ })).toContainText('Verfügbar');
       await expect(table.getByRole('row')).toHaveCount(2);
       await page.reload();
       await expect(page.getByRole('combobox', { name: 'Status' })).toHaveValue('available');
@@ -96,7 +96,7 @@ test.describe('admin content pages (desktop)', () => {
       await expect(card.getByText('Gewinner')).toBeVisible();
       await expect(card.getByText('Nicht in der Bibliothek')).toBeVisible();
       await card.getByRole('button', { name: 'Freigeben' }).click();
-      await expect(toasts(page).getByText('„Dune: Part Two“ freigegeben – der Wunsch ist angelegt.')).toBeVisible();
+      await expect(toasts(page).getByText('„Dunmoor: Part Two“ freigegeben – der Wunsch ist angelegt.')).toBeVisible();
       await expect(page.getByText('Nichts offen.')).toBeVisible();
       expect(api.log.some((l) => l.startsWith('POST /api/admin/polls/p1/approve'))).toBe(true);
     });
@@ -151,41 +151,41 @@ test.describe('admin content pages (desktop)', () => {
       await page.goto('/admin/hubs');
       await expect(page.getByRole('heading', { level: 1, name: 'Marken' })).toBeVisible();
       await expect(page.getByRole('heading', { level: 2, name: 'Marken-Kacheln' })).toBeVisible();
-      const down = page.getByRole('button', { name: 'Marvel nach hinten' });
+      const down = page.getByRole('button', { name: 'Mythos nach hinten' });
       await down.focus();
       await page.keyboard.press('Enter');
-      await expect(toasts(page).getByText('„Marvel“ steht jetzt an Position 2.')).toBeVisible();
-      expect(api.admin.hubs.map((h) => h.name)).toEqual(['Pixar', 'Marvel']);
-      await expect(page.getByRole('button', { name: 'Marvel nach hinten' })).toBeDisabled();
-      await expect(page.getByRole('button', { name: 'Marvel nach vorne' })).toBeFocused();
+      await expect(toasts(page).getByText('„Mythos“ steht jetzt an Position 2.')).toBeVisible();
+      expect(api.admin.hubs.map((h) => h.name)).toEqual(['Pinecone', 'Mythos']);
+      await expect(page.getByRole('button', { name: 'Mythos nach hinten' })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Mythos nach vorne' })).toBeFocused();
 
       await page.getByRole('button', { name: 'Marke anlegen' }).click();
       await expect(page.locator('#hub-name')).toBeFocused();
-      await page.locator('#hub-name').fill('Ghibli');
-      await expect(page.getByRole('img', { name: 'Ghibli' })).toBeVisible();
-      await page.getByLabel('Name in Jellyfin').fill('Studio Ghibli');
+      await page.locator('#hub-name').fill('Glimmerhill');
+      await expect(page.getByRole('img', { name: 'Glimmerhill' })).toBeVisible();
+      await page.getByLabel('Name in Jellyfin').fill('Studio Glimmerhill');
       await page.getByRole('button', { name: 'Speichern' }).click();
-      await expect(toasts(page).getByText('„Ghibli“ gespeichert.')).toBeVisible();
+      await expect(toasts(page).getByText('„Glimmerhill“ gespeichert.')).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Marke anlegen' })).toHaveCount(0);
-      expect(api.admin.hubs.some((h) => h.name === 'Ghibli')).toBe(true);
+      expect(api.admin.hubs.some((h) => h.name === 'Glimmerhill')).toBe(true);
     });
 
     test('a failed reorder rolls back', async ({ page, api }) => {
       await page.route('**/api/admin/hubs/order', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"x"}' }));
       await page.goto('/admin/hubs');
-      await page.getByRole('button', { name: 'Marvel nach hinten' }).click();
+      await page.getByRole('button', { name: 'Mythos nach hinten' }).click();
       await expect(toasts(page).getByText('Serverfehler. Bitte später noch einmal versuchen.')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Marvel nach hinten' })).toBeEnabled();
-      expect(api.admin.hubs.map((h) => h.name)).toEqual(['Marvel', 'Pixar']);
+      await expect(page.getByRole('button', { name: 'Mythos nach hinten' })).toBeEnabled();
+      expect(api.admin.hubs.map((h) => h.name)).toEqual(['Mythos', 'Pinecone']);
     });
 
     test('the visibility switch saves with Undo', async ({ page, api }) => {
       await page.goto('/admin/hubs');
-      await page.getByRole('switch', { name: '„Pixar“ auf der Startseite zeigen' }).click();
-      await expect(toasts(page).getByText('„Pixar“ wird auf der Startseite gezeigt.')).toBeVisible();
-      expect(api.admin.hubs.find((h) => h.name === 'Pixar')!.enabled).toBe(true);
+      await page.getByRole('switch', { name: '„Pinecone“ auf der Startseite zeigen' }).click();
+      await expect(toasts(page).getByText('„Pinecone“ wird auf der Startseite gezeigt.')).toBeVisible();
+      expect(api.admin.hubs.find((h) => h.name === 'Pinecone')!.enabled).toBe(true);
       await toasts(page).getByRole('button', { name: 'Rückgängig' }).click();
-      await expect.poll(() => api.admin.hubs.find((h) => h.name === 'Pixar')!.enabled).toBe(false);
+      await expect.poll(() => api.admin.hubs.find((h) => h.name === 'Pinecone')!.enabled).toBe(false);
     });
   });
 
@@ -265,31 +265,31 @@ test.describe('admin content pages (desktop)', () => {
     test('live streams are titled by name; stopping asks first', async ({ page, api }) => {
       await page.goto('/admin/playback');
       const live = page.getByRole('table', { name: 'Läuft gerade' });
-      await expect(live.getByRole('row', { name: /Severance · Pilot/ })).toContainText('Pausiert');
-      await expect(live.getByRole('row', { name: /Heat/ })).toContainText('Anna Beispiel (Anna)');
+      await expect(live.getByRole('row', { name: /Sundial · Pilot/ })).toContainText('Pausiert');
+      await expect(live.getByRole('row', { name: /Hearth/ })).toContainText('Anna Beispiel (Anna)');
       await expect(live).not.toContainText('it1');
-      await live.getByRole('row', { name: /Heat/ }).getByRole('button', { name: /Aktionen für/ }).click();
+      await live.getByRole('row', { name: /Hearth/ }).getByRole('button', { name: /Aktionen für/ }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Wiedergabe beenden' }).click();
-      const dlg = page.getByRole('alertdialog', { name: '„Heat“ von Anna Beispiel beenden?' });
+      const dlg = page.getByRole('alertdialog', { name: '„Hearth“ von Anna Beispiel beenden?' });
       await expect(dlg).toBeVisible();
       await dlg.getByRole('button', { name: 'Abbrechen' }).click();
       expect(api.admin.live).toHaveLength(2);
-      await live.getByRole('row', { name: /Heat/ }).getByRole('button', { name: /Aktionen für/ }).click();
+      await live.getByRole('row', { name: /Hearth/ }).getByRole('button', { name: /Aktionen für/ }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Wiedergabe beenden' }).click();
       await dlg.getByRole('button', { name: 'Wiedergabe beenden' }).click();
       await expect(toasts(page).getByText('Wiedergabe von Anna Beispiel beendet.')).toBeVisible();
-      await expect(live.getByRole('row', { name: /Heat/ })).toHaveCount(0);
+      await expect(live.getByRole('row', { name: /Hearth/ })).toHaveCount(0);
       expect(api.admin.live).toHaveLength(1);
     });
 
     test('downloads: jobs show the title, licences can be revoked after a confirmation', async ({ page, api }) => {
       await page.goto('/admin/playback');
       const jobs = page.getByRole('table', { name: /Vorbereitung/ });
-      await expect(jobs.getByRole('row', { name: /Inception/ })).toContainText('HD');
+      await expect(jobs.getByRole('row', { name: /Inkwell/ })).toContainText('HD');
       await expect(jobs).not.toContainText('abcdef0123456789');
       await expect(jobs.getByRole('progressbar')).toBeVisible();
       const lic = page.getByRole('table', { name: /Aktive Lizenzen/ });
-      await lic.getByRole('row', { name: /Inception/ }).getByRole('button', { name: /Aktionen für/ }).click();
+      await lic.getByRole('row', { name: /Inkwell/ }).getByRole('button', { name: /Aktionen für/ }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Widerrufen' }).click();
       await page.getByRole('alertdialog').getByRole('button', { name: 'Widerrufen' }).click();
       await expect(toasts(page).getByText('Download von Anna widerrufen.')).toBeVisible();

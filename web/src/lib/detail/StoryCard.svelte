@@ -50,7 +50,7 @@
 {/if}
 
 <style>
-  .story { margin-top: 1.6rem; padding: 1rem 1.2rem 1.1rem; border-radius: 8px; background: var(--surface-2, #262626); border-left: 3px solid var(--acc); }
+  .story { margin-top: 1.6rem; padding: 1rem 1.2rem 1.1rem; border-radius: 8px; background: var(--surface-2, #20262d); border-left: 3px solid var(--acc); }
   .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
   h2 { margin: 0; font-size: 1.15rem; }
   .why { margin: .15rem 0 0; color: var(--mut); font-size: .88rem; }

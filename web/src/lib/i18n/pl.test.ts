@@ -72,10 +72,10 @@ describe('Polish translation', () => {
   it('selects the right plural form at runtime', async () => {
     await setLocale('pl');
     expect(tr('shell.nav.home')).toBe('Strona główna');
-    expect(tr('shell.mobile.meUnread', { n: 1 })).toBe('Mój FriendFlix, 1 nowe powiadomienie');
-    expect(tr('shell.mobile.meUnread', { n: 3 })).toBe('Mój FriendFlix, 3 nowe powiadomienia');
-    expect(tr('shell.mobile.meUnread', { n: 5 })).toBe('Mój FriendFlix, 5 nowych powiadomień');
-    expect(tr('shell.mobile.meUnread', { n: 22 })).toBe('Mój FriendFlix, 22 nowe powiadomienia');
-    expect(tr('shell.mobile.meUnread', { n: 12 })).toBe('Mój FriendFlix, 12 nowych powiadomień');
+    expect(tr('shell.mobile.meUnread', { n: 1 })).toBe('Moja strefa, 1 nowe powiadomienie');
+    expect(tr('shell.mobile.meUnread', { n: 3 })).toBe('Moja strefa, 3 nowe powiadomienia');
+    expect(tr('shell.mobile.meUnread', { n: 5 })).toBe('Moja strefa, 5 nowych powiadomień');
+    expect(tr('shell.mobile.meUnread', { n: 22 })).toBe('Moja strefa, 22 nowe powiadomienia');
+    expect(tr('shell.mobile.meUnread', { n: 12 })).toBe('Moja strefa, 12 nowych powiadomień');
   });
 });

@@ -5,8 +5,8 @@ import type { Translation } from '../../types';
 const fr: Translation<typeof de> = {
   profiles: {
     pageTitle: 'Profils',
-    who: 'Qui regarde ?',
-    manage: 'Gérer les profils',
+    who: 'Qui est là aujourd’hui ?',
+    manage: 'Modifier les profils',
     done: 'Terminé',
     loadFailed: 'Impossible de charger les profils.',
     edit: 'Modifier',
@@ -49,9 +49,9 @@ const fr: Translation<typeof de> = {
     delete: 'Effacer',
   },
   me: {
-    title: 'Mon FriendFlix',
+    title: 'Mon espace',
     switchProfile: 'Changer de profil',
-    manageProfiles: 'Gérer les profils',
+    manageProfiles: 'Modifier les profils',
     quick: 'Accès rapide',
     notifications: 'Notifications',
     less: 'Moins',
@@ -84,7 +84,7 @@ const fr: Translation<typeof de> = {
     lead: 'S’appliquent sur tous vos appareils. Ils ne concernent que vous.',
     autoplayNext: 'Lancer automatiquement l’épisode suivant',
     autoplayNextHint: 'Avec un compte à rebours de 8 secondes, annulable à tout moment.',
-    stillWatching: 'Demander « Vous regardez toujours ? »',
+    stillWatching: 'Demander « Toujours là ? »',
     stillWatchingHint: 'Après plusieurs épisodes d’affilée sans interaction (ou après une longue pause), la lecture ne continue pas automatiquement : une question vous est posée.',
     stillWatchingEpisodes: 'Demander après … épisodes sans interaction',
     spoiler: 'Protection anti-spoilers',

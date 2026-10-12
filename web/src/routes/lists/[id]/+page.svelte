@@ -188,7 +188,7 @@
   .emo-in { width: 5rem; text-align: center; font-size: 1.2rem; }
   .swatches { display: flex; gap: .45rem; flex-wrap: wrap; }
   .sw { width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
-  .sw.on { border-color: #fff; box-shadow: 0 0 0 2px var(--acc, #e50914); }
+  .sw.on { border-color: #fff; box-shadow: 0 0 0 2px var(--acc, #ff4f6d); }
   .cover { margin-bottom: 1.4rem; border-radius: var(--radius, 8px); padding: 2.2rem 1.6rem 1.6rem; min-width: min(560px, 82vw); color: #fff; }
   .cover h1 { margin: .5rem 0 .4rem; font-size: clamp(1.8rem, 3vw + 1rem, 3rem); line-height: 1.1; letter-spacing: -.01em; }
   .cover .emo { margin-right: .15em; }

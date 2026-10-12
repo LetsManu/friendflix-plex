@@ -89,7 +89,7 @@
   h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; color: var(--mut); }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
   li { display: flex; align-items: center; gap: .8rem; background: var(--surface); border-radius: var(--radius); padding: .4rem .6rem .4rem .4rem; }
-  .thumb { flex: 0 0 8rem; aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden; background: #222; display: block; }
+  .thumb { flex: 0 0 8rem; aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden; background: #1c2228; display: block; }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .txt { flex: 1; min-width: 0; display: grid; gap: .1rem; }
   .txt strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

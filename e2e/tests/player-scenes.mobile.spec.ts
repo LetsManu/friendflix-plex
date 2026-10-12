@@ -19,7 +19,7 @@ test('phone: cast peek -> panel, scenes panel, no horizontal overflow', async ({
   await showControls(page);
   await page.getByRole('button', { name: 'Besetzung & Infos' }).tap();
   const peek = page.getByRole('complementary', { name: 'Besetzung auf einen Blick' });
-  await expect(peek.getByText('Leonardo DiCaprio')).toBeVisible();
+  await expect(peek.getByText('Lena Doria')).toBeVisible();
   await expect(peek.getByText('Mehr: I')).toHaveCount(0); // no key hint on touch
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/phone-peek.png` });
   await peek.getByRole('button', { name: 'Alle Infos' }).tap();

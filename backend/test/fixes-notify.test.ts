@@ -33,14 +33,14 @@ describe('seerr webhook scoping', () => {
     const ids = (await env.pool.query('select id, name from users')).rows;
     const ua = ids.find((u: any) => u.name === 'Admin').id;
     const ub = ids.find((u: any) => u.name === 'Bea').id;
-    await env.pool.query("insert into seerr_requests(seerr_request_id, user_id, media_type, tmdb_id, title) values (101,$1,'movie',555,'Dune'),(102,$2,'movie',555,'Dune')", [ua, ub]);
-    const r = await hook({ notification_type: 'MEDIA_DECLINED', subject: 'Dune', media: { media_type: 'movie', tmdbId: '555' }, request: { request_id: '101' } });
+    await env.pool.query("insert into seerr_requests(seerr_request_id, user_id, media_type, tmdb_id, title) values (101,$1,'movie',555,'Dunmoor'),(102,$2,'movie',555,'Dunmoor')", [ua, ub]);
+    const r = await hook({ notification_type: 'MEDIA_DECLINED', subject: 'Dunmoor', media: { media_type: 'movie', tmdbId: '555' }, request: { request_id: '101' } });
     expect(r.statusCode).toBe(200);
     const n = (await env.pool.query("select user_id from notifications where kind='media_declined'")).rows;
     expect(n.map((x: any) => x.user_id)).toEqual([ua]);
   });
   it('available still notifies every requester of the title', async () => {
-    await hook({ notification_type: 'MEDIA_AVAILABLE', subject: 'Dune', media: { media_type: 'movie', tmdbId: '555' }, request: { request_id: '101' } });
+    await hook({ notification_type: 'MEDIA_AVAILABLE', subject: 'Dunmoor', media: { media_type: 'movie', tmdbId: '555' }, request: { request_id: '101' } });
     const n = (await env.pool.query("select user_id from notifications where kind='available'")).rows;
     expect(n).toHaveLength(2);
   });

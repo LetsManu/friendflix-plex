@@ -1,5 +1,5 @@
 import { tr, type TFn } from '#lib/i18n';
-/** Pure helpers for the player's control bar (Netflix layout). */
+/** Pure helpers for the player's control bar. */
 
 /** Saved defaults sent with the FIRST playback/info request: quality cap and preferred audio language (detail-page pick wins). */
 export function firstInfoBody(pf: { quality?: number; audioLang?: string }, wantAudio = ''): { maxBitrate?: number; audioLang?: string } {

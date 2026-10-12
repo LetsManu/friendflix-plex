@@ -17,7 +17,7 @@
     tab = next; confirmId = '';
     if (next === 'dropped' && dropped === null) void loadDropped();
   }
-  /** "Meine Liste" toggled through a card: drop it from the planned tab, and re-read both tabs (adding a dropped title plans it) */
+  /** "Merkliste" toggled through a card: drop it from the planned tab, and re-read both tabs (adding a dropped title plans it) */
   function listToggled(e: CustomEvent<{ item: Item; inList: boolean }>) {
     const { item, inList } = e.detail, key = item.seriesId ?? item.id;
     if (!inList) items = (items ?? []).filter((x) => (x.seriesId ?? x.id) !== key);

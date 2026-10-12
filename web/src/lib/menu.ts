@@ -38,7 +38,7 @@ export const FOOTER_COLUMNS: MenuLink[][] = [
   [['/settings', 'shell.menu.accountSettings', 'settings'], ['/devices', 'shell.menu.devices', 'monitor'], ['/remote', 'shell.menu.remote', 'tv'], ['/collections', 'shell.menu.collections', 'film']],
 ];
 
-/** Slim desktop header (Netflix-like): everything else sits in the avatar menu, the footer and on /me. */
+/** Slim desktop header: everything else sits in the avatar menu, the footer and on /me. */
 export const HEADER_TABS: Array<[href: string, label: TKey]> = [['/', 'shell.nav.home'], ['/browse/series', 'shell.nav.series'], ['/browse/movies', 'shell.nav.movies'], ['/new', 'shell.nav.new'], ['/watchlist', 'shell.nav.myList']];
 
 /** true when `href` is the current section (Start only on "/") */

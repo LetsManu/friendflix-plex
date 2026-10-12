@@ -35,7 +35,7 @@
   const items = (p: Record<string, string>) => load(`/api/library/items?${q(p)}`).then((r) => r.items as Item[]);
   /**
    * Cached per profile (module scope in #lib/home): back to home renders at once from memory. Personal rows
-   * (Weiterschauen, Nächste Folge, Meine Liste) always revalidate in the background, the catalogue rows after 5 minutes.
+   * (Weiterschauen, Nächste Folge, Merkliste) always revalidate in the background, the catalogue rows after 5 minutes.
    */
   const cached = <T,>(key: string, fetcher: () => Promise<T>, apply: (v: T) => void, onError: () => void, ttl?: number) =>
     swrLoad(homeCache, `${getActiveProfile()}|${key}`, fetcher, apply, ttl, onError).catch(() => undefined); // onError only when nothing cached was shown

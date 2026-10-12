@@ -41,9 +41,9 @@ test.describe('admin shell + overview (desktop)', () => {
   test('approve a request inline: optimistic row removal, toast, badge update', async ({ page, api }) => {
     await page.goto('/admin');
     const attn = page.getByRole('region', { name: 'Wartet auf dich' });
-    await attn.getByRole('button', { name: '„Dune: Part Two“ freigeben' }).click();
-    await expect(page.getByRole('region', { name: 'Hinweise' }).getByText('„Dune: Part Two“ freigegeben.')).toBeVisible();
-    await expect(attn.getByText('Dune: Part Two')).toHaveCount(0);
+    await attn.getByRole('button', { name: '„Dunmoor: Part Two“ freigeben' }).click();
+    await expect(page.getByRole('region', { name: 'Hinweise' }).getByText('„Dunmoor: Part Two“ freigegeben.')).toBeVisible();
+    await expect(attn.getByText('Dunmoor: Part Two')).toHaveCount(0);
     expect(api.log.some((l) => l.startsWith('POST /api/admin/requests/101/approve'))).toBe(true);
     await expect(page.getByRole('navigation', { name: 'Admin-Bereiche' }).getByRole('link', { name: /Wünsche.*3 offen/ })).toBeVisible();
   });
@@ -52,16 +52,16 @@ test.describe('admin shell + overview (desktop)', () => {
     await page.goto('/admin');
     const attn = page.getByRole('region', { name: 'Wartet auf dich' });
     const toasts = page.getByRole('region', { name: 'Hinweise' });
-    await attn.getByRole('button', { name: '„Severance“ ablehnen' }).click();
-    await expect(attn.getByText('Severance', { exact: true })).toHaveCount(0);
+    await attn.getByRole('button', { name: '„Sundial“ ablehnen' }).click();
+    await expect(attn.getByText('Sundial', { exact: true })).toHaveCount(0);
     await toasts.getByRole('button', { name: 'Rückgängig' }).click();
-    await expect(attn.getByText('Severance', { exact: true })).toBeVisible();
+    await expect(attn.getByText('Sundial', { exact: true })).toBeVisible();
     expect(api.log.some((l) => l.includes('/decline'))).toBe(false);
 
-    await attn.getByRole('button', { name: '„Severance“ ablehnen' }).click();
+    await attn.getByRole('button', { name: '„Sundial“ ablehnen' }).click();
     await toasts.getByRole('button', { name: 'Hinweis schließen' }).click();
     await expect.poll(() => api.log.some((l) => l.startsWith('POST /api/admin/requests/102/decline'))).toBe(true);
-    await expect(attn.getByText('Severance', { exact: true })).toHaveCount(0);
+    await expect(attn.getByText('Sundial', { exact: true })).toHaveCount(0);
   });
 
   test('a failed action rolls back and shows an error toast', async ({ page }) => {
@@ -92,9 +92,9 @@ test.describe('toast + confirm replace alert()/confirm()', () => {
     let dialogs = 0;
     page.on('dialog', (d) => { dialogs++; void d.dismiss(); });
     await page.goto('/admin/hubs');
-    const del = page.getByRole('button', { name: 'Marvel löschen' });
+    const del = page.getByRole('button', { name: 'Mythos löschen' });
     await del.click();
-    const dlg = page.getByRole('alertdialog', { name: '„Marvel“ wirklich löschen?' });
+    const dlg = page.getByRole('alertdialog', { name: '„Mythos“ wirklich löschen?' });
     await expect(dlg).toBeVisible();
     await expect(dlg.getByRole('button', { name: 'Abbrechen' })).toBeFocused(); // danger: focus starts on Cancel
     await page.keyboard.press('Tab');

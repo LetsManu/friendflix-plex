@@ -178,7 +178,7 @@
   .search input { width: 100%; padding-left: 2.4rem; }
   table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
   caption.sr-only { position: absolute; }
-  th { position: sticky; top: var(--nav-h); z-index: 2; background: #1d1d1d; text-align: left; padding: .55rem .8rem; font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--mut); border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { position: sticky; top: var(--nav-h); z-index: 2; background: #181e24; text-align: left; padding: .55rem .8rem; font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--mut); border-bottom: 1px solid var(--line); white-space: nowrap; }
   th:first-child { border-top-left-radius: 8px; } th:last-child { border-top-right-radius: 8px; }
   td { padding: .6rem .8rem; border-bottom: 1px solid var(--line); vertical-align: middle; overflow-wrap: anywhere; }
   tbody tr:last-child td { border-bottom: 0; }

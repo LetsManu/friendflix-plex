@@ -5,7 +5,7 @@ import { boxInViewport, openPopout, row } from '../helpers.js';
 test.describe('hover pop-out (desktop)', () => {
   test('stays inside the viewport for the first and the last visible card of a row', async ({ page }) => {
     await page.goto('/');
-    const r = row(page, 'Weil du „Inception“ gesehen hast');
+    const r = row(page, 'Weil du „Inkwell“ gesehen hast');
     await r.scrollIntoViewIfNeeded();
     const cards = r.locator('article.card');
     await expect(cards.first()).toBeVisible();
@@ -31,12 +31,12 @@ test.describe('hover pop-out (desktop)', () => {
     }
   });
 
-  test('pop-out actions: Meine Liste toggles through the API', async ({ page, api }) => {
+  test('pop-out actions: Merkliste toggles through the API', async ({ page, api }) => {
     await page.goto('/');
-    const card = row(page, 'Weil du „Inception“ gesehen hast').locator('article.card').nth(1); // The Dark Knight: not on the list yet
+    const card = row(page, 'Weil du „Inkwell“ gesehen hast').locator('article.card').nth(1); // The Dawn Keeper: not on the list yet
     const hp = await openPopout(page, card);
-    await hp.getByRole('button', { name: 'Zu Meine Liste hinzufügen' }).click();
-    await expect(hp.getByRole('button', { name: 'Von Meine Liste entfernen' })).toBeVisible();
+    await hp.getByRole('button', { name: 'Zur Merkliste hinzufügen' }).click();
+    await expect(hp.getByRole('button', { name: 'Von der Merkliste entfernen' })).toBeVisible();
     expect(api.log.some((l) => l.startsWith('POST /api/items/') && l.includes('/watchlist'))).toBe(true);
   });
 });
@@ -44,14 +44,14 @@ test.describe('hover pop-out (desktop)', () => {
 test.describe('quick-view modal (desktop)', () => {
   test('opens from the pop-out, closes with Escape and restores the URL', async ({ page }) => {
     await page.goto('/');
-    const card = row(page, 'Weil du „Inception“ gesehen hast').locator('article.card').first();
+    const card = row(page, 'Weil du „Inkwell“ gesehen hast').locator('article.card').first();
     const hp = await openPopout(page, card);
     await hp.getByRole('link', { name: /^Mehr Infos zu / }).click();
 
-    const modal = page.getByRole('dialog', { name: /Interstellar/ });
+    const modal = page.getByRole('dialog', { name: /Interlace/ });
     await expect(modal).toBeVisible();
     await expect(page).toHaveURL(/\/item\/0{31}2$/);
-    await expect(modal.locator('#modal-title')).toHaveText('Interstellar');
+    await expect(modal.locator('#modal-title')).toHaveText('Interlace');
     await expect(page.locator('.hp')).toHaveCount(0);
 
     await page.keyboard.press('Escape');

@@ -23,7 +23,7 @@ export const prefsSchema = z.object({
   autoStartPreview: z.boolean().default(true),
   /** 0 = automatic, else a bitrate in bit/s (capped by the role limit on the server) */
   quality: z.number().int().min(0).max(200_000_000).default(0),
-  /** "Schaust du noch?" check before autoplaying further episodes */
+  /** "Noch da?" check before autoplaying further episodes */
   stillWatching: z.boolean().default(true),
   /** ask after this many episodes in a row without interaction */
   stillWatchingEpisodes: z.union([z.literal(2), z.literal(3), z.literal(4), z.literal(5)]).default(3),

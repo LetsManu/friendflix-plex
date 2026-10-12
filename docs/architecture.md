@@ -45,13 +45,13 @@ flowchart TB
   P -.->|"auth.example.com"| AK
   classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
   classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
-  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef app fill:#4a1a24,stroke:#ff4f6d,stroke-width:1px,color:#fff5f7
   classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
   classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
   classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
   classDef fork fill:#4a1d3c,stroke:#e070b0,stroke-width:1px,stroke-dasharray:4 3,color:#fff0f8
   linkStyle default stroke:#8b949e,stroke-width:1.4px
-  style FF fill:none,stroke:#e50914,stroke-width:1px,stroke-dasharray:4 4
+  style FF fill:none,stroke:#ff4f6d,stroke-width:1px,stroke-dasharray:4 4
 ```
 
 > 🟥 FriendFlix · 🟩 media server · 🟦 other service · 🟪 reverse proxy · 🟨 data store · ⬛ viewers / outside · dashed frame = network or boundary · thick line = video stream · dotted = optional / via public URL
@@ -111,7 +111,7 @@ flowchart TB
   BE -.->|"OIDC, via public URL"| NPM
   classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
   classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
-  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef app fill:#4a1a24,stroke:#ff4f6d,stroke-width:1px,color:#fff5f7
   classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
   classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
   classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
@@ -189,7 +189,7 @@ flowchart TB
   BE -.->|"OIDC, via public URL"| NPM
   classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
   classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
-  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef app fill:#4a1a24,stroke:#ff4f6d,stroke-width:1px,color:#fff5f7
   classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
   classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
   classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
@@ -257,7 +257,7 @@ flowchart TB
   BE -->|"library sync"| PX
   classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
   classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
-  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef app fill:#4a1a24,stroke:#ff4f6d,stroke-width:1px,color:#fff5f7
   classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
   classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
   classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
@@ -265,7 +265,7 @@ flowchart TB
   linkStyle default stroke:#8b949e,stroke-width:1.4px
   style PUB fill:none,stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4
   style LAN fill:none,stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4
-  style HOST fill:none,stroke:#e50914,stroke-width:1px,stroke-dasharray:4 4
+  style HOST fill:none,stroke:#ff4f6d,stroke-width:1px,stroke-dasharray:4 4
 ```
 
 > 🟥 FriendFlix · 🟩 media server · 🟦 other service · 🟪 reverse proxy · 🟨 data store · ⬛ viewers / outside · dashed frame = network or boundary · thick line = video stream · dotted = optional / via public URL
@@ -298,7 +298,7 @@ sequenceDiagram
     actor browser as 📺 Browser
     participant web as 🖥️ web
   end
-  box rgba(229,9,20,0.07) FriendFlix
+  box rgba(255,79,109,0.07) FriendFlix
     participant backend as ⚙️ backend
     participant gateway as 📡 gateway
   end
@@ -349,7 +349,7 @@ sequenceDiagram
     actor browser as 📺 Browser
     participant web as 🖥️ web
   end
-  box rgba(229,9,20,0.07) FriendFlix
+  box rgba(255,79,109,0.07) FriendFlix
     participant backend as ⚙️ backend
     participant gateway as 📡 gateway
   end
@@ -423,17 +423,69 @@ flowchart TB
   PX("🎬 <b>Plex Media Server</b>"):::media
   classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
   classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
-  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef app fill:#4a1a24,stroke:#ff4f6d,stroke-width:1px,color:#fff5f7
   classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
   classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
   classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
   classDef fork fill:#4a1d3c,stroke:#e070b0,stroke-width:1px,stroke-dasharray:4 3,color:#fff0f8
   linkStyle default stroke:#8b949e,stroke-width:1.4px
-  style BEL fill:none,stroke:#e50914,stroke-width:1px,stroke-dasharray:4 4
-  style GWL fill:none,stroke:#e50914,stroke-width:1px,stroke-dasharray:4 4
+  style BEL fill:none,stroke:#ff4f6d,stroke-width:1px,stroke-dasharray:4 4
+  style GWL fill:none,stroke:#ff4f6d,stroke-width:1px,stroke-dasharray:4 4
 ```
 
 > 🟥 FriendFlix · 🟩 media server · 🟦 other service · 🟪 reverse proxy · 🟨 data store · ⬛ viewers / outside · 🟫 dashed pink = Plex only · dashed frame = network or boundary · thick line = video stream · dotted = optional / via public URL
+
+How the pieces line up: backend routes and jobs only know the `MediaServer` interface, the gateway core only the `Upstream` adapter; each media server kind provides one of each, and `MEDIA_SERVER` picks them.
+
+```mermaid
+---
+config:
+  flowchart:
+    curve: basis
+    nodeSpacing: 50
+    rankSpacing: 65
+    padding: 14
+  themeVariables:
+    edgeLabelBackground: 'rgba(150,150,150,0.12)'
+  themeCSS: '.labelBkg { background-color: rgba(127,127,127,0.12) !important; }'
+---
+flowchart TB
+  accTitle: The media server seam
+  accDescr: Backend routes call the MediaServer interface and the gateway core calls the Upstream adapter interface. Each media server kind provides one implementation of each, selected by MEDIA_SERVER.
+  subgraph BEL["backend"]
+    RT("🧭 <b>routes + jobs</b><br/><small>ctx.jf</small>"):::app
+    IF("📐 <b>MediaServer</b><br/><small>media/types.ts · createMediaServer()</small>"):::app
+    NI("➕ <b>another server</b><br/><small>backend/src/&lt;kind&gt;/*</small>"):::fork
+    JFI("🧩 <b>JellyfinService</b><br/><small>backend/src/jellyfin/*<br/>admin key + user tokens</small>"):::app
+  end
+  subgraph GWL["gateway"]
+    CORE("📡 <b>gateway core</b><br/><small>authz · clamp · sanitise</small>"):::app
+    UP("📐 <b>Upstream</b><br/><small>upstream/types.ts · selectUpstream()</small>"):::app
+    JFU("🔌 <b>jellyfinUpstream</b><br/><small>upstream/jellyfin.ts<br/>user token</small>"):::app
+    NU("➕ <b>another adapter</b><br/><small>upstream/&lt;kind&gt;.ts</small>"):::fork
+  end
+  RT -->|calls| IF
+  CORE -->|uses| UP
+  IF -.->|"implements"| JFI
+  IF -.->|"implements"| NI
+  JFI ==>|API| JF
+  UP -.->|"implements"| JFU
+  UP -.->|"implements"| NU
+  JFU ==>|"video"| JF
+  JF("🎬 <b>Jellyfin</b>"):::media
+  classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
+  classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
+  classDef app fill:#4a1a24,stroke:#ff4f6d,stroke-width:1px,color:#fff5f7
+  classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
+  classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
+  classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
+  classDef fork fill:#4a1d3c,stroke:#e070b0,stroke-width:1px,stroke-dasharray:4 3,color:#fff0f8
+  linkStyle default stroke:#8b949e,stroke-width:1.4px
+  style BEL fill:none,stroke:#ff4f6d,stroke-width:1px,stroke-dasharray:4 4
+  style GWL fill:none,stroke:#ff4f6d,stroke-width:1px,stroke-dasharray:4 4
+```
+
+> 🟥 FriendFlix · 🟩 media server · 🟦 other service · 🟪 reverse proxy · 🟨 data store · ⬛ viewers / outside · 🟫 dashed pink = room for another media server · dashed frame = network or boundary · thick line = video stream · dotted = optional / via public URL
 
 ### Backend
 

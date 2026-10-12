@@ -5,8 +5,8 @@ import type { Translation } from '../../types';
 const es: Translation<typeof de> = {
   profiles: {
     pageTitle: 'Perfiles',
-    who: '¿Quién está viendo?',
-    manage: 'Administrar perfiles',
+    who: '¿Quién se apunta hoy?',
+    manage: 'Editar perfiles',
     done: 'Listo',
     loadFailed: 'No se pudieron cargar los perfiles.',
     edit: 'Editar',
@@ -49,9 +49,9 @@ const es: Translation<typeof de> = {
     delete: 'Borrar',
   },
   me: {
-    title: 'Mi FriendFlix',
+    title: 'Mi espacio',
     switchProfile: 'Cambiar de perfil',
-    manageProfiles: 'Administrar perfiles',
+    manageProfiles: 'Editar perfiles',
     quick: 'Accesos directos',
     notifications: 'Notificaciones',
     less: 'Menos',
@@ -84,7 +84,7 @@ const es: Translation<typeof de> = {
     lead: 'Se aplican en todos tus dispositivos y solo te afectan a ti.',
     autoplayNext: 'Reproducir automáticamente el siguiente episodio',
     autoplayNextHint: 'Con una cuenta atrás de 8 segundos que puedes cancelar en cualquier momento.',
-    stillWatching: 'Preguntar «¿Sigues viendo esto?»',
+    stillWatching: 'Preguntar «¿Sigues ahí?»',
     stillWatchingHint: 'Tras varios episodios seguidos sin interacción (o tras una pausa larga), la reproducción no continúa sola, sino que pregunta antes.',
     stillWatchingEpisodes: 'Preguntar tras … episodios sin interacción',
     spoiler: 'Protección contra spoilers',

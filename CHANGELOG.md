@@ -17,7 +17,7 @@ All notable changes. Nothing is released yet, so everything is listed under *Unr
 - **Scenes:** chapter marks on the seek bar, chapter name in the scrub tip and a "Scenes" panel with stills (`GET /api/items/:id/chapters`, optional server capability `chapters`).
 - **Clear voices** and **Night mode** (Web Audio, saved per profile as `audioFx`; off while casting or where unsupported).
 - **Fresh labels** on cards and detail (new series, season finale, new season, new episode, new), **picture-and-sound chips** (4K, HDR, Dolby Vision, Atmos, 5.1) and **The story so far** card for series after a new-season start or a 6-week break.
-- **Leaving soon:** admins set a removal date (nothing is deleted); countdown badge, home row, reminders 7 days and 1 day before for people who have the title on My List or in Continue Watching (never for kids profiles).
+- **Leaving soon:** admins set a removal date (nothing is deleted); countdown badge, home row, reminders 7 days and 1 day before for people who have the title on the watchlist or in Continue Watching (never for kids profiles).
 - **Skip preview** ("next time on …"), a series-wide audio/subtitle choice, optional "Anime: original audio with subtitles", and an **Extras** tab (trailers, special features).
 
 ### Discovering
@@ -38,7 +38,7 @@ All notable changes. Nothing is released yet, so everything is listed under *Unr
 - Owner PIN reset needs a fresh Authentik login and is refused on kid-locked devices.
 
 ### Phone and TV
-- PWA **shortcuts** (Continue Watching, My List, Search, Downloads), an **icon badge** with unread notifications, and a **web manifest in the profile's language** (`/manifest.webmanifest?lang=`).
+- PWA **shortcuts** (Continue Watching, Watchlist, Search, Downloads), an **icon badge** with unread notifications, and a **web manifest in the profile's language** (`/manifest.webmanifest?lang=`).
 - Phone layout polish, touch action sheet on cards; TV pairing from kids profiles.
 - Seven interface languages (English, German, French, Spanish, Italian, Turkish, Polish) with server texts in the recipient's language and a localized offline page.
 
@@ -73,7 +73,7 @@ The history before the groups above, newest first, as originally written.
 - Browser error reporting: `POST /api/client-errors` (unauthenticated, rate limited, logged scrubbed, counted in `friendflix_client_errors_total`), `web/src/lib/telemetry.ts` + `hooks.client.ts` (dedupe 60 s, max 10 per page load, extension/ResizeObserver noise filtered). See docs/monitoring.md.
 - Playwright browser tests in `e2e/` (API fully mocked, run against the built web app; `npm run e2e`) and an `e2e` CI job.
 #### Block 10 – Wünsche aus der Suche, kuratierte Reihen
-- Search shows "Noch nicht in der Bibliothek" with request service results and a "Wünschen" button (hidden when request service is unavailable).
+- Search shows "Noch nicht in der Bibliothek" with Seerr results and a "Wünschen" button (hidden when Seerr is unavailable).
 - Admins can feature up to 5 lists (Admin → Listen); they appear as rows on everyone's home page ("Empfohlen von …") and are readable by all, with titles filtered per profile. Migration 24: `lists.featured_at`.
 #### Block 9 – Trending, Neue Folgen, Reaktionen
 - Home row "Diese Woche bei uns": what friends watched in the last 7 days (counts only; a title needs 2 viewers unless you are one of them).
@@ -83,7 +83,7 @@ The history before the groups above, newest first, as originally written.
 - Touch action sheet on cards, series name on episode cards, srcset/sizes for card/hero/quick-view images, ItemModal accessibility (inert background, labelled dialog).
 #### Block 7 – Sprache, Watch-Status, Freunde
 - Audio/subtitle language filter in Filme/Serien ("Ton", "Untertitel", quick toggle "Deutscher Ton"), backed by a background index of all MediaStreams (`item_langs`, every 12 h); the item page lists audio and subtitle languages.
-- Watch status per profile: "Geplant" (Meine Liste) and "Abgebrochen" (leaves Weiterschauen and Nächste Folge), plus derived "Schaue ich gerade"/"Gesehen"; Meine Liste has tabs Geplant | Abgebrochen.
+- Watch status per profile: "Geplant" (Merkliste) and "Abgebrochen" (leaves Weiterschauen and Nächste Folge), plus derived "Schaue ich gerade"/"Gesehen"; Merkliste has tabs Geplant | Abgebrochen.
 - Friends strip on the item page: who recommended it to you, friends' stars (only with "Bewertungen teilen") and who watched it (only with "Verlauf teilen").
 - Gemeinsam schauen: titles on participants' lists first ("2× geplant", never who), titles someone dropped or thumbed down are left out.
 - Migration 22: `item_langs`, `dropped`.
@@ -105,11 +105,11 @@ The history before the groups above, newest first, as originally written.
 #### Block 3 – Digest, shared lists, reminders
 - Weekly digest ("Wochenrückblick"): new films/episodes, new episodes of followed series, fulfilled wishes, friends' tips; `/digest` page, schedule via `DIGEST_DAY`/`DIGEST_HOUR` or Admin → Wochenrückblick, opt-out in settings. Personal ntfy topic per account (never the shared ntfy/Discord channel).
 - Shared lists: owner invites editors/viewers, "Zu Liste hinzufügen" on cards/detail page, only titles visible to the viewer's profile are shown.
-- "Erinnere mich" on Demnächst and future calendar episodes: notification when the title is in the library (request service webhook, optional Jellyfin `ItemAdded` webhook, 30-min fallback), deduplicated with series follows and own requests.
+- "Erinnere mich" on Demnächst and future calendar episodes: notification when the title is in the library (Seerr webhook, optional Jellyfin `ItemAdded` webhook, 30-min fallback), deduplicated with series follows and own requests.
 #### Block 2 – Profiles & viewing comfort
-- Profiles per account (max 5, optional 4-digit PIN, "Wer schaut gerade?"): each extra profile is a hidden Jellyfin user with the account's role policy, so progress, favourites, watchlist and viewing prefs are per profile; stream limit, requests, ratings and admin rights stay per account (admin only from the owner profile). "PIN vergessen?" re-login clears the owner PIN. Turn off request service's automatic Jellyfin user import so profile users don't show up there.
+- Profiles per account (max 5, optional 4-digit PIN, "Wer ist heute dabei?"): each extra profile is a hidden Jellyfin user with the account's role policy, so progress, favourites, watchlist and viewing prefs are per profile; stream limit, requests, ratings and admin rights stay per account (admin only from the owner profile). "PIN vergessen?" re-login clears the owner PIN. Turn off Seerr's automatic Jellyfin user import so profile users don't show up there.
 - Verlauf page (remove an episode or a whole series), tidier "Weiterschauen" (no near-finished/barely-started items, one entry per series, X to hide).
-- "Schaust du noch?" after N autoplayed episodes or 90 min without input; subtitle style (size, colour, background, font); spoiler protection for unwatched episodes.
+- "Noch da?" after N autoplayed episodes or 90 min without input; subtitle style (size, colour, background, font); spoiler protection for unwatched episodes.
 #### Reliability block 1
 - Guests: playback capped at 1080p, transcoding allowed in the role policy (re-applied once to existing users on start); watch progress no longer lost on early stop.
 - Nightly playback check (`PLAYBACK_CHECK_HOUR`, -1 = off) with admin alert; watch-party size limit; home page retries failed rows.
@@ -137,10 +137,10 @@ The history before the groups above, newest first, as originally written.
 #### Step 14 – Social & discovery
 - Group matcher ("Was hat noch keiner von uns gesehen?"): opt-in per participant, intersection of unwatched lists with each user's own token, filters (length/genre), one click to a film-night poll.
 - Scenes: share links with timestamp (`/watch/<id>?t=`), bookmarks with notes and timeline markers.
-- X-Ray cast panel on pause; find subtitles via Jellyfin remote providers; picture of title mood (dynamic tint on the detail page).
+- Cast panel on pause; find subtitles via Jellyfin remote providers; picture of title mood (dynamic tint on the detail page).
 - Recommend to friends, "Von Freunden empfohlen" and "Freunde haben bewertet" rows (rating sharing opt-out), thumbs up/down feeding "Weil du ... gesehen hast".
-- "Demnächst" from request service with one-click wish; extras/bonus material, collections and studio hubs.
-- Muted hover trailer previews (local trailers only), shareable Wrapped card (PNG, rendered in the browser).
+- "Demnächst" from Seerr with one-click wish; extras/bonus material, collections and studio hubs.
+- Muted hover trailer previews (local trailers only), shareable year-in-review card (PNG, rendered in the browser).
 #### Step 13 – Streaming features
 - Timeline preview thumbnails (Jellyfin trickplay) through the gateway/auth_request allowlist.
 - Quality selector (Auto/1080p/720p/480p/360p, never above the role limit); "Einstellungen" menu with quality, speed and sleep timer ("nach 15/30/45/60 Min." or "nach dieser Folge").
@@ -149,8 +149,8 @@ The history before the groups above, newest first, as originally written.
 - "Weil du ... gesehen hast" row and Jellyfin-based "Ähnliche Titel".
 - Fix: CSS class collision made the player menus invisible (`.bar` clipped them).
 #### Step 12 – Own player + watch party in the player, Plan B
-- Custom Netflix-style player: scrubbing timeline with buffer + hover time, ±10 s, volume, remaining time, audio/subtitle menu, speed, fullscreen of the whole stage (overlays stay visible), auto-hiding controls, touch gestures (double-tap ±10 s), spinner, toasts, keyboard shortcuts.
-- Watch party inside the player (Amazon-Watch-Party style): avatar stack with host crown and buffering state, chat side panel with unread badge + fading message bubbles, reaction picker with floating emoji, "waiting for X" banner, copy invite link, host switch "Nur Host / Alle dürfen steuern", guests see locked controls with hint.
+- Custom player: scrubbing timeline with buffer + hover time, ±10 s, volume, remaining time, audio/subtitle menu, speed, fullscreen of the whole stage (overlays stay visible), auto-hiding controls, touch gestures (double-tap ±10 s), spinner, toasts, keyboard shortcuts.
+- Watch party inside the player (shared playback): avatar stack with host crown and buffering state, chat side panel with unread badge + fading message bubbles, reaction picker with floating emoji, "waiting for X" banner, copy invite link, host switch "Nur Host / Alle dürfen steuern", guests see locked controls with hint.
 - Plan B implemented: `GET /internal/authz-nginx` + hardened nginx `auth_request` config, shared allowlist test vectors, query length/param limits (also in the gateway), `friendflix_authz_nginx_total`, `mediaedge` network, end-to-end test script against real nginx.
 #### Step 11 – Polish
 - Gateway: images are browser-cacheable (`private, max-age=86400, stale-while-revalidate`, ETag/304 pass-through); upstream `public` is downgraded to `private`.
@@ -162,9 +162,9 @@ The history before the groups above, newest first, as originally written.
 #### Step 10 – Cinematic UI
 - New design system (OLED dark, Inter self-hosted, tokens, focus rings, reduced-motion, skeleton loading, 44 px touch targets) generated with the ui-ux-pro-max skill.
 - Home: full-bleed billboard, carousels with arrows + scroll-snap, hover preview cards (play, list, favorite, details), lazy-loaded genre rows.
-- Transparent-to-solid top navigation, expanding search, profile menu, mobile tab bar; Browse (Filme/Serien with genre/sort/filter), "Neu & beliebt", search with wish fallback.
+- Transparent-to-solid top navigation, expanding search, profile menu, mobile tab bar; Browse (Filme/Serien with genre/sort/filter), "Neu & demnächst", search with wish fallback.
 - Detail page with episode list + progress; immersive player page with auto-hiding chrome and "next episode" countdown; restyled invite page.
-- Backend: `GET /api/watchlist/ids` for the "Meine Liste" state on cards.
+- Backend: `GET /api/watchlist/ids` for the "Merkliste" state on cards.
 #### Step 9 – Improvements
 - Feature: "Überrasch mich" – random unwatched movie/series, optional genre filter (`/api/library/random`, `/api/library/genres`).
 - Security: sliding idle timeout (default 2 h) plus absolute lifetime (8 h) for sessions; "log out other devices" for users; admins can end all sessions of a user (audited).
@@ -174,13 +174,13 @@ The history before the groups above, newest first, as originally written.
 - Admin status page, extended Prometheus metrics, backup script + sidecar + restore test, Docker-secrets override, strict CSP + security headers, error handler.
 - Fixes: `_FILE` secret loading restricted to known settings, OIDC dev flag (`OIDC_ALLOW_INSECURE`), generic error handler (zod -> 400).
 #### Step 7 – Stats, achievements, now playing
-- Watch-time statistics from playback events, personal Wrapped + group leaderboard, 11 achievements (state and event driven), now-playing board.
+- Watch-time statistics from playback events, personal year in review + group leaderboard, 11 achievements (state and event driven), now-playing board.
 #### Step 6 – Voting, wishes, notifications
-- Film-night polls (one vote per user, countdown, auto-start party room), non-library winners need admin approval -> request service request -> auto-scheduled when available, ratings with short reviews, series calendar with follow + notifications (in-app, ntfy, Discord).
+- Film-night polls (one vote per user, countdown, auto-start party room), non-library winners need admin approval -> Seerr request -> auto-scheduled when available, ratings with short reviews, series calendar with follow + notifications (in-app, ntfy, Discord).
 #### Step 5 – Watch party
 - Own WebSocket sync (no SyncPlay): host-controlled play/pause/seek with server timestamps, ~300 ms drift correction, room holds until all participants have buffered, chat + whitelisted emoji reactions, scheduled auto-start, Origin + session checks.
-#### Step 4 – request service
-- Search, wishes in the user's name (mapped request service user), status mapping, admin approve/decline, request service webhook (available/pending/approved/declined), in-app notifications + ntfy/Discord push, TMDB poster proxy.
+#### Step 4 – Seerr
+- Search, wishes in the user's name (mapped Seerr user), status mapping, admin approve/decline, Seerr webhook (available/pending/approved/declined), in-app notifications + ntfy/Discord push, TMDB poster proxy.
 #### Step 3 – Invites, roles, mapping
 - Single-use hashed invite links with expiry (optional Authentik invitation), role templates applied to Jellyfin policy, admin user management (role, disable), device approval for new devices, audit log, public invite landing page.
 #### Step 2 – Gateway + Player

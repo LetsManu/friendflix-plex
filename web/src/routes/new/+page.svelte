@@ -143,13 +143,13 @@
   .dy { font-size: 1.7rem; font-weight: 800; margin-top: .2rem; }
   .rank { font-size: 2.6rem; font-weight: 900; line-height: 1; color: #fff; text-align: center; padding-top: .2rem; letter-spacing: -.04em; }
   .body { min-width: 0; }
-  .img { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: #222; margin-bottom: .6rem; }
+  .img { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: #1c2228; margin-bottom: .6rem; }
   .img img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .img.poster img.bl { position: absolute; inset: 0; filter: blur(18px) brightness(.7); transform: scale(1.3); }
   .img img.pp { position: absolute; inset: 0; object-fit: contain; }
   .img:not(.poster) img.pp { object-fit: contain; }
   .img img.bl { position: absolute; inset: 0; filter: blur(18px) brightness(.7); transform: scale(1.3); }
-  .noimg { position: absolute; inset: 0; display: grid; place-items: center; padding: .6rem; text-align: center; font-weight: 700; background: linear-gradient(160deg, #2c2c2c, #181818); }
+  .noimg { position: absolute; inset: 0; display: grid; place-items: center; padding: .6rem; text-align: center; font-weight: 700; background: linear-gradient(160deg, #252c34, #161b21); }
   .playi { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); background: rgba(0,0,0,.5); display: grid; place-items: center; padding-left: 2px; }
   h2 { font-size: 1.1rem; font-weight: 700; margin: 0 0 .15rem; }
   h2 a:hover { text-decoration: underline; }

@@ -4,8 +4,8 @@ import { makeEnv, type TestEnv } from './helpers.js';
 
 const A = 'a'.repeat(32), B = 'b'.repeat(32), H = 'c'.repeat(32);
 const CATALOG: Record<string, Record<string, unknown>> = {
-  [A]: { Id: A, Name: 'Alien', Type: 'Movie' },
-  [B]: { Id: B, Name: 'Brazil', Type: 'Movie' },
+  [A]: { Id: A, Name: 'Ashfall', Type: 'Movie' },
+  [B]: { Id: B, Name: 'Brasswind', Type: 'Movie' },
   [H]: { Id: H, Name: 'Hidden', Type: 'Movie' },
 };
 let env: TestEnv;

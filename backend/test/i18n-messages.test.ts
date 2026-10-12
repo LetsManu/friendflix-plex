@@ -59,23 +59,23 @@ describe('rendering', () => {
     expect(roleLabel('tr', 'guest', 'Gast', 'Gast')).toBe('Misafir');
     expect(roleLabel('en', 'guest', 'Besucher', 'Gast')).toBe('Besucher');
     expect(roleLabel('en', 'vip', 'VIP', undefined)).toBe('VIP');
-    const row = { id: 1, title: 'Download bereit', body: null, msg: { title: m('download.ready.title'), body: m('download.ready.body', { title: 'Dune' }) } };
-    expect(localizeStored(row, 'es')).toEqual({ id: 1, title: 'Descarga lista', body: 'Dune ya se puede descargar.' });
+    const row = { id: 1, title: 'Download bereit', body: null, msg: { title: m('download.ready.title'), body: m('download.ready.body', { title: 'Dunmoor' }) } };
+    expect(localizeStored(row, 'es')).toEqual({ id: 1, title: 'Descarga lista', body: 'Dunmoor ya se puede descargar.' });
     expect(localizeStored({ id: 2, title: 'alt', body: 'text', msg: null }, 'en')).toEqual({ id: 2, title: 'alt', body: 'text' });
   });
 
   it('inbox rows that refer to renamed/removed keys keep the stored text instead of showing the raw key', () => {
     const gone = { key: 'download.renamed.title' } as unknown as ReturnType<typeof m>;
     const nested = m('download.ready.body', { title: { key: 'old.removed.key' } as unknown as ReturnType<typeof m> });
-    const row = { id: 3, title: 'Download bereit', body: 'Dune kann jetzt geladen werden.', msg: { title: gone, body: nested } };
-    expect(localizeStored(row, 'en')).toEqual({ id: 3, title: 'Download bereit', body: 'Dune kann jetzt geladen werden.' });
+    const row = { id: 3, title: 'Download bereit', body: 'Dunmoor kann jetzt geladen werden.', msg: { title: gone, body: nested } };
+    expect(localizeStored(row, 'en')).toEqual({ id: 3, title: 'Download bereit', body: 'Dunmoor kann jetzt geladen werden.' });
     expect(knownText(gone)).toBe(false);
     expect(knownText(nested)).toBe(false);
     expect(knownText({ join: [m('download.ready.title'), 'plain'] })).toBe(true);
     expect(renderKnown('en', m('download.ready.title'))).toBe('Download ready');
     expect(renderKnown('en', { join: [gone] })).toBeNull();
     // a known title next to an unknown body: only the body falls back
-    expect(localizeStored({ ...row, msg: { title: m('download.ready.title'), body: gone } }, 'en')).toEqual({ id: 3, title: 'Download ready', body: 'Dune kann jetzt geladen werden.' });
+    expect(localizeStored({ ...row, msg: { title: m('download.ready.title'), body: gone } }, 'en')).toEqual({ id: 3, title: 'Download ready', body: 'Dunmoor kann jetzt geladen werden.' });
   });
 
   it('weekly digest texts', () => {
@@ -122,14 +122,14 @@ afterAll(async () => { await env.close(); });
 describe('notifications in the recipient language', () => {
   it('inbox: stored in the account language, shown in the reader language; broadcasts + ntfy in the instance language', async () => {
     await call(admin, 'PUT', '/api/prefs/language', { language: 'en' });
-    await notify(env.ctx, { userId: adminId, kind: 'download_ready', title: m('download.ready.title'), body: m('download.ready.body', { title: 'Dune' }), link: '/downloads' });
+    await notify(env.ctx, { userId: adminId, kind: 'download_ready', title: m('download.ready.title'), body: m('download.ready.body', { title: 'Dunmoor' }), link: '/downloads' });
     const stored = (await env.pool.query("select title, body, msg from notifications where kind='download_ready'")).rows[0];
-    expect(stored).toMatchObject({ title: 'Download ready', body: 'Dune can be downloaded now.' });
+    expect(stored).toMatchObject({ title: 'Download ready', body: 'Dunmoor can be downloaded now.' });
     expect(stored.msg.title).toEqual({ key: 'download.ready.title' });
 
     await call(admin, 'PUT', '/api/prefs/language', { language: 'fr' });
     let inbox = (await call(admin, 'GET', '/api/notifications')).json().notifications;
-    expect(inbox[0]).toMatchObject({ title: 'Téléchargement prêt', body: 'Dune peut maintenant être téléchargé.', link: '/downloads' });
+    expect(inbox[0]).toMatchObject({ title: 'Téléchargement prêt', body: 'Dunmoor peut maintenant être téléchargé.', link: '/downloads' });
     expect(inbox[0].msg).toBeUndefined();
 
     await call(admin, 'PUT', '/api/admin/settings/language', { language: 'es' });

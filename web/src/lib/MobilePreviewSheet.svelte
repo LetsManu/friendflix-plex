@@ -82,17 +82,17 @@
 
 <style>
   .backdrop { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,.62); animation: fade .2s ease-out; }
-  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 91; max-width: 560px; margin: 0 auto; max-height: 88dvh; overflow-y: auto; overscroll-behavior: contain; outline: none; background: #1c1c1c; border-radius: 16px 16px 0 0; padding: 0 var(--pad-x) calc(.8rem + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px rgba(0,0,0,.7); animation: rise .26s var(--ease, ease-out); }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 91; max-width: 560px; margin: 0 auto; max-height: 88dvh; overflow-y: auto; overscroll-behavior: contain; outline: none; background: #161b21; border-radius: 16px 16px 0 0; padding: 0 var(--pad-x) calc(.8rem + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px rgba(0,0,0,.7); animation: rise .26s var(--ease, ease-out); }
   .sheet.dragging { transition: none; }
   .grab { touch-action: none; cursor: grab; padding: 0 0 .2rem; margin: 0 calc(var(--pad-x) * -1); }
-  .handle { display: block; width: 40px; height: 4px; border-radius: 99px; background: #666; margin: 10px auto 8px; }
+  .handle { display: block; width: 40px; height: 4px; border-radius: 99px; background: #6a7480; margin: 10px auto 8px; }
   /* sits inside the sheet's padding box (aligned with the content edge), 44px hit area around a 34px circle */
   .close { position: absolute; top: 14px; right: calc(var(--pad-x) - 5px); width: 44px; min-height: 44px; height: 44px; padding: 0; border-radius: 50%; background: transparent; z-index: 2; }
-  .close::before { content: ''; position: absolute; inset: 5px; border-radius: 50%; background: #3a3a3a; z-index: -1; }
+  .close::before { content: ''; position: absolute; inset: 5px; border-radius: 50%; background: #323a43; z-index: -1; }
   .close:hover:not(:disabled) { background: transparent; }
-  .close:hover:not(:disabled)::before { background: #4a4a4a; }
+  .close:hover:not(:disabled)::before { background: #46505a; }
   .top { display: flex; gap: .9rem; padding-top: .5rem; padding-right: 2.6rem; }
-  .poster { flex: none; width: 84px; height: 126px; border-radius: 4px; object-fit: cover; background: #2a2a2a; }
+  .poster { flex: none; width: 84px; height: 126px; border-radius: 4px; object-fit: cover; background: #242b33; }
   .info { min-width: 0; }
   h2 { font-size: 1.2rem; font-weight: 800; margin: 0 0 .3rem; line-height: 1.2; overflow-wrap: anywhere; }
   .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .5rem; margin: 0 0 .3rem; color: #d2d2d2; font-size: .9rem; }
@@ -111,7 +111,7 @@
   .dl :global(.dl) { display: block; }
   .ic.dl:not(:has(:global(.dlb))) { display: none; } /* downloads not allowed / unsupported: DownloadButton renders nothing */
   .note { min-height: 1.2em; margin: .5rem 0 0; font-size: .85rem; color: var(--mut); text-align: center; }
-  .details { display: flex; align-items: center; justify-content: space-between; gap: .7rem; min-height: 48px; margin-top: .2rem; padding: 0 .2rem; border-top: 1px solid #333; font-weight: 600; }
+  .details { display: flex; align-items: center; justify-content: space-between; gap: .7rem; min-height: 48px; margin-top: .2rem; padding: 0 .2rem; border-top: 1px solid #2b333c; font-weight: 600; }
   .details :global(svg:last-child) { margin-left: auto; color: var(--mut); }
   @keyframes rise { from { transform: translateY(100%); } to { transform: none; } }
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }

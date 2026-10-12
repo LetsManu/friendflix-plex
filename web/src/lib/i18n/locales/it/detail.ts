@@ -8,9 +8,9 @@ const it: Translation<typeof de> = {
     resume: 'Riprendi',
     continue: 'Continua',
     episodeCode: 'S{s}:E{e}',
-    myList: 'La mia lista',
-    addToList: 'Aggiungi a La mia lista',
-    removeFromList: 'Rimuovi da La mia lista',
+    myList: 'Watchlist',
+    addToList: 'Aggiungi alla watchlist',
+    removeFromList: 'Rimuovi dalla watchlist',
     soundOn: 'Attiva l’audio',
     soundOff: 'Disattiva l’audio',
     cancel: 'Annulla',
@@ -115,8 +115,8 @@ const it: Translation<typeof de> = {
   },
   more: {
     title: 'Simili a questo',
-    add: 'Aggiungi {name} a La mia lista',
-    remove: 'Rimuovi {name} da La mia lista',
+    add: 'Aggiungi {name} alla watchlist',
+    remove: 'Rimuovi {name} dalla watchlist',
     saveFailed: 'Impossibile salvare.',
   },
   cast: {

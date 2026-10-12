@@ -4,7 +4,7 @@ test.describe('fork branding: "FriendFlix for Plex" (desktop)', () => {
   test('header shows the "for Plex" badge next to the wordmark', async ({ page }) => {
     await page.goto('/');
     const logo = page.locator('header.nav a.logo');
-    await expect(logo).toContainText('FRIENDFLIX');
+    await expect(logo).toContainText('FriendFlix');
     await expect(logo.locator('.badge')).toBeVisible();
     await expect(logo.locator('.badge')).toHaveText('for Plex');
   });

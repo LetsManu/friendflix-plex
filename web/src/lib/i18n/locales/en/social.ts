@@ -190,14 +190,14 @@ const en: Translation<typeof de> = {
     empty: 'Nothing here yet. Mark titles with the heart to collect them here.',
   },
   watchlist: {
-    title: 'My List',
+    title: 'Watchlist',
     tabs: { planned: 'Planned', dropped: 'Dropped' },
     tabsAria: 'List type',
     saveFailed: 'Could not be saved.',
     emptyPlanned: 'Nothing here yet. Add titles with the plus.',
     emptyDropped: 'No dropped titles. They disappear from “Continue watching” but stay here.',
     confirmAria: 'Remove “{name}”?',
-    confirm: 'Remove “{name}” from My List completely?',
+    confirm: 'Remove “{name}” from your watchlist completely?',
     yesRemove: 'Yes, remove',
     restore: 'Add back',
     removeAria: 'Remove {name}',
@@ -216,7 +216,7 @@ const en: Translation<typeof de> = {
     wholeSeries: 'Whole series',
   },
   stats: {
-    title: 'Your Wrapped',
+    title: 'Your year in review',
     share: 'Share as image',
     watched: 'watched',
     distinctTitles: 'different titles',
@@ -244,7 +244,7 @@ const en: Translation<typeof de> = {
     },
   },
   wrapped: {
-    heading: 'Wrapped {year}',
+    heading: '{year} in review',
     hoursUnit: 'h',
     minutesRest: '{m} min',
     watched: 'watched',
@@ -253,7 +253,7 @@ const en: Translation<typeof de> = {
     top3: 'MY TOP 3',
     minutes: '{n} min',
     achievements: '{earned} of {total} achievements unlocked',
-    shareTitle: 'My FriendFlix Wrapped {year}',
+    shareTitle: 'My FriendFlix year in review {year}',
   },
   digest: {
     title: 'Weekly recap',

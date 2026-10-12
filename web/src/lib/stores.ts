@@ -3,7 +3,7 @@ import { api, getActiveProfile } from '#lib/api';
 import { syncBadge } from '#lib/badge';
 import { getLocale, locale, remountPage, setLocale, tr, type Locale } from '#lib/i18n';
 
-/** Ids on "Meine Liste" (watchlist). Loaded once, updated optimistically by cards and detail pages. */
+/** Ids on "Merkliste" (watchlist). Loaded once, updated optimistically by cards and detail pages. */
 export const listIds = writable<Set<string>>(new Set());
 
 export async function loadList() {
@@ -16,14 +16,14 @@ export async function loadList() {
 
 const listBusy = new Set<string>();
 /**
- * Message callers show (role="status") when saving "Meine Liste" / a favourite failed. A live binding that follows the
+ * Message callers show (role="status") when saving "Merkliste" / a favourite failed. A live binding that follows the
  * UI language (read it when the message is shown); components may also use `$t('account.listSaveFailed')` directly.
  */
 export let SAVE_FAILED = tr('account.listSaveFailed');
 locale.subscribe(() => { SAVE_FAILED = tr('account.listSaveFailed'); });
 
 /**
- * Adds/removes an item on "Meine Liste" optimistically. `on` is the current state (true = remove).
+ * Adds/removes an item on "Merkliste" optimistically. `on` is the current state (true = remove).
  * Resolves true when saved, false when it failed (state is rolled back). A second call for the same
  * id while one is in flight is ignored and resolves true (nothing to report).
  */

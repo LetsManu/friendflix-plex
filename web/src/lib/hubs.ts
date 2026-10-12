@@ -17,7 +17,7 @@ function hue(name: string): number {
 
 /** Tile background without any artwork: the accent colour (or a hue derived from the name) fading into dark. Never a bundled logo. */
 export function hubGradient(h: Pick<Hub, 'name' | 'accent'>): string {
-  if (h.accent) return `linear-gradient(135deg, ${h.accent}, color-mix(in srgb, ${h.accent} 22%, #0b0b0b))`;
+  if (h.accent) return `linear-gradient(135deg, ${h.accent}, color-mix(in srgb, ${h.accent} 22%, #0a0d10))`;
   const a = hue(h.name);
   return `linear-gradient(135deg, hsl(${a} 58% 36%), hsl(${(a + 40) % 360} 55% 12%))`;
 }

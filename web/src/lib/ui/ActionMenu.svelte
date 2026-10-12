@@ -26,7 +26,7 @@
 
 <style>
   .am { display: inline-flex; }
-  .am :global(.ma.ring), .busy { width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; background: transparent; border: 1px solid #4a4a4a; color: var(--fg); display: grid; place-items: center; }
+  .am :global(.ma.ring), .busy { width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; background: transparent; border: 1px solid #46505a; color: var(--fg); display: grid; place-items: center; }
   .am :global(.ma.ring:hover:not(:disabled)), .am :global(.ma.ring.on) { background: rgba(255,255,255,.08); border-color: #8a8a8a; }
   .busy { cursor: progress; }
   .busy:hover:not(:disabled) { background: transparent; }

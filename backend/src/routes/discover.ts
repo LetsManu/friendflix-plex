@@ -256,7 +256,7 @@ export function discoverRoutes(app: FastifyInstance, ctx: Ctx) {
     return { items: items.filter((i) => !i.played).map((i) => ({ ...i, caption: cap.get(i.id) })) };
   }));
 
-  // ---- Thumbs: -1 Nicht mein Fall, 1 Gefällt mir, 2 Super (>= 1 feeds "Weil du ... gesehen hast") ----
+  // ---- Thumbs: -1 Naja, 1 Gut, 2 Geliebt (>= 1 feeds "Weil du ... gesehen hast") ----
   app.put('/api/items/:id/thumb', pre, wrap(async (req) => {
     const id = id32.parse((req.params as { id: string }).id);
     const { value } = z.object({ value: z.union([z.literal(-1), z.literal(0), z.literal(1), z.literal(2)]) }).parse(req.body);
@@ -273,7 +273,7 @@ export function discoverRoutes(app: FastifyInstance, ctx: Ctx) {
     return { value };
   }));
 
-  // ---- X-Ray (cast), hover trailer, collections, studios ----
+  // ---- Cast panel, hover trailer, collections, studios ----
   app.get('/api/items/:id/people', pre, wrap(async (req) => ({ people: await ctx.jf.people(req.jfUser!, id32.parse((req.params as { id: string }).id)) })));
   app.get('/api/items/:id/next', pre, wrap(async (req) => {
     const id = id32.parse((req.params as { id: string }).id);

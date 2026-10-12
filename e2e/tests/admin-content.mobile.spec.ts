@@ -19,13 +19,13 @@ test.describe('admin content pages (phone)', () => {
 
   test('requests become cards with the actions inside', async ({ page }) => {
     await page.goto('/admin/requests');
-    const card = page.getByRole('row', { name: /Dune: Part Two/ });
+    const card = page.getByRole('row', { name: /Dunmoor: Part Two/ });
     await expect(card).toBeVisible();
-    await expect(card.getByRole('button', { name: '„Dune: Part Two“ freigeben' })).toBeVisible();
+    await expect(card.getByRole('button', { name: '„Dunmoor: Part Two“ freigeben' })).toBeVisible();
     const box = await card.boundingBox();
     expect(box!.width).toBeLessThanOrEqual(390);
-    await card.getByRole('button', { name: '„Dune: Part Two“ freigeben' }).click();
-    await expect(page.getByRole('region', { name: 'Hinweise' }).getByText('„Dune: Part Two“ freigegeben.')).toBeVisible();
+    await card.getByRole('button', { name: '„Dunmoor: Part Two“ freigeben' }).click();
+    await expect(page.getByRole('region', { name: 'Hinweise' }).getByText('„Dunmoor: Part Two“ freigegeben.')).toBeVisible();
   });
 
   test('hubs: the edit form opens in view on the phone', async ({ page }) => {

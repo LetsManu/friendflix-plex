@@ -163,9 +163,9 @@ describe('Plex browse + user data over the mirror', () => {
 
   it('people, person, search; tracks; extras vs trailers; traits; segments from markers', async () => {
     const people = keep(await e.ms.people(u, item(3)));
-    expect(people[0]).toEqual({ id: tag(10), name: 'Dario Molaro', role: 'Sam', type: 'Actor', image: false });
+    expect(people[0]).toEqual({ id: tag(10), name: 'Teo Brandvik', role: 'Sam', type: 'Actor', image: false });
     expect((await e.ms.people(u, item(5))).length).toBe(7); // episodes fall back to the series cast
-    expect(await e.ms.person(u, tag(10))).toEqual({ id: tag(10), name: 'Dario Molaro', image: false });
+    expect(await e.ms.person(u, tag(10))).toEqual({ id: tag(10), name: 'Teo Brandvik', image: false });
     expect(await e.ms.person(u, item(3))).toBeNull();
     expect((await e.ms.searchPeople(u, 'jane')).map((p) => p.name)).toEqual(['Jane Doe']);
     const tracks = await e.ms.tracks(u, item(1));

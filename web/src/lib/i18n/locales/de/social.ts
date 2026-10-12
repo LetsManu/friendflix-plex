@@ -1,4 +1,4 @@
-/** Area "social": party, voting, matcher, tonight, lists, favourites, my list, history, stats/wrapped, digest, calendar, upcoming, requests, now playing. German is the typed source. */
+/** Area "social": party, voting, matcher, tonight, lists, favourites, my list, history, stats/year in review, digest, calendar, upcoming, requests, now playing. German is the typed source. */
 export default {
   /** shared bits of the social pages */
   kind: { movie: 'Film', series: 'Serie', episode: 'Folge' },
@@ -191,14 +191,14 @@ export default {
     empty: 'Noch nichts hier. Markiere Titel mit dem Herz, um sie hier zu sammeln.',
   },
   watchlist: {
-    title: 'Meine Liste',
+    title: 'Merkliste',
     tabs: { planned: 'Geplant', dropped: 'Abgebrochen' },
     tabsAria: 'Listenart',
     saveFailed: 'Konnte nicht gespeichert werden.',
     emptyPlanned: 'Noch nichts hier. Füge Titel über das Plus hinzu.',
     emptyDropped: 'Keine abgebrochenen Titel. Sie verschwinden aus „Weiterschauen“, bleiben aber hier erhalten.',
     confirmAria: '„{name}“ entfernen?',
-    confirm: '„{name}“ ganz aus Meine Liste entfernen?',
+    confirm: '„{name}“ ganz aus der Merkliste entfernen?',
     yesRemove: 'Ja, entfernen',
     restore: 'Wieder aufnehmen',
     removeAria: '{name} entfernen',
@@ -217,7 +217,7 @@ export default {
     wholeSeries: 'Ganze Serie',
   },
   stats: {
-    title: 'Dein Wrapped',
+    title: 'Dein Jahresrückblick',
     share: 'Als Bild teilen',
     watched: 'geschaut',
     distinctTitles: 'verschiedene Titel',
@@ -245,9 +245,9 @@ export default {
       night_owl: { title: 'Nachteule', desc: 'Zwischen 1 und 4 Uhr nachts geschaut' },
     },
   },
-  /** the shareable Wrapped image (lib/wrapped.ts) */
+  /** the shareable Jahresrückblick image (lib/wrapped.ts) */
   wrapped: {
-    heading: 'Wrapped {year}',
+    heading: 'Jahresrückblick {year}',
     hoursUnit: 'Std.',
     minutesRest: '{m} Min.',
     watched: 'geschaut',
@@ -256,7 +256,7 @@ export default {
     top3: 'MEINE TOP 3',
     minutes: '{n} min',
     achievements: '{earned} von {total} Achievements freigeschaltet',
-    shareTitle: 'Mein FriendFlix Wrapped {year}',
+    shareTitle: 'Mein FriendFlix-Jahresrückblick {year}',
   },
   digest: {
     title: 'Wochenrückblick',

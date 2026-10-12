@@ -8,7 +8,7 @@ import { requireAdmin, requireUser } from '../session.js';
 import type { JfUser } from '../types.js';
 import { id32, wrap, type WrapOptions } from './_shared.js';
 
-/** Block 15: brand hubs (Disney+-style tiles from the owner's own studios / collections / tags / genres) and the Extras tab. */
+/** Block 15: brand hubs (brand tiles from the owner's own studios / collections / tags / genres) and the Extras tab. */
 
 const SOURCES = ['studio', 'collection', 'tag', 'genre'] as const;
 type SourceKind = (typeof SOURCES)[number];

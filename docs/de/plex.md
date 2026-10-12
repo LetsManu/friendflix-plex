@@ -52,7 +52,7 @@ flowchart TB
   BE -->|"Bibliotheks-Sync"| PX
   classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
   classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
-  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef app fill:#4a1a24,stroke:#ff4f6d,stroke-width:1px,color:#fff5f7
   classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
   classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
   classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
@@ -60,7 +60,7 @@ flowchart TB
   linkStyle default stroke:#8b949e,stroke-width:1.4px
   style PUB fill:none,stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4
   style LAN fill:none,stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4
-  style HOST fill:none,stroke:#e50914,stroke-width:1px,stroke-dasharray:4 4
+  style HOST fill:none,stroke:#ff4f6d,stroke-width:1px,stroke-dasharray:4 4
 ```
 
 > 🟥 FriendFlix · 🟩 Medienserver · 🟦 weitere Dienste · 🟪 Reverse-Proxy · 🟨 Datenspeicher · ⬛ Zuschauer / extern · gestrichelter Rahmen = Netz bzw. Grenze · dicke Linie = Videostream · gepunktet = optional / über öffentliche URL
@@ -84,7 +84,7 @@ sequenceDiagram
     actor browser as 📺 Browser
     participant web as 🖥️ web
   end
-  box rgba(229,9,20,0.07) FriendFlix
+  box rgba(255,79,109,0.07) FriendFlix
     participant backend as ⚙️ backend
     participant gateway as 📡 gateway
   end
@@ -239,7 +239,7 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | Bald nicht mehr verfügbar, „Bisher geschah“, Themenlisten, ruhiger Modus, klare Stimmen, Handy-Kurzbefehle und Badge | Funktioniert | FriendFlix-Funktionen; „Bisher geschah“ nutzt die Staffel- und Folgenbeschreibungen aus Plex (ohne Metadaten-Agent gibt es keine) |
 | Admin-Seiten (Übersicht, Personen, Inhalte, Live-Streams, Vorschauen, Bald nicht mehr verfügbar) | Funktioniert | „Live-Streams“ zeigt nur Wiedergaben über FriendFlix; „Beenden“ stoppt die Plex-Transcode-Sitzung, eine Direct-Play-Datei lässt sich nicht unterbrechen |
 | „Mehr davon“ | Eingeschränkt | Von FriendFlix aus gemeinsamen Genres und Besetzung berechnet, nicht Plex' eigene Empfehlungen |
-| Weiterschauen, Meine Liste, Favoriten, Bewertungen, Verlauf | Funktioniert | In FriendFlix; nichts wird in Plex geschrieben |
+| Weiterschauen, Merkliste, Favoriten, Bewertungen, Verlauf | Funktioniert | In FriendFlix; nichts wird in Plex geschrieben |
 | Direct Play | Funktioniert | Browser-taugliche Dateien (MP4/WebM, H.264/VP9/AV1, AAC/MP3/Opus/FLAC) innerhalb der Rollengrenzen |
 | Adaptives Streaming (HLS) | Funktioniert | Plex-Universal-Transcoder (MPEG-TS-Segmente), sitzungsgebundene URLs über das Gateway |
 | Rollengrenzen | Funktioniert | Bitrate- und Höhenlimit beim Transcode-Start; Rollen ohne Transcoding bekommen nur Direct Play (sonst `403 transcoding_not_allowed`); max. Streams pro Konto und pro Profil |

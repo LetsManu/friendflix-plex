@@ -26,7 +26,7 @@
 
 <style>
   .tile { display: flex; align-items: flex-start; gap: .8rem; padding: 1rem 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-width: 0; transition: background var(--t-fast), border-color var(--t-fast); }
-  .link:hover { background: #202020; border-color: #3d3d3d; }
+  .link:hover { background: #1b2127; border-color: #353d46; }
   .ic { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 50%; background: rgba(255,255,255,.08); }
   .ok .ic { background: var(--tone-ok); color: var(--ok); }
   .warn .ic { background: var(--tone-warn); color: var(--warn); }

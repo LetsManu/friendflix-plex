@@ -183,7 +183,7 @@
   .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
   .steps li { display: flex; align-items: center; gap: .7rem; color: var(--mut); }
   .steps li.cur { color: var(--fg); font-weight: 600; } .steps li.done { color: var(--fg); }
-  .dot { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #4a4a4a; flex: none; font-size: .7rem; }
+  .dot { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #46505a; flex: none; font-size: .7rem; }
   .done .dot { background: var(--ok); border-color: var(--ok); color: #06210e; } .cur .dot { border-color: var(--warn); color: var(--warn); }
   .sk { display: grid; gap: .8rem; }
   .state { display: flex; flex-direction: column; align-items: center; gap: .6rem; text-align: center; padding: 2rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }

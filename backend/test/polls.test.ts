@@ -13,12 +13,12 @@ let imported = '';
 
 beforeAll(async () => {
   env = await makeEnv({
-    'GET /Items/[^/]+': (u) => { const id = u.pathname.split('/').pop()!; return { json: { Id: id, Name: id === A ? 'Alien' : id === B ? 'Brazil' : 'Serie', Type: id === SERIES ? 'Series' : 'Movie' } }; },
-    'GET /Items': (u) => u.searchParams.get('ids') ? { json: { Items: u.searchParams.get('ids')!.split(',').map((Id) => ({ Id, Name: Id === A ? 'Alien' : 'Brazil', Type: 'Movie' })) } } : ({ json: { Items: libraryHasDune && u.search.includes('tmdb.438631') ? [{ Id: 'd'.repeat(32), Name: 'Dune' }] : [] } }),
+    'GET /Items/[^/]+': (u) => { const id = u.pathname.split('/').pop()!; return { json: { Id: id, Name: id === A ? 'Ashfall' : id === B ? 'Brasswind' : 'Serie', Type: id === SERIES ? 'Series' : 'Movie' } }; },
+    'GET /Items': (u) => u.searchParams.get('ids') ? { json: { Items: u.searchParams.get('ids')!.split(',').map((Id) => ({ Id, Name: Id === A ? 'Ashfall' : 'Brasswind', Type: 'Movie' })) } } : ({ json: { Items: libraryHasDune && u.search.includes('tmdb.900001') ? [{ Id: 'd'.repeat(32), Name: 'Dunmoor' }] : [] } }),
     'GET /Shows/Upcoming': () => ({ json: { Items: [{ Id: 'e'.repeat(32), Name: 'Pilot', Type: 'Episode', SeriesId: SERIES, SeriesName: 'Serie', IndexNumber: 1, ParentIndexNumber: 1, PremiereDate: '2020-01-01T00:00:00Z' }, { Id: 'f'.repeat(32), Name: 'Later', Type: 'Episode', SeriesId: SERIES, SeriesName: 'Serie', PremiereDate: '2999-01-01T00:00:00Z' }] } }),
   }, {
     seerr: {
-      'GET /api/v1/movie/\\d+': () => ({ json: { title: 'Dune', posterPath: '/dune.jpg' } }),
+      'GET /api/v1/movie/\\d+': () => ({ json: { title: 'Dunmoor', posterPath: '/dune.jpg' } }),
       'GET /api/v1/user': () => ({ json: { results: imported ? [{ id: 9, jellyfinUserId: imported }] : [] } }),
       'POST /api/v1/user/import-from-jellyfin': (_u, _i, b) => { imported = b.jellyfinUserIds[0]; return { json: [{ id: 9 }] }; },
       'POST /api/v1/request': () => ({ json: { id: 77 } }),
@@ -45,7 +45,7 @@ describe('polls', () => {
     const after = (await call('GET', `/api/polls/${id}`)).json();
     expect(after.status).toBe('scheduled');
     const room = parties.get(after.roomId)!;
-    expect(room.title).toBe('Alien');
+    expect(room.title).toBe('Ashfall');
     expect(room.startAt).toBeGreaterThan(Date.now());
     expect((await call('POST', `/api/polls/${id}/vote`, { optionId: d.options[0].id })).statusCode).toBe(409); // closed
     expect((await call('GET', '/api/notifications')).json().notifications.some((n: any) => n.kind === 'poll_scheduled')).toBe(true);
@@ -54,11 +54,11 @@ describe('polls', () => {
 
   it('non-library winner needs admin approval -> seerr request -> auto-scheduled once available', async () => {
     await env.pool.query("update polls set status='started'");
-    const r = await call('POST', '/api/polls', { title: 'Samstag', options: [{ tmdbId: 438631, mediaType: 'movie' }, { jfItemId: A }], closesInMinutes: 5 });
+    const r = await call('POST', '/api/polls', { title: 'Samstag', options: [{ tmdbId: 900001, mediaType: 'movie' }, { jfItemId: A }], closesInMinutes: 5 });
     expect(r.statusCode).toBe(200);
     const id = r.json().id;
     const d = (await call('GET', `/api/polls/${id}`)).json();
-    expect(d.options[0]).toMatchObject({ title: 'Dune', inLibrary: false });
+    expect(d.options[0]).toMatchObject({ title: 'Dunmoor', inLibrary: false });
     await call('POST', `/api/polls/${id}/vote`, { optionId: d.options[0].id });
     await env.pool.query("update polls set closes_at = now() - interval '1 second' where id=$1", [id]);
     await closeDuePolls(env.ctx);
@@ -68,11 +68,11 @@ describe('polls', () => {
     expect((await call('POST', `/api/admin/polls/${id}/approve`)).statusCode).toBe(409);
     const p = (await call('GET', `/api/polls/${id}`)).json();
     expect(p.status).toBe('requested');
-    expect(env.seerrCalls.find((c) => c.path === '/api/v1/request')!.body).toMatchObject({ mediaType: 'movie', mediaId: 438631, userId: 9 });
+    expect(env.seerrCalls.find((c) => c.path === '/api/v1/request')!.body).toMatchObject({ mediaType: 'movie', mediaId: 900001, userId: 9 });
     await resolveRequestedPolls(env.ctx);
     expect((await call('GET', `/api/polls/${id}`)).json().status).toBe('requested'); // not in library yet
     libraryHasDune = true;
-    await seerrHooks.run(env.ctx, { type: 'available', tmdbId: 438631, mediaType: 'movie' });
+    await seerrHooks.run(env.ctx, { type: 'available', tmdbId: 900001, mediaType: 'movie' });
     const done = (await call('GET', `/api/polls/${id}`)).json();
     expect(done.status).toBe('scheduled');
     expect(parties.get(done.roomId)!.itemId).toBe('d'.repeat(32));

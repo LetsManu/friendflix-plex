@@ -31,7 +31,7 @@
   export let itemId: string;
   /** shown on the phone's remote while this plays */
   export let title = '';
-  /** centred in the control bar (Netflix): series / film name and, for episodes, "F3 Folgentitel" */
+  /** centred in the control bar: series / film name and, for episodes, "F3 Folgentitel" */
   export let barTitle = '';
   export let barSub = '';
   /** series of the playing episode: shows the episodes panel button */
@@ -534,7 +534,7 @@
   $: castLabel = casting ? $t('player.cast.stopOn', { name: $castState.deviceName || 'Chromecast' }) : $castState.connected ? $t('player.cast.playOn', { name: $castState.deviceName || 'Chromecast' }) : $t('player.cast.castTo');
   $: modeLabel = casting ? 'Chromecast' : mode === 'direct' ? $t('player.mode.direct') : mode ? $t('player.mode.hls') : '';
   const toggleMenu = (m: typeof menu) => (menu = menu === m ? '' : m);
-  /** Netflix-size control icons (~40px); smaller on phones */
+  /** Large control icons (~40px); smaller on phones */
   let ICON = 36;
   function pickEpisode(e: CustomEvent<{ id: string }>) { menu = ''; dispatch('episode', e.detail); }
   /** "Folgen" panel closed (✕ or the playing episode): focus goes back to its trigger */
@@ -1017,7 +1017,7 @@
   @keyframes sp { to { transform: rotate(360deg); } }
   .spin.sm { width: 34px; height: 34px; border-width: 4px; }
   .errov { background: rgba(0,0,0,.82); pointer-events: auto; z-index: 11; }
-  .errbox, .reco { display: grid; justify-items: center; gap: .8rem; text-align: center; max-width: min(460px, 90%); padding: 1.4rem 1.6rem; background: rgba(20,20,20,.92); border: 1px solid #3a3a3a; border-radius: 10px; }
+  .errbox, .reco { display: grid; justify-items: center; gap: .8rem; text-align: center; max-width: min(460px, 90%); padding: 1.4rem 1.6rem; background: rgba(16,20,24,.92); border: 1px solid #323a43; border-radius: 10px; }
   .errbox b { font-size: 1.3rem; } .errbox p { margin: 0; color: #cfcfcf; } .errbox .flex { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center; }
   .reco { pointer-events: none; font-weight: 600; } .reco small { color: var(--mut); font-weight: 400; }
   .rip { position: absolute; top: 0; bottom: 0; width: 38%; z-index: 5; pointer-events: none; background: rgba(255,255,255,.2); animation: rip .7s ease-out forwards; }
@@ -1031,10 +1031,10 @@
   .lockbtn.holding { background: var(--acc); }
   .stage.locked { cursor: none; }
   .help { position: absolute; inset: 0; z-index: 13; display: grid; place-items: center; background: rgba(0,0,0,.7); }
-  .hbox { width: min(520px, 92vw); max-height: 86%; overflow: auto; background: rgba(20,20,20,.98); border: 1px solid #3a3a3a; border-radius: 10px; padding: 1rem 1.2rem; }
+  .hbox { width: min(520px, 92vw); max-height: 86%; overflow: auto; background: rgba(16,20,24,.98); border: 1px solid #323a43; border-radius: 10px; padding: 1rem 1.2rem; }
   .hbox header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .6rem; }
   .hbox dl { display: grid; grid-template-columns: max-content 1fr; gap: .45rem 1.2rem; margin: 0; align-items: center; } .hbox dt, .hbox dd { margin: 0; }
-  kbd { font: inherit; font-size: .85rem; background: #333; border: 1px solid #555; border-bottom-width: 2px; border-radius: 4px; padding: .1rem .5rem; white-space: nowrap; }
+  kbd { font: inherit; font-size: .85rem; background: #2b333c; border: 1px solid #4a5560; border-bottom-width: 2px; border-radius: 4px; padding: .1rem .5rem; white-space: nowrap; }
   .seg { position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,.38); pointer-events: none; border-left: 2px solid rgba(255,255,255,.9); border-radius: 2px; }
   .seg.preview { background: rgba(190,120,255,.4); border-left-color: #be78ff; }
   .seg.outro { background: rgba(245,197,24,.45); border-left-color: #f5c518; } .seg.recap { background: rgba(120,170,255,.4); border-left-color: #78aaff; }
@@ -1060,8 +1060,8 @@
   .played { position: absolute; inset: 0 auto 0 0; background: var(--acc); border-radius: 3px; }
   .knob { z-index: 2; position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; background: var(--acc); border-radius: 50%; transform: scale(0); transition: transform var(--t-fast); }
   .track:hover .knob, .track:focus-visible .knob { transform: scale(1); }
-  .tip { position: absolute; bottom: 22px; transform: translateX(-50%); background: rgba(20,20,20,.95); padding: .15rem .35rem .2rem; border-radius: 4px; font-size: .85rem; pointer-events: none; text-align: center; }
-  .thumb { overflow: hidden; border-radius: 3px; margin: .2rem 0 .25rem; background: #111; }
+  .tip { position: absolute; bottom: 22px; transform: translateX(-50%); background: rgba(16,20,24,.95); padding: .15rem .35rem .2rem; border-radius: 4px; font-size: .85rem; pointer-events: none; text-align: center; }
+  .thumb { overflow: hidden; border-radius: 3px; margin: .2rem 0 .25rem; background: #0c1014; }
   .mark { position: absolute; top: -3px; width: 4px; height: 11px; margin-left: -2px; background: #f5c518; border-radius: 2px; pointer-events: none; }
   .ic.on { color: var(--acc); }
   .menu.scenes { min-width: 280px; max-width: 92vw; } .menu.scenes .addnote { display: flex; gap: .4rem; padding: .3rem .6rem .6rem; } .menu.scenes .addnote input { flex: 1; min-width: 0; min-height: 38px; }
@@ -1075,11 +1075,11 @@
   .fxcol { min-width: 170px; } .mi.fx { white-space: normal; align-items: flex-start; } .mi.fx :global(svg), .mi.fx .sp { margin-top: .2rem; }
   .fxl { display: grid; line-height: 1.25; } .fxl small { color: var(--mut); font-weight: 400; font-size: .78rem; }
   .fxnote { margin: .3rem .6rem 0; font-size: .78rem; color: var(--mut); max-width: 220px; }
-  .dlg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 12; background: rgba(20,20,20,.98); border: 1px solid #3a3a3a; border-radius: 10px; padding: 1rem 1.2rem; width: min(520px, 92vw); max-height: 70%; overflow: auto; display: grid; gap: .8rem; }
+  .dlg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 12; background: rgba(16,20,24,.98); border: 1px solid #323a43; border-radius: 10px; padding: 1rem 1.2rem; width: min(520px, 92vw); max-height: 70%; overflow: auto; display: grid; gap: .8rem; }
   .dlg header { display: flex; justify-content: space-between; align-items: center; } .dlg ul { list-style: none; padding: 0; margin: 0; } .grow { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; }
   .sleepdot { position: absolute; top: 10px; right: 10px; width: 9px; height: 9px; border-radius: 50%; background: var(--acc); }
   .rem { min-width: 3.4rem; text-align: right; font-variant-numeric: tabular-nums; }
-  /* Netflix bar: controls left, title centred, extras right */
+  /* Control bar: controls left, title centred, extras right */
   .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr); align-items: center; gap: .6rem; }
   .grp { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; }
   .grp.right { justify-content: flex-end; }
@@ -1093,25 +1093,25 @@
   .vslider { width: 0; opacity: 0; transition: width var(--t-med) var(--ease), opacity var(--t-med); padding: 0; min-height: 0; accent-color: var(--acc); background: transparent; border: 0; }
   .vol:hover .vslider, .vol:focus-within .vslider { width: 92px; opacity: 1; margin-right: .6rem; }
   .clock { margin-left: .8rem; font-size: .9rem; color: #e0e0e0; font-variant-numeric: tabular-nums; }
-  .ratebadge { position: absolute; right: 2px; bottom: 4px; font-size: .62rem; font-weight: 700; background: var(--acc); color: #fff; border-radius: 3px; padding: 0 .2rem; line-height: 1.3; }
+  .ratebadge { position: absolute; right: 2px; bottom: 4px; font-size: .62rem; font-weight: 700; background: var(--acc-fill); color: #fff; border-radius: 3px; padding: 0 .2rem; line-height: 1.3; }
   .menu.bare { padding: 0; background: none; border: 0; box-shadow: none; min-width: 0; }
   .menu.more { min-width: 270px; padding: .4rem .3rem; }
   .menu.more .mi { min-height: 48px; font-size: .98rem; gap: .8rem; }
   .chev { margin-left: auto; font-size: 1.3rem; color: var(--mut); padding-left: .8rem; }
-  .modeinfo { display: flex; gap: .5rem; align-items: center; margin: .3rem .6rem .2rem; padding-top: .5rem; border-top: 1px solid #333; color: var(--mut); font-size: .82rem; }
+  .modeinfo { display: flex; gap: .5rem; align-items: center; margin: .3rem .6rem .2rem; padding-top: .5rem; border-top: 1px solid #2b333c; color: var(--mut); font-size: .82rem; }
   .menu h3 .back { background: transparent; padding: 0; width: 32px; min-height: 32px; margin-right: .3rem; font-size: 1.4rem; line-height: 1; color: #fff; border-radius: 50%; }
   .menu h3 .back:hover:not(:disabled) { background: rgba(255,255,255,.12); }
   .menu.speed { padding: 1rem 1.2rem 1.1rem; min-width: 0; }
   .menu.speed h3 { margin: 0 0 .9rem; }
   .speeds { display: flex; gap: .2rem; position: relative; }
-  .speeds::before { content: ''; position: absolute; left: 2.2rem; right: 2.2rem; top: 21px; height: 2px; background: #5a5a5a; }
+  .speeds::before { content: ''; position: absolute; left: 2.2rem; right: 2.2rem; top: 21px; height: 2px; background: #4f5964; }
   .sp-opt { position: relative; display: grid; justify-items: center; gap: .45rem; min-width: 72px; min-height: 64px; padding: .2rem .3rem; background: transparent; color: #bdbdbd; font-weight: 400; font-size: .85rem; white-space: nowrap; border-radius: 4px; }
   .sp-opt .dot { width: 14px; height: 14px; margin-top: 8px; border-radius: 50%; background: #8a8a8a; }
   .sp-opt.on { color: #fff; font-weight: 700; }
   .sp-opt.on .dot { width: 24px; height: 24px; margin-top: 3px; background: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.25); }
   .sp-opt:hover:not(:disabled) { background: rgba(255,255,255,.08); color: #fff; }
   .mwrap { position: relative; }
-  .menu { position: absolute; right: 0; bottom: 64px; background: rgba(20,20,20,.97); border: 1px solid #3a3a3a; border-radius: 6px; padding: .6rem .3rem; min-width: 190px; box-shadow: 0 12px 30px #000; z-index: 20; }
+  .menu { position: absolute; right: 0; bottom: 64px; background: rgba(16,20,24,.97); border: 1px solid #323a43; border-radius: 6px; padding: .6rem .3rem; min-width: 190px; box-shadow: 0 12px 30px #000; z-index: 20; }
   .menu.tracks { display: flex; gap: 1rem; padding: .8rem; min-width: 360px; max-width: min(94vw, 720px); }
   .menu.tracks > div { flex: 1; min-width: 118px; }
   .mi { white-space: nowrap; }

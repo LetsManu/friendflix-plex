@@ -24,9 +24,9 @@ test.describe('admin shell (phone)', () => {
   test('overview fits the phone and toasts sit above the tab bar', async ({ page }) => {
     await page.goto('/admin');
     const attn = page.getByRole('region', { name: 'Wartet auf dich' });
-    await expect(attn.getByText('Dune: Part Two')).toBeVisible();
+    await expect(attn.getByText('Dunmoor: Part Two')).toBeVisible();
     await expect.poll(() => noHorizontalOverflow(page)).toBe(true);
-    await attn.getByRole('button', { name: '„Dune: Part Two“ freigeben' }).click();
+    await attn.getByRole('button', { name: '„Dunmoor: Part Two“ freigeben' }).click();
     const toast = page.getByRole('region', { name: 'Hinweise' }).getByRole('listitem');
     await expect(toast).toBeVisible();
     const tb = await page.getByRole('navigation', { name: 'Mobile Navigation' }).last().boundingBox();

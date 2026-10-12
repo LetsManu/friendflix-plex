@@ -74,7 +74,7 @@
   .small { padding: .3rem .9rem; font-size: .85rem; }
   .chips { margin-bottom: 1.5rem; }
   .chip { background: var(--surface-2); border-radius: 99px; padding: 0 1rem; font-weight: 500; }
-  .chip:hover:not(:disabled) { background: #3a3a3a; }
-  .chip.on { background: #fff; color: #000; } .chip.on .muted { color: #444; }
+  .chip:hover:not(:disabled) { background: #323a43; }
+  .chip.on { background: #fff; color: #000; } .chip.on .muted { color: #3b444e; }
   @media (max-width: 560px) { .head { flex-direction: column; align-items: center; text-align: center; } .av { width: 120px; height: 120px; } }
 </style>

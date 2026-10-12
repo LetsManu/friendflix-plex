@@ -139,15 +139,15 @@
   .wrap :global(.stage) { height: 100%; }
   .top { padding: .8rem 1rem; display: flex; align-items: center; gap: .6rem; background: linear-gradient(rgba(0,0,0,.8), transparent); }
   .ttl { display: flex; flex-direction: column; line-height: 1.2; } .ttl span { color: var(--mut); font-size: .9rem; }
-  /* desktop: the title sits centred in the control bar (Netflix); phones keep it at the top */
+  /* desktop: the title sits centred in the control bar; phones keep it at the top */
   @media (min-width: 721px) { .ttl.phone { display: none; } }
-  .next { position: absolute; right: var(--pad-x); bottom: 8.5rem; z-index: 9; background: rgba(20,20,20,.94); border: 1px solid #444; border-radius: 8px; padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: .8rem; max-width: min(380px, 92vw); }
+  .next { position: absolute; right: var(--pad-x); bottom: 8.5rem; z-index: 9; background: rgba(16,20,24,.94); border: 1px solid #3b444e; border-radius: 8px; padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: .8rem; max-width: min(380px, 92vw); }
   .nt { display: flex; flex-direction: column; gap: .15rem; }
   .next { width: min(400px, calc(100vw - 2rem)); } .next.more { width: min(440px, calc(100vw - 2rem)); }
   .nrow { display: flex; gap: .9rem; align-items: center; }
-  .nthumb { position: relative; flex: none; width: 128px; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: #222; display: grid; place-items: center; }
+  .nthumb { position: relative; flex: none; width: 128px; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: #1c2228; display: grid; place-items: center; }
   .nthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .nph { display: grid; place-items: center; width: 100%; height: 100%; color: var(--mut); background: #222; }
+  .nph { display: grid; place-items: center; width: 100%; height: 100%; color: var(--mut); background: #1c2228; }
   .ring { position: absolute; inset: 50% auto auto 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; background: rgba(0,0,0,.55); border-radius: 50%; }
   .ring circle { fill: none; stroke-width: 4; } .ring .bg { stroke: rgba(255,255,255,.3); } .ring .fg { stroke: #fff; stroke-linecap: round; transition: stroke-dashoffset .1s linear; }
   .rn { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); font-size: 1rem; font-variant-numeric: tabular-nums; }

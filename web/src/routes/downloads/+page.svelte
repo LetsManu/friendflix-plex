@@ -49,10 +49,10 @@
   {#if !list.length}
     <div class="empty">
       <svg class="ill" viewBox="0 0 160 160" width="160" height="160" aria-hidden="true" focusable="false">
-        <circle cx="80" cy="80" r="76" fill="#2a2a2a" />
-        <rect x="52" y="38" width="56" height="84" rx="8" fill="#1a1a1a" stroke="#5a5a5a" stroke-width="3" />
-        <rect x="60" y="48" width="40" height="56" rx="3" fill="#333" />
-        <circle cx="80" cy="112" r="3.5" fill="#5a5a5a" />
+        <circle cx="80" cy="80" r="76" fill="#242b33" />
+        <rect x="52" y="38" width="56" height="84" rx="8" fill="#151a20" stroke="#4f5964" stroke-width="3" />
+        <rect x="60" y="48" width="40" height="56" rx="3" fill="#2b333c" />
+        <circle cx="80" cy="112" r="3.5" fill="#4f5964" />
         <circle cx="112" cy="104" r="22" fill="var(--acc)" />
         <path d="M112 93v18m-8-8 8 8 8-8" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
@@ -106,7 +106,7 @@
 <style>
   .store { display: grid; gap: .8rem; max-width: 720px; margin-bottom: 1.5rem; }
   .empty + .store { margin: 0 auto 1.5rem; }
-  .bar { height: 8px; border-radius: 4px; background: var(--surface-2, #2a2a2a); overflow: hidden; } .bar i { display: block; height: 100%; background: var(--acc); transition: width .3s; }
+  .bar { height: 8px; border-radius: 4px; background: var(--surface-2, #242b33); overflow: hidden; } .bar i { display: block; height: 100%; background: var(--acc); transition: width .3s; }
   .bar.slim { height: 4px; margin-top: .3rem; }
   .small { font-size: .85rem; } .store p { margin: 0; }
   .list { list-style: none; padding: 0; margin: 0 0 1.5rem; display: grid; gap: .5rem; max-width: 900px; }

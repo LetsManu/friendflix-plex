@@ -39,7 +39,7 @@
 <style>
   .toasts { position: fixed; z-index: 120; right: 1.2rem; bottom: 1.2rem; width: min(420px, calc(100vw - 2rem)); pointer-events: none; }
   ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
-  .toast { pointer-events: auto; display: flex; align-items: center; gap: .6rem; padding: .45rem .45rem .45rem .9rem; min-height: 52px; background: #262626; color: var(--fg); border-radius: 8px; border: 1px solid #3a3a3a; border-left: 4px solid var(--mut); box-shadow: var(--shadow-pop); }
+  .toast { pointer-events: auto; display: flex; align-items: center; gap: .6rem; padding: .45rem .45rem .45rem .9rem; min-height: 52px; background: #20262d; color: var(--fg); border-radius: 8px; border: 1px solid #323a43; border-left: 4px solid var(--mut); box-shadow: var(--shadow-pop); }
   .success { border-left-color: var(--ok); } .success .ic { color: var(--ok); }
   .error { border-left-color: var(--err); } .error .ic { color: var(--err); }
   .info { border-left-color: var(--info); } .info .ic { color: var(--info); }

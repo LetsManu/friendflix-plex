@@ -1,5 +1,5 @@
 /**
- * Profile gate ("Wer schaut gerade?") and the early-render hint of the app shell.
+ * Profile gate ("Wer ist heute dabei?") and the early-render hint of the app shell.
  *
  * Accounts with more than one profile see the gate once per browser session (new tab/window = new session),
  * like the big streaming apps. The pick is remembered in sessionStorage by /profiles.

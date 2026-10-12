@@ -60,8 +60,8 @@
   h2 { margin: 0; font-size: 1.3rem; }
   .hint { margin: 0; max-width: 18rem; text-align: center; color: var(--mut); font-size: .9rem; }
   .boxes { display: flex; gap: .7rem; margin: .5rem 0 0; }
-  .b { width: 3.2rem; height: 3.8rem; display: grid; place-items: center; background: #333; border: 2px solid transparent; border-radius: 6px; font-size: 1.5rem; }
-  .b.cur { border-color: #fff; } .b.on { border-color: #666; }
+  .b { width: 3.2rem; height: 3.8rem; display: grid; place-items: center; background: #2b333c; border: 2px solid transparent; border-radius: 6px; font-size: 1.5rem; }
+  .b.cur { border-color: #fff; } .b.on { border-color: #6a7480; }
   .msg { min-height: 1.5em; margin: 0; font-size: .9rem; }
   .keys { display: grid; grid-template-columns: repeat(3, 4.2rem); gap: .6rem; }
   .k { min-height: 3.6rem; font-size: 1.3rem; padding: 0; }

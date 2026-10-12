@@ -8,9 +8,9 @@ const pl: Translation<typeof de> = {
     resume: 'Wznów',
     continue: 'Dalej',
     episodeCode: 'S{s}:O{e}',
-    myList: 'Moja lista',
-    addToList: 'Dodaj do mojej listy',
-    removeFromList: 'Usuń z mojej listy',
+    myList: 'Do obejrzenia',
+    addToList: 'Dodaj do listy Do obejrzenia',
+    removeFromList: 'Usuń z listy Do obejrzenia',
     soundOn: 'Włącz dźwięk',
     soundOff: 'Wyłącz dźwięk',
     cancel: 'Anuluj',
@@ -125,8 +125,8 @@ const pl: Translation<typeof de> = {
   },
   more: {
     title: 'Podobne tytuły',
-    add: 'Dodaj „{name}” do mojej listy',
-    remove: 'Usuń „{name}” z mojej listy',
+    add: 'Dodaj „{name}” do listy Do obejrzenia',
+    remove: 'Usuń „{name}” z listy Do obejrzenia',
     saveFailed: 'Nie udało się zapisać.',
   },
   cast: {

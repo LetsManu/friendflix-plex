@@ -26,7 +26,7 @@
   let suggestions: Suggestion[] | null = null;
   /** form state: editing = id of the hub being edited, '' = a new one, null = closed */
   let editing: string | null = null;
-  let name = '', source: Source = 'genre', value = '', accentOn = false, accent = '#e50f2a', enabled = true, imageId = '', imageName = '';
+  let name = '', source: Source = 'genre', value = '', accentOn = false, accent = '#ff4f6d', enabled = true, imageId = '', imageName = '';
   let q = '', results: Item[] = [], searchSeq = 0, searchT: ReturnType<typeof setTimeout>;
   let formEl: HTMLElement | undefined;
 
@@ -50,7 +50,7 @@
   async function open(h?: AdminHub, s?: Suggestion) {
     editing = h?.id ?? '';
     name = h?.name ?? s?.name ?? ''; source = h?.source ?? s?.source ?? 'genre'; value = h?.sourceValue ?? s?.sourceValue ?? '';
-    accentOn = Boolean(h?.accent); accent = h?.accent ?? '#e50f2a'; enabled = h?.enabled ?? true;
+    accentOn = Boolean(h?.accent); accent = h?.accent ?? '#ff4f6d'; enabled = h?.enabled ?? true;
     imageId = h?.imageItemId ?? ''; imageName = ''; q = ''; results = [];
     if (s?.source === 'collection') imageId = '';
     await tick();

@@ -26,7 +26,7 @@
   const qLabel = (q: string) => (q === '4k' ? $t('fresh.q.4k') : $t('fresh.q.hdr'));
   function toggleQuality(q: (typeof QUALITIES)[number]) { set('quality', (qlist.includes(q) ? qlist.filter((x) => x !== q) : [...qlist, q]).join(',')); }
   $: key = kind + '?' + browseQuery(s, kind, 0, PAGE).toString() + '|' + qparam;
-  // Netflix-like: rows per genre while nothing is filtered (or the grid when the viewer prefers it); filters always show the grid
+  // rows per genre while nothing is filtered (or the grid when the viewer prefers it); filters always show the grid
   const VIEW_KEY = 'ff_browse_view';
   let view: 'rows' | 'grid' = 'rows';
   try { if (typeof localStorage !== 'undefined' && localStorage.getItem(VIEW_KEY) === 'grid') view = 'grid'; } catch { /* storage blocked */ }
@@ -181,26 +181,26 @@
   .qgrp { display: inline-flex; gap: .5rem; }
   .chips { list-style: none; padding: 0; margin: 0 0 1.2rem; }
   .chip { background: var(--surface-2); border-radius: 99px; padding: 0 1rem; font-weight: 500; }
-  .chip:hover:not(:disabled) { background: #3a3a3a; }
+  .chip:hover:not(:disabled) { background: #323a43; }
   .state { text-align: center; padding: 1rem 0 3rem; }
   .backdrop { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.6); animation: fade .2s ease-out; }
-  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 71; flex-direction: column; max-height: 85vh; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain; background: #121212; border-top: 1px solid #333; border-radius: 16px 16px 0 0; padding: 0 1rem calc(1rem + env(safe-area-inset-bottom)); animation: rise .26s var(--ease, ease-out); }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 71; flex-direction: column; max-height: 85vh; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain; background: #0d1115; border-top: 1px solid #2b333c; border-radius: 16px 16px 0 0; padding: 0 1rem calc(1rem + env(safe-area-inset-bottom)); animation: rise .26s var(--ease, ease-out); }
   .sheet.dragging { transition: none; }
-  .grab { touch-action: none; cursor: grab; position: sticky; top: 0; background: #121212; z-index: 1; padding: 0 0 .4rem; margin: 0 -1rem; }
-  .handle { display: block; width: 40px; height: 4px; border-radius: 99px; background: #555; margin: 10px auto 8px; }
+  .grab { touch-action: none; cursor: grab; position: sticky; top: 0; background: #0d1115; z-index: 1; padding: 0 0 .4rem; margin: 0 -1rem; }
+  .handle { display: block; width: 40px; height: 4px; border-radius: 99px; background: #4a5560; margin: 10px auto 8px; }
   .sht { margin: 0 1rem; font-size: 1.1rem; }
   .sheet form { display: grid; gap: .9rem; margin-top: .6rem; }
   .fl { display: grid; gap: .3rem; color: var(--mut); font-size: .82rem; font-weight: 600; }
   .fl select { width: 100%; min-height: 48px; color: var(--fg); font-size: 1rem; font-weight: 400; }
   .sheet form { gap: .7rem; }
-  .sacts { display: flex; gap: .6rem; position: sticky; bottom: calc(-1rem - env(safe-area-inset-bottom)); margin: .2rem -1rem calc(-1rem - env(safe-area-inset-bottom)); padding: .7rem 1rem calc(1rem + env(safe-area-inset-bottom)); background: #121212; border-top: 1px solid #262626; }
+  .sacts { display: flex; gap: .6rem; position: sticky; bottom: calc(-1rem - env(safe-area-inset-bottom)); margin: .2rem -1rem calc(-1rem - env(safe-area-inset-bottom)); padding: .7rem 1rem calc(1rem + env(safe-area-inset-bottom)); background: #0d1115; border-top: 1px solid #20262d; }
   .sacts button { flex: 1; min-height: 48px; }
   @keyframes rise { from { transform: translateY(100%); } to { transform: none; } }
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .sheet, .backdrop { animation: none; } }
   /* desktop: the same filter panel as a drawer on the right */
   @media (min-width: 721px) {
-    .sheet { left: auto; top: 0; width: min(400px, 92vw); max-height: none; border-radius: 0; border-top: 0; border-left: 1px solid #333; animation-name: slidein; }
+    .sheet { left: auto; top: 0; width: min(400px, 92vw); max-height: none; border-radius: 0; border-top: 0; border-left: 1px solid #2b333c; animation-name: slidein; }
     .grab { cursor: default; } .handle { visibility: hidden; height: 0; margin: 14px 0 0; }
   }
   @keyframes slidein { from { transform: translateX(100%); } to { transform: none; } }

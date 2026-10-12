@@ -171,7 +171,7 @@ export default {
   /** watch page: next-episode card, "still watching?", more like this */
   watch: {
     back: 'Zurück',
-    stillTitle: 'Schaust du noch?',
+    stillTitle: 'Noch da?',
     stillText: 'Die automatische Wiedergabe ist pausiert. Als Nächstes: {ep}',
     keepWatching: 'Weiter ansehen',
     next: 'Nächste Folge',

@@ -264,7 +264,7 @@ export const MIGRATIONS: string[] = [
   alter table role_settings add column max_height int check (max_height between 0 and 4320);
   create table app_flags (key text primary key, at timestamptz not null default now());
   `,
-  // profiles (Netflix style). The owner profile has the same id as its account, so existing progress/token cache/device ids keep working.
+  // profiles. The owner profile has the same id as its account, so existing progress/token cache/device ids keep working.
   // Watchlist, thumbs and bookmarks become per profile (backfilled with the owner profile); profile_prefs holds per-profile viewing prefs.
   `
   create table profiles (
@@ -487,7 +487,7 @@ export const MIGRATIONS: string[] = [
   alter table reactions drop constraint reactions_pkey;
   alter table reactions add primary key (profile_id, item_id);
   `,
-  // 26: thumbs get a third value 2 ("Super"); the inline check was auto-named thumbs_value_check, but drop whatever check guards value
+  // 26: thumbs get a third value 2 ("Geliebt"); the inline check was auto-named thumbs_value_check, but drop whatever check guards value
   `
   do $$
   declare c record;

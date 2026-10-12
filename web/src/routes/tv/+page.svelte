@@ -75,7 +75,7 @@
 {/if}
 
 <style>
-  .pair { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: clamp(2rem, 7vw, 7rem); padding: 3rem var(--pad-x); background: radial-gradient(900px 500px at 20% 10%, rgba(229, 15, 42, .16), transparent 70%), var(--bg); flex-wrap: wrap; }
+  .pair { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: clamp(2rem, 7vw, 7rem); padding: 3rem var(--pad-x); background: radial-gradient(900px 500px at 20% 10%, rgba(255, 79, 109, .16), transparent 70%), var(--bg); flex-wrap: wrap; }
   .txt { max-width: 38rem; }
   .logo { display: inline-flex; }
   h1 { font-size: clamp(2rem, 4.5vw, 3.2rem); margin: 1.2rem 0 1rem; }

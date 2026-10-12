@@ -33,10 +33,10 @@
 <style>
   .tgl { display: flex; align-items: flex-start; gap: .75rem; min-width: 0; }
   .sw { flex: none; width: 52px; min-height: 44px; padding: 0; background: transparent; position: relative; border-radius: 99px; }
-  .sw::before { content: ''; position: absolute; left: 2px; right: 2px; top: 50%; height: 28px; transform: translateY(-50%); border-radius: 99px; background: #4a4a4a; transition: background var(--t-fast); }
+  .sw::before { content: ''; position: absolute; left: 2px; right: 2px; top: 50%; height: 28px; transform: translateY(-50%); border-radius: 99px; background: #46505a; transition: background var(--t-fast); }
   .sw:hover:not(:disabled) { background: transparent; }
   .sw.on::before { background: var(--ok); }
-  .knob { position: absolute; top: 50%; left: 5px; width: 22px; height: 22px; margin-top: -11px; border-radius: 50%; background: #fff; display: grid; place-items: center; color: #333; font-size: .7rem; transition: transform var(--t-fast) var(--ease); }
+  .knob { position: absolute; top: 50%; left: 5px; width: 22px; height: 22px; margin-top: -11px; border-radius: 50%; background: #fff; display: grid; place-items: center; color: #2b333c; font-size: .7rem; transition: transform var(--t-fast) var(--ease); }
   .on .knob { transform: translateX(20px); }
   .txt { display: flex; flex-direction: column; padding-top: .55rem; min-width: 0; }
   label { color: var(--fg); font-size: .95rem; cursor: pointer; }

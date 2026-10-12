@@ -38,7 +38,7 @@ describe('profiles migration', () => {
     await expect(pool.query("insert into profiles(id,user_id,name,jellyfin_user_id) values ('55555555-5555-4555-8555-555555555555',$1,'KIND','jf3')", [uid])).rejects.toThrow();
   });
 
-  it('migration 26 lets thumbs hold 2 ("Super") and keeps existing rows', async () => {
+  it('migration 26 lets thumbs hold 2 ("Geliebt") and keeps existing rows', async () => {
     await pool.query('drop schema public cascade; create schema public;');
     for (const m of MIGRATIONS.slice(0, 25)) await pool.query(m);
     const uid = '11111111-1111-4111-8111-111111111111';

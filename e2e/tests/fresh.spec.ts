@@ -9,7 +9,7 @@ const ADMIN = { ...ME, isAdmin: true, profile: { id: 'p1', name: 'Tester', avata
 const day = (offset: number) => new Date(Date.now() + offset * 864e5).toISOString().slice(0, 10);
 const inception = items[0]!, interstellar = items[1]!, darkKnight = items[2]!, breaking = SERIES;
 
-/** badges the server would send: Inception leaves in 3 days, Interstellar is new, Breaking Bad has a finale */
+/** badges the server would send: Inkwell leaves in 3 days, Interlace is new, Bright Valley has a finale */
 async function mockBadges(page: Page, extra: Record<string, unknown> = {}) {
   await page.route('**/api/discover/badges', (r) => r.fulfill({ json: { badges: { [inception.id]: { fresh: 'new', daysLeft: 3 }, [interstellar.id]: { fresh: 'new' }, [breaking.id]: { fresh: 'finale' }, [darkKnight.id]: { fresh: 'newSeason' }, ...extra } } }));
 }
@@ -28,10 +28,10 @@ test.describe('fresh labels and leaving soon (desktop)', () => {
     await expect(first.getByText('Nur noch 3 Tage')).toBeVisible();
     await expect(first.locator('.newep, .brand')).toHaveCount(1);
     await expect(leaving.locator('article.card').nth(1).getByText('Nur noch 11 Tage')).toBeVisible();
-    // the trending row: Dark Knight "Neue Staffel" (no removal date), Breaking Bad "Staffelfinale"
+    // the trending row: Dawn Keeper "Neue Staffel" (no removal date), Bright Valley "Staffelfinale"
     const trending = row(page, 'Diese Woche bei uns');
     await trending.scrollIntoViewIfNeeded();
-    await expect(trending.locator('article.card').filter({ hasText: 'Inception' }).getByText('Nur noch 3 Tage')).toBeVisible();
+    await expect(trending.locator('article.card').filter({ hasText: 'Inkwell' }).getByText('Nur noch 3 Tage')).toBeVisible();
     await expect(trending.getByText('Staffelfinale')).toBeVisible();
     await expect(trending.getByText('Neue Folgen')).toHaveCount(0); // the old client-side hint is gone once the server answered
     await expect.poll(() => noHorizontalOverflow(page)).toBe(true);
@@ -55,7 +55,7 @@ test.describe('fresh labels and leaving soon (desktop)', () => {
     await mockBadges(page);
     await page.route(`**/api/items/${interstellar.id}/facts`, (r) => r.fulfill({ json: { fresh: 'new', leaving: { leavesAt: day(3), days: 3 }, traits: { resolution: '4k', hdr: 'dolbyvision', audio: 'atmos' } } }));
     await page.goto('/');
-    const card = row(page, 'Weil du „Inception“ gesehen hast').locator('article.card').first(); // Interstellar
+    const card = row(page, 'Weil du „Inkwell“ gesehen hast').locator('article.card').first(); // Interlace
     await card.scrollIntoViewIfNeeded();
     await card.hover();
     const hp = page.locator('.hp.ready');
@@ -75,7 +75,7 @@ test.describe('detail view (desktop)', () => {
       episode: { id: hex(500), name: 'Das Ende', season: 1, index: 7, overview: 'Walter trifft eine folgenschwere Entscheidung.' }, next: { id: hex(501), season: 2, index: 1 },
     } } }));
     await page.goto('/item/' + breaking.id);
-    await expect(page.getByRole('heading', { level: 1, name: 'Breaking Bad' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Bright Valley' })).toBeVisible();
     const facts = page.locator('.tf');
     await expect(facts.getByText('Neue Staffel')).toBeVisible();
     await expect(facts.getByText('Nur noch 6 Tage')).toBeVisible();
@@ -91,13 +91,13 @@ test.describe('detail view (desktop)', () => {
     await story.getByRole('button', { name: 'Karte ausblenden' }).click();
     await expect(story).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole('heading', { level: 1, name: 'Breaking Bad' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Bright Valley' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Die Geschichte bisher' })).toHaveCount(0);
   });
 
   test('a movie shows no story card and a viewer sees no admin entry', async ({ page }) => {
     await page.goto('/item/' + inception.id);
-    await expect(page.getByRole('heading', { level: 1, name: 'Inception' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Inkwell' })).toBeVisible();
     await page.getByRole('button', { name: 'Mehr', exact: true }).click();
     await expect(page.getByRole('button', { name: /Entfernungsdatum/ })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Die Geschichte bisher' })).toHaveCount(0);
@@ -115,7 +115,7 @@ test.describe('detail view (desktop)', () => {
       await r.fulfill({ json: { ok: true } });
     });
     await page.goto('/item/' + inception.id);
-    await expect(page.getByRole('heading', { level: 1, name: 'Inception' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Inkwell' })).toBeVisible();
     await page.getByRole('button', { name: 'Mehr', exact: true }).click();
     await page.getByRole('button', { name: /Entfernungsdatum setzen/ }).click();
     const dlg = page.getByRole('dialog', { name: 'Nicht mehr verfügbar ab' });

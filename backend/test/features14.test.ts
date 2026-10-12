@@ -116,7 +116,7 @@ describe('recommendations, friends rated, thumbs', () => {
     expect((await call('PUT', `/api/items/${A}/thumb`, { value: 0 })).json()).toEqual({ value: 0 });
     expect((await call('PUT', `/api/items/${A}/thumb`, { value: 5 })).statusCode).toBe(400);
   });
-  it('thumbs: 2 ("Super") is stored, read back and also seeds "because"', async () => {
+  it('thumbs: 2 ("Geliebt") is stored, read back and also seeds "because"', async () => {
     expect((await call('PUT', `/api/items/${A}/thumb`, { value: 2 })).json()).toEqual({ value: 2 });
     expect((await call('GET', `/api/items/${A}`)).json().thumb).toBe(2);
     const b = (await call('GET', '/api/library/because')).json();
@@ -125,7 +125,7 @@ describe('recommendations, friends rated, thumbs', () => {
   });
 });
 
-describe('scenes, X-Ray, extras, trailers, collections', () => {
+describe('scenes, cast panel, extras, trailers, collections', () => {
   it('bookmarks: create, list per item, delete only own, validate', async () => {
     const id = (await call('POST', '/api/bookmarks', { itemId: A, position: 754, note: 'Beste Szene' })).json().id;
     expect((await call('GET', `/api/bookmarks?itemId=${A}`)).json().bookmarks).toMatchObject([{ position: 754, note: 'Beste Szene' }]);
@@ -137,7 +137,7 @@ describe('scenes, X-Ray, extras, trailers, collections', () => {
     expect((await call('POST', '/api/bookmarks', { itemId: A, position: -1 })).statusCode).toBe(400);
     expect((await call('POST', '/api/bookmarks', { itemId: 'zz', position: 3 })).statusCode).toBe(400);
   });
-  it('X-Ray returns cast with image flags', async () => {
+  it('cast panel returns cast with image flags', async () => {
     const p = (await call('GET', `/api/items/${A}/people`)).json().people;
     expect(p[0]).toEqual({ id: 'f'.repeat(32), name: 'Ada Beispiel', role: 'Kommissarin', type: 'Actor', image: true });
     expect(p[1]).toMatchObject({ type: 'Director', image: false });

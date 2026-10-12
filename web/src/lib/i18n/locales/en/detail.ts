@@ -8,9 +8,9 @@ const en: Translation<typeof de> = {
     resume: 'Resume',
     continue: 'Continue',
     episodeCode: 'S{s}:E{e}',
-    myList: 'My List',
-    addToList: 'Add to My List',
-    removeFromList: 'Remove from My List',
+    myList: 'Watchlist',
+    addToList: 'Add to watchlist',
+    removeFromList: 'Remove from watchlist',
     soundOn: 'Turn sound on',
     soundOff: 'Turn sound off',
     cancel: 'Cancel',
@@ -115,8 +115,8 @@ const en: Translation<typeof de> = {
   },
   more: {
     title: 'More like this',
-    add: 'Add {name} to My List',
-    remove: 'Remove {name} from My List',
+    add: 'Add {name} to your watchlist',
+    remove: 'Remove {name} from your watchlist',
     saveFailed: 'Could not be saved.',
   },
   cast: {

@@ -40,7 +40,7 @@ export default {
   admin: {
     tab: 'Bald weg',
     title: 'Bald nicht mehr verfügbar',
-    intro: 'Für diese Titel ist ein Datum gesetzt, an dem sie die Mediathek verlassen. Zwei Wochen vorher erscheint ein Hinweis auf den Karten, eine Woche und einen Tag vorher bekommen alle, die den Titel in „Meine Liste“ oder „Weiterschauen“ haben, eine Benachrichtigung. Es wird nichts gelöscht – das Datum ist nur eine Ankündigung; abgelaufene Einträge verschwinden von selbst.',
+    intro: 'Für diese Titel ist ein Datum gesetzt, an dem sie die Mediathek verlassen. Zwei Wochen vorher erscheint ein Hinweis auf den Karten, eine Woche und einen Tag vorher bekommen alle, die den Titel auf der Merkliste oder in „Weiterschauen“ haben, eine Benachrichtigung. Es wird nichts gelöscht – das Datum ist nur eine Ankündigung; abgelaufene Einträge verschwinden von selbst.',
     addTitle: 'Titel hinzufügen',
     search: 'Titel suchen',
     searchPlaceholder: 'Film oder Serie …',

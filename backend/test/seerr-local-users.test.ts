@@ -43,7 +43,7 @@ beforeAll(async () => {
         users = users.filter((x) => x.id !== Number(u.pathname.split('/').pop()));
         return { json: {} };
       },
-      'GET /api/v1/movie/\\d+': () => ({ json: { title: 'Dune', posterPath: '/dune.jpg' } }),
+      'GET /api/v1/movie/\\d+': () => ({ json: { title: 'Dunmoor', posterPath: '/dune.jpg' } }),
       'POST /api/v1/request': (_u, _i, b) => ({ json: { id: reqId++, status: 1, media: { status: 2 }, echo: b } }),
     },
   });

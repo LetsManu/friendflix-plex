@@ -13,7 +13,7 @@
   export let seriesId = '';
   /** small icon-only variant for episode rows */
   export let compact = false;
-  /** full-width grey button (phone detail view, Netflix app style) */
+  /** full-width grey button (phone detail view, phone style) */
   export let block = false;
   /** no trigger of its own: the parent opens it with `activate()` (e.g. from the "⋯ Mehr" menu) */
   export let headless = false;
@@ -164,12 +164,12 @@
   .dlb.on { color: var(--ok); }
   .compact .dlb { width: 40px; min-height: 40px; height: 40px; padding: 0; justify-content: center; border-radius: 50%; background: rgba(42,42,42,.7); border: 1px solid rgba(255,255,255,.35); position: relative; }
   .block { display: flex; width: 100%; align-items: stretch; }
-  .block .dlb { width: 100%; justify-content: center; min-height: 44px; font-size: 1rem; font-weight: 700; background: rgba(109,109,110,.45); color: #fff; border: 0; border-radius: 4px; }
-  .block .dlb:hover:not(:disabled) { background: rgba(109,109,110,.65); }
+  .block .dlb { width: 100%; justify-content: center; min-height: 44px; font-size: 1rem; font-weight: 700; background: rgba(112,124,138,.35); color: #fff; border: 0; border-radius: 4px; }
+  .block .dlb:hover:not(:disabled) { background: rgba(112,124,138,.5); }
   .block .dlb.on { color: #fff; }
-  .mini { position: absolute; right: -2px; top: -4px; font-size: .62rem; background: var(--acc); color: #fff; border-radius: 8px; padding: 0 .25rem; line-height: 1.2; }
+  .mini { position: absolute; right: -2px; top: -4px; font-size: .62rem; background: var(--acc-fill); color: #fff; border-radius: 8px; padding: 0 .25rem; line-height: 1.2; }
   .mini:empty { display: none; }
-  .menu { position: absolute; top: 100%; left: 0; z-index: 30; min-width: 14rem; margin-top: .3rem; display: flex; flex-direction: column; background: var(--surface-2, #2a2a2a); border-radius: 8px; box-shadow: 0 8px 28px #000a; padding: .3rem; }
+  .menu { position: absolute; top: 100%; left: 0; z-index: 30; min-width: 14rem; margin-top: .3rem; display: flex; flex-direction: column; background: var(--surface-2, #242b33); border-radius: 8px; box-shadow: 0 8px 28px #000a; padding: .3rem; }
   .compact .menu { left: auto; right: 0; }
   .menu button, .menu a { display: flex; gap: .5rem; align-items: center; background: none; border: 0; text-align: left; padding: .6rem .7rem; min-height: 44px; border-radius: 6px; color: var(--fg); }
   .menu button:hover, .menu a:hover { background: rgba(255,255,255,.1); }

@@ -11,7 +11,7 @@
   $: inList = $listIds.has(id);
 
   $: void load(id);
-  // "Meine Liste" toggled elsewhere (card, modal, detail page): planned <-> none, dropped -> planned when added
+  // "Merkliste" toggled elsewhere (card, modal, detail page): planned <-> none, dropped -> planned when added
   $: syncList(inList);
   function syncList(now: boolean) {
     if (now === lastIn) return;
@@ -34,7 +34,7 @@
     try {
       const r = await api(`/api/items/${id}/status`, { method: 'PUT', body: { status: want } });
       if (my === seq) status = r.status as Status;
-      void loadList(); // keeps the "Meine Liste" button in sync
+      void loadList(); // keeps the "Merkliste" button in sync
     } catch {
       if (my === seq) status = before;
       msg = tr('detail.status.saveFailed');

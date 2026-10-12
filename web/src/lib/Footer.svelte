@@ -43,13 +43,13 @@
   ul { list-style: none; margin: 0; padding: 0; }
   li { margin: 0; }
   a { display: inline-flex; align-items: center; min-height: 44px; color: #808080; }
-  a:hover { text-decoration: underline; color: #b3b3b3; }
+  a:hover { text-decoration: underline; color: #b3bac2; }
   .meta { display: flex; align-items: center; gap: 1.2rem; margin-top: 1.2rem; flex-wrap: wrap; }
   .lang { position: relative; display: inline-flex; align-items: center; }
   .globe { position: absolute; left: .7rem; font-size: .9rem; pointer-events: none; filter: grayscale(1); }
-  .lang select { min-height: 44px; padding: .3rem .9rem .3rem 2.1rem; background: transparent; border: 1px solid #808080; border-radius: 2px; color: #b3b3b3; font-size: .82rem; }
+  .lang select { min-height: 44px; padding: .3rem .9rem .3rem 2.1rem; background: transparent; border: 1px solid #808080; border-radius: 2px; color: #b3bac2; font-size: .82rem; }
   .lang select:hover, .lang select:focus-visible { color: #fff; border-color: #fff; }
-  .lang option { background: #141414; color: #fff; }
+  .lang option { background: #101418; color: #fff; }
   .help { background: transparent; border: 1px solid #808080; color: #808080; font-weight: 400; font-size: .82rem; min-height: 44px; padding: .3rem .9rem; border-radius: 2px; }
   .help:hover:not(:disabled) { background: transparent; color: #fff; border-color: #fff; }
   .brand { display: inline-flex; align-items: center; gap: .45rem; opacity: .85; }

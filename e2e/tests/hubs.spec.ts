@@ -74,7 +74,7 @@ test.describe('brand hubs (desktop)', () => {
 test.describe('extras tab (desktop)', () => {
   test('without extras there are no tabs', async ({ page }) => {
     await page.goto('/item/' + LOCKED_ID);
-    await expect(page.getByRole('heading', { level: 1, name: 'Inception' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Inkwell' })).toBeVisible();
     await expect(page.getByRole('tablist')).toHaveCount(0);
   });
 

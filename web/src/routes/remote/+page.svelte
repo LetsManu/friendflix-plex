@@ -154,7 +154,7 @@
   .remote { max-width: 720px; }
   h1 { display: flex; align-items: center; gap: .6rem; }
   .state { display: flex; align-items: center; gap: .6rem; }
-  .led { width: 12px; height: 12px; border-radius: 50%; background: #666; } .led.on { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+  .led { width: 12px; height: 12px; border-radius: 50%; background: #6a7480; } .led.on { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
   .now { display: flex; flex-direction: column; margin: .6rem 0 .4rem; }
   .keys { display: grid; grid-template-columns: 1fr 1fr 1.5fr 1fr 1fr; gap: .6rem; align-items: stretch; }
   .keys button { min-height: 64px; font-size: 1.05rem; padding: 0; min-width: 0; }
@@ -164,11 +164,11 @@
   .pad { padding: 1.1rem; }
   .list { list-style: none; padding: 0; margin: 0 0 1.2rem; display: grid; gap: .5rem; }
   .list li { display: grid; grid-template-columns: 92px 1fr auto; gap: .8rem; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem .5rem .5rem; }
-  .th { aspect-ratio: 16 / 9; background: #222; border-radius: 4px; overflow: hidden; display: block; } .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .th { aspect-ratio: 16 / 9; background: #1c2228; border-radius: 4px; overflow: hidden; display: block; } .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .tx { display: flex; flex-direction: column; min-width: 0; } .tx b, .tx .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wide { width: 100%; font-size: 1.05rem; margin-bottom: .8rem; }
   .pair { margin-top: 1.5rem; } summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
   .code { font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 1.5rem; letter-spacing: .15em; text-transform: uppercase; width: 11ch; text-align: center; }
   .small { font-size: .85rem; }
-  .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom)); background: rgba(20, 20, 20, .96); border: 1px solid #444; padding: .7rem 1.1rem; border-radius: 8px; z-index: 70; max-width: 90vw; }
+  .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom)); background: rgba(16,20,24, .96); border: 1px solid #3b444e; padding: .7rem 1.1rem; border-radius: 8px; z-index: 70; max-width: 90vw; }
 </style>
