@@ -12,8 +12,7 @@
 #   PLEX_TOKEN=...                           required; the token of the Plex account FriendFlix uses (ONE token for everybody).
 #                                            Recommended: a dedicated Plex account with access to the libraries FriendFlix should show.
 #                                            As a Docker secret instead: PLEX_TOKEN_FILE (compose.secrets.yaml style, see below).
-#   JELLYFIN_URL=http://unused.invalid       placeholder ONLY because compose.prod.yaml marks it required (`:?`) and compose interpolates
-#                                            every file before merging; this override removes it from the containers again.
+#   JELLYFIN_URL / JELLYFIN_ADMIN_API_KEY      not needed with Plex (leave empty).
 #
 # The Plex token only ever lives in the backend and gateway environment: it is sent to Plex as a header and never reaches a browser.
 services:

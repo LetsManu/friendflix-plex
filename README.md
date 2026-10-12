@@ -178,7 +178,7 @@ git clone https://github.com/LetsManu/friendflix-plex.git && cd friendflix-plex
 cp .env.example .env
 openssl rand -base64 32    # -> APP_ENC_KEY
 openssl rand -hex 24       # -> INTERNAL_SECRET, WEBHOOK_SECRET, METRICS_TOKEN (one value each)
-$EDITOR .env               # PUBLIC_URL, passwords, OIDC_*, PLEX_URL, PLEX_TOKEN, JELLYFIN_URL=http://unused.invalid (placeholder), SEERR_*
+$EDITOR .env               # PUBLIC_URL, passwords, OIDC_*, PLEX_URL, PLEX_TOKEN, SEERR_*
 docker login ghcr.io -u <user>                                 # only if the packages are private (PAT with read:packages)
 docker compose -f compose.prod.yaml -f compose.plex.yaml config --quiet   # validate
 docker compose -f compose.prod.yaml -f compose.plex.yaml up -d    # compose.plex.yaml only connects to your existing Plex server
@@ -211,7 +211,7 @@ Template: [.env.example](.env.example). Every variable can also be read from a f
 | `MEDIA_SERVER` | `jellyfin` upstream; `plex` here | `plex` selects the Plex backend (one media server per instance) |
 | `PLEX_URL` | – (required with `plex`) | URL of your Plex server as seen by backend and gateway, e.g. `http://192.168.1.10:32400` or `http://host.docker.internal:32400` |
 | `PLEX_TOKEN` or `PLEX_TOKEN_FILE` | – (required with `plex`) | Plex token (a dedicated Plex account is recommended). Only backend and gateway use it; never sent to browsers |
-| `JELLYFIN_URL`, `JELLYFIN_ADMIN_API_KEY` | – (upstream / `MEDIA_SERVER=jellyfin` only) | Not used with Plex; `compose.prod.yaml` still needs a placeholder `JELLYFIN_URL` (e.g. `http://unused.invalid`) |
+| `JELLYFIN_URL`, `JELLYFIN_ADMIN_API_KEY` | – (upstream / `MEDIA_SERVER=jellyfin` only) | Not used with Plex; leave empty |
 | `SEERR_URL`, `SEERR_API_KEY` | – (required as upstream) | Internal request service URL and API key |
 | `ADMIN_GROUP` | `friendflix-admins` | Authentik group whose members become portal admins |
 | `BIND_ADDR` | `127.0.0.1` | Host address the three ports are published on – never a public interface |

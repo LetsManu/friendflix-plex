@@ -46,7 +46,6 @@ curl -s -H "X-Plex-Token: $PLEX_TOKEN" -H "Accept: application/json" "$PLEX_URL/
 # .env (Vorlage: Block „FriendFlix for Plex“ in .env.example)
 PLEX_URL=http://192.168.1.10:32400     # so erreichen Backend + Gateway Plex
 PLEX_TOKEN=...                         # oder PLEX_TOKEN= leer lassen und PLEX_TOKEN_FILE=/run/secrets/plex_token
-JELLYFIN_URL=http://unused.invalid     # Platzhalter: compose.prod.yaml verlangt einen Wert; mit Plex unbenutzt
 SEERR_URL=http://seerr:5055            # verlangt compose.prod.yaml ebenfalls (siehe „Wünsche“ im Funktionsvergleich)
 
 docker compose -f compose.prod.yaml -f compose.plex.yaml config --quiet   # prüft die zusammengeführte Konfiguration
@@ -60,7 +59,6 @@ Tipp: Mit `COMPOSE_FILE=compose.prod.yaml:compose.plex.yaml` in `.env` reicht `d
 | `MEDIA_SERVER` | setzt `compose.plex.yaml` auf `plex` | wählt die Plex-Implementierung in Backend und Gateway |
 | `PLEX_URL` | ja | Plex-Adresse aus Sicht der Container (LAN-IP, `http://host.docker.internal:32400` für Plex auf dem Docker-Host, oder ein Containername in einem gemeinsamen Netz) |
 | `PLEX_TOKEN` / `PLEX_TOKEN_FILE` | eins von beiden | das Plex-Token, das FriendFlix für alle nutzt; nur Backend und Gateway lesen es, es geht als Header an Plex und nie an einen Browser |
-| `JELLYFIN_URL` | nur Platzhalter | `compose.prod.yaml` verlangt einen Wert; `compose.plex.yaml` entfernt ihn wieder aus den Containern (liegt eine dritte Datei wie `compose.secrets.yaml` dazwischen, behält Compose den Platzhalter in der Container-Umgebung, wo er ignoriert wird) |
 
 Images: `ghcr.io/letsmanu/friendflix-plex-backend`, `-web`, `-gateway` (`FF_REGISTRY` / `FF_TAG` wie im Original). Die CI des Forks veröffentlicht sie, sobald die Plex-Unterstützung released ist; bis dahin lokal bauen mit `docker compose -f compose.yaml -f compose.plex.yaml build`. Das Backend-Image enthält `ffmpeg`, das FriendFlix mit Plex für Untertitel und Downloads braucht.
 
@@ -180,7 +178,6 @@ Plex kennt nur ein Token, also setzt FriendFlix die Rolleneinstellungen selbst d
 | Untertitel fehlen | Es gibt nur Text-Untertitel; bildbasierte (PGS) nicht. |
 | FriendFlix-Wiedergabe erscheint nicht in Plex „Aktuell läuft“ | Erwartet: FriendFlix meldet keine Wiedergabe an Plex. |
 | `403 transcoding_not_allowed` | Die Rolle hat Transcoding aus, und die Datei lässt sich nicht direkt im Browser abspielen. |
-| `docker compose ... config` meckert über `JELLYFIN_URL` | Platzhalter `JELLYFIN_URL=http://unused.invalid` in `.env` setzen (Abschnitt 3). |
 
 ## Mit einem echten Plex-Server testen
 
