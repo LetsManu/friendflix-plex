@@ -78,8 +78,11 @@ export function toItemDto(r: ItemRow): ItemDto {
   const positionTicks = isGroup ? 0 : Number(r.ud_position ?? 0);
   const seriesKey = r.type === 'episode' ? r.grandparent_key : r.type === 'season' ? r.parent_key : null;
   const seriesThumb = r.type === 'episode' ? (r.grandparent_thumb ?? r.show_thumb) : r.type === 'season' ? (r.parent_thumb ?? r.show_thumb) : null;
+  // image tags = the Plex artwork timestamp (cache key; the gateway turns ?tag=<ts> into /library/metadata/<rk>/thumb/<ts>);
+  // collections without own artwork have a composite poster: tag c<ts> -> /library/collections/<rk>/composite/<ts>
+  const composite = r.type === 'collection' ? /^\/library\/collections\/\d+\/composite\/(\d{1,12})(?:\?|$)/.exec(r.thumb ?? '') : null;
   const tags: ImageTags = {
-    primary: imageTag(r.thumb),
+    primary: composite ? `c${composite[1]}` : imageTag(r.thumb),
     backdrop: imageTag(r.art),
     logo: imageTag(r.logo),
     seriesPrimary: imageTag(seriesThumb),

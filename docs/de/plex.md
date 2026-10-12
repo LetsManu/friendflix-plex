@@ -1,6 +1,6 @@
 # FriendFlix for Plex – Einrichtung
 
-> **Status: in Entwicklung / Preview.** Die Plex-Unterstützung wird gerade gebaut und ist **noch nicht veröffentlicht**. Diese Anleitung beschreibt das Zielsetup des ersten Preview-Releases; Namen wie `compose.plex.yaml` und die Images `friendflix-plex-*` sind geplant. Aussagen zum Verhalten von Plex wurden gegen einen echten Plex Media Server 1.43 geprüft; was als *geplant* steht, sind Entwurfsentscheidungen, die noch nicht umgesetzt sind.
+> **Status: Preview, nicht veröffentlicht.** Plex-Backend, Gateway-Adapter und `compose.plex.yaml` sind im Entwicklungszweig umgesetzt und gegen einen Fake-Plex-Server getestet, der aus echten Antworten eines Plex Media Server 1.43 gebaut ist. Es gibt **noch kein Release**: Die Images `friendflix-plex-*` werden erst nach Merge und Release veröffentlicht, und an vielen echten Servern lief es noch nicht. Wer helfen möchte: [Mit einem echten Plex-Server testen](#mit-einem-echten-plex-server-testen).
 >
 > Du nutzt Jellyfin? Dann nimm das Originalprojekt [LetsManu/friendflix](https://github.com/LetsManu/friendflix). English: [../plex.md](../plex.md).
 
@@ -28,7 +28,7 @@ Folge dem Plex-Supportartikel **„Finding an authentication token / X-Plex-Toke
 Empfehlungen:
 
 - Nimm ein **eigenes Plex-Konto** (mindestens ein eigenes Token) für FriendFlix, nicht dein Alltagskonto. Plex speichert die gewählte Tonspur pro Plex-Konto, und FriendFlix muss sie ändern, wenn jemand eine Sprache wählt (siehe [Tonspuren](#tonspuren)). Nutzen andere Plex-Apps dasselbe Konto, sehen sie diese Änderungen.
-- Das Token ist ein Passwort: Lege es möglichst in `PLEX_TOKEN_FILE` (Docker Secret, siehe `compose.secrets.yaml`) statt in `.env` und poste es nie in Issues oder Chats. Ist es durchgesickert, widerrufe es wie in der Plex-Dokumentation beschrieben (z. B. das Gerät in den autorisierten Geräten deines Kontos entfernen) und erzeuge ein neues.
+- Das Token ist ein Passwort: Lege es möglichst in `PLEX_TOKEN_FILE` (Docker Secret, siehe Kommentar am Ende von `compose.plex.yaml`) statt in `.env` und poste es nie in Issues oder Chats. Ist es durchgesickert, widerrufe es wie in der Plex-Dokumentation beschrieben (z. B. das Gerät in den autorisierten Geräten deines Kontos entfernen) und erzeuge ein neues.
 
 Prüfen von der Maschine aus, auf der FriendFlix läuft:
 
@@ -40,22 +40,35 @@ curl -s -H "X-Plex-Token: $PLEX_TOKEN" -H "Accept: application/json" "$PLEX_URL/
 
 ## 3. FriendFlix konfigurieren
 
-```bash
-# .env (geplante Variablennamen)
-MEDIA_SERVER=plex
-PLEX_URL=http://192.168.1.10:32400
-PLEX_TOKEN=...            # oder PLEX_TOKEN_FILE=/run/secrets/plex_token
+`compose.plex.yaml` ist ein Override für `compose.prod.yaml` (fertige Images) oder `compose.yaml` (lokaler Build). Es setzt `MEDIA_SERVER=plex` für Backend und Gateway, reicht die Plex-Variablen durch, wechselt auf die Images `friendflix-plex-*` und entfernt die Jellyfin-Variablen wieder aus den Containern.
 
-docker compose -f compose.prod.yaml -f compose.plex.yaml up -d   # kommt mit dem ersten Preview-Release
+```bash
+# .env (Vorlage: Block „FriendFlix for Plex“ in .env.example)
+PLEX_URL=http://192.168.1.10:32400     # so erreichen Backend + Gateway Plex
+PLEX_TOKEN=...                         # oder PLEX_TOKEN= leer lassen und PLEX_TOKEN_FILE=/run/secrets/plex_token
+JELLYFIN_URL=http://unused.invalid     # Platzhalter: compose.prod.yaml verlangt einen Wert; mit Plex unbenutzt
+SEERR_URL=http://seerr:5055            # verlangt compose.prod.yaml ebenfalls (siehe „Wünsche“ im Funktionsvergleich)
+
+docker compose -f compose.prod.yaml -f compose.plex.yaml config --quiet   # prüft die zusammengeführte Konfiguration
+docker compose -f compose.prod.yaml -f compose.plex.yaml up -d
 ```
 
-Images (geplant): `ghcr.io/letsmanu/friendflix-plex-backend`, `-web`, `-gateway`.
+Tipp: Mit `COMPOSE_FILE=compose.prod.yaml:compose.plex.yaml` in `.env` reicht `docker compose up -d` / `ps` / `logs`.
+
+| Variable | Pflicht | Zweck |
+|---|---|---|
+| `MEDIA_SERVER` | setzt `compose.plex.yaml` auf `plex` | wählt die Plex-Implementierung in Backend und Gateway |
+| `PLEX_URL` | ja | Plex-Adresse aus Sicht der Container (LAN-IP, `http://host.docker.internal:32400` für Plex auf dem Docker-Host, oder ein Containername in einem gemeinsamen Netz) |
+| `PLEX_TOKEN` / `PLEX_TOKEN_FILE` | eins von beiden | das Plex-Token, das FriendFlix für alle nutzt; nur Backend und Gateway lesen es, es geht als Header an Plex und nie an einen Browser |
+| `JELLYFIN_URL` | nur Platzhalter | `compose.prod.yaml` verlangt einen Wert; `compose.plex.yaml` entfernt ihn wieder aus den Containern (liegt eine dritte Datei wie `compose.secrets.yaml` dazwischen, behält Compose den Platzhalter in der Container-Umgebung, wo er ignoriert wird) |
+
+Images: `ghcr.io/letsmanu/friendflix-plex-backend`, `-web`, `-gateway` (`FF_REGISTRY` / `FF_TAG` wie im Original). Die CI des Forks veröffentlicht sie, sobald die Plex-Unterstützung released ist; bis dahin lokal bauen mit `docker compose -f compose.yaml -f compose.plex.yaml build`. Das Backend-Image enthält `ffmpeg`, das FriendFlix mit Plex für Untertitel und Downloads braucht.
 
 ### Netzwerk
 
 - **Gateway und Backend müssen `PLEX_URL` erreichen.** Nimm die **lokale Adresse** des Plex-Servers (LAN-IP oder ein Name, den der Docker-Host auflöst, Port 32400). Nicht die öffentliche `plex.direct`-/Fernzugriff-Adresse: Sie bringt Latenz, kann über Plex' Relay laufen und ist unnötig.
 - Browser müssen Plex nicht erreichen. Öffentlich ist nur das FriendFlix-Portal.
-- Läuft Plex auf demselben Host in Docker, hänge beide in ein gemeinsames Docker-Netz oder nimm die LAN-IP des Hosts.
+- Läuft Plex auf demselben Host: nativ oder mit Host-Netzwerk `http://host.docker.internal:32400` nehmen (`compose.plex.yaml` bildet den Namen auf den Host ab); als Container in ein gemeinsames Docker-Netz hängen oder die LAN-IP des Hosts nehmen.
 - FriendFlix sendet immer das Token und hängt deshalb nicht davon ab, dass Plex die Verbindung als „lokal“ einstuft.
 
 ## 4. Bibliotheksnamen und Zugriff pro Rolle
@@ -64,14 +77,14 @@ FriendFlix spiegelt deine Plex-Bibliotheken (Sections) und lässt dich **pro Rol
 
 - Gib Bibliotheken klare, stabile Namen. Mit diesen Namen wählst du sie im Admin-Bereich.
 - Lege Inhalte, die nur manche sehen sollen (Kinder, Erwachsene, Familienvideos), in eigene Bibliotheken, statt dich nur auf Altersfreigaben zu verlassen.
-- Eine für die Rolle nicht erlaubte Bibliothek ist unsichtbar – auch in Suche, Empfehlungen und bei direkten Links.
-- *Geplant:* Der Zugriff hängt an der Bibliothek, nicht am Namen; Umbenennen in Plex sollte ihn nicht entfernen, prüfe danach aber die Rolleneinstellungen.
+- Eine für die Rolle nicht erlaubte Bibliothek ist unsichtbar – auch in Suche, Empfehlungen, bei direkten Links und im Medien-Gateway.
+- Der Zugriff hängt am **Namen** der Bibliothek (Groß-/Kleinschreibung egal). **Benennst du eine Bibliothek in Plex um, verschwindet sie für Rollen, die sie über den Namen freigeben**, bis du die Rolleneinstellungen anpasst.
 
 ## 5. Altersfreigaben
 
 Altersgrenzen und Kinderprofile stützen sich auf die Plex-**Altersfreigabe** (`contentRating`) jedes Titels.
 
-- FriendFlix ordnet gängigen Plex-Freigaben ein Mindestalter zu (z. B. `G`, `PG`, `PG-13`, `R`, `NC-17`, `TV-Y`, `TV-G`, `TV-PG`, `TV-14`, `TV-MA` und Werte mit Länderpräfix wie `de/12`). Die vollständige Tabelle wird hier aufgeführt und liegt nach der Umsetzung in `backend/src/plex/`.
+- FriendFlix ordnet gängigen Plex-Freigaben ein Mindestalter zu (z. B. `G`, `PG`, `PG-13`, `R`, `NC-17`, `TV-Y`, `TV-G`, `TV-PG`, `TV-14`, `TV-MA` und Werte mit Länderpräfix wie `de/12`). Die Tabelle steht in `backend/src/plex/access.ts` (`ratingAge`): US-MPAA- und TV-Freigaben, `de/` (FSK), `gb/`, `ie/`, `au/`, `nz/`, `ca/`, `fr/`, `nl/`, `jp/` und reine Zahlen (`12`, `FSK 16`, `16+`).
 - **Unbekannte oder leere Freigaben sind für Profile mit Altersgrenze und für Kinderprofile gesperrt** (im Zweifel zu). Profile ohne Grenze sehen alles, was ihre Rolle erlaubt.
 - Folgen erben die Freigabe ihrer Serie, sofern sie keine eigene haben.
 
@@ -79,7 +92,7 @@ Falsche oder fehlende Freigabe in Plex korrigieren:
 
 1. Titel in Plex öffnen, **Bearbeiten** (Stift) → **Erweitert** → **Altersfreigabe** (Content Rating).
 2. Einen gängigen Wert eintragen und das Feld **sperren**, damit eine Metadaten-Aktualisierung es nicht überschreibt.
-3. Plex ändert beim Bearbeiten von Metadaten das Änderungsdatum des Titels **nicht**; FriendFlix kann es daher nicht allein an Zeitstempeln erkennen. Es prüft alle Freigaben in regelmäßigen Durchläufen und hört auf Plex-Benachrichtigungen (*geplant*); eine Änderung kann einige Minuten brauchen.
+3. Plex ändert beim Bearbeiten von Metadaten das Änderungsdatum des Titels **nicht**; FriendFlix kann es daher nicht allein an Zeitstempeln erkennen. Es fragt alle 5 Minuten ab, hört auf Plex' Benachrichtigungs-Websocket und liest nachts alle Details neu; eine Freigaben-Änderung kann daher bis zum nächsten nächtlichen Durchlauf dauern.
 
 Tipp: In Plex die Bibliothek nach *Altersfreigabe* filtern, um Titel ohne Freigabe zu finden. „Zuordnung korrigieren“ (Fix Match) füllt die Freigabe oft aus.
 
@@ -109,22 +122,31 @@ Du brauchst **kein** Plex Pass für FriendFlix. Plex Pass bringt nur zusätzlich
 
 ## Funktionsvergleich
 
+Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; *Eingeschränkt* = funktioniert mit der Einschränkung in der Notiz):
+
 | Funktion | Plex | Hinweis |
 |---|---|---|
-| Profile, Kinderprofile, PIN, Altersgrenzen | Funktioniert | In FriendFlix; braucht korrekte `contentRating` |
-| Bibliothek, Suche, Detailseiten, Besetzung, Bilder | Funktioniert | Titel-Logos nur, wenn Plex sie liefert, sonst Titeltext |
-| Weiterschauen, Meine Liste, Favoriten, Bewertungen, Verlauf | Funktioniert | In FriendFlix |
-| Direct Play | Funktioniert | Datei wird über Plex gestreamt |
-| Adaptives Streaming (HLS) | Funktioniert | MPEG-TS-Segmente vom Plex-Universal-Transcoder, vom Gateway umgeschrieben |
-| Untertitel | Funktioniert | Text-Untertitel extrahiert/in WebVTT gewandelt von FriendFlix; kein PGS |
-| Tonspur wählen | Eingeschränkt | Pro Plex-Konto; Stream-Starts laufen nacheinander |
-| Intro / Abspann überspringen | Eingeschränkt | Nur mit Plex-Pass-Markern; nie Recap/Vorschau |
-| Vorschaubilder beim Spulen | Eingeschränkt | Einzelbilder; braucht aktivierte Vorschaubilder |
-| „Demnächst erscheinende Folgen“ | Nicht verfügbar | |
-| Offline-Downloads | Funktioniert | Von FriendFlix umgepackt (Remux) |
-| TV-Modus, Chromecast, Watch-Partys, Empfehlungen, Benachrichtigungen | Funktioniert | FriendFlix-Funktionen |
-| Wünsche (Wunsch-Dienst) | Eingeschränkt | Zuordnung pro Nutzer eingeschränkt |
-| nginx-„Plan B“ für Medien | Nicht verfügbar | Konfiguration wird mit Plex abgelehnt |
+| Profile, Kinderprofile, PIN, Altersgrenzen | Funktioniert | Von FriendFlix bei jeder Liste, Suche, jedem Titel und jeder Medienanfrage durchgesetzt; braucht korrekte `contentRating`, unbekannte Freigaben sind für begrenzte Profile gesperrt |
+| Bibliothekszugriff pro Rolle | Funktioniert | Über den Bibliotheksnamen, siehe Abschnitt 4 |
+| Bibliothek, Suche, Detailseiten, Sammlungen, Genres, Studios | Funktioniert | Aus FriendFlix' Spiegel der Plex-Bibliothek |
+| Bilder | Funktioniert | Poster, Hintergründe, Logos (falls Plex eins hat) über Plex' Bild-Transcoder; zusammengesetzte Sammlungsposter |
+| Besetzung | Eingeschränkt | Namen und Rollen, **keine Personenbilder** |
+| „Mehr davon“ | Eingeschränkt | Von FriendFlix aus gemeinsamen Genres und Besetzung berechnet, nicht Plex' eigene Empfehlungen |
+| Weiterschauen, Meine Liste, Favoriten, Bewertungen, Verlauf | Funktioniert | In FriendFlix; nichts wird in Plex geschrieben |
+| Direct Play | Funktioniert | Browser-taugliche Dateien (MP4/WebM, H.264/VP9/AV1, AAC/MP3/Opus/FLAC) innerhalb der Rollengrenzen |
+| Adaptives Streaming (HLS) | Funktioniert | Plex-Universal-Transcoder (MPEG-TS-Segmente), sitzungsgebundene URLs über das Gateway |
+| Rollengrenzen | Funktioniert | Bitrate- und Höhenlimit beim Transcode-Start; Rollen ohne Transcoding bekommen nur Direct Play (sonst `403 transcoding_not_allowed`); max. Streams pro Konto und pro Profil |
+| Untertitel | Eingeschränkt | Nur Text-Untertitel (SRT, ASS/SSA, VTT, mov_text …); externe Dateien werden konvertiert, **eingebettete Spuren extrahiert FriendFlix** mit ffmpeg; kein PGS/VobSub; keine Untertitelsuche |
+| Tonspurwahl | Eingeschränkt | Plex speichert sie pro Plex-Konto; FriendFlix startet Streams nacheinander, siehe [Tonspuren](#tonspuren) |
+| Intro / Abspann überspringen | Eingeschränkt | Nur mit Plex-Pass-Markern; Rückblick und Vorschau überspringen gibt es nie |
+| Vorschaubilder beim Spulen | Eingeschränkt | Einzelbilder aus Plex' BIF-Index, nur wenn Vorschaubilder erzeugt sind |
+| Offline-Downloads | Funktioniert | Originaldatei, wenn sie schon MP4/H.264/AAC ist, sonst von Plex transkodiert und von FriendFlix umverpackt |
+| Chromecast | Eingeschränkt | HLS funktioniert; **beim Casten noch keine Untertitel** |
+| TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen, Hubs | Funktioniert | FriendFlix-Funktionen |
+| „Kommende Folgen“ / Kalender | Nicht verfügbar | Plex bietet das nicht |
+| Wünsche (Request-Dienst) | Noch nicht | Das Original ordnet FriendFlix-Nutzer über Jellyfin-IDs Seerr-Nutzern zu; mit Plex schlägt das fehl, in der Preview lassen sich keine Wünsche anlegen |
+| „Aktuell läuft“ anderer Plex-Apps | Nicht verfügbar | FriendFlix zeigt nur eigene Sitzungen |
+| nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt |
 
 ### Tonspuren
 
@@ -132,6 +154,14 @@ Plex' Transcoder ignoriert eine in der Anfrage gewählte Tonspur; er nimmt die S
 
 - Starten mehrere Streams im selben Moment, dauert es etwas länger (sie reihen sich kurz ein).
 - Die Auswahl deines FriendFlix-Tokens ändert sich ständig. **Nimm nicht das Konto, mit dem du Plex selbst schaust**, sonst springt dessen Tonspur. Nimm ein eigenes Plex-Konto bzw. Token.
+
+### Rollengrenzen
+
+Plex kennt nur ein Token, also setzt FriendFlix die Rolleneinstellungen selbst durch:
+
+- **Bitrate-/Höhenlimit** wird bei jedem Transcode-Start mitgeschickt; eine begrenzte Rolle bekommt nie Direct Play einer größeren Datei.
+- **Transcoding aus** (Rollenvorlage oder *Admin → Rollen*): nur Direct Play. Titel, die den Transcoder bräuchten, antworten mit `403 transcoding_not_allowed`; Plex startet keinen Transcode. Casten und transkodierte Downloads werden genauso abgelehnt.
+- **Max. Streams**: pro Konto (wie im Original) und pro Profil-Identität gezählt (aktive Plex-Sitzungen mit Fortschrittsmeldung in den letzten 60 s). Qualitäts- oder Tonspurwechsel beim selben Titel zählt nie doppelt. Eine Stopp-Meldung beendet den Plex-Transcode sofort.
 
 ## Fehlersuche
 
@@ -148,6 +178,28 @@ Plex' Transcoder ignoriert eine in der Anfrage gewählte Tonspur; er nimmt die S
 | Stream startet nicht / hängt am Anfang | Der Plex-Transcoder braucht einige Sekunden für das erste Segment; Platz im Transcoder-Temp, CPU-Last und Plex-Logs prüfen. |
 | Untertitel fehlen | Es gibt nur Text-Untertitel; bildbasierte (PGS) nicht. |
 | FriendFlix-Wiedergabe erscheint nicht in Plex „Aktuell läuft“ | Erwartet: FriendFlix meldet keine Wiedergabe an Plex. |
+| `403 transcoding_not_allowed` | Die Rolle hat Transcoding aus, und die Datei lässt sich nicht direkt im Browser abspielen. |
+| `docker compose ... config` meckert über `JELLYFIN_URL` | Platzhalter `JELLYFIN_URL=http://unused.invalid` in `.env` setzen (Abschnitt 3). |
+
+## Mit einem echten Plex-Server testen
+
+Die Preview ist gegen einen Fake-Plex-Server getestet, der aus aufgezeichneten Antworten von Plex Media Server 1.43 besteht. Berichte von echten Servern helfen am meisten. Nimm bitte eine **Testinstanz** (eigene Datenbank, eigenes Plex-Konto/Token) und notiere Plex-Version, Betriebssystem und ob du Plex Pass hast. Poste nie dein Token in ein Issue.
+
+1. **Verbindung:** Die `curl`-Prüfung aus Abschnitt 2 klappt vom Docker-Host; `docker compose -f compose.prod.yaml -f compose.plex.yaml config --quiet` läuft durch; Backend und Gateway werden healthy; das Backend-Log zeigt den ersten Sync ohne Fehler.
+2. **Bibliotheken:** Alle Plex-Bibliotheken erscheinen unter *Admin → Rollen*; eine auf eine Bibliothek beschränkte Rolle sieht nur diese (Listen, Suche, Direktlink auf einen Titel einer anderen Bibliothek = nicht gefunden).
+3. **Alter:** Ein Kinderprofil mit Grenze 6 sieht nur Titel bis 6; ein Titel ohne Freigabe ist versteckt; eine in Plex geänderte Freigabe kommt an (spätestens nach dem nächtlichen Durchlauf).
+4. **Stöbern:** Startseiten-Reihen, Detailseiten von Film, Serie, Staffel, Folge und Sammlung; Poster, Hintergründe und Logos laden; die Suche findet Titel und Personen.
+5. **Direct Play:** Eine MP4/H.264/AAC-Datei spielt, ohne dass das Plex-Dashboard einen Transcode zeigt.
+6. **Transcode:** Eine MKV/HEVC-Datei spielt per HLS; weit vorspulen klappt; das Plex-Dashboard zeigt genau eine Transcode-Sitzung, und sie verschwindet kurz nach dem Schließen des Players.
+7. **Ton:** Ein Titel mit zwei Tonsprachen spielt in der gewählten Sprache; zwei Geräte gleichzeitig mit verschiedenen Sprachen starten – jedes bekommt seine.
+8. **Untertitel:** Eine SRT-Datei daneben und ein eingebetteter Text-Untertitel (MKV) erscheinen synchron; Bild-Untertitel (PGS) werden nicht angeboten.
+9. **Marker / Vorschaubilder:** Mit Plex Pass und erkannten Intros erscheint der Überspringen-Knopf; mit erzeugten Vorschaubildern zeigt das Spulen Bilder.
+10. **Fortschritt:** 5 Minuten schauen, schließen, wieder öffnen: Fortsetzungsposition und *Weiterschauen* stimmen; Plex' eigener Gesehen-Status des Token-Kontos bleibt unverändert.
+11. **Downloads und Casten** (falls genutzt): Ein Download wird fertig und spielt offline; Casten startet (ohne Untertitel).
+12. **Grenzen:** Eine Rolle ohne Transcoding spielt nur direkt abspielbare Dateien; eine Rolle mit 1 Stream kann auf einem zweiten Gerät keinen zweiten Titel starten.
+13. **Token-Hygiene:** In den Entwicklerwerkzeugen des Browsers (Netzwerk) enthält keine Anfrage-URL, Antwort oder Playlist dein Plex-Token oder die Adresse deines Plex-Servers.
+
+Ergebnisse (was ging, was nicht, Logs ohne Token) bitte als Issue in [LetsManu/friendflix-plex](https://github.com/LetsManu/friendflix-plex/issues).
 
 ## Abgleich mit dem Original (für Maintainer)
 

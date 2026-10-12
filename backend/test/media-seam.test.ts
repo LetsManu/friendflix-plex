@@ -20,7 +20,7 @@ describe('MEDIA_SERVER config', () => {
   it('defaults to jellyfin and accepts jellyfin', () => {
     expect(loadConfig(BASE).MEDIA_SERVER).toBe('jellyfin');
     expect(loadConfig({ ...BASE, MEDIA_SERVER: 'jellyfin' }).MEDIA_SERVER).toBe('jellyfin');
-    expect(MEDIA_SERVERS).toEqual(['jellyfin']);
+    expect(MEDIA_SERVERS).toContain('jellyfin'); // fork: + plex
   });
   it('rejects anything else (no silent fallback on a typo)', () => {
     for (const v of ['plex', 'emby', 'Jellyfin', ' jellyfin', '__proto__']) expect(() => loadConfig({ ...BASE, MEDIA_SERVER: v })).toThrow();
@@ -47,7 +47,7 @@ describe('createMediaServer factory', () => {
     expect(calls.at(-1)).toMatchObject({ path: '/Library/MediaFolders', auth: expect.stringContaining('Token="adminkey"') });
   });
   it('refuses an unknown kind even if config validation was bypassed', () => {
-    expect(() => createMediaServer({ cfg: { ...cfg, MEDIA_SERVER: 'plex' as never }, kv: new MemoryKV(), encKey: keyFromBase64(ENC_KEY) })).toThrow(/unknown MEDIA_SERVER/);
+    expect(() => createMediaServer({ cfg: { ...cfg, MEDIA_SERVER: 'not-a-server' as never }, kv: new MemoryKV(), encKey: keyFromBase64(ENC_KEY) })).toThrow(/unknown MEDIA_SERVER/);
   });
 });
 

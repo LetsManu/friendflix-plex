@@ -613,6 +613,7 @@ export class PlexMediaServer implements MediaServer {
     return (await this.trailers(user, id))[0]?.id ?? null;
   }
 
+  // person images: image is always false - the gateway serves item images only (Plex person thumbs are often external URLs)
   async people(user: MediaUser, id: string): Promise<Array<{ id: string; name: string; role?: string; type: string; image: boolean }>> {
     const rk = await this.mustSee(user, id);
     const r = await this.q<{ tag: string; tag_id: string; role: string | null; kind: string; thumb: string | null; own: boolean }>(
@@ -626,7 +627,7 @@ export class PlexMediaServer implements MediaServer {
     const own = r.some((x) => x.own) ? r.filter((x) => x.own) : r;
     const seen = new Set<string>();
     return own.filter((x) => !seen.has(`${x.tag_id}|${x.kind}`) && seen.add(`${x.tag_id}|${x.kind}`)).slice(0, 40)
-      .map((x) => ({ id: encodePlexId('tag', x.tag_id), name: x.tag, ...(x.role ? { role: x.role } : {}), type: PERSON_TYPE[x.kind] ?? 'Actor', image: Boolean(x.thumb) }));
+      .map((x) => ({ id: encodePlexId('tag', x.tag_id), name: x.tag, ...(x.role ? { role: x.role } : {}), type: PERSON_TYPE[x.kind] ?? 'Actor', image: false }));
   }
 
   async searchPeople(user: MediaUser, q: string, limit = 12): Promise<Array<{ id: string; name: string; image: boolean }>> {
@@ -636,7 +637,7 @@ export class PlexMediaServer implements MediaServer {
       `select t.tag_id, min(t.tag) tag, max(t.thumb) thumb from plex_tags t join plex_items i on i.rating_key = t.rating_key
        where t.kind = any(${p(PEOPLE_KINDS)}::text[]) and t.tag_id is not null and t.tag ilike ${p(like(q))} and ${visibleSql(acc, 'i', p)}
        group by t.tag_id order by count(*) desc, min(t.tag) limit ${Math.min(Math.max(limit, 1), 100)}`, params);
-    return r.map((x) => ({ id: encodePlexId('tag', x.tag_id), name: x.tag, image: Boolean(x.thumb) }));
+    return r.map((x) => ({ id: encodePlexId('tag', x.tag_id), name: x.tag, image: false }));
   }
 
   /** A person exists for the viewer only when at least one title it appears in is visible. */
@@ -648,7 +649,7 @@ export class PlexMediaServer implements MediaServer {
     const r = await this.q<{ tag: string; thumb: string | null }>(
       `select t.tag, t.thumb from plex_tags t join plex_items i on i.rating_key = t.rating_key
        where t.tag_id = ${p(tid)} and t.kind = any(${p(PEOPLE_KINDS)}::text[]) and ${visibleSql(acc, 'i', p)} order by t.thumb nulls last limit 1`, params);
-    return r[0] ? { id: encodePlexId('tag', tid), name: r[0].tag, image: Boolean(r[0].thumb) } : null;
+    return r[0] ? { id: encodePlexId('tag', tid), name: r[0].tag, image: false } : null;
   }
 
   async tracks(user: MediaUser, id: string): Promise<TrackList> {
@@ -758,6 +759,11 @@ export class PlexMediaServer implements MediaServer {
   /** Player progress -> FriendFlix user data only (never Plex timeline/scrobble: that would write into the admin account). */
   async report(user: MediaUser, r: PlaybackReport): Promise<void> {
     if (this.playback.report) return this.playback.report(user, r);
+    return this.recordReport(user, r);
+  }
+
+  /** The user-data part of report() (the playback delegate's report() calls it too). */
+  async recordReport(user: MediaUser, r: PlaybackReport): Promise<void> {
     const rk = await this.mustSee(user, r.itemId);
     const dur = (await this.q<{ duration_ms: string | null }>('select duration_ms from plex_items where rating_key = $1', [rk]))[0]?.duration_ms;
     await this.mutate(user, () => ud.recordProgress(this.db, user.jellyfin_user_id, rk, {
