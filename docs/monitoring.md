@@ -16,6 +16,50 @@ Weitere Metriken: `friendflix_http_requests_total{method,status}` (Status als Kl
 
 ## Prometheus + Grafana (optional)
 `compose.monitoring.yaml` ergänzt den Stack um Prometheus und Grafana mit fertigem Dashboard ([deploy/grafana/friendflix.json](../deploy/grafana/friendflix.json)):
+
+So hängt es zusammen:
+
+```mermaid
+---
+config:
+  flowchart:
+    curve: basis
+    nodeSpacing: 50
+    rankSpacing: 65
+    padding: 14
+  themeVariables:
+    edgeLabelBackground: 'rgba(150,150,150,0.12)'
+  themeCSS: '.labelBkg { background-color: rgba(127,127,127,0.12) !important; }'
+---
+flowchart TB
+  accTitle: Monitoring
+  accDescr: Prometheus holt Metriken von Backend und Gateway über ein internes Netz; Grafana zeigt sie; Icinga prüft Health-Endpunkte auf dem Host.
+  GR("📊 <b>grafana</b><br/><small>127.0.0.1:3083</small>"):::svc
+  subgraph MN["Netz monitoring · intern"]
+    PR("🔥 <b>prometheus</b><br/><small>alle 30 s · 30 Tage</small>"):::svc
+    BE("⚙️ <b>backend</b><br/><small>:3000 /metrics</small>"):::app
+    GW("📡 <b>gateway</b><br/><small>:4000 /metrics</small>"):::app
+  end
+  IC("🩺 <b>Icinga</b><br/><small>Uptime-Check</small>"):::ext
+  X[("🗄️ <b>Postgres · Redis · Plex</b><br/><small>Bereitschaftsprüfung</small>")]:::store
+  GR -->|PromQL| PR
+  PR -->|"Bearer token"| BE
+  PR -->|"Bearer token"| GW
+  IC -->|"/health"| BE
+  BE -.-> X
+  classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
+  classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
+  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
+  classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
+  classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
+  classDef fork fill:#4a1d3c,stroke:#e070b0,stroke-width:1px,stroke-dasharray:4 3,color:#fff0f8
+  linkStyle default stroke:#8b949e,stroke-width:1.4px
+  style MN fill:none,stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4
+```
+
+> 🟥 FriendFlix · 🟩 Medienserver · 🟦 weitere Dienste · 🟪 Reverse-Proxy · 🟨 Datenspeicher · ⬛ Zuschauer / extern · gestrichelter Rahmen = Netz bzw. Grenze · dicke Linie = Videostream · gepunktet = optional / über öffentliche URL
+
 ```bash
 # .env: METRICS_TOKEN=<openssl rand -hex 32>   GRAFANA_ADMIN_PASSWORD=<langes Passwort>   (beides Pflicht, es gibt kein Standardpasswort)
 docker compose -f compose.prod.yaml -f compose.monitoring.yaml up -d      # bzw. -f compose.yaml -f compose.monitoring.yaml

@@ -20,103 +20,137 @@
 
 **FriendFlix for Plex** ist ein privates Streaming-Portal vor deinem **Plex Media Server** (deine Medien) und einem optionalen Wunsch-Dienst. Deine Freunde bekommen ein schickes, vertrautes Streaming-Erlebnis auf Laptop, Handy und Fernseher – mit Profilen, Downloads, Watch-Partys und Empfehlungen untereinander. Plex und den Wunsch-Dienst sehen sie nie direkt, und du bestimmst, wer hineinkommt. Niemand braucht ein plex.tv-Konto.
 
-> **Status: Preview, nicht veröffentlicht.** Die Plex-Unterstützung ist im Entwicklungszweig umgesetzt und gegen einen Fake-Plex-Server aus echten Antworten von Plex Media Server 1.43 getestet, aber **nicht released** und kaum an echten Servern erprobt – Images gibt es erst mit dem ersten Preview-Release (siehe [Releases](https://github.com/LetsManu/friendflix-plex/releases) und [CHANGELOG.md](CHANGELOG.md)). Freiwillige: [mit einem echten Plex-Server testen](docs/de/plex.md#mit-einem-echten-plex-server-testen). Die Screenshots zeigen die FriendFlix-Oberfläche, wie sie im Original existiert.
+> **Status: Preview, nicht veröffentlicht.** Die Plex-Unterstützung ist im Entwicklungszweig umgesetzt und gegen einen Fake-Plex-Server aus echten Antworten von Plex Media Server 1.43 getestet, aber **nicht released** und kaum an echten Servern erprobt – Images gibt es erst mit dem ersten Preview-Release (siehe [Releases](https://github.com/LetsManu/friendflix-plex/releases) und [CHANGELOG.md](CHANGELOG.md)). Freiwillige: [mit einem echten Plex-Server testen](docs/de/plex.md#mit-einem-echten-plex-server-testen).
 >
-> **Das ist ein Fork.** FriendFlix for Plex ist ein Fork von [FriendFlix](https://github.com/LetsManu/friendflix), der statt Jellyfin mit Plex spricht. **Du nutzt Jellyfin? Dann nimm das Originalprojekt: [LetsManu/friendflix](https://github.com/LetsManu/friendflix).**
+> **Das ist ein Fork.** FriendFlix for Plex ist ein Fork von [FriendFlix](https://github.com/LetsManu/friendflix), der statt Jellyfin mit Plex spricht. **Du nutzt Jellyfin? Dann nimm das Originalprojekt: [LetsManu/friendflix](https://github.com/LetsManu/friendflix).** Die Funktionsübersicht unten ist die des Originals, auf Plex umformuliert; die [Vergleichstabelle](#plex-und-jellyfin-im-vergleich) zeigt, was Plex nicht liefern kann.
 
-> Alle Titel und Bilder in diesen Screenshots sind erfunden und für die Demo generiert.
+> Alle Titel und Bilder in diesen Screenshots sind erfunden und für die Demo generiert. Das „for Plex“-Badge neben dem Schriftzug gehört zur Oberfläche dieses Forks.
+
 
 ## Inhalt
 
 - [Das bekommst du](#das-bekommst-du)
-- [Gemacht für Freunde und Familie](#gemacht-für-freunde-und-familie)
 - [Datenschutz und Sicherheit](#datenschutz-und-sicherheit)
 - [Plex und Jellyfin im Vergleich](#plex-und-jellyfin-im-vergleich)
 - [Für Admins: Einrichtung und Betrieb](#für-admins-einrichtung-und-betrieb)
 
 ## Das bekommst du
 
-### Eine Startseite wie bei einem echten Streamingdienst
+Schauen · Entdecken · Gemeinsam · Familie und Kinder · Handy und TV · Admin
+
+### Schauen
+
+#### Eine Startseite wie bei einem echten Streamingdienst
 
 Ein großes Billboard mit Titel-Logo, darunter Reihen wie *Weiterschauen*, *Nächste Folge*, *Von Freunden empfohlen*, *Freunde haben bewertet*, *Diese Woche bei uns*, *Weil du … gesehen hast*, *Top 10* und *Meine Liste*. Fährst du mit der Maus über eine Karte, klappt sie mit den wichtigsten Aktionen auf: abspielen, auf die Liste, bewerten, mehr Infos.
 
-Unter dem Billboard führen **Marken-Hubs** – breite Kacheln, die der Admin aus deinen eigenen Plex-Sammlungen, -Genres oder -Tags baut (Studio-Hubs hängen davon ab, was Plex liefert) (etwa „Anime“ oder „Dokus“) – auf eine eigene Seite mit *Neu*, *Beliebt*, *Filme*, *Serien* und A–Z. Mehrere Reihen *Weil du … gesehen hast*, jede zu einem anderen zuletzt gesehenen Titel, sind zwischen die übrigen Reihen verteilt. Die **Simulcast**-Seite (verlinkt im Kalender) zeigt die gerade laufenden Serien nach Wochentag und Season, mit Filter „Nur Anime“ (bei Plex stützt sie sich auf Plex-Ausstrahlungsdaten; eingeschränkt, noch nicht geprüft).
+Kleine **Labels** auf den Karten zeigen, was neu ist – *Neu*, *Neue Folge*, *Neue Staffel*, *Staffelfinale*, *Neue Serie*. Weiß der Admin, dass ein Titel bald die Bibliothek verlässt, steht auf seiner Karte „Nur noch 6 Tage“, und eine Reihe **Bald nicht mehr verfügbar** sammelt diese Titel; wer einen davon auf der Liste oder in *Weiterschauen* hat, bekommt eine Woche und einen Tag vorher eine Erinnerung. Gelöscht wird nichts – das Datum ist nur eine Ankündigung.
 
-<p align="center"><img src="docs/images/de/popout.jpg" alt="Aufgeklappte Karte mit Abspielen, Liste und Bewertung" width="900"></p>
+<p align="center"><img src="docs/images/de/home.jpg" alt="Startseite mit Themenlisten, Neu- und Bald-weg-Labels und der Reihe „Bald nicht mehr verfügbar“" width="900"></p>
 
-### Alles zu einem Titel an einem Ort
+<p align="center"><img src="docs/images/de/popout.jpg" alt="Aufgeklappte Karte mit Abspielen, Liste und Bewertung sowie Bild- und Ton-Chips" width="900"></p>
 
-Die Detailansicht zeigt Beschreibung, Ton- und Untertitelsprachen, Besetzung, welche Freunde den Titel empfohlen oder gesehen haben und – bei Serien – alle Staffeln und Folgen mit Fortschrittsbalken. Weiterschauen genau dort, wo du aufgehört hast. Ein Tab **Extras** sammelt Trailer und Bonusmaterial aus Plex (lokale Extras wie `-trailer`-Dateien), und jede Folge hat ihre eigenen **Kommentare** von Freunden: Kommentare zu einer Folge, die du noch nicht gesehen hast, bleiben verschwommen, bis du „Spoiler – trotzdem zeigen“ wählst.
+#### Alles zu einem Titel an einem Ort
+
+Die Detailansicht zeigt Beschreibung, Ton- und Untertitelsprachen, Besetzung, welche Freunde den Titel empfohlen oder gesehen haben und – bei Serien – alle Staffeln und Folgen mit Fortschrittsbalken. Weiterschauen genau dort, wo du aufgehört hast. Kleine Chips verraten vor dem Start **Bild und Ton** (4K, HDR, Dolby Vision, Dolby Atmos, 5.1 Surround), gelesen aus den Stream-Details von Plex. Steht eine neue Staffel an oder warst du ein paar Wochen weg, fasst **Die Geschichte bisher** (aus den Staffel- und Folgenbeschreibungen von Plex) kurz zusammen, was passiert ist und wo du stehengeblieben bist – die Karte lässt sich ausblenden. Ein Tab **Extras** sammelt Trailer und Bonusmaterial aus Plex (lokale Extras wie `-trailer`-Dateien), und jede Folge hat ihre eigenen **Kommentare** von Freunden: Kommentare zu einer Folge, die du noch nicht gesehen hast, bleiben verschwommen, bis du „Spoiler – trotzdem zeigen“ wählst.
 
 <table>
   <tr>
-    <td><img src="docs/images/de/detail.jpg" alt="Detailansicht einer Serie mit Weiter-Knopf und Freunden" width="440"></td>
-    <td><img src="docs/images/de/detail-episodes.jpg" alt="Folgenliste mit Fortschritt und Beschreibungen" width="440"></td>
+    <td><img src="docs/images/de/detail.jpg" alt="Detailansicht einer Serie mit Neue-Staffel-Label, Qualitäts-Chips und „Die Geschichte bisher“" width="440"></td>
+    <td><img src="docs/images/de/detail-episodes.jpg" alt="Karte „Die Geschichte bisher“ und Folgenliste mit Fortschritt und Beschreibungen" width="440"></td>
   </tr>
 </table>
 
-### Ein Player für Serienabende
+#### Ein Player für Serienabende
 
-Intro und Abspann überspringen (wo Plex Marker hat, siehe [Grenzen](#plex-und-jellyfin-im-vergleich)), nächste Folge mit Countdown, Tonspur und Untertitel (mit eigenem Untertitel-Stil), Wiedergabegeschwindigkeit, Lesezeichen, Tastenkürzel und „Schaust du noch?“ nach mehreren automatisch gestarteten Folgen. Direct Play, wenn möglich, sonst adaptives Streaming (HLS). **Vorschau überspringen** („Zuvor bei …“) gibt es mit Plex nicht. Tonspur und Untertitel merkt sich FriendFlix **für die ganze Serie** (von FriendFlix gespeichert); ist „Anime: Originalton mit Untertiteln“ an, starten Animes auf Japanisch mit Untertiteln in deiner Sprache, sofern du für die Serie nichts anderes gewählt hast.
+Intro und Abspann überspringen (wo Plex Marker hat, siehe [Grenzen](#plex-und-jellyfin-im-vergleich)), nächste Folge mit Countdown, Tonspur und Untertitel (mit eigenem Untertitel-Stil), Wiedergabegeschwindigkeit, Lesezeichen, Tastenkürzel und „Schaust du noch?“ nach mehreren automatisch gestarteten Folgen. Direct Play, wenn möglich, sonst adaptives Streaming (HLS). **Vorschau überspringen** („Nächstes Mal bei …“) gibt es mit Plex nicht. Wechselst du einmal Tonspur oder Untertitel, merkt sich FriendFlix das **für die ganze Serie**; mit „Anime: Originalton mit Untertiteln“ starten Anime auf Japanisch mit Untertiteln in deiner Sprache, solange du für die Serie nichts anderes gewählt hast.
 
-<p align="center"><img src="docs/images/de/player.jpg" alt="Player mit Steuerleiste, Fortschrittsbalken und „Intro überspringen“" width="900"></p>
+- **Besetzung & Infos** (<kbd>I</kbd> für einen kurzen Blick, dann „Alle Infos“): wer wen spielt, die Gaststars dieser Folge, Regie, Drehbuch, Studio und Labels – ein Tipp auf eine Person zeigt ihre weiteren Titel in deiner Bibliothek (Plex hat keine Personenbilder).
+- **Szenen**: Kapitelmarken auf der Zeitleiste und ein Fenster mit einem Vorschaubild je Szene (nur, wenn Plex Kapitelbilder erzeugt) – direkt zur besten Stelle springen.
+- **Klare Stimmen** und **Nachtmodus** im Klang-Menü: Dialoge hervorheben oder dafür sorgen, dass laute Szenen nicht das ganze Haus wecken.
 
-### „Wer schaut gerade?“
+<p align="center"><img src="docs/images/de/player.jpg" alt="Player mit geöffnetem Fenster „Besetzung & Infos“ neben dem Bild" width="900"></p>
 
-Bis zu fünf Profile pro Konto, jedes mit eigenem Verlauf, eigener Liste, Favoriten, Sprache und Wiedergabe-Einstellungen. Profile lassen sich mit einer 4-stelligen PIN sperren. Profile, Kinderprofile, Altersgrenzen, Wiedergabefortschritt und Favoriten speichert FriendFlix selbst – nicht Plex, und die Altersgrenzen der Kinderprofile setzt FriendFlix bei jeder Liste, Suche und jedem Titel durch. Jedes neue Profil beginnt mit einem kurzen **Willkommen**: Name und Farbe bestätigen, dann drei Titel wählen, die dir gefallen – so wissen die Empfehlungen, wo sie anfangen sollen.
+<p align="center"><img src="docs/images/de/player-scenes.jpg" alt="Player mit dem Szenen-Fenster und einem Vorschaubild je Kapitel" width="900"></p>
 
-**Kinderprofile** bekommen eine eigene, bunte Startseite mit großen Kacheln, eine einfache Suche und eine Altersgrenze (0, 6 oder 12), die der Server bei jeder Liste, Suche und jedem Titel durchsetzt. Soziales gibt es dort nicht – keine Freunde, Reaktionen, Bewertungen, Kommentare, Watch-Partys, geteilten Listen, Wünsche oder Statistiken –, und die Einstellungen bieten nur Sprache und Wiedergabesprachen. Ein Kinderprofil verlässt man nur mit der PIN des Zielprofils oder, wenn dieses keine hat, mit der PIN des Hauptprofils; ein Fernseher, der aus einem Kinderprofil gekoppelt wurde, bleibt auf diesem Kinderprofil.
+### Entdecken
 
-<p align="center"><img src="docs/images/de/profiles.jpg" alt="Profilauswahl mit vier Profilen, eines mit PIN gesperrt" width="900"></p>
+- **Marken-Hubs** – breite Kacheln, die der Admin aus deinen eigenen Plex-Sammlungen, -Genres oder -Tags baut – Studio-Hubs hängen davon ab, was Plex liefert (etwa „Anime“ oder „Dokus“) – führen auf eine eigene Seite mit *Neu*, *Beliebt*, *Filme*, *Serien* und A–Z.
+- **Themenlisten** – jede Liste kann zur redaktionellen Seite mit Titel, Farbe und Emoji werden; der Admin heftet einige als Reihen auf die Startseite aller an („Filmabend am Freitag“, „Gemütlicher Herbst“).
+- **Weil du … gesehen hast** – mehrere Reihen, jede zu einem anderen zuletzt gesehenen Titel, verteilt zwischen den übrigen Reihen.
+- **Suche und Stöbern** finden Personen, Genres, Titel und Folgen; filtern geht nach Jahrzehnt, Bewertung, Sprache und **Bildqualität** (4K, HDR, Dolby Vision, Atmos). „Heute Abend“ schlägt drei Titel nach Stimmung und Zeit vor.
+- **Simulcast** (verlinkt im Kalender) zeigt die gerade laufenden Serien nach Wochentag und Season, mit Filter „Nur Anime“ (mit Plex auf Basis der Plex-Sendedaten; eingeschränkt, noch nicht geprüft).
 
-### Stark auf dem Handy
+### Gemeinsam
 
-App-artige Oberfläche mit Tab-Leiste unten, einer Vorschau beim Antippen eines Posters und allen Details nur einen Wisch entfernt. FriendFlix lässt sich auf dem Home-Bildschirm installieren (PWA).
+- **Watch-Partys** mit synchroner Wiedergabe, Chat und Live-Emoji-Reaktionen, die für alle in der Party über das Bild schweben. **Filmabend-Abstimmung** mit Countdown und automatischem Start. „Was hat noch keiner von uns gesehen?“ – der Gruppen-Matcher findet Titel für alle.
+- **Empfehlungen**: Titel an Freunde empfehlen, sehen, was Freunde bewertet und diese Woche geschaut haben, geteilte Listen mit Editoren und Lesern, kuratierte Reihen vom Admin.
+- **Wünsche**: Fehlt etwas? Direkt aus der Suche wünschen und benachrichtigt werden, sobald es da ist (über den Wunsch-Dienst, mit je einem eigenen lokalen Wunsch-Nutzer pro FriendFlix-Konto) – mit einem monatlichen Limit pro Rolle. „Erinnere mich“ für kommende Titel.
+- **Immer auf dem Laufenden**: Benachrichtigungen in der App, als Web-Push auf jedem Gerät, über ntfy oder Discord und ein optionaler Wochenrückblick.
+- **Die Extras**: Reaktionen und Kurzkritiken (erst sichtbar, wenn du den Titel gesehen hast), Bewertungen, Statistik, Achievements und eine teilbare „Wrapped“-Karte mit deinen Zahlen.
+
+### Familie und Kinder
+
+Bis zu fünf Profile pro Konto, jedes mit eigenem Verlauf, eigener Liste, Favoriten, Sprache und Wiedergabe-Einstellungen. Profile lassen sich mit einer 4-stelligen PIN sperren. Jedes neue Profil beginnt mit einem kurzen **Willkommen**: Name und Farbe bestätigen, dann drei Titel wählen, die dir gefallen – so wissen die Empfehlungen, wo sie anfangen sollen.
+
+**Kinderprofile** bekommen eine eigene, bunte Startseite mit großen Kacheln, eine einfache Suche und eine Altersgrenze (0, 6 oder 12), die der Server bei jeder Liste, Suche und jedem Titel durchsetzt. Soziales gibt es dort nicht – keine Freunde, Reaktionen, Bewertungen, Kommentare, Watch-Partys, geteilten Listen, Wünsche oder Statistiken –, und die Einstellungen bieten nur Sprache und Wiedergabesprachen. Ein Kinderprofil verlässt man nur mit der PIN des Zielprofils oder, wenn dieses keine hat, mit der PIN des Hauptprofils; ein Fernseher, der aus einem Kinderprofil gekoppelt wurde, bleibt auf diesem Kinderprofil. Angeheftete Themenlisten („Gemütlicher Herbst“ für die Kleinen) erscheinen dort ebenfalls.
+
+Der **Ruhige Modus** (pro Profil, auch für Kinder) hält alles still: kein Trailer im Billboard, keine Vorschau beim Darüberfahren, kein Ton und weniger Bewegung in der ganzen App.
+
+<table>
+  <tr>
+    <td><img src="docs/images/de/profiles.jpg" alt="Profilauswahl mit vier Profilen, eines mit PIN gesperrt" width="440"></td>
+    <td><img src="docs/images/de/kids.jpg" alt="Kinder-Startseite mit großen Kacheln und freundlicher Begrüßung" width="440"></td>
+  </tr>
+</table>
+
+### Handy und TV
+
+App-artige Oberfläche mit Tab-Leiste unten, einer Vorschau beim Antippen eines Posters und allen Details nur einen Wisch entfernt. FriendFlix lässt sich auf dem Home-Bildschirm installieren (PWA) – mit **Verknüpfungen** per langem Druck (Weiterschauen, Meine Liste, Suche, Downloads), einem **Badge** mit deinen ungelesenen Benachrichtigungen auf dem Symbol und Name und Beschreibung der App in deiner Sprache.
 
 <table>
   <tr>
     <td><img src="docs/images/de/phone-home.jpg" alt="Startseite auf dem Handy" width="260"></td>
     <td><img src="docs/images/de/phone-preview.jpg" alt="Vorschau auf dem Handy" width="260"></td>
-    <td><img src="docs/images/de/phone-detail.jpg" alt="Detailseite auf dem Handy" width="260"></td>
+    <td><img src="docs/images/de/phone-detail.jpg" alt="Detailseite auf dem Handy mit Qualitäts-Chips" width="260"></td>
   </tr>
 </table>
 
-### Downloads für Zug und Flugzeug
+**Auf dem großen Bildschirm:** TV-Modus für Smart-TV-Browser, Sticks und Konsolen – große Schrift, Steuerung mit Pfeiltasten, Kopplung per Code oder QR-Code und das **Handy als Fernbedienung**. Chromecast aus Chrome, Edge und Android.
 
-Filme und Folgen herunterladen (bei Serien auch gleich die nächsten Folgen) und offline im Browser ansehen. Der Fortschritt wird beim nächsten Online-Sein abgeglichen.
+**Downloads für Zug und Flugzeug:** Filme und Folgen herunterladen (bei Serien auch gleich die nächsten Folgen) und offline im Browser ansehen. Der Fortschritt wird beim nächsten Online-Sein abgeglichen. Lizenzen pro Gerät mit Ablaufdatum; funktioniert in Chrome, Edge, Firefox, Safari 17+ und als Home-Bildschirm-App auf iOS 17+.
 
 <p align="center"><img src="docs/images/de/downloads.jpg" alt="Downloads-Seite mit fertigen, pausierten und vorbereiteten Downloads" width="700"></p>
 
-### Sieben Sprachen
-
-Die Oberfläche spricht **Deutsch, Englisch, Französisch, Spanisch, Italienisch, Türkisch und Polnisch**. Jedes Profil wählt seine eigene Sprache; beim ersten Login fragt FriendFlix einmal nach und schlägt die Browsersprache vor. Der Admin legt die Standardsprache der ganzen Instanz fest.
+**Sieben Sprachen:** Die Oberfläche spricht **Deutsch, Englisch, Französisch, Spanisch, Italienisch, Türkisch und Polnisch**. Jedes Profil wählt seine eigene Sprache; beim ersten Login fragt FriendFlix einmal nach und schlägt die Browsersprache vor. Der Admin legt die Standardsprache der ganzen Instanz fest.
 
 <p align="center"><img src="docs/images/de/language.jpg" alt="Sprachauswahl beim ersten Login" width="700"></p>
 
-## Gemacht für Freunde und Familie
+### Admin
 
-| | |
-|---|---|
-| **Profile für alle** | Bis zu 5 Profile pro Konto, optionale PIN, getrennter Verlauf, eigene Listen und Einstellungen. |
-| **Auf dem großen Bildschirm** | TV-Modus für Smart-TV-Browser, Sticks und Konsolen: große Schrift, Steuerung mit Pfeiltasten, Kopplung per Code oder QR-Code und das **Handy als Fernbedienung**. Chromecast aus Chrome, Edge und Android. |
-| **Offline-Downloads** | Lizenzen pro Gerät mit Ablaufdatum; funktioniert in Chrome, Edge, Firefox, Safari 17+ und als Home-Bildschirm-App auf iOS 17+. |
-| **Gemeinsam schauen** | Watch-Partys mit synchroner Wiedergabe, Chat und Live-Emoji-Reaktionen, die für alle in der Party über das Bild schweben. **Filmabend-Abstimmung** mit Countdown und automatischem Start. „Was hat noch keiner von uns gesehen?“ – der Gruppen-Matcher findet Titel für alle. „Heute Abend“ schlägt drei Titel nach Stimmung und Zeit vor. |
-| **Empfehlungen** | Titel an Freunde empfehlen, sehen, was Freunde bewertet und diese Woche geschaut haben, „Weil du … gesehen hast“, geteilte Listen mit Editoren und Lesern, kuratierte Reihen vom Admin. |
-| **Wünsche** | Fehlt etwas? Direkt aus der Suche wünschen (über den Wunsch-Dienst) und benachrichtigt werden, sobald es da ist – mit einem monatlichen Limit pro Rolle. „Erinnere mich“ für kommende Titel. |
-| **Immer auf dem Laufenden** | Benachrichtigungen in der App, als Web-Push auf jedem Gerät, über ntfy oder Discord und ein optionaler Wochenrückblick. |
-| **Die Extras** | Reaktionen und Kurzkritiken (erst sichtbar, wenn du den Titel gesehen hast), Bewertungen, Statistik, Achievements und eine teilbare „Wrapped“-Karte mit deinen Zahlen. |
-| **Sieben Sprachen** | Deutsch, Englisch, Französisch, Spanisch, Italienisch, Türkisch, Polnisch – pro Profil. |
+Ein aufgeräumter Admin-Bereich mit Seitenleiste (Personen, Inhalte, Betrieb) und einer **Übersicht**, die Systemzustand, offene Entscheidungen – einen Wunsch oder ein neues Gerät gleich dort freigeben oder ablehnen –, die letzte Aktivität in ganzen Sätzen, Zahlen und Speicher zeigt. Alles meldet sich zurück: keine Pop-up-Fenster, riskante Aktionen fragen vorher, kleine bieten **Rückgängig**. Auf dem Handy ist derselbe Bereich eine einfache Liste mit großen Tippflächen.
+
+Außerdem im Admin-Bereich: Einladungen und Rollen, **Marken-Hubs**, hervorgehobene und Themenlisten, **Bald-weg-Termine**, Vorschau-Clips, der nächtliche Wiedergabe-Check, der Wochenrückblick, ein Audit-Log und Updates per Knopfdruck.
+
+<table>
+  <tr>
+    <td><img src="docs/images/de/admin.jpg" alt="Admin-Übersicht mit Systemzustand, offenen Wünschen und Geräten und der letzten Aktivität" width="600"></td>
+    <td><img src="docs/images/de/phone-admin.jpg" alt="Admin-Bereich auf dem Handy als gegliederte Liste" width="260"></td>
+  </tr>
+</table>
 
 ## Datenschutz und Sicherheit
 
 - **Selbst gehostet.** Alles läuft auf deinem eigenen Server. FriendFlix hat keine Werbung und keine Analyse-Dienste von Dritten.
 - **Nur mit Einladung.** Neue Leute kommen über Einmal-Einladungslinks dazu. Die Anmeldung läuft über dein Authentik mit **verpflichtender Zwei-Faktor-Authentifizierung**, neue Geräte können eine Freigabe brauchen.
-- **Plex und der Wunsch-Dienst bleiben unsichtbar.** Freunde sprechen nur mit dem Portal. Das Plex-Token liegt nur in Backend und Gateway und geht nie an einen Browser; Videos laufen über ein Gateway, das jede Anfrage prüft.
-- **Keine plex.tv-Konten für deine Freunde.** FriendFlix verwaltet seine Nutzer selbst; Plex sieht nur ein serverseitiges Token. Es funktioniert ohne Plex Pass.
+- **Plex und der Wunsch-Dienst bleiben unsichtbar.** Freunde sprechen nur mit dem Portal. Das Plex-Token liegt nur im Backend und im Gateway und geht nie an einen Browser; Videos und Bilder laufen über ein Gateway, das jede Anfrage prüft.
+- **Keine plex.tv-Konten für deine Freunde.** FriendFlix verwaltet seine Nutzer selbst und setzt Rollen, Profile und Altersgrenzen selbst durch; Plex sieht nur ein serverseitiges Token. Es läuft ohne Plex Pass.
 - **Du bestimmst, was Freunde sehen.** „Verlauf teilen“ (standardmäßig aus) und „Bewertungen teilen“ stellt jede Person in den Einstellungen ein; „Diese Woche bei uns“ zeigt nur Zahlen, nie wer geschaut hat. Reaktionen zu einem Titel erscheinen erst, wenn du ihn gesehen hast, und der optionale Spoilerschutz blendet Bilder und Beschreibungen ungesehener Folgen aus.
 - **Trailer ohne Tracking.** Trailer für Titel, die noch nicht in der Bibliothek sind, laufen im datenschutzfreundlichen `youtube-nocookie.com`-Player und laden erst nach einem Klick.
 - **Fehlerberichte bleiben bei dir.** Stürzt die App im Browser von jemandem ab, landet eine bereinigte Fehlermeldung (ohne Query-Strings, Tokens oder E-Mail-Adressen) im Log *deines* Servers – und nirgendwo sonst.
 - **Ehrlich zu Downloads.** Downloads sind für vertrauenswürdige Freunde und Familie gedacht: Es gibt keinen Kopierschutz (kein DRM); Ablauf und Widerruf setzt die App durch.
+- **Geprüft, bevor es ausgeliefert wird.** Jedes Image wird gescannt, signiert und mit einer Software-Stückliste veröffentlicht; die Pipeline macht außerdem einen Web-Sicherheitsscan, und die Lieferkette wird öffentlich bewertet (siehe unten).
+
 
 ## Plex und Jellyfin im Vergleich
 
@@ -148,7 +182,7 @@ Die FriendFlix-Oberfläche ist dieselbe; unterschiedlich ist, was Plex liefern k
 | Chromecast | Funktioniert | Inklusive Text-Untertiteln (signierte FriendFlix-Untertitel-URLs) |
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen | Funktioniert | FriendFlix-Funktionen, unabhängig vom Medienserver |
 | „Demnächst erscheinende Folgen“ | Nicht verfügbar | Plex bietet das nicht |
-| Wünsche / Wunsch-Dienst | Funktioniert | Jedes FriendFlix-Konto bekommt beim ersten Wunsch einen eigenen lokalen Seerr-Nutzer (nur Wunsch-Recht) |
+| Wünsche / Wunsch-Dienst | Funktioniert | Jedes FriendFlix-Konto bekommt beim ersten Wunsch einen eigenen lokalen Wunsch-Dienst-Nutzer (nur Wunsch-Recht) |
 | nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt |
 
 Details, Einrichtung und Fehlersuche: [docs/de/plex.md](docs/de/plex.md).
@@ -168,7 +202,7 @@ Ab hier wird es technisch. Die Plex-Anleitung ist [docs/de/plex.md](docs/de/plex
 - Ein Linux-Server mit **Docker** und **Docker Compose**.
 - Ein **Plex Media Server** (getestet gegen 1.43) mit deinen Bibliotheken, **beansprucht („claimed“)** (einmal mit einem Konto angemeldet) und vom FriendFlix-Gateway erreichbar. FriendFlix verbindet sich mit einem vorhandenen Server und startet keinen. Ein Plex-Server pro FriendFlix-Instanz.
 - Ein **Plex-Admin-Token** (`X-Plex-Token`): siehe Plex-Supportartikel „Finding an authentication token / X-Plex-Token“ und [docs/de/plex.md](docs/de/plex.md). Nimm dafür ein eigenes Plex-Konto bzw. Token für FriendFlix. Plex Pass ist optional (Intro-/Abspann-Marker, Hardware-Transcoding).
-- Optional ein Wunsch-Dienst (Seerr, wie im Original).
+- Optional ein Wunsch-Dienst (wie im Original; FriendFlix legt je Konto einen lokalen Wunsch-Nutzer an, ohne Plex- oder Jellyfin-Konto).
 - **Authentik** als Login (OIDC mit PKCE; MFA dort erzwingen).
 - Ein Reverse Proxy mit TLS, z. B. **Nginx Proxy Manager**, mit einem Proxy-Host für das Portal.
 - Optional: ntfy, ein Discord-Webhook, Portainer (Updates per Knopfdruck).
@@ -236,11 +270,12 @@ Vorlage: [.env.example](.env.example). Jede Variable kann mit der Endung `_FILE`
 | `DIRECT_PLAY_REQUIRES_DOWNLOAD` | `false` | `true`: Rollen ohne Download-Recht verlieren auch Direct Play |
 | `PREVIEW_WARM` | `true` | Hintergrundjob, der Vorschau-Clips für Karten und Billboard vorab erzeugt |
 | `PLAYBACK_CHECK_HOUR` | `4` | Nächtlicher Wiedergabe-Check mit Admin-Hinweis; `-1` = aus |
-| `BACKGROUND_JOBS` | `true` | Download-Vorbereitung/-Aufräumen, Sprachindex, Bibliotheks-Sync / Session-Polling (auf dem einzigen Backend `true` lassen) |
+| `BACKGROUND_JOBS` | `true` | Download-Vorbereitung/-Aufräumen, Sprach- und Bildqualitäts-Index, Bald-weg-Erinnerungen, Plex-Bibliotheks-Sync (auf dem einzigen Backend `true` lassen) |
 | `API_COMPRESSION` | `true` | gzip/brotli für JSON-Antworten ab 1 KB; `false`, wenn der Proxy `/api` schon komprimiert |
 | `METRICS_TOKEN` | leer | Bearer-Token für `/metrics` |
 | `PORTAINER_WEBHOOK_URL` oder `PORTAINER_URL` + `PORTAINER_API_KEY` + `PORTAINER_STACK_ID` | leer | Updates per Knopfdruck unter *Admin → Update* (`PORTAINER_ENDPOINT_ID` Standard `1`) |
 | `UPDATE_REPO`, `GITHUB_TOKEN` | `LetsManu/friendflix`, leer | Versionsprüfung; das Token hebt nur das GitHub-Limit an |
+| `GRAFANA_ADMIN_PASSWORD`, `GRAFANA_PORT`, `PROMETHEUS_RETENTION` | – (nötig für den Monitoring-Stack), `3083`, `30d` | Optionales Prometheus + Grafana (`compose.monitoring.yaml`); kein Standardpasswort |
 | `BACKUP_PATH`, `BACKUP_HOUR`, `BACKUP_KEEP_DAYS`, `BACKUP_RUN_ON_START` | `./backups`, `3`, `14`, `false` | Backup-Sidecar (Profil `backup`) |
 | `MEDIA_PATH` | `./media` | Medienordner für das mitgelieferte Jellyfin (Profil `bundled` im Original; mit Plex nicht verwendet) |
 
@@ -248,31 +283,70 @@ Die vollständige Liste mit Erklärungen steht in [.env.example](.env.example).
 
 ### Architektur
 
+So greift es ineinander – das Plex-Token bleibt in Backend und Gateway, und das Backend spiegelt die Plex-Bibliothek nach Postgres und entscheidet den Zugriff selbst:
+
 ```mermaid
-flowchart LR
-  user["Browser · Handy · TV"] -->|HTTPS| npm["Nginx Proxy Manager<br/>(TLS, einziger öffentlicher Eingang)"]
-  npm -->|"/"| web["web<br/>SvelteKit-PWA"]
-  npm -->|"/api /auth /ws"| backend["backend<br/>Fastify-API + WebSocket"]
-  npm -->|"/media/"| gateway["gateway<br/>Streaming-Pipe"]
-  gateway -->|"authz"| backend
-  gateway --> plex["Plex Media Server"]
-  backend --> plex
-  backend --> seerr["Wunsch-Dienst"]
-  backend --> postgres[("Postgres")]
-  backend --> redis[("Redis")]
-  backend -.->|"OIDC"| authentik["Authentik"]
+---
+config:
+  flowchart:
+    curve: basis
+    nodeSpacing: 50
+    rankSpacing: 65
+    padding: 14
+  themeVariables:
+    edgeLabelBackground: 'rgba(150,150,150,0.12)'
+  themeCSS: '.labelBkg { background-color: rgba(127,127,127,0.12) !important; }'
+---
+flowchart TB
+  accTitle: So greift FriendFlix ineinander
+  accDescr: Zuschauer erreichen über HTTPS einen Reverse-Proxy. Dieser leitet an Web, Backend und Gateway von FriendFlix weiter. Backend und Gateway sprechen mit Plex Media Server; das Backend nutzt außerdem Authentik, den Wunsch-Dienst und Benachrichtigungen.
+  V("📺 <b>Zuschauer</b><br/><small>Browser · Handy · TV</small>"):::ext
+  P("🛡️ <b>Reverse-Proxy</b><br/><small>Nginx Proxy Manager · TLS</small>"):::edge
+  subgraph FF["FriendFlix"]
+    W("🖥️ <b>web</b><br/><small>die App im Browser</small>"):::app
+    B("⚙️ <b>backend</b><br/><small>Login · API · Regeln</small>"):::app
+    G("📡 <b>gateway</b><br/><small>Video- und Bild-Pipe</small>"):::app
+  end
+  S("🎬 <b>Plex Media Server</b><br/><small>dein bestehender Server · ein Admin-Token</small>"):::media
+  PG[("🗄️ <b>Postgres</b><br/><small>Bibliotheks-Spiegel · Profile · Wiedergabestand</small>")]:::store
+  RQ("🔔 <b>Wünsche</b><br/><small>Wunsch-Dienst · ntfy · Discord</small>"):::svc
+  AK("🔑 <b>Authentik</b><br/><small>Login · Einladungen</small>"):::svc
+  V -->|HTTPS| P
+  P -->|"/"| W
+  P -->|"/media/*"| G
+  P -->|"/api /auth /ws"| B
+  G -->|"darf schauen?"| B
+  G ==>|"Video"| S
+  B -->|"Bibliotheks-Sync"| S
+  B -->|SQL| PG
+  B -->|REST| RQ
+  B -.->|OIDC| AK
+  P -.->|"auth.example.com"| AK
+  classDef ext fill:#30363d,stroke:#8b949e,stroke-width:1px,color:#f0f6fc
+  classDef edge fill:#2d2a4a,stroke:#9d8cf0,stroke-width:1px,color:#f0f6fc
+  classDef app fill:#4a1418,stroke:#e50914,stroke-width:1px,color:#fff5f5
+  classDef store fill:#4a3a14,stroke:#d4a72c,stroke-width:1px,color:#fff8e6
+  classDef media fill:#173f30,stroke:#3fb68b,stroke-width:1px,color:#eafff6
+  classDef svc fill:#163e4c,stroke:#56b6d6,stroke-width:1px,color:#eaf9ff
+  classDef fork fill:#4a1d3c,stroke:#e070b0,stroke-width:1px,stroke-dasharray:4 3,color:#fff0f8
+  linkStyle default stroke:#8b949e,stroke-width:1.4px
+  style FF fill:none,stroke:#e50914,stroke-width:1px,stroke-dasharray:4 4
 ```
 
+> 🟥 FriendFlix · 🟩 Medienserver · 🟦 weitere Dienste · 🟪 Reverse-Proxy · 🟨 Datenspeicher · ⬛ Zuschauer / extern · gestrichelter Rahmen = Netz bzw. Grenze · dicke Linie = Videostream · gepunktet = optional / über öffentliche URL
+
 - Öffentlich ist nur der Proxy. `web`, `backend` und `gateway` sind nur auf `127.0.0.1` veröffentlicht; der Wunsch-Dienst hat gar keine Ports und hängt im internen Netz `media` (dein Plex-Server bleibt, wo er ist, und wird nur von Gateway und Backend angesprochen), Postgres und Redis im internen Netz `db`.
-- Alle Videodaten (Playlists, Segmente, Direct Play, Bilder, Untertitel, Downloads, Chromecast) laufen durch das Gateway: ohne Pufferung, mit HTTP-Range, Plex-Token nur im Gateway (und Backend), Pfad-Allowlist, fester Upstream, Bitrate-Grenze pro Rolle.
+- Alle Videodaten (Playlists, Segmente, Direct Play, Bilder, Untertitel, Downloads, Chromecast) laufen durch das Gateway: ohne Pufferung, mit HTTP-Range, Plex-Token nur im Gateway (und Backend), Pfad-Allowlist, fester Upstream, Bitrate-Grenze pro Rolle. Pfade für Part, Transcode-Session und Kapitelbild tragen eine HMAC-Signatur: Ein sichtbarer Titel schaltet nie eine fremde Datei frei.
 - Container laufen ohne Root, mit schreibgeschütztem Dateisystem, `cap_drop: ALL` und `no-new-privileges`. Strikte CSP, CSRF-Tokens, Rate-Limits, Audit-Log.
-- Plex-spezifisch: FriendFlix spiegelt die Plex-Bibliothek nach Postgres und setzt Profile, Altersgrenzen und Zugriff selbst durch; das Gateway schreibt Playlists des Plex-Transcoders um, damit Clients nie Plex-URLs oder -Tokens sehen. Die „Plan B“-Alternative des Originals (nginx liefert `/media/` selbst) wird mit Plex **nicht unterstützt**.
+- Plex-spezifisch: FriendFlix spiegelt die Plex-Bibliothek nach Postgres (Abgleich alle 5 Minuten, Plex-Benachrichtigungs-Websocket und nächtlicher Komplettdurchlauf) und setzt Profile, Altersgrenzen und Zugriff selbst durch; das Gateway schreibt Playlists des Plex-Transcoders um, damit Clients nie Plex-URLs oder -Tokens sehen. Die „Plan B“-Alternative (nginx liefert `/media/` selbst aus) wird mit Plex **nicht unterstützt**.
+- Der Medienserver sitzt hinter einer neutralen Schnittstelle (`MediaServer` im Backend, ein `Upstream`-Adapter im Gateway, gewählt über `MEDIA_SERVER`); Plex ist eine Implementierung neben Jellyfin. Container und Netze, „Play drücken“, Vertrauensgrenzen und die Schnittstelle, Plex und Jellyfin nebeneinander: [docs/architecture.md](docs/architecture.md) (englisch).
 
 ### Betrieb
 
 - **Backups:** Der optionale Sidecar `backup` macht täglich um `BACKUP_HOUR` einen `pg_dump`, prüft jeden Dump mit `pg_restore --list`, behält `BACKUP_KEEP_DAYS` Tage und wird `unhealthy`, wenn ein Lauf fehlschlägt. Wiederherstellung und monatlicher Restore-Test (`scripts/restore-test.sh`): [docs/operations.md](docs/operations.md). `APP_ENC_KEY` getrennt von den Dumps im Passwort-Manager aufbewahren.
 - **Updates:** *Admin → Update* zeigt installierte und neueste Version samt Änderungsliste und stößt über Portainer (Webhook oder API) ein Redeploy an. Von Hand: `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`. Datenbank-Migrationen laufen beim Start.
 - **Monitoring:** `/health` (Liveness) und `/health/ready` (Redis, Postgres, Medienserver) auf `127.0.0.1:3081`; Prometheus-Metriken unter `:3081/metrics` und `:3082/metrics` (Bearer `METRICS_TOKEN`). Beispiele für Icinga und Prometheus sowie ein optionaler Prometheus-+-Grafana-Stack mit Dashboard (`compose.monitoring.yaml`): [docs/monitoring.md](docs/monitoring.md).
+- **Lieferkette:** Images werden gescannt (Trivy), mit cosign signiert (keyless) und mit SBOM- und Provenienz-Attestierungen veröffentlicht; vor dem Deployment prüfen – [docs/operations.md](docs/operations.md).
 - **Ladezeiten:** Jede API-Antwort trägt einen `Server-Timing`-Header (`jf` = Medienserver, `db` = Postgres, `kv` = Redis, `app` = gesamt), das Gateway ergänzt `authz` und `upstream`; sichtbar in den Browser-DevTools unter *Network → Timing*. Anfragen ab 500 ms erscheinen als `slow request` im Log. Browser-Fehler landen im Backend-Log und in `friendflix_client_errors_total`.
 
 ### Entwicklung
@@ -299,6 +373,7 @@ npm run e2e                                     # Playwright: baut die Web-App u
 | Thema | Datei |
 |---|---|
 | Installation Schritt für Schritt (Jellyfin-Schritte: stattdessen [docs/de/plex.md](docs/de/plex.md)) | [docs/de/setup.md](docs/de/setup.md) |
+| Architektur: Zusammenspiel, Container und Netze, Play drücken, Vertrauensgrenzen, Medienserver-Schnittstelle (Plex und Jellyfin; englisch) | [docs/architecture.md](docs/architecture.md) |
 | Authentik: Installation, Provider, Flows, Einladungen | [docs/de/authentik.md](docs/de/authentik.md) |
 | **Plex-Einrichtung, Funktionsvergleich, Fehlersuche, Abgleich mit dem Original** | [docs/de/plex.md](docs/de/plex.md) · [English](docs/plex.md) |
 | Wunsch-Dienst, Authentik, ntfy/Discord, Web-Push (Jellyfin-Teile gelten nicht) | [docs/integrations.md](docs/integrations.md) |
@@ -307,7 +382,9 @@ npm run e2e                                     # Playwright: baut die Web-App u
 | Offline-Downloads (Plattformen, Speicher, Grenzen) | [docs/downloads.md](docs/downloads.md) |
 | TV-Modus und Handy als Fernbedienung | [docs/tv-mode.md](docs/tv-mode.md) |
 | Chromecast | [docs/cast.md](docs/cast.md) |
-| Such- und Entdecken-API | [docs/discovery.md](docs/discovery.md) |
+| Such- und Entdecken-API, Labels, Bald weg, Qualität, Kinder-Regeln | [docs/discovery.md](docs/discovery.md) |
+| Themenlisten, Ruhiger Modus, Klang im Player, Handy-Verknüpfungen und Badge | [docs/personal.md](docs/personal.md) |
+| UI-Kit und Admin-Rahmen | [docs/ui-kit.md](docs/ui-kit.md) |
 | Sprachen und Übersetzungen | [docs/i18n.md](docs/i18n.md) |
 | Änderungen | [CHANGELOG.md](CHANGELOG.md) |
 
@@ -315,6 +392,9 @@ npm run e2e                                     # Playwright: baut die Web-App u
 
 - Ein Backend-Replikat: Watch-Party-Räume, Rate-Limits und Fernbedienungs-Räume liegen im Speicher.
 - Bildbasierte Untertitel (PGS) werden nicht angeboten; Text-Untertitel kommen als WebVTT.
+- Besetzung & Infos, Szenen und die Bild-/Ton-Chips brauchen vom Medienserver Besetzungslisten, Kapitel und Stream-Details; mit Plex funktionieren sie (siehe Tabelle oben), wo ein Server sie nicht liefern kann, blendet die Oberfläche die Funktion aus (`capabilities` in `/api/me`).
+- „Bald nicht mehr verfügbar“ ist eine Ankündigung eines Admins; FriendFlix löscht nie Medien. Das Label „Staffelfinale“ ist eine Heuristik (mit Plex: jede Folge hat ein Sendedatum und die neueste liegt über 60 Tage zurück). Der Bildqualitäts-Filter liest einen Hintergrund-Index (`BACKGROUND_JOBS=true`), der sich nach dem ersten Start erst etwas füllt; Plex-Bibliotheken, die eine ältere Version gespiegelt hat, werden einmal neu gelesen.
+- Klare Stimmen und Nachtmodus nutzen die Audioverarbeitung des Browsers: nicht auf jedem Gerät verfügbar und nicht beim Streamen auf ein anderes Gerät. PWA-Widgets für den Home-Bildschirm gibt es nur unter Windows 11; Verknüpfungen und das Symbol-Badge (nicht auf jeder iOS-Version) bekommt das Handy stattdessen.
 - Plex (siehe die [Tabelle oben](#plex-und-jellyfin-im-vergleich) und [docs/de/plex.md](docs/de/plex.md)): Intro/Abspann überspringen nur mit Plex-Pass-Markern (nie Recap/Vorschau); Vorschaubilder beim Spulen sind Einzelbilder und brauchen aktivierte Vorschaubilder in Plex; keine „demnächst erscheinenden Folgen“; die Tonspur-Auswahl gilt pro Plex-Konto (Stream-Starts laufen nacheinander, nimm ein eigenes Token); Untertitel extrahiert und wandelt FriendFlix um; der Server muss geclaimt und ein Token vorhanden sein; Plan B wird nicht unterstützt.
 - Die Plex-Umsetzung stützt sich teils auf nicht dokumentierte Plex-APIs und ist gegen Plex Media Server 1.43 geprüft; andere Versionen können sich anders verhalten.
 - Die APIs von Wunsch-Dienst und Authentik unterscheiden sich je Version – nach Upgrades siehe [docs/operations.md](docs/operations.md) und [docs/integrations.md](docs/integrations.md).
@@ -327,5 +407,3 @@ npm run e2e                                     # Playwright: baut die Web-App u
 Copyright © 2026 Manuel Weißböck. Alle Rechte vorbehalten – siehe [LICENSE](LICENSE).
 
 ### Markenhinweis
-
-Plex is a trademark of Plex, Inc.; this project is not affiliated with or endorsed by Plex. (Plex ist eine Marke von Plex, Inc.; dieses Projekt steht in keiner Verbindung zu Plex und wird von Plex nicht unterstützt.) Jellyfin wird nur genannt, um Kompatibilität zu beschreiben.
