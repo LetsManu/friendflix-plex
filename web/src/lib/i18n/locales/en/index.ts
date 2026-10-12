@@ -9,6 +9,10 @@ import player from './player';
 import account from './account';
 import social from './social';
 import admin from './admin';
+import hubs from './hubs';
+import anime from './anime';
+import together from './together';
+import kids from './kids';
 
-const dict: Translation<typeof de> = { common, shell, home, detail, player, account, social, admin };
+const dict: Translation<typeof de> = { common, shell, home, detail, player, account, social, admin, hubs, anime, together, kids };
 export default dict;

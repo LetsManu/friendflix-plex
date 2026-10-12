@@ -9,6 +9,7 @@ import { m } from '../i18n.js';
 import { notify } from '../notify.js';
 import { JellyfinError } from '../jellyfin/client.js';
 import { SeerrError } from '../seerr/client.js';
+import { requireGrownUp } from '../kids.js';
 import { requireAdmin, requireUser } from '../session.js';
 import type { JfUser } from '../types.js';
 import { id32 } from './_shared.js';
@@ -30,13 +31,15 @@ async function itemOr(ctx: Ctx, reply: FastifyReply, user: JfUser, id: string) {
 
 export function pollRoutes(app: FastifyInstance, ctx: Ctx) {
   const pre = { preHandler: requireUser(ctx) };
+  /** polls and ratings/reviews are shared with friends: kids profiles get 403 kids_profile */
+  const grown = { preHandler: requireGrownUp(ctx) };
   const admin = { preHandler: requireAdmin(ctx) };
 
   seerrHooks.add(async (c, e) => {
     if (e.type === 'available') await resolveRequestedPolls(c);
   });
 
-  app.post('/api/polls', pre, async (req, reply) => {
+  app.post('/api/polls', grown, async (req, reply) => {
     const b = z.object({
       title: z.string().trim().min(3).max(80),
       options: z.array(optionSchema).min(2).max(10),
@@ -76,16 +79,16 @@ export function pollRoutes(app: FastifyInstance, ctx: Ctx) {
     };
   };
 
-  app.get('/api/polls', pre, async (req) => {
+  app.get('/api/polls', grown, async (req) => {
     const ids = (await ctx.db.query("select id from polls where status in ('open','scheduled','needs_approval','requested') or created_at > now() - interval '3 days' order by created_at desc limit 20")).rows;
     return { polls: (await Promise.all(ids.map((r) => detail(r.id, req.user!.id, req.jfUser)))).filter(Boolean) };
   });
-  app.get('/api/polls/:id', pre, async (req, reply) => {
+  app.get('/api/polls/:id', grown, async (req, reply) => {
     const d = await detail(z.guid().parse((req.params as { id: string }).id), req.user!.id, req.jfUser);
     return d ?? reply.code(404).send({ error: 'not_found' });
   });
 
-  app.post('/api/polls/:id/vote', pre, async (req, reply) => {
+  app.post('/api/polls/:id/vote', grown, async (req, reply) => {
     const pollId = z.guid().parse((req.params as { id: string }).id);
     const { optionId } = z.object({ optionId: z.number().int() }).parse(req.body);
     const ok = await ctx.db.query<{ jf_item_id: string | null }>(
@@ -115,7 +118,7 @@ export function pollRoutes(app: FastifyInstance, ctx: Ctx) {
   }
 
   // ---- ratings / reviews ----
-  app.get('/api/items/:id/ratings', pre, async (req, reply) => {
+  app.get('/api/items/:id/ratings', grown, async (req, reply) => {
     const itemId = id32.parse((req.params as { id: string }).id);
     if (!(await itemOr(ctx, reply, req.jfUser!, itemId))) return reply; // viewer must be able to see the item
     // other users' ratings are hidden when they switched shareRatings off; the viewer's own row always stays
@@ -125,7 +128,7 @@ export function pollRoutes(app: FastifyInstance, ctx: Ctx) {
     const avg = r.rows.length ? r.rows.reduce((a, x) => a + x.stars, 0) / r.rows.length : null;
     return { ratings: r.rows, average: avg };
   });
-  app.put('/api/items/:id/rating', pre, async (req, reply) => {
+  app.put('/api/items/:id/rating', grown, async (req, reply) => {
     const itemId = id32.parse((req.params as { id: string }).id);
     const b = z.object({ stars: z.number().int().min(1).max(5), review: z.string().trim().max(280).optional() }).parse(req.body);
     const item = await itemOr(ctx, reply, req.jfUser!, itemId);
@@ -138,7 +141,7 @@ export function pollRoutes(app: FastifyInstance, ctx: Ctx) {
     bus.emitT('rating.created', { userId: req.user!.id });
     return { ok: true };
   });
-  app.delete('/api/items/:id/rating', pre, async (req) => {
+  app.delete('/api/items/:id/rating', grown, async (req) => {
     await ctx.db.query('delete from ratings where user_id=$1 and item_id=$2', [req.user!.id, id32.parse((req.params as { id: string }).id)]);
     return { ok: true };
   });

@@ -84,8 +84,10 @@ export interface Me { id: string; name: string; role: string; roleLabel: string;
   /** false = the active profile never chose a language (first-login picker); absent on older servers */ languageChosen?: boolean;
   /** instance default language */ defaultLanguage?: string;
   /** false = no admin stored the instance language yet (asked once) */ defaultLanguageSet?: boolean;
-  /** browser language from Accept-Language when supported, else null */ suggestedLanguage?: string | null }
-export interface MeProfile { id: string; name: string; avatar: string; isOwner: boolean }
+  /** browser language from Accept-Language when supported, else null */ suggestedLanguage?: string | null;
+  /** the active profile is a kids profile (kids home, no social features); absent on older servers */ kids?: boolean;
+  /** false = the active profile never finished /welcome (absent = onboarded) */ onboarded?: boolean }
+export interface MeProfile { id: string; name: string; avatar: string; isOwner: boolean; kids?: boolean; /** parental cap of a kids profile (0/6/12) */ maxRating?: number }
 
 // ---- shared item cache: the modal / item page render instantly from what a card already had, then revalidate ----
 /** detail response of GET /api/items/:id (the item plus per-profile state) */

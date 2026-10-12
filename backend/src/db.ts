@@ -504,6 +504,57 @@ export const MIGRATIONS: string[] = [
   `
   alter table notifications add column msg jsonb;
   `,
+  // 28: Block 15 Q1: brand hubs (admin-defined tiles on the home page; source = Jellyfin studio | collection | tag | genre)
+  `
+  create table brand_hubs (
+    id uuid primary key default gen_random_uuid(),
+    name text not null,
+    source_kind text not null check (source_kind in ('studio','collection','tag','genre')),
+    source_value text not null,
+    accent text,
+    image_item_id text,
+    image_kind text check (image_kind in ('Primary','Backdrop')),
+    sort_order int not null default 0,
+    enabled boolean not null default true,
+    created_at timestamptz not null default now()
+  );
+  create index brand_hubs_order on brand_hubs (sort_order, created_at);
+  `,
+  // 29: per profile + series audio / subtitle language ("anime pack"); null = not chosen, subtitle 'off' = subtitles off
+  `
+  create table series_langprefs (
+    profile_id uuid not null references profiles(id) on delete cascade,
+    series_id text not null,
+    audio text check (char_length(audio) <= 16),
+    subtitle text check (char_length(subtitle) <= 16),
+    updated_at timestamptz not null default now(),
+    primary key (profile_id, series_id)
+  );
+  `,
+  // 30: friends-only comments on episodes / movies (soft delete; the reader's own watched state decides the spoiler blur)
+  `
+  create table episode_comments (
+    id uuid primary key default gen_random_uuid(),
+    item_id text not null,
+    profile_id uuid not null references profiles(id) on delete cascade,
+    user_id uuid not null references users(id) on delete cascade,
+    body text not null check (char_length(body) between 1 and 1000),
+    spoiler boolean not null default true,
+    created_at timestamptz not null default now(),
+    deleted_at timestamptz
+  );
+  create index episode_comments_item on episode_comments(item_id, created_at desc) where deleted_at is null;
+  create index episode_comments_profile on episode_comments(profile_id, created_at);
+  `,
+  // 31: Block 15 K1: kids profiles (Jellyfin parental cap 0/6/12 on the profile's hidden Jellyfin user), a device that last ran a
+  // kids profile stays on it (switching away needs a PIN), onboarding flag: every profile that exists now counts as onboarded
+  `
+  alter table profiles add column kids boolean not null default false;
+  alter table profiles add column kids_max_rating smallint not null default 12 check (kids_max_rating in (0, 6, 12));
+  alter table devices add column kids_profile_id uuid references profiles(id) on delete set null;
+  insert into profile_prefs(profile_id, data) select id, '{"onboarded": true}'::jsonb from profiles
+    on conflict (profile_id) do update set data = profile_prefs.data || '{"onboarded": true}'::jsonb;
+  `,
 ];
 
 export async function migrate(pool: pg.Pool): Promise<void> {

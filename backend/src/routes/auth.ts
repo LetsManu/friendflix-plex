@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { timingSafeEqual } from 'node:crypto';
 import { dropRemotePeers } from './tv.js';
 import { audit } from '../audit.js';
@@ -10,8 +10,11 @@ import { DEFAULT_ROLES, effectiveRole } from '../roles.js';
 import { deviceHasSession, registerDevice } from '../devices.js';
 import { deletePushSubscriptions } from '../push.js';
 import { claimInvite, deleteAuthentikInvitation, enrollFlowUrl, lookupInvite, releaseInvite, type InviteRow } from '../invites.js';
-import { accountJellyfinIds, listProfiles, publicProfile } from '../profiles.js';
+import { accountJellyfinIds, deviceKidsProfile, listProfiles, publicProfile } from '../profiles.js';
+import { DEVICE_COOKIE } from '../devices.js';
+import { freshAuth, RESET_PIN_MAX_AGE } from '../oidc.js';
 import { applyRole, getUserBySub, provisionUser } from '../users.js';
+import { profileOnboarded } from './prefs.js';
 import { FALLBACK_LANGUAGE, instanceLanguage, languageFromAcceptLanguage, profileLanguage, roleLabel } from '../i18n.js';
 
 const OIDC_COOKIE = 'ff_oidc';
@@ -29,10 +32,32 @@ export function authRoutes(app: FastifyInstance, ctx: Ctx) {
     return s.url;
   }
 
+  /**
+   * A device that is locked to a kids profile (its ff_dev cookie or the current session's device) may never reset the owner PIN:
+   * otherwise a kid who knows the account login could free itself. The owner resets from another device.
+   */
+  async function kidLockedDevice(req: FastifyRequest, userId?: string): Promise<boolean> {
+    const ids = new Set<string>();
+    const cookieDev = req.cookies[DEVICE_COOKIE];
+    if (cookieDev) ids.add(cookieDev);
+    const sess = await loadSession(ctx, req.cookies[COOKIE]).catch(() => null);
+    if (sess?.deviceId) ids.add(sess.deviceId);
+    for (const id of ids) {
+      if (userId) { if (await deviceKidsProfile(ctx, userId, id)) return true; continue; }
+      const r = await ctx.db.query('select 1 from devices d join profiles p on p.id=d.kids_profile_id where d.device_id=$1 and p.kids limit 1', [id]);
+      if (r.rowCount) return true;
+    }
+    return false;
+  }
+  /** the profile picker explains why (no JSON error page for a person who clicked "PIN vergessen?") */
+  const RESET_BLOCKED = '/profiles?pinReset=kids';
+  const RESET_STALE = '/profiles?pinReset=stale';
+
   app.get('/auth/login', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req, reply) => {
     const q = req.query as Record<string, string | undefined>;
     const invite = q.invite;
     if (invite && !(await lookupInvite(ctx, invite))) return reply.code(410).send({ error: 'invite_invalid' });
+    if (q.resetPin === '1' && (await kidLockedDevice(req))) return reply.redirect(RESET_BLOCKED);
     // ?resetPin=1: forgotten owner PIN -> forced re-login at the IdP, the callback then clears the owner profile's PIN
     return reply.redirect(await startLogin(reply, invite, 600, q.resetPin === '1'));
   });
@@ -58,7 +83,8 @@ export function authRoutes(app: FastifyInstance, ctx: Ctx) {
     await ctx.kv.del(`oidc:${state}`); // single use
     try {
       const saved = JSON.parse(raw) as { state: string; nonce: string; codeVerifier: string; invite?: string; resetPin?: boolean };
-      const claims = await ctx.oidc.finish(new URL(req.url, ctx.cfg.PUBLIC_URL), saved);
+      // forgotten PIN: the IdP must really have asked for the login again (auth_time), a still valid IdP session is not enough
+      const claims = await ctx.oidc.finish(new URL(req.url, ctx.cfg.PUBLIC_URL), saved, saved.resetPin ? { maxAge: RESET_PIN_MAX_AGE } : undefined);
       let user = await getUserBySub(ctx, claims.sub);
       const isAdmin = claims.groups.includes(ctx.cfg.ADMIN_GROUP);
       if (!user) {
@@ -87,6 +113,9 @@ export function authRoutes(app: FastifyInstance, ctx: Ctx) {
       }
       if (user.disabled) return reply.code(403).send({ error: 'disabled' });
       if (saved.resetPin) {
+        // checked here as well (independent of the OIDC library): no fresh authentication, or a kid-locked device -> no reset, no login
+        if (!freshAuth(claims.authTime, RESET_PIN_MAX_AGE)) return reply.redirect(RESET_STALE);
+        if (await kidLockedDevice(req, user.id)) return reply.redirect(RESET_BLOCKED);
         // the person just re-authenticated at the IdP: the owner profile's forgotten PIN is cleared (and its lockout lifted)
         const cleared = await ctx.db.query('update profiles set pin_hash=null where id=$1 and is_owner and pin_hash is not null', [user.id]);
         await ctx.kv.del(`pinfail:${user.id}`);
@@ -109,7 +138,7 @@ export function authRoutes(app: FastifyInstance, ctx: Ctx) {
     const u = req.user!;
     const profileCount = (await listProfiles(ctx, u.id)).length;
     const dlRole = await effectiveRole(ctx, u.role);
-    const [instLang, profLang] = await Promise.all([instanceLanguage(ctx), profileLanguage(ctx, req.profile?.id)]);
+    const [instLang, profLang, onboarded] = await Promise.all([instanceLanguage(ctx), profileLanguage(ctx, req.profile?.id), profileOnboarded(ctx, req.profile?.id)]);
     return {
       id: u.id,
       name: u.name,
@@ -131,6 +160,10 @@ export function authRoutes(app: FastifyInstance, ctx: Ctx) {
       profileCount,
       /** false: this session never picked a profile explicitly (cookie of an older session / owner fallback) */
       profileChosen: Boolean(req.session!.profileId),
+      /** the active profile is a kids profile: kids home, no social features (the server answers 403 kids_profile there) */
+      kids: Boolean(req.profile?.kids),
+      /** false: the active profile was created after onboarding existed and never finished /welcome */
+      onboarded,
       /** effective UI language: the active profile's choice → instance default → 'de' (see docs/i18n.md) */
       language: profLang ?? instLang ?? FALLBACK_LANGUAGE,
       /** false: the active profile never chose a language → the client shows the first-login language picker */

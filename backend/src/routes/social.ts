@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
 import type { ItemDto } from '../jellyfin/dto.js';
+import { requireGrownUp } from '../kids.js';
 import { requireUser } from '../session.js';
 import type { UserRow } from '../types.js';
 import { itemsByIds } from './discover.js';
@@ -22,6 +23,8 @@ export function derivedStatus(i: ItemDto): WatchStatus {
 
 export function socialRoutes(app: FastifyInstance, ctx: Ctx) {
   const pre = { preHandler: requireUser(ctx) };
+  /** friends' ratings / history: not for kids profiles */
+  const grown = { preHandler: requireGrownUp(ctx) };
 
   /** The visible item, with an episode replaced by its series (status is kept per movie/series). */
   const canonical = async (req: any, id: string): Promise<ItemDto> => {
@@ -64,7 +67,7 @@ export function socialRoutes(app: FastifyInstance, ctx: Ctx) {
   }));
 
   // ---- Freunde-Leiste: who rated / watched / recommended this title (each part respects the friend's privacy flags) ----
-  app.get('/api/items/:id/friends', { ...pre, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, wrap(async (req) => {
+  app.get('/api/items/:id/friends', { ...grown, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, wrap(async (req) => {
     const id = id32.parse((req.params as { id: string }).id);
     await ctx.jf.item(req.jfUser!, id); // 404 unless the viewer can see it
     const rows = (await ctx.db.query<UserRow & { stars: number | null; recommended: boolean; share: boolean }>(

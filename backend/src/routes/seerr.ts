@@ -7,7 +7,8 @@ import { effectiveLanguage, m } from '../i18n.js';
 import { localizeStored, notify } from '../notify.js';
 import { portalStatus, SeerrError } from '../seerr/client.js';
 import { ensureSeerrUser } from '../seerr/service.js';
-import { requireAdmin, requireUser } from '../session.js';
+import { requireGrownUp } from '../kids.js';
+import { requireAdmin } from '../session.js';
 import { limitFor, quota, release, reserve, resetsAt, usage } from '../requestlimit.js';
 import { checkSecret } from './internal.js';
 import { seerrHooks } from '../hooks.js';
@@ -30,8 +31,9 @@ function mapResult(r: any) {
 const wrap = <T extends (...a: any[]) => Promise<any>>(fn: T): T => sharedWrap(fn, { zod: 'plain', jellyfin: false, seerr: true });
 
 export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
-  const pre = { preHandler: requireUser(ctx) };
-  const npre = { preHandler: requireUser(ctx, { allowNoProfile: true }) };
+  const pre = { preHandler: requireGrownUp(ctx) }; // Seerr requests are for grown-ups: kids profiles get 403 kids_profile
+  // the account's notifications (party invites, recommendations, requests ...) are not shown on kids profiles either
+  const npre = { preHandler: requireGrownUp(ctx, { allowNoProfile: true }) };
   const admin = { preHandler: requireAdmin(ctx) };
 
   app.get('/api/seerr/search', pre, wrap(async (req) => {

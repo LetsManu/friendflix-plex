@@ -22,9 +22,11 @@ const fr: Translation<typeof de> = {
   noNext: 'Pas d’autre épisode',
   secondsForward: { one: 'Avance de {n} seconde', many: 'Avance de {n} secondes', other: 'Avance de {n} secondes' },
   secondsBack: { one: 'Retour de {n} seconde', many: 'Retour de {n} secondes', other: 'Retour de {n} secondes' },
-  segment: { intro: 'Générique de début', outro: 'Générique de fin', recap: 'Résumé' },
-  skip: { intro: 'Passer le générique', outro: 'Passer le générique de fin', recap: 'Passer le résumé' },
-  skipped: { intro: 'Générique passé', outro: 'Générique de fin passé', recap: 'Résumé passé' },
+  segment: { intro: 'Générique de début', outro: 'Générique de fin', recap: 'Résumé', preview: 'Aperçu' },
+  skip: { intro: 'Passer le générique', outro: 'Passer le générique de fin', recap: 'Passer le résumé', preview: 'Passer l’aperçu' },
+  skipped: { intro: 'Générique passé', outro: 'Générique de fin passé', recap: 'Résumé passé', preview: 'Aperçu passé' },
+  /** toast after the audio / subtitle choice was saved for the series */
+  langSaved: 'Mémorisé pour cette série',
   skipOk: ' (OK)',
   quality: {
     title: 'Qualité',

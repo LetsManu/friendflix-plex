@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
 /** Allowed reactions (whitelist: nothing user-controlled gets rendered as markup). */
-export const EMOJIS = ['😂', '😮', '😢', '❤️', '👏', '🔥', '👍', '🍿'] as const;
+export const EMOJIS = ['😂', '😮', '❤️', '👍', '😢', '🔥'] as const;
+
+/** Live reactions per member: a burst of 5, then one every 700 ms (token bucket). Excess reactions are dropped silently. */
+export const REACT_BURST = 5;
+export const REACT_REFILL_MS = 700;
 
 export const clientMsg = z.discriminatedUnion('t', [
   z.object({ t: z.literal('ping'), c: z.number() }),
@@ -42,6 +46,9 @@ export interface MemberInfo {
 export interface Member extends MemberInfo {
   send: (m: ServerMsg) => void;
   chatTimes: number[];
+  /** reaction token bucket (see REACT_BURST) */
+  reactTokens: number;
+  reactAt: number;
 }
 
 export class Room {
@@ -93,7 +100,7 @@ export class Room {
   join(id: string, name: string, send: (m: ServerMsg) => void): Member {
     const existing = this.members.get(id);
     if (existing) existing.send = send; // reconnect (e.g. second tab replaces the first)
-    const m: Member = existing ?? { id, name, buffering: true, send, chatTimes: [] }; // a joiner buffers first -> room waits
+    const m: Member = existing ?? { id, name, buffering: true, send, chatTimes: [], reactTokens: REACT_BURST, reactAt: this.now() }; // a joiner buffers first -> room waits
     m.send = send;
     m.buffering = true;
     this.members.set(id, m);
@@ -137,9 +144,15 @@ export class Room {
         this.all({ t: 'chat', from: id, name: m.name, text: msg.text, at: t });
         break;
       }
-      case 'react':
+      case 'react': {
+        const t = this.now();
+        m.reactTokens = Math.min(REACT_BURST, m.reactTokens + (t - m.reactAt) / REACT_REFILL_MS);
+        m.reactAt = t;
+        if (m.reactTokens < 1) return; // flood protection: floating emojis are not persisted, so just drop the excess
+        m.reactTokens -= 1;
         this.all({ t: 'react', from: id, name: m.name, emoji: msg.emoji });
         break;
+      }
       case 'mode':
         if (id !== this.hostId) return;
         this.mode = msg.value;

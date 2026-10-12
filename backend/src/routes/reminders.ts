@@ -5,7 +5,7 @@ import { seerrHooks } from '../hooks.js';
 import { JellyfinError } from '../jellyfin/client.js';
 import { fireTmdb, isAvailableEpisode } from '../reminders.js';
 import { portalStatus, SeerrError } from '../seerr/client.js';
-import { requireUser } from '../session.js';
+import { requireGrownUp } from '../kids.js';
 import { id32 } from './_shared.js';
 
 const body = z.union([
@@ -14,7 +14,7 @@ const body = z.union([
 ]);
 
 export function reminderRoutes(app: FastifyInstance, ctx: Ctx) {
-  const pre = { preHandler: requireUser(ctx) };
+  const pre = { preHandler: requireGrownUp(ctx) }; // reminders come from Seerr/calendar features and notify the account: not on kids profiles
 
   seerrHooks.add(async (c, e) => {
     if (e.type === 'available') await fireTmdb(c, e.mediaType, e.tmdbId);

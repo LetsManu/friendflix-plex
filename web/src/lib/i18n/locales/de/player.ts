@@ -21,9 +21,11 @@ export default {
   /** screen reader text after a double tap */
   secondsForward: { one: '{n} Sekunde vor', other: '{n} Sekunden vor' },
   secondsBack: { one: '{n} Sekunde zurück', other: '{n} Sekunden zurück' },
-  segment: { intro: 'Intro', outro: 'Abspann', recap: 'Rückblick' },
-  skip: { intro: 'Intro überspringen', outro: 'Abspann überspringen', recap: 'Rückblick überspringen' },
-  skipped: { intro: 'Intro übersprungen', outro: 'Abspann übersprungen', recap: 'Rückblick übersprungen' },
+  segment: { intro: 'Intro', outro: 'Abspann', recap: 'Rückblick', preview: 'Vorschau' },
+  skip: { intro: 'Intro überspringen', outro: 'Abspann überspringen', recap: 'Rückblick überspringen', preview: 'Vorschau überspringen' },
+  skipped: { intro: 'Intro übersprungen', outro: 'Abspann übersprungen', recap: 'Rückblick übersprungen', preview: 'Vorschau übersprungen' },
+  /** toast after the audio / subtitle choice was saved for the series */
+  langSaved: 'Für diese Serie gemerkt',
   /** suffix of the skip button on a TV */
   skipOk: ' (OK)',
   quality: {

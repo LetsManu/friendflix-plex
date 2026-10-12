@@ -37,9 +37,11 @@ const pl: Translation<typeof de> = {
     many: '{n} sekund do tyłu',
     other: '{n} sekundy do tyłu',
   },
-  segment: { intro: 'Czołówka', outro: 'Napisy końcowe', recap: 'Poprzednio w serialu' },
-  skip: { intro: 'Pomiń czołówkę', outro: 'Pomiń napisy końcowe', recap: 'Pomiń podsumowanie' },
-  skipped: { intro: 'Pominięto czołówkę', outro: 'Pominięto napisy końcowe', recap: 'Pominięto podsumowanie' },
+  segment: { intro: 'Czołówka', outro: 'Napisy końcowe', recap: 'Poprzednio w serialu', preview: 'Zapowiedź' },
+  skip: { intro: 'Pomiń czołówkę', outro: 'Pomiń napisy końcowe', recap: 'Pomiń podsumowanie', preview: 'Pomiń zapowiedź' },
+  skipped: { intro: 'Pominięto czołówkę', outro: 'Pominięto napisy końcowe', recap: 'Pominięto podsumowanie', preview: 'Pominięto zapowiedź' },
+  /** toast after the audio / subtitle choice was saved for the series */
+  langSaved: 'Zapamiętano dla tego serialu',
   skipOk: ' (OK)',
   quality: {
     title: 'Jakość',

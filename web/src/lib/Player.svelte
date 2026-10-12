@@ -17,7 +17,8 @@
   import { hlsConfig, loadHls } from '#lib/player/hls';
   import { firstInfoBody, speedLabel, SPEEDS } from '#lib/player/bar';
   import EpisodesPanel from '#lib/player/EpisodesPanel.svelte';
-  import { fmtDuration, t, tr, type TFn, type TKey } from '#lib/i18n';
+  import { fmtDuration, getLocale, t, tr, type TFn, type TKey } from '#lib/i18n';
+  import { animeAudio, animeDefaultApplies, animeSubtitle } from '#lib/player/anime';
   import { castPause, castPlay, castPlayPause, castSeek, castSetSubtitle, castSetVolume, castState, castStop, castToggleMute, initCast, loadOnCast, onCastEvent, requestCastSession, type CastInfo, type CastState } from '#lib/cast';
 
   export let itemId: string;
@@ -29,6 +30,8 @@
   /** series of the playing episode: shows the episodes panel button */
   export let seriesId = '';
   export let seasonId = '';
+  /** known to be a film (no per-series audio / subtitle preference to look up) */
+  export let isMovie = false;
   /** language picked on the detail page: audio language code, subtitles code or 'off' (empty = my defaults) */
   export let wantAudio = '';
   export let wantSub = '';
@@ -96,8 +99,8 @@
   $: bufPct = duration ? Math.min(100, (buffered / duration) * 100) : 0;
   $: nowPlaying.set({ itemId, title, position: current, duration, paused, audio: info?.audioTracks.map((a) => ({ i: a.index, t: a.title })), audioSel: audioIndex ?? info?.audioTracks.find((a) => a.isDefault)?.index, subs: info?.subtitles.map((x) => ({ i: x.index, t: x.title })), subSel: subIndex }); // what the phone remote shows
   $: if (skip && skip.type === 'intro' && !partyMode && canControl && get(prefs).autoSkipIntro && !autoSkipped.has(skip.start)) { autoSkipped.add(skip.start); doSkip(); flash(tr('player.skipped.intro'), 1500); }
-  type Seg = 'intro' | 'outro' | 'recap';
-  const isSeg = (k: string): k is Seg => k === 'intro' || k === 'outro' || k === 'recap';
+  type Seg = 'intro' | 'outro' | 'recap' | 'preview';
+  const isSeg = (k: string): k is Seg => k === 'intro' || k === 'outro' || k === 'recap' || k === 'preview';
   const segKey = (k: string, kind: 'segment' | 'skip' | 'skipped'): TKey | null => (isSeg(k) ? `player.${kind}.${k}` : null);
   const segText = (tf: TFn, k: string, kind: 'segment' | 'skip' | 'skipped'): string => { const key = segKey(k, kind); return key ? tf(key) : k; };
 
@@ -110,16 +113,46 @@
   let lastSent = 0;
   const send = (kind: 'start' | 'progress' | 'stop', keepalive = false) => { lastSent = Date.now(); return report && info && api(`/api/playback/${kind}`, { method: 'POST', body: body(), keepalive }).catch(() => undefined); };
 
+  // ---- per-series audio / subtitle choice ("anime pack"): remembered per profile, applied before the global defaults ----
+  let serPref: { audio: string | null; subtitle: string | null } = { audio: null, subtitle: null }, serPrefDone = false;
+  /** "Anime: Originalton mit Untertiteln": this anime series has no own choice yet -> Japanese audio + subtitles in the UI language */
+  let animeDefault = false;
+  /** first start of an episode: look the saved choice up (an episode id resolves to its series server-side); never delays playback for long */
+  async function loadSerPref() {
+    if (serPrefDone || partyMode || isMovie) return;
+    serPrefDone = true;
+    try {
+      const want = get(prefs).animeOriginal;
+      const r = await Promise.race([api<typeof serPref & { anime?: boolean }>(`/api/series/${seriesId || itemId}/langpref${want ? '?anime=1' : ''}`), new Promise<never>((_, no) => setTimeout(no, 800))]);
+      serPref = { audio: r.audio, subtitle: r.subtitle };
+      animeDefault = animeDefaultApplies(want, r.anime, serPref);
+    } catch { /* no saved choice */ }
+  }
+  function rememberLang(p: { audio?: string; subtitle?: string }) {
+    if (!seriesId || partyMode) return;
+    serPref = { ...serPref, ...p };
+    api(`/api/series/${seriesId}/langpref`, { method: 'PUT', body: p }).then(() => flash(tr('player.langSaved'), 1400)).catch(() => undefined);
+  }
+
+  /** the fields every later step relies on (a 204 parses to null) */
+  const validInfo = (x: unknown): x is Info => {
+    const i = x as Partial<Info> | null;
+    return Boolean(i && typeof i.playSessionId === 'string' && typeof i.resumeTicks === 'number' && Array.isArray(i.audioTracks) && Array.isArray(i.subtitles) && (i.directUrl || i.hlsUrl));
+  };
   async function load(startSec?: number) {
     error = ''; errNote = '';
     if (startSec !== undefined) { lastPos = startSec; posKnown = true; }
     // first start: the saved quality + audio language go into this same request (no second round trip)
     const first = !prefsApplied && !partyMode;
-    const fb = first ? firstInfoBody(get(prefs), wantAudio) : {};
+    if (first) await loadSerPref();
+    const fb = first ? firstInfoBody(get(prefs), wantAudio || serPref.audio || animeAudio(animeDefault)) : {};
     if (fb.maxBitrate && !quality) quality = fb.maxBitrate;
     const audioLang = fb.audioLang;
     try {
-      info = await api<Info>('/api/playback/info', { method: 'POST', body: { itemId, startTicks: startSec !== undefined ? secToTicks(startSec) : undefined, audioIndex, maxBitrate: quality || undefined, audioLang } });
+      const got = await api<Info | null>('/api/playback/info', { method: 'POST', body: { itemId, startTicks: startSec !== undefined ? secToTicks(startSec) : undefined, audioIndex, maxBitrate: quality || undefined, audioLang } });
+      // an empty/foreign answer (204, proxy page ...) has no playback session: show the error instead of crashing on it
+      if (!validInfo(got)) throw new ApiError(502, null);
+      info = got;
     } catch (e: any) {
       if (!(e instanceof ApiError) || e.status >= 500) { recover('network', true); return; } // server/network hiccup: retry with backoff
       reconnecting = 0;
@@ -174,8 +207,13 @@
     }
     stopped = false; started = false;
     dispatch('ready', { info });
-    const want = wantSub === 'off' ? '' : wantSub || get(prefs).subtitleLang;
-    if (want && !partyMode) tickDom().then(() => { const sub = info?.subtitles.find((x) => (x as { language?: string }).language === want); if (sub) setSubtitle(sub.index); });
+    // detail-page pick > this series' saved choice (when the episode has that language) > my global default
+    const sp = serPref.subtitle;
+    // anime default: subtitles in the UI language, but only while the Japanese track plays (a dub-only release keeps my defaults)
+    const playingAudio = info.audioTracks.find((a) => a.index === audioIndex) ?? info.audioTracks.find((a) => a.isDefault);
+    const anime = animeDefault && !wantAudio ? animeSubtitle(getLocale(), playingAudio?.language, info.subtitles) : null;
+    const want = wantSub === 'off' ? '' : wantSub || (sp === 'off' ? '' : sp && info.subtitles.some((x) => x.language === sp) ? sp : anime || get(prefs).subtitleLang);
+    if (want && !partyMode) tickDom().then(() => { const sub = info?.subtitles.find((x) => (x as { language?: string }).language === want); if (sub) setSubtitle(sub.index, false); });
   }
 
   // ---- error recovery: network = 3 retries with backoff at the last position; decode error = recoverMediaError once, then transcode / lower quality ----
@@ -292,6 +330,8 @@
   const doPause = () => (casting ? castPause() : video?.pause());
 
   async function changeAudio(i: number) {
+    const lang = info?.audioTracks.find((a) => a.index === i)?.language;
+    if (lang && lang !== 'und') rememberLang({ audio: lang });
     if (casting) { audioIndex = i; await recast(castPos); return; }
     const pos = video?.currentTime ?? 0;
     await send('stop');
@@ -299,8 +339,9 @@
     await load(pos);
     video?.play().catch(() => undefined);
   }
-  function setSubtitle(i: number) {
+  function setSubtitle(i: number, remember = true) {
     subIndex = i;
+    if (remember) { const lang = i === -1 ? 'off' : info?.subtitles.find((x) => x.index === i)?.language; if (lang && lang !== 'und') rememberLang({ subtitle: lang }); }
     if (casting) castSetSubtitle(i);
     [...(video?.textTracks ?? [])].forEach((t) => (t.mode = t.id === `sub-${i}` ? 'showing' : 'disabled'));
   }
@@ -343,7 +384,14 @@
     if (casting) { if (!allowed()) return; t = Math.max(0, Math.min(duration || t, t)); castSeek(t); current = castPos = t; setTimeout(() => { if (started && !stopped) send('progress'); }, 700); return; }
     if (!video || !allowed()) return; video.currentTime = Math.max(0, Math.min(duration || t, t)); }
   function seekBy(d: number, quiet = false) { if (!video || !allowed()) return; seekTo((casting ? castPos : video.currentTime) + d); if (quiet) announce(d > 0 ? tr('player.secondsForward', { n: d }) : tr('player.secondsBack', { n: -d })); else flash(d > 0 ? `+${d} s` : `−${-d} s`, 700); }
-  function doSkip() { if (skip) { const key = segKey(skip.type, 'skipped'); seekTo(skip.end); if (key) announce(tr(key)); } }
+  function doSkip() {
+    if (!skip) return;
+    const key = segKey(skip.type, 'skipped');
+    // a preview at the very end is the teaser of the next episode: go there instead of seeking into nothing
+    if (skip.type === 'preview' && duration && skip.end >= duration - 3 && hasNext) { if (allowed()) dispatch('next'); return; }
+    seekTo(skip.end);
+    if (key) announce(tr(key));
+  }
   const QUALITIES: Array<[string, number]> = [['1080p', 8_000_000], ['720p', 4_000_000], ['480p', 1_500_000], ['360p', 800_000]];
   $: qualityOptions = QUALITIES.filter(([, b]) => b < (info?.roleMaxBitrate ?? Infinity));
   const qualityToast = (bps: number) => tr('player.quality.changed', { q: bps ? QUALITIES.find(([, b]) => b === bps)?.[0] ?? tr('player.quality.mbit', { n: Math.round(bps / 1e6) }) : tr('player.quality.auto') });
@@ -893,6 +941,7 @@
   .hbox dl { display: grid; grid-template-columns: max-content 1fr; gap: .45rem 1.2rem; margin: 0; align-items: center; } .hbox dt, .hbox dd { margin: 0; }
   kbd { font: inherit; font-size: .85rem; background: #333; border: 1px solid #555; border-bottom-width: 2px; border-radius: 4px; padding: .1rem .5rem; white-space: nowrap; }
   .seg { position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,.38); pointer-events: none; border-left: 2px solid rgba(255,255,255,.9); border-radius: 2px; }
+  .seg.preview { background: rgba(190,120,255,.4); border-left-color: #be78ff; }
   .seg.outro { background: rgba(245,197,24,.45); border-left-color: #f5c518; } .seg.recap { background: rgba(120,170,255,.4); border-left-color: #78aaff; }
   .bigplay { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 96px; height: 96px; border-radius: 50%; background: rgba(0,0,0,.55); border: 3px solid #fff; z-index: 4; }
   .bigplay:hover:not(:disabled) { background: rgba(0,0,0,.75); }

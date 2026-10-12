@@ -7,5 +7,9 @@ import player from './player';
 import account from './account';
 import social from './social';
 import admin from './admin';
+import hubs from './hubs';
+import anime from './anime';
+import together from './together';
+import kids from './kids';
 
-export default { common, shell, home, detail, player, account, social, admin } as const;
+export default { common, shell, home, detail, player, account, social, admin, hubs, anime, together, kids } as const;

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, ApiError, getActiveProfile, type Item } from '#lib/api';
+  import BrandHubs from '#lib/BrandHubs.svelte';
   import Hero from '#lib/Hero.svelte';
   import LazyRow from '#lib/LazyRow.svelte';
   import Row from '#lib/Row.svelte';
@@ -13,6 +14,7 @@
   let resume: Item[] | null = null, next: Item[] | null = null, latest: Item[] | null = null, mine: Item[] | null = null;
   let trending: Item[] | null = null, recs: Item[] | null = null, friendsRated: Item[] | null = null;
   let top: Item[] | null = null, because: { name: string } | null = null, becauseItems: Item[] | null = null;
+  let moreRaw: Array<{ because: { id: string; name: string }; items: Item[] }> = [];
   let featured: FeaturedList[] = [];
   let views: Item[] = [], genres: string[] = [], error = '';
   const q = (p: Record<string, string>) => new URLSearchParams(p).toString();
@@ -49,6 +51,8 @@
     void cached('recs', () => load('/api/recommendations').then((r) => r.items as Item[]), (v) => (recs = v), () => (recs = []));
     void cached('friends', () => load('/api/library/friends-rated').then((r) => r.items as Item[]), (v) => (friendsRated = v), () => (friendsRated = []));
     void cached('because', () => load('/api/library/because'), (r: { because: { name: string } | null; items: Item[] }) => { because = r.because; becauseItems = r.items; }, () => (becauseItems = []));
+    // more "Because you watched" rows (2-3 further recent titles); they only appear in between the other rows below the fold
+    void cached('becauseMore', () => load('/api/library/because-more').then((r) => r.rows as typeof moreRaw), (v) => (moreRaw = v), () => (moreRaw = []));
     // 3. below the fold: once the browser is idle (keeps the network free for the billboard image);
     //    from the cache at once (back navigation: same page height, so the scroll position restores exactly)
     const warm = Boolean(homeCache.get(`${getActiveProfile()}|latest`));
@@ -70,12 +74,16 @@
   $: heroRank = hero && top ? top.findIndex((i) => i.id === hero!.id) + 1 : 0;
   // Jellyfin's next-up also lists the episode you are in the middle of: that one is already under "Weiterschauen"
   $: nextOnly = next && resume ? next.filter((e) => !resume!.some((r) => r.id === e.id)) : next;
+  // the extra rows never repeat what "Weiterschauen" / "Nächste Folge" / the first "Weil du ..." row already show (episodes count as their series)
+  $: taken = new Set([...(resume ?? []), ...(next ?? []), ...(becauseItems ?? [])].flatMap((i) => [i.id, i.seriesId ?? i.id]));
+  $: more = moreRaw.map((r) => ({ ...r, items: r.items.filter((i) => !taken.has(i.id)) })).filter((r) => r.items.length >= 4);
   const viewLoader = (id: string) => () => items({ parentId: id, sort: 'DateCreated', desc: 'true', limit: '24' });
   const genreLoader = (g: string) => () => items({ types: 'Movie,Series', genre: g, sort: 'Random', limit: '24' });
 </script>
 
 <svelte:head><title>{$t('common.appName')}</title></svelte:head>
 <Hero item={hero} rank={heroRank} portrait />
+<BrandHubs />
 <div class="rows">
   {#if error}<p class="err" style="margin:1rem var(--pad-x)">{error}</p>{/if}
   <Row title={$t('home.rows.resume')} items={resume} landscape removable on:remove={(e) => removeResume(e.detail.id)} />
@@ -85,8 +93,10 @@
   {#if because}<Row title={$t('home.rows.because', { name: because.name })} items={becauseItems} />{/if}
   <Row title={$t('home.rows.latest')} items={latest} href="/new" />
   <Row title={$t('home.rows.trending')} items={trending} ranked />
+  {#if more[0]}<Row title={$t('together.because', { name: more[0].because.name })} items={more[0].items} />{/if}
   {#each featured as f (f.id)}<Row title={$t('home.rows.featured', { name: f.name, owner: f.owner.name })} items={f.items} href="/lists/{f.id}" />{/each}
   <Row title={$t('home.rows.myList')} items={mine} href="/watchlist" />
+  {#if more[1]}<Row title={$t('together.because', { name: more[1].because.name })} items={more[1].items} />{/if}
   <UpcomingRow type="movie" title={$t('home.rows.upcomingWish')} />
   <!-- the second ranked row never directly follows the first one -->
   {#each views as v, i (v.id)}
@@ -94,8 +104,9 @@
     {#if i === 0}<Row title={$t('home.rows.top10')} items={top} ranked />{/if}
   {/each}
   {#if !views.length}<Row title={$t('home.rows.top10')} items={top} ranked />{/if}
-  {#each genres as g (g)}
+  {#each genres as g, i (g)}
     <LazyRow title={g} href="/browse/movies?genre={encodeURIComponent(g)}" cacheKey="genre:{g}" load={genreLoader(g)} />
+    {#if i === 0 && more[2]}<Row title={$t('together.because', { name: more[2].because.name })} items={more[2].items} />{/if}
   {/each}
 </div>
 

@@ -8,6 +8,7 @@
   import { t, tr } from '#lib/i18n';
   import Icon from '#lib/Icon.svelte';
   import ListMenu from '#lib/ListMenu.svelte';
+  import { kidsMode } from '#lib/kids';
   import RatingButton from '#lib/RatingButton.svelte';
   import MoreActions, { type MoreAction } from '#lib/MoreActions.svelte';
   import { toThumb, type Thumb } from '#lib/rating';
@@ -184,7 +185,7 @@
       {#if item.type !== 'BoxSet'}<RatingButton itemId={listId} bind:value={thumb} on:change={onThumb} on:error={flash} />{/if}
       <span class="right">
         <MoreActions {actions} title={item.name} label={$t('home.card.moreActionsFor', { name: item.name })}>
-          {#if item.type !== 'BoxSet'}<ListMenu itemId={listId} variant="row" on:changed={(e) => dispatch('listchanged', e.detail)} />{/if}
+          {#if item.type !== 'BoxSet' && !$kidsMode}<ListMenu itemId={listId} variant="row" on:changed={(e) => dispatch('listchanged', e.detail)} />{/if}
         </MoreActions>
         <a class="round" href={detail} aria-label={$t('home.card.moreInfoFor', { name: item.name })} aria-haspopup="dialog" title={$t('home.card.moreInfo')} on:pointerenter={prefetchModal} on:focus={prefetchModal} on:click={more}><Icon name="chevron-down" size={18} /></a>
       </span>

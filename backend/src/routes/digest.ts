@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { audit } from '../audit.js';
 import type { Ctx } from '../ctx.js';
 import { digestSchedule, sendDigest, type DigestData } from '../digest.js';
-import { requireAdmin, requireUser } from '../session.js';
+import { requireGrownUp } from '../kids.js';
+import { requireAdmin } from '../session.js';
 import type { ItemDto } from '../jellyfin/dto.js';
 import type { JfUser } from '../types.js';
 
@@ -55,7 +56,7 @@ export async function filterDigest(ctx: Ctx, user: JfUser, d: DigestData): Promi
 const settingsSchema = z.object({ enabled: z.boolean(), day: z.number().int().min(0).max(6), hour: z.number().int().min(0).max(23) });
 
 export function digestRoutes(app: FastifyInstance, ctx: Ctx) {
-  const pre = { preHandler: requireUser(ctx) };
+  const pre = { preHandler: requireGrownUp(ctx) }; // the weekly digest is social (friends' activity)
   const admin = { preHandler: requireAdmin(ctx) };
 
   app.get('/api/digest/latest', pre, async (req) => {

@@ -160,7 +160,7 @@ git switch main && git merge upstream/main          # regularly, e.g. weekly or 
 ```
 
 - Plex code lives in `backend/src/plex/` and in the gateway's upstream adapter; shared code only gets the minimum changes needed (the media-server interface). Prefer adding files over editing upstream files.
-- Jellyfin-specific docs (`docs/integrations.md`, `docs/operations.md`, `docs/monitoring.md`, `docs/downloads.md`, `docs/discovery.md`) only carry a short note at the top pointing here, so upstream edits merge cleanly. Do not rewrite them in this fork.
+- Jellyfin-specific docs (`docs/integrations.md`, `docs/operations.md`, `docs/monitoring.md`, `docs/downloads.md`, `docs/discovery.md`, `docs/setup.md`, `docs/authentik.md` and their `docs/de/` twins) only carry a short note at the top pointing here, so upstream edits merge cleanly. Do not rewrite them in this fork.
 - README, `docs/plex.md`, `docs/de/plex.md` and branding are fork-only and will conflict only in the README: resolve by taking the fork text and re-applying upstream's factual changes (new env vars, features).
 - After each merge run lint, typecheck and the test suites, including the Plex tests against the fake Plex server.
 - Unrelated upstream features that depend on Jellyfin need a Plex equivalent or an entry in the parity table above.

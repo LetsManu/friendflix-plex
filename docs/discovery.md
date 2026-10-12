@@ -105,6 +105,19 @@ Admins können bis zu 5 Listen auf der Startseite aller Nutzer hervorheben (Migr
 
 Jeder Treffer trägt `planned`: die Zahl der Teilnehmer (Konten), die den Titel auf der Merkliste eines ihrer Profile haben. Sortiert wird nach `planned`, dann Bewertung, dann Name. Titel, die ein Teilnehmer abgebrochen (`dropped`, jedes Profil) oder mit Daumen runter bewertet hat, entfallen. Wer geplant hat, wird nicht verraten.
 
+## Marken-Hubs, Extras, Simulcast, Kommentare
+
+- **Marken-Hubs:** `GET /api/hubs` (sichtbare Hubs mit Kachelbild), `GET /api/hubs/:id` und `/api/hubs/:id/items` (Reihen Neu, Beliebt, Filme, Serien, A–Z). Quelle ist ein Jellyfin-Studio, eine Sammlung, ein Tag oder ein Genre; der Admin pflegt sie unter `/admin/hubs` (bis zu 8, Vorschläge aus der Bibliothek). Inhalte laufen immer über den Jellyfin-Zugang des Profils.
+- **Extras:** `GET /api/items/:id/extras/all` – lokale Trailer und Bonusmaterial; der Tab fehlt, wenn es nichts gibt.
+- **Weitere „Weil du … gesehen hast“-Reihen:** `GET /api/library/because-more` – bis zu drei Reihen zu verschiedenen zuletzt gesehenen Titeln, ohne Doppelte und ohne Weiterschauen-Titel.
+- **Serien-Sprachwahl:** `GET/PUT/DELETE /api/series/:id/langpref` (je Profil; eine Folgen-ID zählt für ihre Serie). `?anime=1` liefert zusätzlich `anime` für die Einstellung „Anime: Originalton mit Untertiteln“ (`animeOriginal` in `/api/prefs`): ohne eigene Serienwahl startet ein Anime auf Japanisch mit Untertiteln in der UI-Sprache, sofern es eine japanische Tonspur gibt.
+- **Simulcast:** `GET /api/simulcast[?anime=1]` – laufende Serien mit Folgen in den letzten/nächsten vier Wochen, nach Wochentag und Season.
+- **Folgen-Kommentare:** `GET/POST /api/items/:id/comments`, `DELETE /api/comments/:id` (Autor oder Admin). Sichtbar für alle Konten der Instanz außer Gästen – FriendFlix kennt keine eigene Freundesliste, alle eingeladenen Konten sind „Freunde“ (wie bei `/api/friends`). Wer die Folge noch nicht gesehen hat, bekommt alle fremden Kommentare ohne Text, bis `?reveal=1` sie anfordert. Löschen darf der Autor oder ein Admin im Hauptprofil.
+
+## Kinderprofile
+
+Ein Kinderprofil (`kids`, Altersgrenze 0/6/12 als Jellyfin-`MaxParentalRating`, Titel ohne Freigabe ausgeblendet) erhält auf alle sozialen und kontoweiten Routen `403 kids_profile` (`requireGrownUp` in `backend/src/kids.ts`): Reaktionen, Freunde-Leiste, Bewertungen, Listen, Abstimmungen, Kommentare, Watch-Party (REST und WebSocket, Schließcode 4403), Freunde/Matcher/Empfehlungen, „Freunde haben bewertet“, „Läuft gerade“, Seerr-Wünsche, Statistiken, Wochenrückblick, Benachrichtigungen, Web-Push, Erinnerungen, „Diese Woche bei uns“ und Geräteliste. Inhalte (Titel, Suche, Wiedergabe, Hubs, Extras, Downloads, Simulcast, Serien-Sprachwahl) bleiben erlaubt. Ein Fernseher, der aus einem Kinderprofil gekoppelt wird, ist fest an dieses Profil gebunden (`devices.kids_profile_id`); auf solchen Geräten wird „PIN vergessen?“ abgelehnt. Ändert der Inhaber Kinder-Flag oder Altersgrenze, verwirft der Server die Caches dieses Profils (`policyChanged` in `backend/src/hooks.ts`).
+
 ## Web
 
 - **`/search`:** Die Abschnitte heißen Personen, Genres, Filme & Serien und Folgen.

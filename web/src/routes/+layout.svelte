@@ -10,6 +10,7 @@
   import Footer from '#lib/Footer.svelte';
   import { avatarBg, initial } from '#lib/avatars';
   import { loadList, loadPrefs } from '#lib/stores';
+  import { kidsMode } from '#lib/kids';
   import type ItemModalType from '#lib/ItemModal.svelte';
   import { loadModal, prefetchModal } from '#lib/lazy';
   import { startTvLink, type ToTv } from '#lib/remote';
@@ -23,7 +24,7 @@
   import { categoryHref, kindFromPath, showsChips, type Kind } from '#lib/mobile';
   import { dialogKeys } from '#lib/actions';
   import { langLabel } from '#lib/langs';
-  import { canRenderEarly, clearReloadFlag, earlyProfile, gateHref, hintOf, needsProfileGate, readActive, readHint, readPicked, readReloading, writeActive, writeHint } from '#lib/gate';
+  import { canRenderEarly, clearReloadFlag, earlyProfile, gateHref, hintOf, kidsRedirect, needsProfileGate, needsWelcome, readActive, readHint, readPicked, readReloading, welcomeHref, writeActive, writeHint } from '#lib/gate';
   import MobilePreviewSheet from '#lib/MobilePreviewSheet.svelte';
   import { closePreview, previewSheet } from '#lib/previewSheet';
   import { isLocale, pageEpoch, pickLocale, ready, setLocale, t, type Locale } from '#lib/i18n';
@@ -75,6 +76,10 @@
   $: who = me ? (me.profile?.name ?? me.name) : '';
   $: faceStyle = me?.profile ? `background:${avatarBg(me.profile.avatar)}` : undefined;
   $: admin = Boolean(me?.isAdmin && me?.profile?.isOwner);
+  /** kids profile: kids header, no footer links / tab bar / bell; the last /api/me answer decides until the fresh one arrives */
+  $: kidsUi = me ? Boolean(me.kids) : Boolean(bootHint?.kids);
+  $: if (typeof document !== 'undefined') document.documentElement.classList.toggle('kids', kidsUi);
+  $: kidsMode.set(kidsUi); // shared flag for components (no social UI on kids profiles)
   // ---- phone: chip bar + "Kategorien" overlay; desktop: "Kategorien" dropdown (genres, languages, collections) ----
   let catOpen = false, catGenres: string[] | null = null, catKind: Kind = 'movies', catBtn: HTMLElement | null = null;
   let catLangs: string[] | null = null;
@@ -82,11 +87,17 @@
   $: path = $page.url.pathname;
   $: publicPage = path.startsWith('/invite/') || path === '/tv' || path === '/offline';
   $: watchPage = path.startsWith('/watch/') || /^\/party\/[^/]+/.test(path); // immersive player pages: no navigation
-  $: profilesPage = path === '/profiles';
+  $: profilesPage = path === '/profiles' || path === '/welcome'; // full-screen pages without navigation (picker, onboarding)
   $: heroPage = path === '/' || path.startsWith('/item/');
+  $: kidsPage = path === '/kids' || path.startsWith('/kids/'); // full-bleed bright kids pages (own background and spacing)
   $: unread = notes.filter((n) => !n.read).length;
   $: if (path) { menu = false; bell = false; cats = false; catOpen = false; closePreview(); }
-  $: chips = $mobile && showsChips(path);
+  $: chips = $mobile && showsChips(path) && !kidsUi;
+  // kids profiles stay on kids routes, new profiles go through /welcome once (both also checked in boot() before the page mounts)
+  $: if (me && !pending && !publicPage) {
+    const to = kidsRedirect(me, path) ?? (needsWelcome(me, path) ? welcomeHref(path + $page.url.search, me.kids) : null);
+    if (to) void goto(to, { replaceState: true });
+  }
   $: if (typeof document !== 'undefined') {
     document.documentElement.classList.toggle('m-chips', chips && !watchPage && !profilesPage);
     document.documentElement.style.overflow = catOpen ? 'hidden' : ($previewSheet ? 'hidden' : ''); // no page scroll behind the overlay / sheet
@@ -103,7 +114,7 @@
     loadModal().then((m) => (Modal = m.default)).catch(() => { location.href = `/item/${id}`; }); // chunk gone (new deploy/offline): open the full page
   }
 
-  async function loadNotes() { try { notes = (await api('/api/notifications')).notifications; } catch { /* ignore */ } }
+  async function loadNotes() { if (me?.kids) return; try { notes = (await api('/api/notifications')).notifications; } catch { /* ignore */ } } // kids: 403 kids_profile
   async function toggleBell() {
     bell = !bell; menu = false; cats = false;
     if (bell && unread) { await api('/api/notifications/read', { method: 'POST' }); setTimeout(loadNotes, 1500); }
@@ -252,7 +263,9 @@
     window.addEventListener('ff-notes', onNotes);
     const onHelp = () => (help = true); // "Hilfe" on /me
     window.addEventListener('ff-help', onHelp);
-    stops.push(() => { window.removeEventListener('ff-notes', onNotes); window.removeEventListener('ff-help', onHelp); });
+    const onOnboarded = () => { if (me) me = { ...me, onboarded: true }; }; // /welcome finished
+    window.addEventListener('ff-onboarded', onOnboarded);
+    stops.push(() => { window.removeEventListener('ff-notes', onNotes); window.removeEventListener('ff-help', onHelp); window.removeEventListener('ff-onboarded', onOnboarded); });
     // header background: a 10 px sentinel at the top of the document instead of reading scrollY on every scroll event
     if (typeof IntersectionObserver === 'function' && sentinel) {
       const io = new IntersectionObserver(([e]) => { scrolled = !e!.isIntersecting; });
@@ -305,6 +318,10 @@
         if (!pending && needsProfileGate(m, location.pathname, readPicked())) {
           await goto(gateHref(location.pathname + location.search), { replaceState: true });
         }
+        // a kids profile never mounts a grown-up page; a new profile starts with /welcome (after the language question, which
+        // is an overlay above it)
+        else if (!pending && kidsRedirect(m, location.pathname)) await goto(kidsRedirect(m, location.pathname)!, { replaceState: true });
+        else if (!pending && needsWelcome(m, location.pathname)) await goto(welcomeHref(location.pathname + location.search, m.kids), { replaceState: true });
         // the server language is active before the page mounts (an early-rendered page only gets the $t texts updated;
         // older servers send no language: keep the remembered one)
         if (m.language) await setLocale(m.language);
@@ -339,7 +356,16 @@
 {#if publicPage}
   <slot />
 {:else if pageReady}
-  {#if !watchPage && !profilesPage}
+  {#if !watchPage && !profilesPage && kidsUi}
+    <header class="nav kidsnav" class:solid={scrolled || !path.startsWith('/kids')}>
+      <a class="klogo" href="/kids" aria-label={$t('kids.nav.home')}><Logo wordmark={!$mobile} size={$mobile ? 30 : 32} label="" /><span class="kbadge">{$t('kids.badge')}</span></a>
+      <span class="sp"></span>
+      <nav class="knav" aria-label={$t('kids.nav.label')}>
+        <a class="kbtn" href="/kids/search" aria-label={$t('kids.nav.search')} aria-current={path.startsWith('/kids/search') ? 'page' : undefined}><Icon name="search" size={26} /></a>
+        <a class="kav" href="/profiles" aria-label={$t('kids.nav.switchProfile', { name: who })}><span class="face" style={faceStyle}>{initial(who)}</span></a>
+      </nav>
+    </header>
+  {:else if !watchPage && !profilesPage}
     {#if $mobile}
       <header class="nav m" class:solid={scrolled || !heroPage} class:chips>
         <div class="mrow">
@@ -456,7 +482,7 @@
   {#if !online}<div class="offbar" role="status">{$t('shell.offline.bar')} <a href="/offline" data-sveltekit-reload>{$t('shell.offline.toDownloads')}</a></div>{/if}
   {#if replaced}<div class="panel" role="alert" style="position:fixed;z-index:90;top:5rem;left:50%;transform:translateX(-50%)"><b>{$t('shell.tvReplaced.text')}</b> <button on:click={() => location.reload()}>{$t('shell.tvReplaced.reconnect')}</button></div>{/if}
   {#if modalId && Modal}<svelte:component this={Modal} id={modalId} />{/if}
-  <main id="main" class:page={!heroPage && !watchPage && !profilesPage}>
+  <main id="main" class:page={!heroPage && !watchPage && !profilesPage && !kidsPage}>
     {#if pending}
       <div class="page"><div class="panel pendp">
         <b class="warn">{$t('shell.pending.title')}</b>
@@ -475,8 +501,8 @@
       {#key $pageEpoch}<slot />{/key}
     {/if}
   </main>
-  {#if !watchPage && !profilesPage && !tv && !pending && !$mobile}<Footer onHelp={() => (help = true)} />{/if}
-  {#if langAsk && !profilesPage}
+  {#if !watchPage && !profilesPage && !tv && !pending && !$mobile}<Footer onHelp={() => (help = true)} kids={kidsUi} />{/if}
+  {#if langAsk && path !== '/profiles'}<!-- also above /welcome: the language comes first -->
     <LanguageGate mode={langAsk} preselect={langPre} onChoose={langAsk === 'instance' ? chooseInstance : chooseProfile}
       onSkip={langAsk === 'profile' ? skipLanguage : null} />
   {/if}
@@ -518,6 +544,16 @@
   .face { width: 34px; height: 34px; border-radius: 4px; display: grid; place-items: center; background: linear-gradient(135deg, #ff3b52, #7a0a17); font-weight: 800; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
   .caret { width: 0; height: 0; border: 5px solid transparent; border-top-color: #fff; border-bottom: 0; transition: transform var(--t-fast); }
   .caret.up { transform: rotate(180deg); }
+  /* ---- kids header: bright, big touch targets, logo + "Kids" badge, search, avatar (switch profile) ---- */
+  .kidsnav { background: linear-gradient(100deg, #4f6bed, #7b5cff); color: #fff; } /* always solid: the white wordmark stays readable */
+  .kidsnav.solid { box-shadow: 0 2px 14px rgba(32,35,58,.25); }
+  .klogo { display: inline-flex; align-items: center; gap: .6rem; min-height: 48px; color: #fff; }
+  .kbadge { display: inline-grid; place-items: center; min-height: 30px; padding: 0 .8rem; border-radius: 99px; background: linear-gradient(135deg, #ff5d8f, #ffb703); color: #fff; font-weight: 900; font-size: .95rem; letter-spacing: .04em; }
+  .knav { display: flex; align-items: center; gap: .5rem; }
+  .kbtn, .kav { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; color: #20233a; }
+  .kbtn { background: #fff; box-shadow: 0 2px 8px rgba(32,35,58,.15); }
+  .kbtn:focus-visible, .kav:focus-visible, .klogo:focus-visible { outline: 4px solid #ffb703; outline-offset: 2px; }
+  .kav .face { width: 46px; height: 46px; border-radius: 50%; font-size: 1.1rem; color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.85); }
   .top-sentinel { position: absolute; top: 0; left: 0; width: 1px; height: 10px; pointer-events: none; visibility: hidden; }
   .drop { position: absolute; right: 0; top: calc(100% + 6px); background: rgba(0,0,0,.94); border: 1px solid #333; border-radius: 4px; min-width: 220px; padding: .4rem 0; display: flex; flex-direction: column; box-shadow: 0 12px 30px rgba(0,0,0,.7); max-height: calc(100vh - var(--nav-h) - 16px); max-height: calc(100dvh - var(--nav-h) - 16px); overflow-y: auto; overscroll-behavior: contain; animation: drop-in .16s var(--ease); }
   @keyframes drop-in { from { opacity: 0; transform: translateY(-4px); } }

@@ -5,6 +5,8 @@
   import { saveLanguage } from '#lib/stores';
   /** opens the help dialog of the layout */
   export let onHelp: () => void = () => undefined;
+  /** kids profile: no link columns (party, lists, stats … are not for kids), language and help stay */
+  export let kids = false;
   let langErr = false;
   async function pick(e: Event) {
     const sel = e.currentTarget as HTMLSelectElement, l = sel.value as Locale;
@@ -13,13 +15,15 @@
   }
 </script>
 
-<footer class="foot" aria-label={$t('shell.footer.label')}>
+<footer class="foot" class:kids aria-label={$t('shell.footer.label')}>
   <div class="inner">
-    <nav class="cols" aria-label={$t('shell.footer.more')}>
-      {#each FOOTER_COLUMNS as col, i (i)}
-        <ul>{#each col as [href, label] (href)}<li><a {href}>{$t(label)}</a></li>{/each}</ul>
-      {/each}
-    </nav>
+    {#if !kids}
+      <nav class="cols" aria-label={$t('shell.footer.more')}>
+        {#each FOOTER_COLUMNS as col, i (i)}
+          <ul>{#each col as [href, label] (href)}<li><a {href}>{$t(label)}</a></li>{/each}</ul>
+        {/each}
+      </nav>
+    {/if}
     <div class="meta">
       <label class="lang"><span class="globe" aria-hidden="true">🌐</span><span class="sr-only">{$t('shell.footer.language')}</span>
         <select value={$locale} on:change={pick}>{#each LOCALES as l (l.code)}<option value={l.code} lang={l.code}>{l.name}</option>{/each}</select>
@@ -48,5 +52,9 @@
   .help { background: transparent; border: 1px solid #808080; color: #808080; font-weight: 400; font-size: .82rem; min-height: 44px; padding: .3rem .9rem; border-radius: 2px; }
   .help:hover:not(:disabled) { background: transparent; color: #fff; border-color: #fff; }
   .brand { display: inline-flex; align-items: center; gap: .45rem; opacity: .85; }
+  .foot.kids { background: #fffaf0; color: #5b6280; }
+  .foot.kids .meta { margin-top: 0; }
+  .foot.kids .lang select, .foot.kids .help { color: #20233a; border-color: #9aa0b8; border-radius: 99px; }
+  .foot.kids .lang option { background: #fff; color: #20233a; }
   @media (max-width: 720px) { .foot { display: none; } }
 </style>

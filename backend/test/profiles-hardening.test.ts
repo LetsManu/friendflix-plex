@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { freshAuth, RESET_PIN_MAX_AGE } from '../src/oidc.js';
 import { ownerProfile } from '../src/profiles.js';
 import { makeEnv, type Handler, type TestEnv } from './helpers.js';
 
 type Sess = { cookies: Record<string, string>; csrf: string };
 let env: TestEnv;
-afterEach(async () => { await env?.close(); });
+afterEach(async () => { const e = env; env = undefined as unknown as TestEnv; await e?.close(); });
 
 const extraJf = (): Record<string, Handler> => ({
   'GET /UserItems/Resume': () => ({ json: { Items: [] } }),
@@ -173,5 +174,70 @@ describe('profile hardening', () => {
     expect((await env.pool.query('select pin_hash from profiles where id=$1', [oid])).rows[0].pin_hash).toBeNull();
     expect(await env.kv.get(`pinfail:${oid}`)).toBeNull();
     expect((await env.pool.query("select 1 from audit_log where action='profile.pin_reset'")).rowCount).toBe(1);
+  });
+
+  it('PIN reset needs a really fresh IdP login: auth_time is checked (and maxAge goes to the id_token validation)', async () => {
+    const s = await mk();
+    const oid = await ownerId();
+    await call(s, 'PUT', `/api/profiles/${oid}/pin`, { pin: '1234' });
+    const seen: Array<{ maxAge?: number } | undefined> = [];
+    const orig = env.ctx.oidc.finish;
+    env.ctx.oidc.finish = (u, saved, o) => { seen.push(o); return orig(u, saved, o); };
+    const reset = async (authTime?: number) => {
+      env.claims.current = { ...env.claims.current, authTime } as typeof env.claims.current;
+      const l = await env.app.inject('/auth/login?resetPin=1');
+      const st = l.cookies.find((x) => x.name === 'ff_oidc')!.value;
+      return env.app.inject({ url: `/auth/callback?state=${st}&code=c`, cookies: { ff_oidc: st } });
+    };
+    const pin = async () => (await env.pool.query('select pin_hash from profiles where id=$1', [oid])).rows[0].pin_hash;
+    // an old IdP session (prompt=login ignored) or a token without auth_time: no reset, no session
+    for (const at of [Math.floor(Date.now() / 1000) - 3600, undefined]) {
+      const cb = await reset(at);
+      expect(cb.headers.location).toBe('/profiles?pinReset=stale');
+      expect(cb.cookies.find((c) => c.name === 'ff_sid')).toBeUndefined();
+      expect(await pin()).toBeTruthy();
+    }
+    expect(seen.at(-1)).toEqual({ maxAge: RESET_PIN_MAX_AGE });
+    // a normal login is not affected by an old auth_time
+    env.claims.current = { ...env.claims.current, authTime: 1 } as typeof env.claims.current;
+    await env.login();
+    expect(seen.at(-1)).toBeUndefined();
+    expect((await reset(Math.floor(Date.now() / 1000) - 10)).headers.location).toBe('/');
+    expect(await pin()).toBeNull();
+  });
+
+  it('freshAuth: present, at most maxAge old, not from the future', () => {
+    const now = 1_800_000_000_000;
+    expect(freshAuth(now / 1000 - 60, 120, now)).toBe(true);
+    expect(freshAuth(now / 1000 - 200, 120, now)).toBe(false);
+    expect(freshAuth(now / 1000 + 600, 120, now)).toBe(false);
+    expect(freshAuth(undefined, 120, now)).toBe(false);
+  });
+
+  it('a device locked to a kids profile can never reset the owner PIN (login refused, callback refused)', async () => {
+    const s = await mk();
+    const oid = await ownerId();
+    const kid = await mkProfile(s, 'Mia', { kids: true });
+    await call(s, 'PUT', `/api/profiles/${oid}/pin`, { pin: '1234' });
+    const k = sidOf(await call(s, 'POST', `/api/profiles/${kid.id}/select`, {}), s);
+    const dev = (await env.pool.query<{ device_id: string }>('select device_id from devices where kids_profile_id=$1', [kid.id])).rows[0]!.device_id;
+    // by the device cookie and by the session alone
+    for (const cookies of [{ ff_dev: dev }, k.cookies]) {
+      const l = await env.app.inject({ url: '/auth/login?resetPin=1', cookies });
+      expect(l.statusCode).toBe(302);
+      expect(l.headers.location).toBe('/profiles?pinReset=kids');
+      expect(l.cookies.find((c) => c.name === 'ff_oidc')).toBeUndefined();
+    }
+    // a flow started elsewhere but finished on the kid's device is refused too
+    const l = await env.app.inject('/auth/login?resetPin=1');
+    const st = l.cookies.find((x) => x.name === 'ff_oidc')!.value;
+    const cb = await env.app.inject({ url: `/auth/callback?state=${st}&code=c`, cookies: { ff_oidc: st, ff_dev: dev } });
+    expect(cb.headers.location).toBe('/profiles?pinReset=kids');
+    expect((await env.pool.query('select pin_hash from profiles where id=$1', [oid])).rows[0].pin_hash).toBeTruthy();
+    // another device (no kids lock) may reset it
+    const st2 = (await env.app.inject('/auth/login?resetPin=1')).cookies.find((x) => x.name === 'ff_oidc')!.value;
+    const ok = await env.app.inject({ url: `/auth/callback?state=${st2}&code=c`, cookies: { ff_oidc: st2 } });
+    expect(ok.headers.location).toBe('/');
+    expect((await env.pool.query('select pin_hash from profiles where id=$1', [oid])).rows[0].pin_hash).toBeNull();
   });
 });

@@ -266,7 +266,7 @@ export class JellyfinService {
   }
 
   /**
-   * Intro/outro/recap segments (Jellyfin >= 10.10 media segments API). Older servers answer 404 -> empty list,
+   * Intro/outro/recap/preview segments (Jellyfin >= 10.10 media segments API). Older servers answer 404 -> empty list,
    * the "Intro überspringen" button then simply never shows.
    */
   async segments(user: JfUser, id: string): Promise<Array<{ type: string; start: number; end: number }>> {
@@ -274,7 +274,7 @@ export class JellyfinService {
     if (!res.ok) return [];
     const r = (await res.json().catch(() => null)) as { Items?: Array<{ Type: string; StartTicks: number; EndTicks: number }> } | null;
     return (r?.Items ?? [])
-      .filter((s) => ['Intro', 'Outro', 'Recap'].includes(s.Type) && s.EndTicks > s.StartTicks)
+      .filter((s) => ['Intro', 'Outro', 'Recap', 'Preview'].includes(s.Type) && s.EndTicks > s.StartTicks)
       .map((s) => ({ type: s.Type.toLowerCase(), start: s.StartTicks / 1e7, end: s.EndTicks / 1e7 }));
   }
 

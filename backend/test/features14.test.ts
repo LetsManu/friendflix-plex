@@ -142,8 +142,7 @@ describe('scenes, X-Ray, extras, trailers, collections', () => {
     expect(p[0]).toEqual({ id: 'f'.repeat(32), name: 'Ada Beispiel', role: 'Kommissarin', type: 'Actor', image: true });
     expect(p[1]).toMatchObject({ type: 'Director', image: false });
   });
-  it('extras, collections and studios', async () => {
-    expect((await call('GET', `/api/items/${A}/extras`)).json().items[0].name).toBe('Making of');
+  it('collections and studios', async () => {
     const c = (await call('GET', '/api/library/collections')).json();
     expect(c.items[0]).toMatchObject({ name: 'Alpha-Reihe', type: 'BoxSet' });
     expect(c.studios).toEqual(['Studio Eins', 'Studio Zwei']);

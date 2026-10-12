@@ -8,6 +8,7 @@
   import Icon from '#lib/Icon.svelte';
   import { itemPath } from '#lib/mobile';
   import Card from '#lib/Card.svelte';
+  import { kidsMode } from '#lib/kids';
   import { mobile } from '#lib/viewport';
   import { alreadyWished, clearRecent, isYear, loadRecent, pushRecent, wishCandidates, type SeerrHit } from '#lib/discovery';
 
@@ -25,7 +26,7 @@
     wishCtl?.abort();
     const my = ++wishSeq;
     wishes = []; wishMsg = ''; sent = new Set(); quotaFull = '';
-    if (q.length < 2 || isYear(q)) return;
+    if (q.length < 2 || isYear(q) || $kidsMode) return; // kids profiles: no Seerr wishes (403 kids_profile)
     wishCtl = new AbortController();
     try {
       const r = await api<{ results: SeerrHit[] }>(`/api/seerr/search?q=${encodeURIComponent(q)}`, { signal: wishCtl.signal });
@@ -101,7 +102,9 @@
     // the layout may render this page before /api/me answered: re-read the recent searches of the real profile then
     const onMe = () => { if (!term) recent = loadRecent(getActiveProfile()); };
     window.addEventListener('ff-me', onMe, { once: true });
-    api('/api/library/trending').then((r) => (popular = (r.items as Item[]).slice(0, 12))).catch(() => (popular = []));
+    // kids profiles: "what friends watch" is social (403 kids_profile): the section stays out
+    if ($kidsMode) popular = [];
+    else api('/api/library/trending').then((r) => (popular = (r.items as Item[]).slice(0, 12))).catch(() => (popular = []));
     if ($mobile && !input) inputEl?.focus();
     return () => window.removeEventListener('ff-me', onMe);
   });
@@ -135,6 +138,7 @@
   {/if}
   {#if term.length === 0}
     {#if !$mobile && !recent.length}<p class="muted hint">{$t('home.search.hint')}</p>{/if}
+    {#if !$kidsMode}
     <section aria-labelledby="pop">
       <h2 id="pop" class="sh">{$t('home.search.popular')}</h2>
       {#if popular === null}<div class="tiles" aria-busy="true">{#each Array(6) as _}<div class="skeleton" style="aspect-ratio:16/9"></div>{/each}</div>
@@ -145,6 +149,7 @@
       {:else if popular.length}<div class="tiles">{#each popular as i (i.id)}<div class="slot"><Card item={i} /></div>{/each}</div>
       {:else}<p class="muted">{$t('home.search.minChars')}</p>{/if}
     </section>
+    {/if}
   {/if}
 {:else if status === 'loading'}
   <div class="tiles" aria-busy="true"><span class="sr-only">{$t('home.search.running')}</span>{#each Array(12) as _}<div class="skeleton" style="aspect-ratio:16/9"></div>{/each}</div>
@@ -153,7 +158,7 @@
 {:else if res}
   {#if res.partial}<p class="muted note">{$t('home.search.partial')}</p>{/if}
   {#if empty}
-    <div class="empty"><h2>{$t('home.search.noHits', { term })}</h2><p class="muted">{$t('home.search.notInLibrary')}</p>{#if !wishes.length}<a class="btn" href="/requests?q={encodeURIComponent(term)}">{$t('home.search.addWish')}</a>{/if}</div>
+    <div class="empty"><h2>{$t('home.search.noHits', { term })}</h2><p class="muted">{$t('home.search.notInLibrary')}</p>{#if !wishes.length && !$kidsMode}<a class="btn" href="/requests?q={encodeURIComponent(term)}">{$t('home.search.addWish')}</a>{/if}</div>
   {:else}
     {#if res.people.length}
       <section aria-labelledby="sp"><h2 id="sp" class="sh">{$t('home.search.people')}</h2>

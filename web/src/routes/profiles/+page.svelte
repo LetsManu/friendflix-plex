@@ -14,22 +14,30 @@
   import { t, tr, type TKey } from '#lib/i18n';
   const colorKey = (key: string) => `account.profiles.colors.${key}` as TKey;
 
-  interface Profile { id: string; name: string; avatar: string; isOwner: boolean; hasPin: boolean; active: boolean }
+  /** unlock 'owner': leaving the active kids profile towards this profile needs the owner profile's PIN (it has none of its own) */
+  interface Profile { id: string; name: string; avatar: string; isOwner: boolean; hasPin: boolean; active: boolean; kids?: boolean; maxRating?: number; unlock?: 'owner' }
   let profiles: Profile[] = [], max = 5, activeId: string | null = null, loaded = false;
   let manage = false, loadErr = '';
-  let pinFor: Profile | null = null, pinErr = '', pinBusy = false;
+  /** kids profile this session is locked to (switching away needs a PIN); account has a kids profile but no owner PIN */
+  let kidsLock: string | null = null, kidsUnguarded = false;
+  /** /auth/login?resetPin=1 was refused: 'kids' = this device is locked to a kids profile, 'stale' = the IdP did not ask for the login again */
+  let resetNote: 'kids' | 'stale' | null = null;
+  let pinFor: Profile | null = null, pinErr = '', pinBusy = false, pinOwner = false;
+  const KIDS_RATINGS = [0, 6, 12] as const;
+  const ratingKey = (n: number) => `kids.profiles.rating${n}` as TKey;
   // editor: null = closed, {} without id = new profile
-  let ed: { id?: string; name: string; avatar: string; hasPin: boolean; isOwner: boolean; pin: string; currentPin: string; removePin: boolean } | null = null;
+  let ed: { id?: string; name: string; avatar: string; hasPin: boolean; isOwner: boolean; pin: string; currentPin: string; removePin: boolean; kids: boolean; maxRating: number } | null = null;
   let edErr = '', edBusy = false;
 
   $: ownerActive = profiles.some((p) => p.active && p.isOwner);
   $: canCreate = ownerActive && profiles.length < max;
+  $: owner = profiles.find((p) => p.isOwner);
   const canEdit = (p: Profile) => ownerActive || p.active;
 
   async function load() {
     try {
       const r = await api('/api/profiles');
-      profiles = r.profiles; max = r.max ?? 5; activeId = r.activeId ?? null;
+      profiles = r.profiles; max = r.max ?? 5; activeId = r.activeId ?? null; kidsLock = r.kidsLock ?? null; kidsUnguarded = Boolean(r.kidsUnguarded);
       // a session without a chosen profile has no "active" owner: the owner (when unlocked) manages, otherwise nothing to manage
       loadErr = '';
     } catch { loadErr = tr('account.profiles.loadFailed'); } finally { loaded = true; }
@@ -37,6 +45,8 @@
   onMount(async () => {
     const sp = new URLSearchParams(location.search);
     if (sp.get('manage') === '1') manage = true;
+    const pr = sp.get('pinReset');
+    if (pr === 'kids' || pr === 'stale') resetNote = pr;
     await load();
     // avatar menu "switch to …": pick that profile right away (asks for the PIN when it has one)
     const pick = sp.get('pick'), p = pick ? profiles.find((x) => x.id === pick) : undefined;
@@ -64,7 +74,8 @@
 
   async function choose(p: Profile, pin?: string) {
     if (manage) return openEdit(p);
-    if (p.hasPin && pin === undefined) { pinFor = p; pinErr = ''; return; }
+    // leaving a kids profile: the target's own PIN, else the owner profile's (the server enforces both)
+    if (pin === undefined && (p.hasPin || p.unlock === 'owner')) { pinFor = p; pinOwner = !p.hasPin; pinErr = ''; return; }
     pinBusy = true; pinErr = '';
     try {
       await api(`/api/profiles/${p.id}/select`, { method: 'POST', body: pin === undefined ? {} : { pin } });
@@ -74,6 +85,7 @@
       done();
     } catch (e) {
       const code = e instanceof ApiError ? e.body?.error : '';
+      pinOwner = e instanceof ApiError && e.body?.pinOf === 'owner';
       if (code === 'pin_required') { pinFor = p; pinErr = ''; }
       else if (code === 'pin_wrong') { pinFor = p; pinErr = tr('account.profiles.pinWrong'); }
       else if (code === 'pin_locked') { pinFor = p; pinErr = tr('account.profiles.pinLocked'); }
@@ -84,8 +96,8 @@
   function openEdit(p?: Profile) {
     edErr = '';
     ed = p
-      ? { id: p.id, name: p.name, avatar: p.avatar, hasPin: p.hasPin, isOwner: p.isOwner, pin: '', currentPin: '', removePin: false }
-      : { name: '', avatar: AVATARS[profiles.length % AVATARS.length][0], hasPin: false, isOwner: false, pin: '', currentPin: '', removePin: false };
+      ? { id: p.id, name: p.name, avatar: p.avatar, hasPin: p.hasPin, isOwner: p.isOwner, pin: '', currentPin: '', removePin: false, kids: Boolean(p.kids), maxRating: p.maxRating ?? 12 }
+      : { name: '', avatar: AVATARS[profiles.length % AVATARS.length][0], hasPin: false, isOwner: false, pin: '', currentPin: '', removePin: false, kids: false, maxRating: 12 };
   }
   const bad = (pin: string) => pin !== '' && !/^\d{4}$/.test(pin);
 
@@ -98,11 +110,15 @@
     try {
       let id = ed.id;
       if (!id) {
-        const r = await api('/api/profiles', { method: 'POST', body: { name, avatar: ed.avatar, ...(ed.pin ? { pin: ed.pin } : {}) } });
+        const r = await api('/api/profiles', { method: 'POST', body: { name, avatar: ed.avatar, ...(ed.pin ? { pin: ed.pin } : {}), ...(ed.kids ? { kids: true, maxRating: ed.maxRating } : {}) } });
         id = r?.id ?? r?.profile?.id;
       } else {
         const cur = profiles.find((p) => p.id === id);
         if (cur && (cur.name !== name || cur.avatar !== ed.avatar)) await api(`/api/profiles/${id}`, { method: 'PATCH', body: { name, avatar: ed.avatar } });
+        // kids mode / cap: owner profile only (the server checks it too)
+        if (cur && ownerActive && !cur.isOwner && (Boolean(cur.kids) !== ed.kids || (ed.kids && (cur.maxRating ?? 12) !== ed.maxRating))) {
+          await api(`/api/profiles/${id}`, { method: 'PATCH', body: { kids: ed.kids, ...(ed.kids ? { maxRating: ed.maxRating } : {}) } });
+        }
         if (ed.pin || ed.removePin) {
           await api(`/api/profiles/${id}/pin`, { method: 'PUT', body: { pin: ed.removePin ? null : ed.pin, ...(ed.currentPin ? { currentPin: ed.currentPin } : {}) } });
         }
@@ -135,15 +151,18 @@
 <span class="brand" aria-hidden="true"><Logo wordmark size={30} /></span>
 <div class="wrap" inert={!!pinFor || !!ed}>
   <h1>{manage ? $t('account.profiles.manage') : $t('account.profiles.who')}</h1>
+  {#if resetNote}<p class="err" role="alert">{resetNote === 'kids' ? $t('kids.profiles.resetBlocked') : $t('kids.profiles.resetStale')}</p>{/if}
   {#if loadErr}<p class="err" role="alert">{loadErr} <button class="sec" on:click={load}>{$t('common.retry')}</button></p>{/if}
   {#if !loaded}
     <div class="grid2"><div class="skeleton sk"></div><div class="skeleton sk"></div></div>
   {:else}
     <div class="grid2" data-nav>
       {#each profiles as p (p.id)}
-        <button class="prof" class:cur={p.id === activeId} data-autofocus={p === profiles[0] ? '' : undefined} aria-label={p.hasPin ? (manage ? $t('account.profiles.ariaPinEdit', { name: p.name }) : $t('account.profiles.ariaPin', { name: p.name })) : manage ? $t('account.profiles.ariaEdit', { name: p.name }) : p.name} disabled={pinBusy} on:click={() => choose(p)}>
+        {@const label = p.kids ? $t('kids.profiles.ariaKids', { name: p.name }) : p.name}
+        <button class="prof" class:cur={p.id === activeId} class:kid={p.kids} data-autofocus={p === profiles[0] ? '' : undefined} aria-label={p.hasPin ? (manage ? $t('account.profiles.ariaPinEdit', { name: label }) : $t('account.profiles.ariaPin', { name: label })) : manage ? $t('account.profiles.ariaEdit', { name: label }) : label} disabled={pinBusy} on:click={() => choose(p)}>
           <span class="face" style="background:{avatarBg(p.avatar)}">{initial(p.name)}
-            {#if p.hasPin}<span class="lock"><Icon name="lock" size={18} /></span>{/if}
+            {#if p.kids}<span class="kb" aria-hidden="true">{$t('kids.badge')}</span>{/if}
+            {#if p.hasPin || p.unlock === 'owner'}<span class="lock"><Icon name="lock" size={18} /></span>{/if}
             {#if manage && canEdit(p)}<span class="edit">{$t('account.profiles.edit')}</span>{/if}
           </span>
           <span class="nm">{p.name}</span>
@@ -156,6 +175,9 @@
       {/if}
     </div>
     {#if manage && !ownerActive}<p class="muted">{$t('account.profiles.ownerOnly')}</p>{/if}
+    {#if ownerActive && kidsUnguarded && owner}
+      <p class="khint" role="note">{$t('kids.profiles.unguarded')} <button type="button" class="sec" on:click={() => { manage = true; owner && openEdit(owner); }}>{$t('kids.profiles.setPin')}</button></p>
+    {/if}
     <p><button class={manage ? 'light done' : 'outline'} on:click={() => (manage = !manage)}>{manage ? $t('account.profiles.done') : $t('account.profiles.manage')}</button></p>
   {/if}
 </div>
@@ -166,8 +188,9 @@
   <div class="ov" role="dialog" aria-modal="true" aria-label={$t('account.profiles.pinFor', { name: pinFor.name })}>
     <div class="box">
       <span class="face sm" style="background:{avatarBg(pinFor.avatar)}">{initial(pinFor.name)}</span>
-      <PinPad title={$t('account.profiles.pinFor', { name: pinFor.name })} error={pinErr} busy={pinBusy} on:submit={(e) => pinFor && choose(pinFor, e.detail)} on:cancel={() => (pinFor = null)} />
-      {#if pinFor.isOwner}<button type="button" class="sec forgot" on:click={() => (location.href = '/auth/login?resetPin=1')}>{$t('account.profiles.forgotPin')}</button>{/if}
+      <PinPad title={pinOwner ? $t('kids.profiles.ownerPinTitle', { name: owner?.name ?? '' }) : $t('account.profiles.pinFor', { name: pinFor.name })} hint={pinOwner ? $t('kids.profiles.ownerPinHint') : ''} error={pinErr} busy={pinBusy} on:submit={(e) => pinFor && choose(pinFor, e.detail)} on:cancel={() => (pinFor = null)} />
+      <!-- never offered while leaving a kids profile (the server refuses the reset on a kid-locked device anyway) -->
+      {#if pinFor.isOwner && !pinOwner && !kidsLock}<button type="button" class="sec forgot" on:click={() => (location.href = '/auth/login?resetPin=1')}>{$t('account.profiles.forgotPin')}</button>{/if}
     </div>
   </div>
 {/if}
@@ -186,6 +209,17 @@
           {/each}
         </div>
       </fieldset>
+      {#if ownerActive && !ed.isOwner}
+        <fieldset class="kidsf">
+          <label class="chk"><input type="checkbox" bind:checked={ed.kids} /> <b>{$t('kids.profiles.toggle')}</b></label>
+          <p class="muted small">{$t('kids.profiles.toggleHint')}</p>
+          {#if ed.kids}
+            <label>{$t('kids.profiles.rating')}
+              <select bind:value={ed.maxRating}>{#each KIDS_RATINGS as n (n)}<option value={n}>{$t(ratingKey(n))}</option>{/each}</select>
+            </label>
+          {/if}
+        </fieldset>
+      {/if}
       <fieldset>
         <legend>{$t('account.profiles.pinOptional')}</legend>
         {#if ed.hasPin}
@@ -240,4 +274,9 @@
   .sw.sel { box-shadow: 0 0 0 3px #fff; }
   .sw:hover:not(:disabled) { filter: brightness(1.15); }
   .sp { flex: 1; }
+  .kb { position: absolute; left: 6px; top: 6px; padding: .1rem .55rem; border-radius: 99px; background: linear-gradient(135deg, #ff5d8f, #ffb703); color: #fff; font-size: .78rem; font-weight: 900; letter-spacing: .04em; }
+  .prof.kid .face { border-radius: 50%; }
+  .khint { max-width: 560px; color: #e5e5e5; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: .8rem 1rem; display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; justify-content: center; }
+  .kidsf { gap: .35rem; border: 1px solid var(--line); border-radius: 8px; padding: .7rem .8rem; }
+  .small { font-size: .85rem; margin: 0; }
 </style>

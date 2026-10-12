@@ -15,7 +15,7 @@
   }
 </script>
 <svelte:head><title>{$t('common.pageTitle', { page: $t('social.calendar.title') })}</title></svelte:head>
-<h1>{$t('social.calendar.title')}</h1>
+<div class="head"><h1>{$t('social.calendar.title')}</h1><a class="sim" href="/simulcast">{$t('anime.simulcast.link')} →</a></div>
 <p class="muted">{$t('social.calendar.intro')}</p>
 {#if msg}<p class="warn" role="status">{msg}</p>{/if}
 {#if !items.length}<p class="muted">{$t('social.calendar.none')}</p>{/if}
@@ -27,3 +27,8 @@
       {#if e.followed}<span class="muted">{$t('social.calendar.viaFollow')}</span>
       {:else}<button class="sec" aria-pressed={$remindKeys[episodeKey(e.id)] !== undefined} aria-label={$t('social.calendar.remindAria')} on:click={() => remind(e)}><Icon name="bell" size={16} /> {$remindKeys[episodeKey(e.id)] !== undefined ? $t('social.calendar.reminderActive') : $t('social.calendar.remindMe')}</button>{/if}
     {/if}</td></tr>{/each}</tbody></table>
+
+<style>
+  .head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+  .sim { text-decoration: underline; }
+</style>

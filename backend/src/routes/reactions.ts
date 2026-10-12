@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
 import { JellyfinError } from '../jellyfin/client.js';
 import type { ItemDto } from '../jellyfin/dto.js';
-import { requireUser } from '../session.js';
+import { requireGrownUp } from '../kids.js';
 import { id32 } from './_shared.js';
 
 const EMOJIS = ['like', 'funny', 'wow', 'sad', 'love'] as const;
@@ -12,7 +12,7 @@ type Emoji = (typeof EMOJIS)[number];
 const isWatched = (i: ItemDto) => i.played || (i.playedPercentage ?? 0) >= 85;
 
 export function reactionRoutes(app: FastifyInstance, ctx: Ctx) {
-  const pre = { preHandler: requireUser(ctx) };
+  const pre = { preHandler: requireGrownUp(ctx) }; // kids profiles: no reactions (403 kids_profile)
 
   /** Visible Movie/Episode, or the reply that was sent instead. */
   const load = async (req: any, reply: any): Promise<ItemDto | null> => {

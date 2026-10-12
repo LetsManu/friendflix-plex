@@ -97,7 +97,7 @@ export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extr
     seerr: new SeerrClient(cfg.SEERR_URL, cfg.SEERR_API_KEY, fakeHttp(extra.seerr ?? {}, seerrCalls)),
     oidc: {
       start: async () => ({ url: 'https://idp/authorize', state: 's' + Math.random().toString(36).slice(2), nonce: 'n', codeVerifier: 'v' }),
-      finish: async () => claims.current,
+      finish: async () => ({ authTime: Math.floor(Date.now() / 1000), ...claims.current }), // a fresh IdP login unless a test sets authTime
     },
   };
   extra.ctxPatch?.(ctx);

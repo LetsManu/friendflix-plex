@@ -41,3 +41,25 @@ class SeerrHooks {
   }
 }
 export const seerrHooks = new SeerrHooks();
+
+/** In-process memos that depend on a Jellyfin user's access policy (per app instance: keyed by its ctx). */
+const policyListeners = new WeakMap<Ctx, Set<(jellyfinUserId: string) => void>>();
+/** Registers a memo cleaner that runs when a Jellyfin user's parental policy changed (see policyChanged). */
+export function onPolicyChange(ctx: Ctx, fn: (jellyfinUserId: string) => void) {
+  const set = policyListeners.get(ctx) ?? new Set();
+  policyListeners.set(ctx, set);
+  set.add(fn);
+}
+/**
+ * A profile's kids flag / age cap changed: everything cached for its Jellyfin user may show titles it can no longer see (or
+ * miss new ones). Drops the item memo and bumps the user-data version ("Weil du …" rows key on it), deletes the
+ * trending/simulcast caches and runs the registered in-process cleaners (brand hubs, extras). Never throws.
+ */
+export async function policyChanged(ctx: Ctx, jellyfinUserId: string): Promise<void> {
+  await ctx.jf.touchUserData(jellyfinUserId);
+  for (const prefix of [`trend:${jellyfinUserId}:`, `simulcast:${jellyfinUserId}`]) {
+    const keys = await ctx.kv.keys(prefix).catch(() => [] as string[]);
+    for (const k of keys) await ctx.kv.del(k).catch(() => undefined);
+  }
+  for (const fn of policyListeners.get(ctx) ?? []) { try { fn(jellyfinUserId); } catch { /* a cleaner never breaks the request */ } }
+}

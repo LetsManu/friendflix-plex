@@ -9,6 +9,7 @@
   import { LOCALES, isLocale, keepPageOnSwitch, locale, localeName, t, tr, type Locale, type TKey } from '#lib/i18n';
   import { langLabel } from '#lib/langs';
   import type { Me } from '#lib/api';
+  import { kidsMode } from '#lib/kids';
 
   /** audio/subtitle track languages (ISO 639-2 as Jellyfin reports them; names in the UI language) */
   const LANGS = ['ger', 'eng', 'fre', 'spa', 'ita', 'jpn'];
@@ -54,7 +55,7 @@
   }
   let ps: PushState = 'off', pushOn = false, pushBroadcast = false, pushBusy = false, pushMsg = '';
   async function refreshPush() { ps = await pushState().catch(() => 'unsupported' as PushState); pushOn = ps === 'on'; }
-  onMount(() => { void refreshPush().then(async () => { if (ps === 'on') { const b = await syncPush(); if (b !== null) pushBroadcast = b; } }); });
+  onMount(() => { if (!$kidsMode) void refreshPush().then(async () => { if (ps === 'on') { const b = await syncPush(); if (b !== null) pushBroadcast = b; } }); });
   async function togglePush() {
     pushBusy = true; pushMsg = '';
     try {
@@ -91,7 +92,9 @@
 </section>
 <h1>{$t('account.settings.title')}</h1>
 <p class="muted">{$t('account.settings.lead')}</p>
+<!-- kids profiles: only language and playback languages / subtitle look (nothing social, nothing account-wide) -->
 <form class="panel form" on:submit|preventDefault={save}>
+  {#if !$kidsMode}
   {@render check('autoplayNext', 'account.settings.autoplayNext', 'account.settings.autoplayNextHint')}
   {@render check('stillWatching', 'account.settings.stillWatching', 'account.settings.stillWatchingHint')}
   {#if form.stillWatching}<div class="field"><label for="swe">{$t('account.settings.stillWatchingEpisodes')}</label>
@@ -109,13 +112,17 @@
       <input id="nt" bind:value={form.ntfyTopic} maxlength="64" pattern="[A-Za-z0-9_\-]*" autocomplete="off" spellcheck="false" placeholder={$t('account.settings.ntfyPlaceholder')} />
       <small class="muted">{$t('account.settings.ntfyHint')}</small></div>
   {/if}
+  {/if}
   <div class="field"><label for="al">{$t('account.settings.audio')}</label>
     <select id="al" bind:value={form.audioLang}><option value="">{$t('account.settings.audioDefault')}</option>{#each LANGS as v}<option value={v}>{trackName(v)}</option>{/each}</select></div>
   <div class="field"><label for="sl">{$t('account.settings.subtitles')}</label>
     <select id="sl" bind:value={form.subtitleLang}><option value="">{$t('common.off')}</option>{#each LANGS as v}<option value={v}>{trackName(v)}</option>{/each}</select></div>
+  {@render check('animeOriginal', 'anime.settings.original', 'anime.settings.originalHint')}
+  {#if !$kidsMode}
   <div class="field"><label for="q">{$t('account.settings.quality')}</label>
     <select id="q" bind:value={form.quality}>{#each QUALITIES as [v, l]}<option value={v}>{$t(l)}</option>{/each}</select>
     <small class="muted">{$t('account.settings.qualityHint')}</small></div>
+  {/if}
   <fieldset class="field sub"><legend>{$t('account.settings.subStyle')}</legend>
     <div class="grid">
       <label>{$t('account.settings.subSize')}<select bind:value={form.subtitleStyle.size}>{#each Object.entries(SIZE_LABELS) as [v, l]}<option value={v}>{$t(l)}</option>{/each}</select></label>
@@ -128,6 +135,7 @@
   </fieldset>
   <div class="flex"><button disabled={busy}>{$t('common.save')}</button>{#if saved}<span class="ok" role="status">{$t('common.saved')}</span>{/if}{#if error}<span class="err" role="alert">{error}</span>{/if}</div>
 </form>
+{#if !$kidsMode}
 <section class="panel form push" aria-labelledby="introh">
   <h2 id="introh">{$t('account.settings.intro.title')}</h2>
   <label class="row"><input type="checkbox" bind:checked={introShow} on:change={saveIntro} /><span><b>{$t('account.settings.intro.show')}</b><small class="muted">{$t('account.settings.intro.showHint')}</small></span></label>
@@ -150,6 +158,7 @@
     {#if pushMsg}<span role="status" class="muted">{pushMsg}</span>{/if}
   {/if}
 </section>
+{/if}
 
 {#snippet check(k: BoolPref, label: TKey, hint: TKey)}
   <label class="row"><input type="checkbox" bind:checked={form[k]} /><span><b>{$t(label)}</b><small class="muted">{$t(hint)}</small></span></label>

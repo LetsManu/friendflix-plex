@@ -3,11 +3,20 @@ import type pg from 'pg';
 import type { Ctx } from './ctx.js';
 import { encrypt, hashPin, randomPassword } from './crypto.js';
 import { JellyfinError } from './jellyfin/client.js';
+import { effectiveRole } from './roles.js';
 import { applyRole } from './users.js';
 import type { JfUser, ProfileRow, UserRow } from './types.js';
 import type { Session } from './session.js';
 
 export const MAX_PROFILES = 5;
+/** parental caps a kids profile can have (Jellyfin MaxParentalRating: FSK 0 / 6 / 12 and their equivalents) */
+export const KIDS_RATINGS = [0, 6, 12] as const;
+export type KidsRating = (typeof KIDS_RATINGS)[number];
+/**
+ * Unrated titles of these kinds stay hidden from kids (Jellyfin BlockUnratedItems; episodes follow their series).
+ * Folders/"Other" are left alone, otherwise the library views themselves would disappear.
+ */
+export const KIDS_BLOCK_UNRATED = ['Movie', 'Series', 'Trailer'] as const;
 
 /** Business errors of the profile service; `code` is the API error string. */
 export class ProfileError extends Error {
@@ -48,6 +57,35 @@ export async function ownerProfile(ctx: Pick<Ctx, 'db'>, user: Pick<UserRow, 'id
   return row;
 }
 
+/**
+ * Jellyfin policy fields a kids profile adds on top of its role: the lower of role cap and kids cap, unrated titles hidden.
+ * A normal profile user gets the unrated block cleared again (it may have been a kids profile before).
+ */
+export function kidsPolicy(p: Pick<ProfileRow, 'kids' | 'kids_max_rating'>, roleCap: number | null): Record<string, unknown> {
+  if (!p.kids) return { BlockUnratedItems: [] };
+  return { MaxParentalRating: roleCap === null ? p.kids_max_rating : Math.min(roleCap, p.kids_max_rating), BlockUnratedItems: [...KIDS_BLOCK_UNRATED] };
+}
+
+/** kidsPolicy() for a Jellyfin user id: {} for an account's own Jellyfin user (owner profiles are never kids profiles). */
+export async function kidsPolicyFor(ctx: Pick<Ctx, 'db'>, jellyfinUserId: string, roleCap: number | null): Promise<Record<string, unknown>> {
+  const r = await ctx.db.query<Pick<ProfileRow, 'kids' | 'kids_max_rating'>>('select kids, kids_max_rating from profiles where jellyfin_user_id=$1', [jellyfinUserId]);
+  return r.rows[0] ? kidsPolicy(r.rows[0], roleCap) : {};
+}
+
+/** The kids profile a device last ran (switching away from it needs a PIN, a new login on the device lands on it again). */
+export async function deviceKidsProfile(ctx: Pick<Ctx, 'db'>, userId: string, deviceId: string | undefined): Promise<ProfileRow | null> {
+  if (!deviceId) return null;
+  const r = await ctx.db.query<ProfileRow>(
+    'select p.* from devices d join profiles p on p.id=d.kids_profile_id where d.user_id=$1 and d.device_id=$2 and p.kids', [userId, deviceId]);
+  return r.rows[0] ?? null;
+}
+
+/** Remembers (kids profile) or clears (any other profile) the kids lock of a device. */
+export async function setDeviceKids(ctx: Pick<Ctx, 'db'>, userId: string, deviceId: string | undefined, kidsProfileId: string | null): Promise<void> {
+  if (!deviceId) return;
+  await ctx.db.query('update devices set kids_profile_id=$3 where user_id=$1 and device_id=$2', [userId, deviceId, kidsProfileId]);
+}
+
 /** The Jellyfin identity of a profile: the owner profile acts as the account itself, others as their hidden Jellyfin user. */
 export function jfUserFor(user: JfUser, profile: ProfileRow): JfUser {
   if (profile.is_owner || !profile.jellyfin_user_id) return user;
@@ -55,14 +93,17 @@ export function jfUserFor(user: JfUser, profile: ProfileRow): JfUser {
 }
 
 /**
- * Active profile of a session: the chosen one if it still exists and belongs to the account, else the owner profile
- * (old sessions, deleted profile) unless it is PIN protected -> null (the client must pick a profile).
+ * Active profile of a session: the chosen one if it still exists and belongs to the account, else the kids profile the device is
+ * locked to (a new login on a kid's device), else the owner profile (old sessions, deleted profile) unless it is PIN protected
+ * -> null (the client must pick a profile).
  */
-export async function resolveProfile(ctx: Pick<Ctx, 'db'>, user: UserRow, session: Pick<Session, 'profileId'>): Promise<ProfileRow | null> {
+export async function resolveProfile(ctx: Pick<Ctx, 'db'>, user: UserRow, session: Pick<Session, 'profileId' | 'deviceId'>): Promise<ProfileRow | null> {
   if (session.profileId) {
     const p = await getProfile(ctx, user.id, session.profileId);
     if (p) return p;
   }
+  const kid = await deviceKidsProfile(ctx, user.id, session.deviceId);
+  if (kid) return kid;
   const owner = await ownerProfile(ctx, user);
   return owner.pin_hash ? null : owner;
 }
@@ -77,7 +118,7 @@ export async function accountJellyfinIds(ctx: Pick<Ctx, 'db'>, userId: string): 
   return r.rows.map((x) => x.id);
 }
 
-export async function createProfile(ctx: Ctx, user: UserRow, b: { name: string; avatar?: string; pin?: string | null }): Promise<ProfileRow> {
+export async function createProfile(ctx: Ctx, user: UserRow, b: { name: string; avatar?: string; pin?: string | null; kids?: boolean; maxRating?: KidsRating }): Promise<ProfileRow> {
   const name = b.name.trim();
   const count = async () => Number((await ctx.db.query<{ n: string }>('select count(*) n from profiles where user_id=$1', [user.id])).rows[0]!.n);
   if ((await count()) >= MAX_PROFILES) throw new ProfileError(409, 'max_profiles');
@@ -97,7 +138,9 @@ export async function createProfile(ctx: Ctx, user: UserRow, b: { name: string; 
     }
   }
   try {
-    await applyRole(ctx, jf!.Id, user.role, user.disabled, { IsHidden: true });
+    const kids = { kids: Boolean(b.kids), kids_max_rating: b.maxRating ?? 12 };
+    // the row does not exist yet: the kids fields go in as extra policy (applyRole adds them itself on every later re-apply)
+    await applyRole(ctx, jf!.Id, user.role, user.disabled, { IsHidden: true, ...(kids.kids ? kidsPolicy(kids, (await effectiveRole(ctx, user.role))?.maxParentalRating ?? null) : {}) });
     const id = randomUUID();
     const pool = ctx.db as pg.Pool;
     const c = await pool.connect();
@@ -110,9 +153,9 @@ export async function createProfile(ctx: Ctx, user: UserRow, b: { name: string; 
         throw new ProfileError(409, 'max_profiles');
       }
       const ins = await c.query<ProfileRow>(
-        `insert into profiles(id, user_id, name, avatar, pin_hash, jellyfin_user_id, jellyfin_username, jellyfin_pw_enc)
-         values ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,
-        [id, user.id, name, b.avatar ?? 'red', b.pin ? hashPin(b.pin) : null, jf!.Id, jfName, encrypt(ctx.encKey, password)],
+        `insert into profiles(id, user_id, name, avatar, pin_hash, jellyfin_user_id, jellyfin_username, jellyfin_pw_enc, kids, kids_max_rating)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *`,
+        [id, user.id, name, b.avatar ?? 'red', b.pin ? hashPin(b.pin) : null, jf!.Id, jfName, encrypt(ctx.encKey, password), kids.kids, kids.kids_max_rating],
       );
       await c.query('commit');
       return ins.rows[0]!;
@@ -142,4 +185,7 @@ export async function deleteProfile(ctx: Ctx, p: ProfileRow): Promise<void> {
   await ctx.kv.del(`jft:${p.id}`);
 }
 
-export const publicProfile = (p: ProfileRow) => ({ id: p.id, name: p.name, avatar: p.avatar, isOwner: p.is_owner });
+export const publicProfile = (p: ProfileRow) => ({
+  id: p.id, name: p.name, avatar: p.avatar, isOwner: p.is_owner,
+  kids: Boolean(p.kids), ...(p.kids ? { maxRating: p.kids_max_rating } : {}),
+});
