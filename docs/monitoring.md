@@ -1,5 +1,7 @@
 # Monitoring (Icinga / Prometheus)
 
+> **FriendFlix for Plex (Preview):** Wo hier „Jellyfin“ steht, ist bei Plex der Plex-Medienserver gemeint (`/health/ready` prüft ihn). Einrichtung: [de/plex.md](de/plex.md).
+
 Endpunkte (nur lokal auf dem Docker-Host erreichbar: Ports sind an `127.0.0.1` gebunden; NPM antwortet für `/metrics` und `/health/ready` mit 404):
 | URL | Zweck |
 |---|---|

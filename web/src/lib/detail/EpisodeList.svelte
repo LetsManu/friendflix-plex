@@ -6,6 +6,8 @@
   import Icon from '#lib/Icon.svelte';
   import DownloadButton from '#lib/DownloadButton.svelte';
   import { seasonLabel } from '#lib/detail/format';
+  import EpisodeComments from '#lib/detail/EpisodeComments.svelte';
+  import { kidsMode } from '#lib/kids';
 
   /** series id (for the per-episode download buttons) */
   export let seriesId: string;
@@ -22,6 +24,9 @@
   let revealed = new Set<string>();
   const reveal = (e: MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); revealed = new Set([...revealed, id]); };
   const hidden = (e: Item, r: Set<string>) => isSpoiler(e, $prefs) && !r.has(e.id);
+  // friends-only comments per episode (expand); kids profiles never see them
+  let openComments = new Set<string>(), counts: Record<string, number> = {};
+  const toggleComments = (id: string) => { const n = new Set(openComments); if (n.has(id)) n.delete(id); else n.add(id); openComments = n; };
   $: current = (e: Item) => (next ? next.id === e.id : false);
 </script>
 
@@ -45,6 +50,7 @@
       {#each episodes as e (e.id)}
         {@const pct = e.positionTicks && e.runtimeTicks ? Math.min(100, (e.positionTicks / e.runtimeTicks) * 100) : 0}
         <li class="eprow" class:cur={current(e)}>
+          <div class="epmain">
           <a class="ep" href="/watch/{e.id}{qs ? '?' + qs : ''}" aria-current={current(e) ? 'true' : undefined}>
             <span class="n" aria-hidden="true">{e.indexNumber ?? ''}</span>
             <span class="th">
@@ -59,7 +65,18 @@
             </span>
             {#if e.played}<span class="seen"><Icon name="check" size={18} label={$t('detail.episodes.watched')} /></span>{/if}
           </a>
-          <span class="epdl"><DownloadButton itemId={e.id} {seriesId} compact /></span>
+          <span class="epdl">
+            {#if !$kidsMode}
+              <button type="button" class="cmbtn" class:on={openComments.has(e.id)} aria-expanded={openComments.has(e.id)} aria-controls="cm-panel-{e.id}"
+                aria-label={openComments.has(e.id) ? $t('anime.comments.hide') : $t('anime.comments.show')} title={openComments.has(e.id) ? $t('anime.comments.hide') : $t('anime.comments.show')}
+                on:click={() => toggleComments(e.id)}><Icon name="message" size={18} />{#if counts[e.id]}<span class="n2">{counts[e.id]}</span>{/if}</button>
+            {/if}
+            <DownloadButton itemId={e.id} {seriesId} compact />
+          </span>
+          </div>
+          {#if openComments.has(e.id) && !$kidsMode}
+            <div id="cm-panel-{e.id}"><EpisodeComments itemId={e.id} onCount={(n) => (counts = { ...counts, [e.id]: n })} /></div>
+          {/if}
         </li>
       {/each}
     {/if}
@@ -77,6 +94,7 @@
   ol { list-style: none; padding: 0; margin: 0; }
   .sk { height: 90px; margin: .5rem 0; }
   .none { padding: 1rem .8rem; }
+  .epmain { position: relative; }
   .eprow { position: relative; border-bottom: 1px solid var(--line); }
   .eprow:last-child { border-bottom: 0; }
   .eprow.cur { background: rgba(255, 255, 255, .06); box-shadow: inset 3px 0 0 var(--acc); border-radius: 4px; }
@@ -97,7 +115,11 @@
   .lnk { background: none; border: 0; padding: 0; min-height: 0; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; font-weight: 400; display: inline; }
   .lnk:hover:not(:disabled) { background: none; }
   .seen { color: var(--ok); }
-  .epdl { position: absolute; right: .8rem; bottom: .8rem; }
+  .epdl { position: absolute; right: .8rem; bottom: .8rem; display: flex; align-items: center; gap: .4rem; }
+  /* the row's bottom margin makes room when the comments panel is closed: the buttons sit over the row's padding */
+  .cmbtn { display: inline-flex; align-items: center; gap: .25rem; min-height: 0; padding: .3rem .5rem; border-radius: 999px; background: rgba(255, 255, 255, .1); border: 0; color: var(--fg); cursor: pointer; font-size: .8rem; }
+  .cmbtn:hover, .cmbtn.on { background: rgba(255, 255, 255, .22); }
+  .n2 { font-variant-numeric: tabular-nums; }
   @media (max-width: 640px) {
     .ep { grid-template-columns: 110px 1fr; padding: .8rem .5rem; gap: .7rem; }
     .n, .seen { display: none; }

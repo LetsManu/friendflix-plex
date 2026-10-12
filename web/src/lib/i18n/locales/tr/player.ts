@@ -22,9 +22,11 @@ const tr: Translation<typeof de> = {
   noNext: 'Başka bölüm yok',
   secondsForward: { one: '{n} saniye ileri', other: '{n} saniye ileri' },
   secondsBack: { one: '{n} saniye geri', other: '{n} saniye geri' },
-  segment: { intro: 'Giriş', outro: 'Jenerik', recap: 'Önceki bölümlerin özeti' },
-  skip: { intro: 'Girişi atla', outro: 'Jeneriği atla', recap: 'Özeti atla' },
-  skipped: { intro: 'Giriş atlandı', outro: 'Jenerik atlandı', recap: 'Özet atlandı' },
+  segment: { intro: 'Giriş', outro: 'Jenerik', recap: 'Önceki bölümlerin özeti', preview: 'Fragman' },
+  skip: { intro: 'Girişi atla', outro: 'Jeneriği atla', recap: 'Özeti atla', preview: 'Fragmanı atla' },
+  skipped: { intro: 'Giriş atlandı', outro: 'Jenerik atlandı', recap: 'Özet atlandı', preview: 'Fragman atlandı' },
+  /** toast after the audio / subtitle choice was saved for the series */
+  langSaved: 'Bu dizi için hatırlandı',
   skipOk: ' (Tamam)',
   quality: {
     title: 'Kalite',

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
 import { m } from '../i18n.js';
 import { endpointAllowed, pushEnabled, sendWebPush } from '../push.js';
+import { requireGrownUp } from '../kids.js';
 import { requireUser } from '../session.js';
 
 const b64url = z.string().regex(/^[A-Za-z0-9_-]+$/);
@@ -15,10 +16,12 @@ const endpointBody = z.object({ endpoint: z.string().max(1024) });
 
 export function pushRoutes(app: FastifyInstance, ctx: Ctx) {
   const pre = { preHandler: requireUser(ctx) };
+  // the account's push notifications are social (party invites, recommendations ...): a kids profile cannot subscribe a device
+  const grown = { preHandler: requireGrownUp(ctx) };
 
   app.get('/api/push/config', pre, async () => (pushEnabled(ctx.cfg) ? { enabled: true, publicKey: ctx.cfg.VAPID_PUBLIC_KEY } : { enabled: false }));
 
-  app.post('/api/push/subscribe', { ...pre, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
+  app.post('/api/push/subscribe', { ...grown, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     if (!pushEnabled(ctx.cfg)) return reply.code(404).send({ error: 'push_disabled' });
     const b = subscribeBody.parse(req.body);
     if (!endpointAllowed(b.endpoint)) return reply.code(400).send({ error: 'push_endpoint_denied' });
@@ -41,7 +44,7 @@ export function pushRoutes(app: FastifyInstance, ctx: Ctx) {
     return { ok: true };
   });
 
-  app.post('/api/push/test', { ...pre, config: { rateLimit: { max: 3, timeWindow: '1 minute' } } }, async (req, reply) => {
+  app.post('/api/push/test', { ...grown, config: { rateLimit: { max: 3, timeWindow: '1 minute' } } }, async (req, reply) => {
     if (!pushEnabled(ctx.cfg)) return reply.code(404).send({ error: 'push_disabled' });
     const b = endpointBody.parse(req.body);
     const own = await ctx.db.query('select 1 from push_subscriptions where endpoint = $1 and user_id = $2', [b.endpoint, req.user!.id]);

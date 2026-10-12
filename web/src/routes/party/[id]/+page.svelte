@@ -9,15 +9,16 @@
   import Player from '#lib/Player.svelte';
   import { t, tr, fmtList } from '#lib/i18n';
 
-  const EMOJIS = ['😂', '😮', '😢', '❤️', '👏', '🔥', '👍', '🍿'];
+  const EMOJIS = ['😂', '😮', '❤️', '👍', '😢', '🔥']; // same whitelist as the server (backend/src/party.ts)
+  const FLOAT_MS = 2500;
   const DRIFT = 0.3; // seconds: seek when further apart than ~300 ms
   type Member = { id: string; name: string; buffering: boolean };
   let video: HTMLVideoElement | null = null;
   let ws: WebSocket | null = null;
   let itemId = '', title = '', you = '', hostId = '', mode: 'host' | 'everyone' = 'host', startAt: number | undefined;
   let members: Member[] = [];
-  let chat: Array<{ id: number; name: string; text: string; mine: boolean }> = [], recent: typeof chat = [], text = '', unread = 0, panel = false, picker = false, settings = false, copied = false;
-  let floating: Array<{ id: number; emoji: string; left: number; name: string }> = [];
+  let chat: Array<{ id: number; name: string; text: string; mine: boolean }> = [], recent: typeof chat = [], text = '', unread = 0, panel = false, settings = false, copied = false;
+  let floating: Array<{ id: number; emoji: string; left: number; name: string }> = [], liveMsg = '';
   let state = { playing: false, position: 0, at: 0, hold: false };
   let offset = 0, bestRtt = Infinity, error = '', needClick = false, countdown = '', ready = false, n = 0, closing = false;
   let timers: ReturnType<typeof setInterval>[] = [], reconnect: ReturnType<typeof setTimeout> | undefined, bound: HTMLVideoElement | null = null;
@@ -62,7 +63,7 @@
         if (!panel && !msg.mine) unread++;
         tick().then(() => chatEl && (chatEl.scrollTop = chatEl.scrollHeight));
       }
-      else if (m.t === 'react') { const id = ++n; floating = [...floating, { id, emoji: m.emoji, left: 8 + Math.random() * 40, name: m.name }]; setTimeout(() => (floating = floating.filter((f) => f.id !== id)), 3200); }
+      else if (m.t === 'react') { const id = ++n; floating = [...floating.slice(-23), { id, emoji: m.emoji, left: 6 + Math.random() * 80, name: m.name }]; liveMsg = tr('together.party.reacted', { name: m.name, emoji: m.emoji }); setTimeout(() => (floating = floating.filter((f) => f.id !== id)), FLOAT_MS); }
       else if (m.t === 'pong') { const rtt = Date.now() - m.c; if (rtt < bestRtt || Math.random() < 0.1) { bestRtt = Math.min(rtt, bestRtt * 1.2); offset = m.s + rtt / 2 - Date.now(); } }
     };
   }
@@ -80,9 +81,16 @@
   function onReady() { ready = true; bindVideo(); send({ t: 'buffering', value: true }); video?.addEventListener('canplay', () => apply(), { once: true }); }
 
   const sendChat = () => { if (text.trim()) { send({ t: 'chat', text }); text = ''; } };
-  const react = (emoji: string) => { send({ t: 'react', emoji }); picker = false; };
+  const react = (emoji: string) => send({ t: 'react', emoji });
+  // keys 1-6 send the matching reaction (not while typing, not with modifiers)
+  function onKey(e: KeyboardEvent) {
+    const el = e.target as HTMLElement | null;
+    if (e.ctrlKey || e.metaKey || e.altKey || el?.closest('input, textarea, select, [contenteditable]')) return;
+    const emoji = EMOJIS[Number(e.key) - 1];
+    if (emoji && e.key.length === 1) react(emoji);
+  }
   const setMode = (v: 'host' | 'everyone') => send({ t: 'mode', value: v });
-  function togglePanel() { panel = !panel; picker = settings = false; if (panel) { unread = 0; tick().then(() => chatEl && (chatEl.scrollTop = chatEl.scrollHeight)); } }
+  function togglePanel() { panel = !panel; settings = false; if (panel) { unread = 0; tick().then(() => chatEl && (chatEl.scrollTop = chatEl.scrollHeight)); } }
   async function copyLink() { try { await navigator.clipboard.writeText(location.href); copied = true; setTimeout(() => (copied = false), 1800); } catch { /* ignore */ } }
   // ---- one tap invitation: pick friends (they get a notification) or share the link ----
   let invite = false, friends: Array<{ id: string; name: string }> = [], picked = new Set<string>(), inviteMsg = '', autoShown = false;
@@ -107,7 +115,7 @@
   onDestroy(() => { closing = true; clearTimeout(reconnect); timers.forEach(clearInterval); ws?.close(); });
 </script>
 
-<svelte:window bind:innerWidth />
+<svelte:window bind:innerWidth on:keydown={onKey} />
 <svelte:head><title>{$t('common.pageTitle', { page: title || $t('social.party.title') })}</title></svelte:head>
 <div class="wrap">
   {#if error}<div class="fatal"><p class="err">{error}</p><a class="btn" href="/party">{$t('social.party.backToList')}</a></div>{/if}
@@ -139,7 +147,12 @@
       {#if state.hold && waitingFor.length}<div class="hold" role="status"><div class="spin"></div>{$t('social.party.waitingFor', { names: fmtList(waitingFor) })}</div>{/if}
       {#if needClick}<div class="hold"><button on:click|stopPropagation={() => { needClick = false; apply(); }}><Icon name="play" size={20} />{$t('social.party.watchAlong')}</button></div>{/if}
 
-      <div class="floats" aria-hidden="true">{#each floating as f (f.id)}<span class="fl" style="left:{f.left}%"><b>{f.emoji}</b><i>{f.name}</i></span>{/each}</div>
+      <div class="floats" aria-hidden="true">{#each floating as f (f.id)}<span class="fl" style="left:{f.left}%"><b>{f.emoji}</b><i><span class="fav">{initial(f.name)}</span>{f.name}</i></span>{/each}</div>
+
+      <div class="rbar ui" class:shift={panel && innerWidth > 720} role="group" aria-label={$t('together.party.reactions')} on:click|stopPropagation on:keydown|stopPropagation>
+        {#each EMOJIS as e, i}<button class="em" title={String(i + 1)} aria-label={$t('together.party.react', { emoji: e })} on:click={() => react(e)}>{e}</button>{/each}
+      </div>
+      <span class="sr" role="status" aria-live="polite">{liveMsg}</span>
 
       {#if !panel && recent.length}
         <ul class="bubbles" aria-live="polite">{#each recent as r (r.id)}<li><b>{r.name}</b> {r.text}</li>{/each}</ul>
@@ -159,7 +172,7 @@
       <svelte:fragment slot="extra">
         {#if isHost}
           <div class="mwrap">
-            <button class="ic" aria-label={$t('social.party.settings')} aria-expanded={settings} on:click|stopPropagation={() => { settings = !settings; picker = false; }}><Icon name={mode === 'everyone' ? 'users' : 'lock'} size={26} /></button>
+            <button class="ic" aria-label={$t('social.party.settings')} aria-expanded={settings} on:click|stopPropagation={() => { settings = !settings; }}><Icon name={mode === 'everyone' ? 'users' : 'lock'} size={26} /></button>
             {#if settings}
               <div class="menu" role="dialog" tabindex="-1" aria-label={$t('social.party.whoControls')} on:click|stopPropagation on:keydown|stopPropagation>
                 <h3>{$t('social.party.whoControls')}</h3>
@@ -171,10 +184,6 @@
         {:else}
           <span class="roleinfo" title={mode === 'everyone' ? $t('social.party.everyoneControls') : $t('social.party.hostControls')}><Icon name={mode === 'everyone' ? 'users' : 'lock'} size={22} /></span>
         {/if}
-        <div class="mwrap">
-          <button class="ic" aria-label={$t('social.party.sendReaction')} aria-expanded={picker} on:click|stopPropagation={() => { picker = !picker; settings = false; }}><Icon name="smile" size={28} /></button>
-          {#if picker}<div class="picker" role="menu" tabindex="-1" on:click|stopPropagation on:keydown|stopPropagation>{#each EMOJIS as e}<button class="em" role="menuitem" aria-label={$t('social.party.reaction', { emoji: e })} on:click={() => react(e)}>{e}</button>{/each}</div>{/if}
-        </div>
         <button class="ic chatbtn" aria-label={unread ? $t('social.party.chatUnread', { label: panel ? $t('social.party.closeChat') : $t('social.party.openChat'), n: unread }) : panel ? $t('social.party.closeChat') : $t('social.party.openChat')} aria-expanded={panel} on:click|stopPropagation={togglePanel}>
           <Icon name="message" size={27} />{#if unread}<span class="dot">{unread}</span>{/if}
         </button>
@@ -199,9 +208,15 @@
   .hold { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); background: rgba(20,20,20,.92); padding: .7rem 1.3rem; border-radius: 999px; display: flex; gap: .7rem; align-items: center; z-index: 9; }
   .spin { width: 20px; height: 20px; border: 3px solid #555; border-top-color: var(--acc); border-radius: 50%; animation: sp .9s linear infinite; } @keyframes sp { to { transform: rotate(360deg); } }
   .floats { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 6; }
-  .fl { position: absolute; bottom: 14%; display: flex; flex-direction: column; align-items: center; animation: up 3.2s ease-out forwards; }
-  .fl b { font-size: 2.4rem; } .fl i { font-style: normal; font-size: .72rem; background: rgba(0,0,0,.6); padding: 0 .4rem; border-radius: 99px; }
-  @keyframes up { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-340px); opacity: 0; } }
+  .fl { position: absolute; bottom: 26%; display: flex; flex-direction: column; align-items: center; animation: up 2.5s ease-out forwards; }
+  .fl b { font-size: 2.4rem; } .fl i { font-style: normal; font-size: .72rem; background: rgba(0,0,0,.6); padding: 0 .5rem 0 .15rem; border-radius: 99px; display: inline-flex; align-items: center; gap: .3rem; }
+  .fav { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #e50f2a, #7a0a17); font-weight: 800; font-size: .65rem; }
+  @keyframes up { 0% { transform: translateY(0) scale(.7); opacity: 0; } 12% { opacity: 1; transform: translateY(-20px) scale(1); } 100% { transform: translateY(-300px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .fl { animation: fade 2.5s linear forwards !important; } /* fade only; beats the global reduced-motion kill switch */ @keyframes fade { from { opacity: 1; } 70% { opacity: 1; } to { opacity: 0; } } }
+  .rbar { position: absolute; right: .8rem; bottom: 9.5rem; z-index: 8; display: flex; gap: .1rem; background: rgba(20,20,20,.82); border: 1px solid #3a3a3a; border-radius: 99px; padding: .15rem .3rem; }
+  .rbar.shift { right: calc(340px + .8rem); }
+  .rbar .em { width: 40px; min-height: 40px; font-size: 1.35rem; border-radius: 50%; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .bubbles { position: absolute; left: clamp(.8rem, 2.4vw, 2.4rem); bottom: 9.5rem; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .35rem; max-width: min(420px, 70vw); z-index: 6; pointer-events: none; }
   .bubbles li { background: rgba(0,0,0,.62); padding: .35rem .8rem; border-radius: 14px; font-size: .92rem; animation: fadein .25s; } @keyframes fadein { from { opacity: 0; transform: translateY(6px); } }
   .chat { position: absolute; top: 0; right: 0; bottom: 0; width: min(340px, 92vw); background: rgba(14,14,14,.94); z-index: 10; display: flex; flex-direction: column; border-left: 1px solid #2c2c2c; animation: slide var(--t-med) var(--ease); }
@@ -214,13 +229,12 @@
   .ic { background: transparent; padding: 0; width: 48px; min-height: 48px; border-radius: 50%; color: #fff; position: relative; } .ic:hover:not(:disabled) { background: rgba(255,255,255,.14); }
   .roleinfo { display: grid; place-items: center; width: 40px; color: var(--mut); }
   .mwrap { position: relative; }
-  .picker { position: absolute; right: 0; bottom: 58px; display: grid; grid-template-columns: repeat(4, 1fr); gap: .2rem; background: rgba(20,20,20,.97); border: 1px solid #3a3a3a; border-radius: 10px; padding: .4rem; z-index: 20; }
   .em { background: transparent; font-size: 1.6rem; width: 48px; padding: 0; } .em:hover:not(:disabled) { background: rgba(255,255,255,.12); transform: scale(1.15); }
   .menu { position: absolute; right: 0; bottom: 58px; background: rgba(20,20,20,.97); border: 1px solid #3a3a3a; border-radius: 6px; padding: .6rem .3rem; min-width: 210px; z-index: 20; }
   .menu h3 { font-size: 1rem; margin: 0 .6rem .4rem; }
   .mi { display: flex; width: 100%; justify-content: flex-start; align-items: center; gap: .5rem; background: transparent; color: #d2d2d2; font-weight: 400; padding: .35rem .6rem; min-height: 40px; border-radius: 4px; } .mi.on { color: #fff; font-weight: 700; } .mi:hover:not(:disabled) { background: rgba(255,255,255,.1); }
   .sp2 { width: 16px; flex: none; }
   .dot { position: absolute; top: 6px; right: 4px; background: var(--acc); font-size: .65rem; min-width: 1.1rem; height: 1.1rem; border-radius: 99px; display: grid; place-items: center; font-weight: 700; }
-  @media (max-width: 720px) { .avatars { display: none; } .bubbles { bottom: 8rem; } }
+  @media (max-width: 720px) { .avatars { display: none; } .bubbles { bottom: 12rem; } .rbar { right: 50%; transform: translateX(50%); bottom: 9rem; } .rbar .em { width: 36px; min-height: 36px; font-size: 1.2rem; } }
 .invite { position: absolute; top: 4.6rem; right: 1rem; z-index: 12; background: rgba(20,20,20,.97); border: 1px solid #3a3a3a; border-radius: 10px; padding: 1rem 1.2rem; width: min(380px, 92vw); display: grid; gap: .8rem; } .invite header { display: flex; justify-content: space-between; align-items: center; } .chk { display: inline-flex; gap: .45rem; align-items: center; color: var(--fg); min-height: 40px; }
 </style>

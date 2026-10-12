@@ -126,7 +126,7 @@ const tr: Translation<typeof de> = {
     status: 'Durum',
   },
   polls: {
-    intro: 'Henüz kütüphanede olmayan kazananlar. Onay bir Seerr isteği oluşturur ve yapım gelince film gecesini planlar.',
+    intro: 'Henüz kütüphanede olmayan kazananlar. Onay bir istek oluşturur ve yapım gelince film gecesini planlar.',
     none: 'Açık bir şey yok.',
     winner: '→ “{title}”',
   },

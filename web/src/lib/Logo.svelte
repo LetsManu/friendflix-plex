@@ -2,7 +2,7 @@
   /** FriendFlix mark (red tile, "F" whose middle bar is a play button). `wordmark` adds the lettering next to it. */
   export let size = 32;
   export let wordmark = false;
-  export let label = 'FriendFlix';
+  export let label = 'FriendFlix for Plex';
   /** soft drop shadow (header over video); off by default: a filter per instance costs a paint layer (cards, rows) */
   export let shadow = false;
   const uid = 'ffl' + Math.random().toString(36).slice(2, 7);
@@ -17,7 +17,7 @@
     <path fill="#fff" d="M19 18a4 4 0 0 1 4-4h23a4 4 0 0 1 0 8H28v28a4.500 4.500 0 0 1-9 0z" />
     <path fill="#fff" stroke="#fff" stroke-width="3" stroke-linejoin="round" d="M33.500 29.500 45.500 36 33.500 42.500z" />
   </svg>
-  {#if wordmark}<span class="txt" aria-label={label}>FRIEND<b>FLIX</b></span>{/if}
+  {#if wordmark}<span class="txt" aria-label={label}>FRIEND<b>FLIX</b></span><span class="badge">for Plex</span>{/if}
 </span>
 
 <style>
@@ -26,5 +26,7 @@
   .shadow svg { filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .45)); }
   .txt { font-weight: 800; letter-spacing: .07em; font-size: clamp(1.05rem, 2vw, 1.45rem); color: #fff; }
   .txt b { color: var(--acc); font-weight: 900; }
-  @media (max-width: 420px) { .txt { display: none; } }
+  /* fork: plain-text "for Plex" badge (no Plex logo or chevron – their mark is a trademark) */
+  .badge { font-weight: 800; font-size: clamp(.62rem, 1vw, .78rem); letter-spacing: .03em; color: #141414; background: #f2b632; border-radius: .4em; padding: .28em .5em; white-space: nowrap; }
+  @media (max-width: 420px) { .txt, .badge { display: none; } }
 </style>

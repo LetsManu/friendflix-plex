@@ -8,6 +8,7 @@
   import { listIds, prefs, toggleList } from '#lib/stores';
   import { closePreview, previewSheet } from '#lib/previewSheet';
   import { genreLine, itemPath, playPath, runtimeLabel, shareData } from '#lib/mobile';
+  import { kidsMode } from '#lib/kids';
   import { t, tr } from '#lib/i18n';
 
   /** Bottom sheet that opens when a poster is tapped (phone layout). Mounted once in +layout.svelte; state in `previewSheet`. */
@@ -72,7 +73,7 @@
       <a class="play" href={playPath(item)} on:click={() => close(false)}><Icon name="play" size={22} />{item.positionTicks ? $t('home.card.resume') : $t('home.card.play')}</a>
       {#if downloadable}<span class="ic dl"><DownloadButton itemId={item.id} seriesId={item.seriesId ?? ''} compact /><small>{$t('home.card.download')}</small></span>{/if}
       <button type="button" class="ic" aria-pressed={inList} on:click={list}><span class="circ"><Icon name={inList ? 'check' : 'plus'} size={22} /></span><small>{$t('home.card.myList')}</small></button>
-      <button type="button" class="ic" on:click={share}><span class="circ"><Icon name="share" size={20} /></span><small>{$t('home.card.share')}</small></button>
+      {#if !$kidsMode}<button type="button" class="ic" on:click={share}><span class="circ"><Icon name="share" size={20} /></span><small>{$t('home.card.share')}</small></button>{/if}
     </div>
     <p class="note" role="status">{note}</p>
     <a class="details" href={itemPath(item)} on:click={() => close(false)}><Icon name="info" size={20} />{$t('home.card.detailsMore')}<Icon name="chevron-right" size={18} /></a>

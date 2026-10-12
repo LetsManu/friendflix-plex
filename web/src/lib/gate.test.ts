@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { canRenderEarly, clearHint, clearReloadFlag, earlyProfile, gateHref, hintOf, markPicked, needsProfileGate, parseHint, readActive, readHint, readPicked, readReloading, writeHint } from './gate';
+import { canRenderEarly, clearHint, clearReloadFlag, earlyProfile, gateHref, hintOf, kidsAllowed, kidsRedirect, markPicked, needsProfileGate, needsWelcome, parseHint, readActive, readHint, readPicked, readReloading, safeNext, welcomeHref, writeHint } from './gate';
 
 describe('needsProfileGate', () => {
   const multi = { profileCount: 3, profileChosen: true };
@@ -22,6 +22,59 @@ describe('needsProfileGate', () => {
     expect(needsProfileGate(multi, '/remote', false)).toBe(false);
     expect(needsProfileGate(multi, '/remote/x', false)).toBe(false);
     expect(needsProfileGate(multi, '/remotely', false)).toBe(true);
+  });
+});
+
+describe('kids profiles', () => {
+  it('only kids routes are allowed; everything else goes to the kids home', () => {
+    for (const p of ['/kids', '/kids/search', '/item/abc', '/watch/abc', '/search', '/profiles', '/offline', '/settings', '/welcome']) expect(kidsAllowed(p), p).toBe(true);
+    for (const p of ['/', '/party', '/party/x', '/lists', '/lists/1', '/requests', '/stats', '/digest', '/admin', '/admin/users', '/me', '/watchlist', '/match', '/vote', '/kidsx', '/settingsx', '/settings/devices', '/browse/movies'])
+      expect(kidsAllowed(p), p).toBe(false);
+    expect(kidsRedirect({ kids: true }, '/')).toBe('/kids');
+    expect(kidsRedirect({ kids: true }, '/party/abc')).toBe('/kids');
+    expect(kidsRedirect({ kids: true }, '/watch/abc')).toBeNull();
+    expect(kidsRedirect({ kids: false }, '/party/abc')).toBeNull();
+    expect(kidsRedirect(null, '/admin')).toBeNull();
+  });
+  it('a kids hint never renders a grown-up page early', () => {
+    const h = hintOf({ deviceApproved: true, profileCount: 2, kids: true });
+    expect(h.kids).toBe(true);
+    expect(parseHint(JSON.stringify(h))).toEqual(h);
+    expect(canRenderEarly(h, true, '/')).toBe(false);
+    expect(canRenderEarly(h, true, '/lists')).toBe(false);
+    expect(canRenderEarly(h, true, '/kids')).toBe(true);
+    expect(parseHint(JSON.stringify({ ...h, kids: 'yes' }))?.kids).toBeUndefined();
+  });
+});
+
+describe('onboarding (/welcome)', () => {
+  it('only profiles the server marks as not onboarded, never on the welcome/picker/public pages or TVs', () => {
+    expect(needsWelcome({ onboarded: false }, '/')).toBe(true);
+    expect(needsWelcome({ onboarded: false }, '/item/x')).toBe(true);
+    expect(needsWelcome({ onboarded: true }, '/')).toBe(false);
+    expect(needsWelcome({}, '/')).toBe(false); // older server
+    expect(needsWelcome(null, '/')).toBe(false);
+    for (const p of ['/welcome', '/profiles', '/offline', '/invite/x', '/tv', '/remote']) expect(needsWelcome({ onboarded: false }, p), p).toBe(false);
+    expect(needsWelcome({ onboarded: false, tv: true }, '/')).toBe(false);
+  });
+  it('continues where the person wanted to go (kids: on the kids home)', () => {
+    expect(welcomeHref('/watch/1?t=3')).toBe('/welcome?next=%2Fwatch%2F1%3Ft%3D3');
+    expect(welcomeHref('/', true)).toBe('/welcome?next=%2Fkids');
+    expect(welcomeHref('/item/1', true)).toBe('/welcome?next=%2Fitem%2F1');
+  });
+  it('safeNext keeps same-origin paths only', () => {
+    expect(safeNext('/kids')).toBe('/kids');
+    expect(safeNext('//evil.example')).toBe('/');
+    expect(safeNext('https://evil.example')).toBe('/');
+    expect(safeNext('/\\evil')).toBe('/');
+    expect(safeNext(null, '/kids')).toBe('/kids');
+  });
+  it('a hint that still owes the onboarding renders nothing early', () => {
+    const h = hintOf({ deviceApproved: true, profileCount: 1, profile: { id: 'p1' }, onboarded: false });
+    expect(h.welcome).toBe(true);
+    expect(parseHint(JSON.stringify(h))).toEqual(h);
+    expect(canRenderEarly(h, false, '/')).toBe(false);
+    expect(hintOf({ deviceApproved: true, profileCount: 1, onboarded: true }).welcome).toBeUndefined();
   });
 });
 

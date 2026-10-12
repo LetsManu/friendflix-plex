@@ -13,6 +13,10 @@ networks:
 x-ak: &ak
   image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG:-2026.8.3}
   restart: unless-stopped
+  # Optional AUTHENTIK_* settings (SMTP e-mail etc., see docs/authentik.md); the file may be missing.
+  env_file:
+    - path: .env.authentik
+      required: false
   environment:
     AUTHENTIK_POSTGRESQL__HOST: ak-postgres
     AUTHENTIK_POSTGRESQL__USER: authentik
@@ -44,17 +48,18 @@ services:
     <<: *ak
     command: server
     ports: ["${BIND_ADDR:-127.0.0.1}:${AUTHENTIK_PORT:-9000}:9000"]
-    volumes: [ak-media:/media, ak-templates:/templates]
+    volumes: [ak-data:/data, ak-media:/media, ak-templates:/templates]   # /data: uploads since 2025.12, /media: older releases
     networks: [front, ak-db, egress]
 
   ak-worker:
     <<: *ak
     command: worker
-    volumes: [ak-media:/media, ak-templates:/templates, ak-certs:/certs]
+    volumes: [ak-data:/data, ak-media:/media, ak-templates:/templates, ak-certs:/certs]
     networks: [ak-db, egress]
 
 volumes:
   ak-pg:
+  ak-data:
   ak-media:
   ak-templates:
   ak-certs:

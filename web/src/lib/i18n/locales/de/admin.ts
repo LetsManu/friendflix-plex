@@ -125,7 +125,7 @@ export default {
     status: 'Status',
   },
   polls: {
-    intro: 'Gewinner, die noch nicht in der Bibliothek sind. Freigabe erzeugt einen Seerr-Wunsch und plant den Filmabend, sobald der Titel da ist.',
+    intro: 'Gewinner, die noch nicht in der Bibliothek sind. Freigabe legt einen Wunsch an und plant den Filmabend, sobald der Titel da ist.',
     none: 'Nichts offen.',
     winner: '→ „{title}“',
   },

@@ -1,5 +1,7 @@
 # Integrations (Jellyfin, Seerr, Authentik, ntfy/Discord)
 
+> **FriendFlix for Plex (preview):** the Jellyfin steps on this page (webhook plugin, API key) do **not** apply. Use [plex.md](plex.md) for the media-server setup ([Deutsch](de/plex.md)). The sections below on the request service, Authentik, ntfy and Discord notifications and web push apply unchanged.
+
 Webhook URLs use the **internal Docker network** (`http://backend:3000`, Jellyfin/Seerr share the `media` network with the backend), never the public host. NPM answers `/internal/*` with 404.
 `WEBHOOK_SECRET` is the shared secret (`.env`).
 
@@ -27,48 +29,10 @@ Pause is derived from `isPaused` in progress events. Sessions started in the por
   Verify against your instance's `/api-docs`: the user import path differs between Jellyseerr/Seerr versions.
 
 ## Authentik
-1. Provider: OAuth2/OpenID, confidential, redirect URI `https://portal.example.com/auth/callback`, scopes `openid profile email` + a `groups` property mapping (claim `groups`).
-2. Application slug `friendflix` → `OIDC_ISSUER=https://auth.example.com/application/o/friendflix/`.
-3. Group `friendflix-admins` (= `ADMIN_GROUP`): members become portal admins on first login (no invite needed).
-4. **MFA mandatory:** Authenticator Validation Stage in the authentication flow: *Not configured action = Force the user to configure an authenticator*, device classes TOTP + WebAuthn. Same in the enrollment flow.
-5. Invitations with account creation: see below. Without them, an invited person must already have an Authentik account; anyone who logs in without a portal invite (and is not in `ADMIN_GROUP`) gets `403 no_invite`.
+Moved to **[authentik.md](authentik.md)**: installation, OAuth2/OpenID provider and application (redirect URI `${PUBLIC_URL}/auth/callback`, `OIDC_ISSUER` with trailing slash), groups and `ADMIN_GROUP`, mandatory MFA, recovery, branding, troubleshooting. The complete installation of FriendFlix is in [setup.md](setup.md).
 
 ### Invitations with account creation
-
-Goal: the admin creates an invite, the friend opens the link, clicks **Konto anlegen & loslegen**, signs up in Authentik (incl. MFA) and lands logged in on the portal with the invite's role. No manual Authentik work per person.
-
-How it works:
-1. `POST /api/admin/invites` creates the portal invite and, via the Authentik API, a single-use invitation bound to the enrollment flow (`GET /api/v3/flows/instances/<slug>/`, then `POST /api/v3/stages/invitation/invitations/` with `name`, `expires`, `single_use: true`, `flow`). Expiry matches the portal invite.
-2. The invite page button points at `/auth/enroll?invite=<token>`. The portal starts the OIDC login (invite stored in the server-side state, valid 30 min) and redirects to
-   `https://auth.example.com/if/flow/<slug>/?itoken=<invitation>&next=/application/o/authorize/?…`.
-3. After the last stage Authentik follows `next`. Authentik only accepts a **relative** `next`, which is why the portal passes the path of its own authorize request. The user is now logged in to Authentik, so the authorize request goes straight to `/auth/callback`, which redeems the invite and creates the portal + Jellyfin account.
-
-(The invitation's `fixed_data` only pre-fills prompt fields, so it cannot carry the redirect. That's why the portal uses `next`.)
-
-Authentik setup (tested shape: 2024.x – 2026.x):
-1. **Enrollment flow**: Flows → Create, designation *Enrollment*, slug e.g. `friendflix-enrollment`, authentication *No requirement*. Stage bindings in order:
-   1. *Invitation stage*, **Continue flow without invitation: off** (only invited people can sign up).
-   2. *Prompt stage* (username, name, email, password, password repeat).
-   3. *User Write stage* (create users as active; optionally add them to a group).
-   4. *Authenticator Validation stage*, *Not configured action = Force the user to configure an authenticator*, device classes TOTP + WebAuthn (or bind TOTP/WebAuthn setup stages).
-   5. *User Login stage*. **Required**: without it the person must log in again after sign-up.
-   Do **not** add a *Redirect stage* or an expression policy that sets a redirect. It overrides `next` and the person ends up in the Authentik user interface instead of the portal.
-2. **API token**: create a service account (Directory → Users → Create service account, e.g. `friendflix-invites`). Give it a role with the permissions *Can add Invitation*, *Can view Invitation* and *Can view Flow* (Directory → Roles → Assign permissions), or make it a superuser. Directory → Tokens → Create: user = that account, **intent API**, no expiry (or rotate it). Copy the key.
-3. Portal `.env` (all three, or none):
-   ```
-   AUTHENTIK_URL=https://auth.example.com          # public base URL, no path
-   AUTHENTIK_API_TOKEN=<token key>                  # or AUTHENTIK_API_TOKEN_FILE
-   AUTHENTIK_ENROLL_FLOW=friendflix-enrollment      # the flow *slug*, not its name
-   ```
-   Then recreate the backend container (`docker compose up -d backend`). Compose passes the variables through with an empty default, so a missing `.env` entry silently turns the feature off.
-
-Troubleshooting (`no_invite`, or no "Konto anlegen" button):
-- The admin invite page shows the result right after creating an invite: *führt durch die Konto-Erstellung* = OK; *nicht konfiguriert* = env vars missing; *konnte nicht erstellt werden* = API error. The backend logs a warning with the reason. At startup it logs `Authentik invitations disabled: … not set` if only some variables are set.
-- Log reasons: `enrollment flow "…" not found` (wrong slug); `rejected AUTHENTIK_API_TOKEN` (401: wrong token or intent); `invitation creation failed (… "Can add Invitation" …)` (403: missing permission); `Authentik unreachable` (DNS/TLS/firewall from the backend container to `AUTHENTIK_URL`).
-- Check by hand from the backend container:
-  `curl -H "Authorization: Bearer $AUTHENTIK_API_TOKEN" $AUTHENTIK_URL/api/v3/flows/instances/$AUTHENTIK_ENROLL_FLOW/`
-- Invites created before the fix have no Authentik invitation: create a new one.
-- `no_invite` after the fact (someone already has an Authentik account but no portal account): create an invite with **hat schon ein Authentik-Konto** ticked (`"enroll": false`). The link then only offers *Anmelden & freischalten*.
+Moved to [authentik.md §7–§9](authentik.md#7-enrollment-flow-for-invitations): enrollment flow (`AUTHENTIK_ENROLL_FLOW`), service account and API token with least privileges (`AUTHENTIK_API_TOKEN`), `AUTHENTIK_URL`, and the troubleshooting table ([§15](authentik.md#15-troubleshooting)). Ready-made blueprints: [`deploy/authentik/`](../deploy/authentik/).
 
 ## ntfy / Discord
 `NTFY_URL=https://ntfy.example.com/friendflix` and/or `DISCORD_WEBHOOK_URL=...` for "now available", pending wishes, voting events.

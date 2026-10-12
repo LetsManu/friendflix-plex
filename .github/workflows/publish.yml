@@ -19,7 +19,7 @@ jobs:
         with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
       - name: Image name (GHCR needs lowercase)
         id: img
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/friendflix-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+        run: repo="${GITHUB_REPOSITORY#*/}"; echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${repo,,}-${{ matrix.service }}" >> "$GITHUB_OUTPUT"   # friendflix-<svc>; forks get <repo>-<svc>
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:

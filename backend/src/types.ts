@@ -25,5 +25,9 @@ export interface ProfileRow {
   jellyfin_user_id: string | null;
   jellyfin_username: string | null;
   jellyfin_pw_enc: string | null;
+  /** kids profile (migration 31): parental cap on its Jellyfin user, no social features, PIN needed to switch away */
+  kids: boolean;
+  /** Jellyfin MaxParentalRating of a kids profile: 0, 6 or 12 (ignored unless `kids`) */
+  kids_max_rating: number;
   created_at: Date;
 }

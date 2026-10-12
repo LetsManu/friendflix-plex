@@ -126,7 +126,7 @@ const fr: Translation<typeof de> = {
     status: 'Statut',
   },
   polls: {
-    intro: 'Gagnants qui ne sont pas encore dans la bibliothèque. L’approbation crée une demande Seerr et planifie la soirée cinéma dès que le titre est disponible.',
+    intro: 'Gagnants qui ne sont pas encore dans la bibliothèque. L’approbation crée une demande et planifie la soirée cinéma dès que le titre est disponible.',
     none: 'Rien en attente.',
     winner: '→ « {title} »',
   },

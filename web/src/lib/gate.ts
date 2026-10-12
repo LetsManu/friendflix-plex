@@ -12,8 +12,33 @@ export const ACTIVE_KEY = 'ff-active-profile';
 /** sessionStorage flag lib/api.ts sets before reloading after a profile switch in another tab */
 const RELOAD_KEY = 'ff_profile_reload';
 
-export interface GateMe { profileRequired?: boolean; profileCount?: number; profileChosen?: boolean; tv?: boolean }
-export interface BootHint { approved: boolean; multi: boolean; tv: boolean; /** single-profile accounts only: that profile never changes */ profile?: string; /** UI language of the last answer: an early-rendered page waits until it is active */ lang?: string }
+export interface GateMe { profileRequired?: boolean; profileCount?: number; profileChosen?: boolean; tv?: boolean; kids?: boolean; onboarded?: boolean }
+export interface BootHint {
+  approved: boolean; multi: boolean; tv: boolean;
+  /** single-profile accounts only: that profile never changes */ profile?: string;
+  /** UI language of the last answer: an early-rendered page waits until it is active */ lang?: string;
+  /** the last answer was a kids profile: only kids routes may render early */ kids?: boolean;
+  /** the last answer still owed the /welcome onboarding: nothing renders early */ welcome?: boolean;
+}
+
+// ---- kids profiles: only a small set of routes; everything else goes to the kids home ----
+/** routes a kids profile may open (the server also answers 403 kids_profile on every social API) */
+const KIDS_ALLOWED = /^\/(kids|item|watch|profiles|offline|welcome)(\/|$)|^\/(search|settings)\/?$/;
+export const kidsAllowed = (path: string): boolean => KIDS_ALLOWED.test(path);
+/** where the layout sends a kids profile instead of `path`, or null when the route is fine */
+export const kidsRedirect = (me: Pick<GateMe, 'kids'> | null | undefined, path: string): string | null => (me?.kids && !kidsAllowed(path) ? '/kids' : null);
+
+// ---- onboarding (/welcome): new profiles go through it once, after the profile and language gates ----
+/** pages that never send to /welcome (the onboarding itself, the picker, public and remote pages) */
+const NO_WELCOME = /^\/(welcome|profiles|offline|invite|tv|remote)(\/|$)/;
+/** true when the layout must send the profile to /welcome first (`onboarded` absent = older server = onboarded) */
+export const needsWelcome = (me: Pick<GateMe, 'onboarded' | 'tv'> | null | undefined, path: string): boolean =>
+  me?.onboarded === false && !me.tv && !NO_WELCOME.test(path);
+/** `/welcome?next=…`; a kids profile continues on its own home */
+export const welcomeHref = (pathAndSearch: string, kids = false) => `/welcome?next=${encodeURIComponent(kids && !kidsAllowed(pathAndSearch.split(/[?#]/)[0]!) ? '/kids' : pathAndSearch)}`;
+/** a same-origin path from `?next=` (anything else: the fallback) */
+export const safeNext = (raw: string | null | undefined, fallback = '/'): string =>
+  raw && raw.startsWith('/') && !raw.startsWith('//') && !raw.includes('\\') ? raw : fallback;
 
 /** paths that never show the per-session gate (the profile page itself, the phone remote control) */
 const NO_SESSION_GATE = /^\/(profiles|remote)(\/|$)/;
@@ -32,7 +57,10 @@ export const gateHref = (pathAndSearch: string) => `/profiles?next=${encodeURICo
 
 export function hintOf(me: GateMe & { deviceApproved?: boolean; profile?: { id: string } | null; language?: string }): BootHint {
   const multi = (me.profileCount ?? 0) > 1;
-  return { approved: Boolean(me.deviceApproved), multi, tv: Boolean(me.tv), ...(!multi && me.profile?.id ? { profile: me.profile.id } : {}), ...(me.language ? { lang: me.language } : {}) };
+  return {
+    approved: Boolean(me.deviceApproved), multi, tv: Boolean(me.tv), ...(!multi && me.profile?.id ? { profile: me.profile.id } : {}), ...(me.language ? { lang: me.language } : {}),
+    ...(me.kids ? { kids: true } : {}), ...(me.onboarded === false ? { welcome: true } : {}),
+  };
 }
 
 /** profile id early requests of this tab use: the one this tab ran with, else the only profile of a single-profile account */
@@ -43,7 +71,10 @@ export function parseHint(raw: string | null | undefined): BootHint | null {
   try {
     const h = JSON.parse(raw);
     if (!(h && typeof h === 'object' && typeof h.approved === 'boolean' && typeof h.multi === 'boolean' && typeof h.tv === 'boolean')) return null;
-    return { approved: h.approved, multi: h.multi, tv: h.tv, ...(typeof h.profile === 'string' && h.profile ? { profile: h.profile } : {}), ...(typeof h.lang === 'string' && /^[a-z]{2}$/.test(h.lang) ? { lang: h.lang } : {}) };
+    return {
+      approved: h.approved, multi: h.multi, tv: h.tv, ...(typeof h.profile === 'string' && h.profile ? { profile: h.profile } : {}), ...(typeof h.lang === 'string' && /^[a-z]{2}$/.test(h.lang) ? { lang: h.lang } : {}),
+      ...(h.kids === true ? { kids: true } : {}), ...(h.welcome === true ? { welcome: true } : {}),
+    };
   } catch { return null; }
 }
 
@@ -52,7 +83,7 @@ export function parseHint(raw: string | null | undefined): BootHint | null {
  * approved device, no TV, and no gate due in this session. Wrong guesses are corrected as soon as /api/me arrives.
  */
 export const canRenderEarly = (h: BootHint | null, sessionPicked: boolean, path: string, activeProfile: string | null = 'x', reloading = false): boolean =>
-  Boolean(h && h.approved && !h.tv && !(h.multi && !sessionPicked) && path !== '/profiles' && activeProfile && !reloading);
+  Boolean(h && h.approved && !h.tv && !(h.multi && !sessionPicked) && path !== '/profiles' && activeProfile && !reloading && !h.welcome && !(h.kids && !kidsAllowed(path)));
 
 const ss = () => { try { return sessionStorage; } catch { return null; } };
 const ls = () => { try { return localStorage; } catch { return null; } };

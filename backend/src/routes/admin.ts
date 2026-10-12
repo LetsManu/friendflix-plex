@@ -10,7 +10,8 @@ import { clipPath, libraryItems, previews, serviceUser } from '../previews.js';
 import { stat } from 'node:fs/promises';
 import { defaultLimit } from '../requestlimit.js';
 import { DEFAULT_ROLES, INVITABLE_ROLES, effectiveRole, invalidateRoles } from '../roles.js';
-import { requireAdmin, requireOwner, requireUser } from '../session.js';
+import { requireGrownUp } from '../kids.js';
+import { requireAdmin, requireOwner } from '../session.js';
 import { portainerMode, triggerUpdate, updateInfo } from '../updates.js';
 import { MAX_FEATURED } from '../lists.js';
 import { accountJellyfinIds } from '../profiles.js';
@@ -275,7 +276,7 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
     await audit(ctx, req.user!.id, 'session.revoke_others', req.user!.id, { sessions: n });
     return { revoked: n };
   });
-  app.get('/api/devices', { preHandler: requireUser(ctx, { allowPendingDevice: true, allowNoProfile: true }) }, async (req) => {
+  app.get('/api/devices', { preHandler: requireGrownUp(ctx, { allowPendingDevice: true, allowNoProfile: true }) }, async (req) => {
     const r = await ctx.db.query('select device_id, label, approved, created_at, last_seen from devices where user_id=$1 order by created_at', [req.user!.id]);
     return { devices: r.rows.map((d) => ({ ...d, id: d.device_id, current: d.device_id === req.session!.deviceId })) };
   });

@@ -73,6 +73,7 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     if (p === '/api/library/resume') return J({ items: [episodes[0], items[2]] });
     if (p === '/api/library/nextup') return J({ items: [episodes[1]] });
     if (p === '/api/library/because') return J({ because: { name: 'Inception' }, items: items.slice(1, 12) });
+    if (p === '/api/library/because-more') return J({ rows: [] }); // specs that need the extra "Weil du ..." rows mock it themselves
     if (p === '/api/recommendations') return J({ items: items.slice(5, 10) });
     if (p === '/api/library/friends-rated') return J({ items: items.slice(2, 8) });
     if (p === '/api/library/trending') {
@@ -116,6 +117,10 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     }
     if (p === '/api/tv/code') return J({ code: 'ABCD-EFGH', pollToken: 'p'.repeat(32), expiresIn: 600, defaultLanguage: 'en' });
     if (p === '/api/tv/claim') return J({ status: 'pending' }, 202);
+    // block 15: per-series audio/subtitle choice (+ anime flag), simulcast, onboarding flag
+    if (/^\/api\/series\/[^/]+\/langpref$/.test(p)) return J({ audio: null, subtitle: null, ...(sp.get('anime') === '1' ? { anime: false } : {}) });
+    if (p === '/api/simulcast') return J({ season: 'fall', year: 2026, total: 0, anime: sp.get('anime') === '1', days: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, items: [] })) });
+    if (p === '/api/prefs/onboarded' && m === 'PUT') return J({ onboarded: true });
     if (p.startsWith('/api/series/')) return J({ followed: false });
 
     // ----- lists -----
@@ -161,6 +166,8 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     }
     if ((mm = p.match(/^\/api\/items\/([^/]+)\/favorite$/))) { if (m === 'POST') st.fav.add(mm[1]!); else st.fav.delete(mm[1]!); return J({ ok: true }); }
     if ((mm = p.match(/^\/api\/items\/([^/]+)\/(played|thumb)$/))) return J({ ok: true });
+    if (/^\/api\/items\/[^/]+\/extras\/all$/.test(p)) return J({ items: [] }); // Extras tab (block 15): specs with extras mock it themselves
+    if (p === '/api/hubs') return J({ hubs: [] }); // brand hub tiles (block 15): specs with hubs mock it themselves
     if ((mm = p.match(/^\/api\/items\/([^/]+)\/reactions$/))) {
       if (mm[1] === LOCKED_ID && m === 'GET') return J({ locked: true, count: 3 });
       const now = new Date().toISOString();
@@ -176,6 +183,7 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
         case 'ratings': return J({ ratings: [{ userId: 'f1', name: 'Anna', stars: 5, review: 'Super!', mine: false }], average: 4.5 });
         case 'similar': return J({ items: items.slice(0, 8) });
         case 'extras': return J({ items: [] });
+        case 'comments': return J(m === 'POST' ? { id: 'c1', name: 'Tester', mine: true, spoiler: false, body: body().body, createdAt: new Date().toISOString(), canDelete: true } : { watched: true, comments: [] }); // episode comments (block 15)
         case 'seasons': return J({ items: [{ id: hex(200), name: 'Staffel 1', type: 'Season', indexNumber: 1, genres: [], image: true, backdrop: false, logo: false, played: false, favorite: false, positionTicks: 0 }] });
         case 'episodes': return J({ items: episodes });
         case 'tracks': return J({ audio: [{ language: 'deu', title: 'Deutsch', isDefault: true }, { language: 'eng', title: 'English', isDefault: false }], subtitles: [{ language: 'deu', title: 'Deutsch' }], type: 'Movie' });
@@ -186,6 +194,8 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
       const it = find(mm[1]!) ?? byName('Inception');
       return J({ item: withFav(it), inWatchlist: st.watch.has(it.id), thumb: 0, langs: { audio: ['deu', 'eng'], subs: ['deu'] } });
     }
+
+    if (/^\/api\/comments\/[^/]+$/.test(p) && m === 'DELETE') return J({ ok: true });
 
     // profiles (gate "Wer schaut gerade?" and the avatar menu)
     if (p === '/api/profiles') return J({ profiles: PROFILES, max: 5, activeId: 'p1' });

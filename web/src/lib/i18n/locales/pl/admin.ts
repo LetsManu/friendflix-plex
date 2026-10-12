@@ -146,7 +146,7 @@ const pl: Translation<typeof de> = {
     status: 'Status',
   },
   polls: {
-    intro: 'Zwycięzcy, których nie ma jeszcze w bibliotece. Zatwierdzenie tworzy życzenie w Seerr i planuje wieczór filmowy, gdy tytuł będzie dostępny.',
+    intro: 'Zwycięzcy, których nie ma jeszcze w bibliotece. Zatwierdzenie tworzy życzenie w usłudze próśb i planuje wieczór filmowy, gdy tytuł będzie dostępny.',
     none: 'Nic nie czeka.',
     winner: '→ „{title}”',
   },

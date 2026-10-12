@@ -31,6 +31,8 @@ import { mediaRoutes } from './routes/media.js';
 import { socialRoutes } from './routes/social.js';
 import { reactionRoutes } from './routes/reactions.js';
 import { trendingRoutes } from './routes/trending.js';
+import { hubRoutes } from './routes/hubs.js';
+import { animeRoutes } from './routes/anime.js';
 
 export interface Extra {
   /** Additional route registrars for later steps. */
@@ -145,6 +147,8 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   socialRoutes(app, ctx);
   reactionRoutes(app, ctx);
   trendingRoutes(app, ctx);
+  hubRoutes(app, ctx);
+  animeRoutes(app, ctx);
   for (const r of extra.register ?? []) await r(app, ctx);
   return app;
 }

@@ -102,6 +102,28 @@ describe('party engine', () => {
     expect(h.last('pong')).toEqual({ t: 'pong', c: 42, s: c.t });
   });
 
+  it('live reactions are throttled per member (burst of 5, then one per 700 ms) and reach everybody', () => {
+    const { c, now } = clock();
+    const room = new Room('r', 'item', 'T', 'host', undefined, now);
+    const h = inbox(), g = inbox();
+    room.join('host', 'Host', h.send);
+    room.join('g2', 'G2', g.send);
+    const reacts = (b: ReturnType<typeof inbox>) => b.msgs.filter((m) => m.t === 'react');
+    for (let i = 0; i < 9; i++) room.handle('host', { t: 'react', emoji: '😂' });
+    expect(reacts(h)).toHaveLength(5);
+    expect(reacts(g)).toHaveLength(5); // the sender sees it too, so does everyone else
+    expect(g.last('react')).toEqual({ t: 'react', from: 'host', name: 'Host', emoji: '😂' });
+    room.handle('g2', { t: 'react', emoji: '🔥' }); // another member has its own bucket
+    expect(reacts(h)).toHaveLength(6);
+    c.t += 700;
+    room.handle('host', { t: 'react', emoji: '😮' });
+    room.handle('host', { t: 'react', emoji: '😮' });
+    expect(reacts(h)).toHaveLength(7); // only one token refilled
+    c.t += 10_000;
+    for (let i = 0; i < 9; i++) room.handle('host', { t: 'react', emoji: '❤️' });
+    expect(reacts(h)).toHaveLength(12); // refill is capped at the burst size
+  });
+
   it('scheduled rooms auto-start at the countdown end and expire when empty', () => {
     const { c, now } = clock();
     const reg = new PartyRegistry(now);

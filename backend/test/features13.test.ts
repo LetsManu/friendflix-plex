@@ -79,16 +79,17 @@ describe('similar titles and "Weil du ... gesehen hast"', () => {
 
 describe('viewing preferences', () => {
   it('has safe defaults, validates and persists per user', async () => {
-    expect((await call('GET', '/api/prefs')).json().prefs).toEqual({ autoplayNext: true, autoSkipIntro: false, shareHistory: false, shareRatings: true, hoverTrailers: true, hoverClip: true, autoStartPreview: true, audioLang: '', subtitleLang: '', quality: 0, stillWatching: true, stillWatchingEpisodes: 3, subtitleStyle: { size: 'm', color: 'white', background: 'semi', font: 'sans' }, spoilerProtection: false, weeklyDigest: true, ntfyTopic: '', language: '' });
-    const put = await call('PUT', '/api/prefs', { autoplayNext: false, autoSkipIntro: true, audioLang: 'ger', subtitleLang: 'eng', quality: 4_000_000 });
+    expect((await call('GET', '/api/prefs')).json().prefs).toEqual({ autoplayNext: true, autoSkipIntro: false, shareHistory: false, shareRatings: true, hoverTrailers: true, hoverClip: true, autoStartPreview: true, audioLang: '', subtitleLang: '', quality: 0, stillWatching: true, stillWatchingEpisodes: 3, subtitleStyle: { size: 'm', color: 'white', background: 'semi', font: 'sans' }, spoilerProtection: false, animeOriginal: false, weeklyDigest: true, ntfyTopic: '', language: '' });
+    const put = await call('PUT', '/api/prefs', { autoplayNext: false, autoSkipIntro: true, audioLang: 'ger', subtitleLang: 'eng', quality: 4_000_000, animeOriginal: true });
     expect(put.statusCode).toBe(200);
-    expect((await call('GET', '/api/prefs')).json().prefs).toMatchObject({ autoplayNext: false, autoSkipIntro: true, audioLang: 'ger', subtitleLang: 'eng', quality: 4_000_000 });
+    expect((await call('GET', '/api/prefs')).json().prefs).toMatchObject({ autoplayNext: false, autoSkipIntro: true, audioLang: 'ger', subtitleLang: 'eng', quality: 4_000_000, animeOriginal: true });
+    expect((await call('PUT', '/api/prefs', { animeOriginal: 'yes' })).statusCode).toBe(400);
     expect((await call('PUT', '/api/prefs', { audioLang: 'german!' })).statusCode).toBe(400);
     expect((await call('PUT', '/api/prefs', { quality: -5 })).statusCode).toBe(400);
   });
   it('parses older stored prefs (without the newer fields) to defaults', async () => {
     await env.pool.query("update profile_prefs set data = '{\"autoplayNext\":false,\"subtitleStyle\":{\"size\":\"xl\"}}'");
-    expect((await call('GET', '/api/prefs')).json().prefs).toMatchObject({ autoplayNext: false, stillWatching: true, stillWatchingEpisodes: 3, spoilerProtection: false, subtitleStyle: { size: 'xl', color: 'white', background: 'semi', font: 'sans' } });
+    expect((await call('GET', '/api/prefs')).json().prefs).toMatchObject({ autoplayNext: false, stillWatching: true, stillWatchingEpisodes: 3, spoilerProtection: false, animeOriginal: false, subtitleStyle: { size: 'xl', color: 'white', background: 'semi', font: 'sans' } });
   });
   it('requires CSRF and a session', async () => {
     expect((await env.app.inject({ method: 'PUT', url: '/api/prefs', cookies: s.cookies, payload: {} })).statusCode).toBe(403);

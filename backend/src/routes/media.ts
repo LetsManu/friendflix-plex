@@ -4,6 +4,7 @@ import type { Ctx } from '../ctx.js';
 import { JellyfinError } from '../jellyfin/client.js';
 import { clearLive, countLive, getLive, listLive, setLive } from '../live.js';
 import { effectiveRole } from '../roles.js';
+import { requireGrownUp } from '../kids.js';
 import { requireUser } from '../session.js';
 import { playbackHooks } from '../hooks.js';
 import { tidyResume } from '../resume.js';
@@ -68,6 +69,7 @@ const LANG_RATE_MAX = 30; // language-path queries per user and minute
 
 export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
   const pre = { preHandler: requireUser(ctx) };
+  const grown = { preHandler: requireGrownUp(ctx) }; // friends' activity (now playing): not on kids profiles
 
   /**
    * Language path of /api/library/items: candidate ids come from the item_langs index, details (and with them visibility and every
@@ -321,7 +323,7 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/playback/stop', pre, report('Playing/Stopped'));
 
   // Own sessions plus those of accounts that opted in via "Verlauf teilen"; only titles the viewer may see. Admins use the admin endpoints.
-  app.get('/api/nowplaying', pre, async (req) => {
+  app.get('/api/nowplaying', grown, async (req) => {
     const me = req.user!.id;
     const live = await listLive(ctx);
     const others = [...new Set(live.filter((l) => l.userId !== me).map((l) => l.userId))];

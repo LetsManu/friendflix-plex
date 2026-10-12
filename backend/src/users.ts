@@ -5,6 +5,7 @@ import type { Ctx } from './ctx.js';
 import { encrypt, randomPassword } from './crypto.js';
 import { policyFromTemplate } from './jellyfin/client.js';
 import { effectiveRole } from './roles.js';
+import { kidsPolicyFor } from './profiles.js';
 import type { OidcClaims } from './oidc.js';
 import type { UserRow } from './types.js';
 
@@ -30,7 +31,9 @@ export async function applyRole(ctx: Ctx, jellyfinUserId: string, role: string, 
     const want = new Set(t.libraries.map((n) => n.toLowerCase()));
     ids = folders.filter((f) => want.has(f.Name.toLowerCase())).map((f) => f.Id);
   }
-  await ctx.jf.client.setPolicy(jellyfinUserId, { ...policyFromTemplate(t, ids), IsDisabled: disabled, ...extra });
+  // a kids profile keeps its parental cap through every re-apply (role edits, admin promotion, startup job)
+  const kids = await kidsPolicyFor(ctx, jellyfinUserId, t.maxParentalRating);
+  await ctx.jf.client.setPolicy(jellyfinUserId, { ...policyFromTemplate(t, ids), IsDisabled: disabled, ...extra, ...kids });
 }
 
 /**

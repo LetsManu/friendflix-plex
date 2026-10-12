@@ -22,9 +22,11 @@ const en: Translation<typeof de> = {
   noNext: 'No next episode',
   secondsForward: { one: '{n} second forward', other: '{n} seconds forward' },
   secondsBack: { one: '{n} second back', other: '{n} seconds back' },
-  segment: { intro: 'Intro', outro: 'Credits', recap: 'Recap' },
-  skip: { intro: 'Skip intro', outro: 'Skip credits', recap: 'Skip recap' },
-  skipped: { intro: 'Intro skipped', outro: 'Credits skipped', recap: 'Recap skipped' },
+  segment: { intro: 'Intro', outro: 'Credits', recap: 'Recap', preview: 'Preview' },
+  skip: { intro: 'Skip intro', outro: 'Skip credits', recap: 'Skip recap', preview: 'Skip preview' },
+  skipped: { intro: 'Intro skipped', outro: 'Credits skipped', recap: 'Recap skipped', preview: 'Preview skipped' },
+  /** toast after the audio / subtitle choice was saved for the series */
+  langSaved: 'Remembered for this series',
   skipOk: ' (OK)',
   quality: {
     title: 'Quality',

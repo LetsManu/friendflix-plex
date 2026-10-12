@@ -6,14 +6,14 @@ import { JellyfinError } from '../jellyfin/client.js';
 import { MAX_FEATURED, MAX_FEATURED_ITEMS, MAX_ITEMS, MAX_MEMBERS, MAX_OWNED, canEdit, isFeatured, listRole, type ListAccess, type ListRole } from '../lists.js';
 import { m } from '../i18n.js';
 import { notify } from '../notify.js';
-import { requireUser } from '../session.js';
+import { requireGrownUp } from '../kids.js';
 import { itemsByIds } from './discover.js';
 import { id32 } from './_shared.js';
 
 const uuid = z.string().uuid();
 
 export function listRoutes(app: FastifyInstance, ctx: Ctx) {
-  const pre = { preHandler: requireUser(ctx) };
+  const pre = { preHandler: requireGrownUp(ctx) }; // shared lists are social: kids profiles get 403 kids_profile
   const limited = { ...pre, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } };
 
   /** Parses :id and resolves the caller's role; unknown id / non-member -> 404 (never reveals existence). */

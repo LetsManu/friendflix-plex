@@ -5,6 +5,8 @@
   import { isBackKey } from '#lib/spatial';
   /** heading; default: "PIN eingeben" in the current language */
   export let title = '';
+  /** optional line below the heading (e.g. why the owner profile's PIN is asked for when leaving a kids profile) */
+  export let hint = '';
   export let error = '';
   export let busy = false;
   const dispatch = createEventDispatcher<{ submit: string; cancel: void }>();
@@ -38,6 +40,7 @@
 
 <div class="pad" bind:this={box} role="group" aria-label={title || $t('account.pin.enter')}>
   <h2>{title || $t('account.pin.enter')}</h2>
+  {#if hint}<p class="hint">{hint}</p>{/if}
   <div class="boxes" aria-live="polite" aria-label={$t('account.pin.progress', { n: pin.length })}>
     {#each [0, 1, 2, 3] as i}<span class="b" class:on={i < pin.length} class:cur={i === pin.length}>{i < pin.length ? '●' : ''}</span>{/each}
   </div>
@@ -55,6 +58,7 @@
 <style>
   .pad { display: flex; flex-direction: column; align-items: center; gap: .6rem; }
   h2 { margin: 0; font-size: 1.3rem; }
+  .hint { margin: 0; max-width: 18rem; text-align: center; color: var(--mut); font-size: .9rem; }
   .boxes { display: flex; gap: .7rem; margin: .5rem 0 0; }
   .b { width: 3.2rem; height: 3.8rem; display: grid; place-items: center; background: #333; border: 2px solid transparent; border-radius: 6px; font-size: 1.5rem; }
   .b.cur { border-color: #fff; } .b.on { border-color: #666; }

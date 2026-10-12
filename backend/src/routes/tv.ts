@@ -73,7 +73,9 @@ export function tvRoutes(app: FastifyInstance, ctx: Ctx) {
       if (!raw) return reply.code(404).send({ error: 'code_invalid_or_expired' });
       const rec = JSON.parse(raw) as { poll: string; userId: string | null };
       if (rec.userId) return reply.code(409).send({ error: 'code_already_used' });
-      await ctx.kv.set(key, JSON.stringify({ ...rec, userId: req.user!.id }), 120);
+      // a kids profile pairs a kids TV: the new device is locked to it (it must never fall back to the owner profile)
+      const kidsProfileId = req.profile?.kids ? req.profile.id : null;
+      await ctx.kv.set(key, JSON.stringify({ ...rec, userId: req.user!.id, kidsProfileId }), 120);
       await audit(ctx, req.user!.id, 'tv.pair', undefined);
       return { ok: true };
     } finally { busy.delete(key); }
@@ -85,7 +87,7 @@ export function tvRoutes(app: FastifyInstance, ctx: Ctx) {
     const key = `tvpair:${norm(b.code)}`;
     const raw = await ctx.kv.get(key);
     if (!raw) return reply.code(404).send({ error: 'code_invalid_or_expired' });
-    const rec = JSON.parse(raw) as { poll: string; userId: string | null };
+    const rec = JSON.parse(raw) as { poll: string; userId: string | null; kidsProfileId?: string | null };
     const a = Buffer.from(hash(b.pollToken).toString('hex')), c = Buffer.from(rec.poll);
     if (a.length !== c.length || !timingSafeEqual(a, c)) return reply.code(403).send({ error: 'forbidden' });
     if (!rec.userId) return reply.code(202).send({ status: 'pending' });
@@ -94,9 +96,15 @@ export function tvRoutes(app: FastifyInstance, ctx: Ctx) {
     const user = (await ctx.db.query<{ id: string; disabled: boolean }>('select id, disabled from users where id=$1', [rec.userId])).rows[0];
     if (!user || user.disabled) return reply.code(403).send({ error: 'forbidden' });
     const deviceId = `tv-${randomBytes(18).toString('base64url')}`;
-    await ctx.db.query('insert into devices(user_id, device_id, label, approved) values ($1,$2,$3,true)', [user.id, deviceId, msg(await userLanguage(ctx, user.id), 'device.tv')]);
+    // the kids profile must still exist and still be a kids profile of this account, else the pairing is void (no owner fallback)
+    const kid = rec.kidsProfileId
+      ? (await ctx.db.query<{ id: string }>('select id from profiles where id=$1 and user_id=$2 and kids', [rec.kidsProfileId, user.id])).rows[0]
+      : undefined;
+    if (rec.kidsProfileId && !kid) return reply.code(403).send({ error: 'forbidden' });
+    await ctx.db.query('insert into devices(user_id, device_id, label, approved, kids_profile_id) values ($1,$2,$3,true,$4)',
+      [user.id, deviceId, msg(await userLanguage(ctx, user.id), 'device.tv'), kid?.id ?? null]);
     const sid = rand();
-    await saveSession(ctx, sid, newSession({ userId: user.id, csrf: rand(), deviceId, deviceApproved: true, ttl: TV_SESSION_SECONDS, idle: TV_IDLE_SECONDS }));
+    await saveSession(ctx, sid, newSession({ userId: user.id, csrf: rand(), deviceId, deviceApproved: true, ttl: TV_SESSION_SECONDS, idle: TV_IDLE_SECONDS, ...(kid ? { profileId: kid.id } : {}) }));
     reply.setCookie(COOKIE, sid, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: TV_SESSION_SECONDS });
     await audit(ctx, user.id, 'tv.claim', user.id, { deviceId });
     // somebody could have talked the user into confirming a stranger's code: make a new TV visible and easy to revoke

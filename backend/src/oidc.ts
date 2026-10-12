@@ -6,7 +6,16 @@ export interface OidcClaims {
   email?: string;
   name?: string;
   groups: string[];
+  /** id_token auth_time (seconds since epoch): when the person really authenticated at the IdP */
+  authTime?: number;
 }
+
+/** seconds a re-authentication may be old for the forgotten-PIN reset (prompt=login is only a request to the IdP) */
+export const RESET_PIN_MAX_AGE = 120;
+
+/** true when `authTime` (seconds) is present and at most `maxAge` seconds (+ small clock skew) in the past */
+export const freshAuth = (authTime: number | undefined, maxAge: number, nowMs = Date.now()): boolean =>
+  typeof authTime === 'number' && Number.isFinite(authTime) && nowMs / 1000 - authTime <= maxAge + 30 && authTime - nowMs / 1000 <= 30;
 
 export interface LoginStart {
   url: string;
@@ -19,7 +28,8 @@ export interface LoginStart {
 export interface OidcProvider {
   /** forceLogin: re-authentication (prompt=login, max_age=0), used by the forgotten-PIN reset */
   start(opts?: { forceLogin?: boolean }): Promise<LoginStart>;
-  finish(currentUrl: URL, saved: Omit<LoginStart, 'url'>): Promise<OidcClaims>;
+  /** maxAge: the id_token must carry an auth_time at most that many seconds old (validated by openid-client) */
+  finish(currentUrl: URL, saved: Omit<LoginStart, 'url'>, opts?: { maxAge?: number }): Promise<OidcClaims>;
 }
 
 export async function createAuthentikProvider(cfg: Config): Promise<OidcProvider> {
@@ -46,12 +56,13 @@ export async function createAuthentikProvider(cfg: Config): Promise<OidcProvider
       });
       return { url: url.toString(), state, nonce, codeVerifier };
     },
-    async finish(currentUrl, saved) {
+    async finish(currentUrl, saved, opts) {
       const tokens = await client.authorizationCodeGrant(config, currentUrl, {
         pkceCodeVerifier: saved.codeVerifier,
         expectedState: saved.state,
         expectedNonce: saved.nonce,
         idTokenExpected: true,
+        ...(opts?.maxAge !== undefined ? { maxAge: opts.maxAge } : {}),
       });
       const c = tokens.claims();
       if (!c) throw new Error('missing id_token claims');
@@ -61,6 +72,7 @@ export async function createAuthentikProvider(cfg: Config): Promise<OidcProvider
         email: typeof c.email === 'string' ? c.email : undefined,
         name: typeof c.name === 'string' ? c.name : undefined,
         groups,
+        authTime: typeof c.auth_time === 'number' ? c.auth_time : undefined,
       };
     },
   };

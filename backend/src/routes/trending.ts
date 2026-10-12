@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Ctx } from '../ctx.js';
 import { JellyfinError } from '../jellyfin/client.js';
 import type { ItemDto } from '../jellyfin/dto.js';
-import { requireUser } from '../session.js';
+import { requireGrownUp } from '../kids.js';
 import { itemsByIds } from './discover.js';
 
 const TTL = 600;
@@ -13,7 +13,7 @@ const MIN_SECONDS = 300;
 type Trending = ItemDto & { viewers: number };
 
 export function trendingRoutes(app: FastifyInstance, ctx: Ctx) {
-  const pre = { preHandler: requireUser(ctx) };
+  const pre = { preHandler: requireGrownUp(ctx) }; // "Diese Woche bei uns" is what friends watch: not on kids profiles
 
   /** "Diese Woche bei uns": what friends watched in the last 7 days. Counts only, never names. */
   app.get('/api/library/trending', pre, async (req, reply) => {
