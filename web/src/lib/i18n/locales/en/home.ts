@@ -97,7 +97,7 @@ const en: Translation<typeof de> = {
     close: 'Close trailer',
   },
   intro: {
-    loading: 'FriendFlix is loading',
+    loading: '{brand} is loading',
   },
   new: {
     title: 'New & Popular',

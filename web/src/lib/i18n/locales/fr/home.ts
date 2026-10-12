@@ -97,7 +97,7 @@ const fr: Translation<typeof de> = {
     close: 'Fermer la bande-annonce',
   },
   intro: {
-    loading: 'Chargement de FriendFlix',
+    loading: 'Chargement de {brand}',
   },
   new: {
     title: 'Nouveautés et tendances',

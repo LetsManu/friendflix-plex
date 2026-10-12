@@ -1,3 +1,4 @@
+import { BRAND_NAME } from '../brand.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
@@ -50,7 +51,7 @@ export function pushRoutes(app: FastifyInstance, ctx: Ctx) {
     const own = await ctx.db.query('select 1 from push_subscriptions where endpoint = $1 and user_id = $2', [b.endpoint, req.user!.id]);
     if (!own.rowCount) return reply.code(404).send({ error: 'not_found' });
     const [status] = await sendWebPush(ctx, {
-      userId: req.user!.id, kind: 'push_test', title: 'FriendFlix',
+      userId: req.user!.id, kind: 'push_test', title: BRAND_NAME,
       body: m(req.profile!.is_owner ? 'push.testOk' : 'push.generic'), link: '/settings',
     }, { endpoint: b.endpoint });
     return { sent: status != null && status >= 200 && status < 300, ...(status != null ? { status } : {}) };

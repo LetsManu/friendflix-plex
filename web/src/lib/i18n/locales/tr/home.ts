@@ -97,7 +97,7 @@ const tr: Translation<typeof de> = {
     close: 'Fragmanı kapat',
   },
   intro: {
-    loading: 'FriendFlix yükleniyor',
+    loading: '{brand} yükleniyor',
   },
   new: {
     title: 'Yeni ve Popüler',

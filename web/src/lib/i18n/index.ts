@@ -10,6 +10,7 @@
 import { derived, writable, type Readable } from 'svelte/store';
 import de from './locales/de/index';
 import { rememberOfflineLocale } from '../sw/locale';
+import { BRAND_NAME } from '../brand';
 import type { KeysOf, Message, PluralForms, TParams, Translation } from './types';
 
 export type { PluralForms, TParams, Translation } from './types';
@@ -181,9 +182,9 @@ function translate(s: State, key: string, params?: TParams): string {
     const cat = n === 0 && msg.zero !== undefined ? 'zero' : pluralRules(tag).select(n);
     text = (msg as unknown as Record<string, string | undefined>)[cat] ?? msg.other;
   }
-  if (!params || !text.includes('{')) return text;
+  if (!text.includes('{')) return text;
   return text.replace(/\{(\w+)\}/g, (all, name: string) => {
-    const v = params[name];
+    const v = name === 'brand' ? BRAND_NAME : params?.[name]; // fork: {brand} = product name (brand.ts)
     if (v === undefined || v === null) return all;
     return typeof v === 'number' ? new Intl.NumberFormat(tag).format(v) : v;
   });

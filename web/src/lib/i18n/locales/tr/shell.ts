@@ -108,7 +108,7 @@ const tr: Translation<typeof de> = {
     label: 'Alt bilgi',
     more: 'Diğer sayfalar',
     help: 'Yardım',
-    tagline: 'FriendFlix · arkadaşlar arasında özel',
+    tagline: '{brand} · arkadaşlar arasında özel',
     language: 'Dil',
   },
   help: {

@@ -112,7 +112,7 @@ const fr: Translation<typeof de> = {
     label: 'Pied de page',
     more: 'Autres pages',
     help: 'Aide',
-    tagline: 'FriendFlix · en privé entre amis',
+    tagline: '{brand} · en privé entre amis',
     language: 'Langue',
   },
   help: {

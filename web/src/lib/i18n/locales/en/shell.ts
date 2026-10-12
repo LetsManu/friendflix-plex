@@ -107,7 +107,7 @@ const en: Translation<typeof de> = {
     label: 'Footer',
     more: 'More pages',
     help: 'Help',
-    tagline: 'FriendFlix · private among friends',
+    tagline: '{brand} · private among friends',
     language: 'Language',
   },
   help: {

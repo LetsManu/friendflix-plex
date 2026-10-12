@@ -3,8 +3,8 @@ import type { Translation } from '../../types';
 
 /** Spanish – area "common". Missing keys fall back to German (docs/i18n.md). */
 const es: Translation<typeof de> = {
-  appName: 'FriendFlix',
-  pageTitle: '{page} – FriendFlix',
+  appName: '{brand}',
+  pageTitle: '{page} – {brand}',
   save: 'Guardar',
   saving: 'Guardando …',
   saved: 'Guardado',

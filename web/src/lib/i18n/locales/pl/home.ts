@@ -112,7 +112,7 @@ const pl: Translation<typeof de> = {
     close: 'Zamknij zwiastun',
   },
   intro: {
-    loading: 'Ładowanie FriendFlix',
+    loading: 'Ładowanie {brand}',
   },
   new: {
     title: 'Nowe i popularne',

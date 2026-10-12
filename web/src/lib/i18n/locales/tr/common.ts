@@ -3,8 +3,8 @@ import type { Translation } from '../../types';
 
 /** Turkish – area "common". Missing keys fall back to German (docs/i18n.md). */
 const tr: Translation<typeof de> = {
-  appName: 'FriendFlix',
-  pageTitle: '{page} – FriendFlix',
+  appName: '{brand}',
+  pageTitle: '{page} – {brand}',
   saved: 'Kaydedildi',
   saving: 'Kaydediliyor …',
   save: 'Kaydet',

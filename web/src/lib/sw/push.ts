@@ -1,3 +1,4 @@
+import { BRAND_NAME } from '../brand';
 /** Web Push handlers for the service worker. Kept free of the webworker lib so it type-checks next to the DOM lib. */
 interface PushClient { url: string; focus(): Promise<unknown>; navigate?(url: string): Promise<unknown>; postMessage(m: unknown): void }
 interface SwScope {
@@ -22,7 +23,7 @@ export function installPush(sw: unknown): void {
     let d: { title?: unknown; body?: unknown; link?: unknown; tag?: unknown } = {};
     try { d = e.data ? e.data.json() : {}; } catch { try { d = { body: e.data?.text() }; } catch { /* ignore */ } }
     if (!d || typeof d !== 'object') d = {};
-    const title = typeof d.title === 'string' && d.title ? d.title.slice(0, 120) : 'FriendFlix';
+    const title = typeof d.title === 'string' && d.title ? d.title.slice(0, 120) : BRAND_NAME;
     const link = safeLink(d.link, s.location.origin) ?? '/';
     e.waitUntil(s.registration.showNotification(title, {
       body: typeof d.body === 'string' ? d.body.slice(0, 300) : '',

@@ -113,7 +113,7 @@ const pl: Translation<typeof de> = {
     label: 'Stopka',
     more: 'Więcej stron',
     help: 'Pomoc',
-    tagline: 'FriendFlix · prywatnie wśród przyjaciół',
+    tagline: '{brand} · prywatnie wśród przyjaciół',
     language: 'Język',
   },
   help: {
