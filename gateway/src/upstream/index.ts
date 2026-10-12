@@ -2,7 +2,7 @@ import { jellyfinUpstream } from './jellyfin.js';
 import { plexUpstream } from './plex.js';
 import type { Upstream } from './types.js';
 
-export type { AuthorizeContext, Upstream, UpstreamCredentials } from './types.js';
+export type { AuthorizeContext, PlaylistContext, Upstream, UpstreamCredentials } from './types.js';
 export { jellyfinUpstream };
 
 /** Known adapters by MEDIA_SERVER value (same values as the backend's MEDIA_SERVER). A fork adds its adapter here. */
@@ -14,4 +14,10 @@ export function selectUpstream(kind: string | undefined): Upstream {
   const u = Object.hasOwn(UPSTREAMS, k) ? UPSTREAMS[k] : undefined;
   if (!u) throw new Error(`unknown MEDIA_SERVER "${kind}" (known: ${Object.keys(UPSTREAMS).join(', ')})`);
   return u;
+}
+
+/** Startup check: throws (gateway does not start) when the adapter's validateConfig() reports problems with `env`. */
+export function checkUpstreamConfig(up: Upstream, env: NodeJS.ProcessEnv): void {
+  const problems = up.validateConfig?.(env) ?? [];
+  if (problems.length) throw new Error(`MEDIA_SERVER=${up.kind}: invalid gateway configuration: ${problems.join('; ')}`);
 }

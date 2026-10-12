@@ -78,8 +78,9 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   });
   // Security headers for API responses (the UI gets its own CSP from SvelteKit).
   app.addHook('onSend', async (_req, reply) => {
-    reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'same-origin').header('X-Frame-Options', 'DENY')
-      .header('Cross-Origin-Resource-Policy', 'same-origin');
+    reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'same-origin').header('X-Frame-Options', 'DENY');
+    // same-origin unless a route opened itself up for the Chromecast receiver (/api/cast/subtitle)
+    if (reply.getHeader('cross-origin-resource-policy') === undefined) reply.header('Cross-Origin-Resource-Policy', 'same-origin');
     if (reply.getHeader('cache-control') === undefined) reply.header('Cache-Control', 'no-store');
   });
   app.addHook('onSend', async (req, reply, payload) => {

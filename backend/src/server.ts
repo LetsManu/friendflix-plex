@@ -37,7 +37,7 @@ if (mediaProblems.length) throw new Error(`MEDIA_SERVER=${cfg.MEDIA_SERVER}: ${m
 const ctx: Ctx = {
   cfg, kv, db: pool, encKey, fetchImpl: fetch,
   oidc: await createAuthentikProvider(cfg),
-  jf: createMediaServer({ cfg, kv, encKey }),
+  jf: createMediaServer({ cfg, kv, db: pool, encKey }),
   seerr: new SeerrClient(cfg.SEERR_URL, cfg.SEERR_API_KEY),
   roles: loadRoles(cfg.ROLE_TEMPLATES),
 };

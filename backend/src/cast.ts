@@ -1,9 +1,10 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Ctx } from './ctx.js';
 import { jfUserFor, getProfile } from './profiles.js';
 import { effectiveRole } from './roles.js';
 import { setLive, getLive } from './live.js';
 import { getUserById } from './users.js';
+import type { JfUser, ProfileRow, UserRow } from './types.js';
 
 /**
  * Chromecast tokens ("ct"): opaque, short-lived, scoped credentials that live in the receiver's URL path
@@ -183,11 +184,9 @@ export async function resolveCast(ctx: Ctx, ct: string, client: string): Promise
   const raw = await ctx.kv.get(dataKey(hash));
   const rec = raw ? (JSON.parse(raw) as CastRecord) : null;
   if (rec && rec.exp > Date.now()) {
-    const user = await getUserById(ctx, rec.userId);
-    const role = user && !user.disabled ? await effectiveRole(ctx, user.role) : undefined;
-    const prof = role ? await getProfile(ctx, rec.userId, rec.profileId) : null;
-    const dev = prof ? await ctx.db.query<{ approved: boolean }>('select approved from devices where user_id=$1 and device_id=$2', [rec.userId, rec.deviceId]) : null;
-    if (user && role && prof && dev?.rows[0]?.approved && (await pinned(ctx, hash, client, rec.exp))) {
+    const owner = await liveOwner(ctx, rec);
+    if (owner && (await pinned(ctx, hash, client, rec.exp))) {
+      const { user, role, prof } = owner;
       const jfUser = jfUserFor(user, prof);
       v = {
         userId: user.id,
@@ -203,6 +202,52 @@ export async function resolveCast(ctx: Ctx, ct: string, client: string): Promise
   memo.set(mk, { exp: Date.now() + (v ? 5_000 : 2_000), v });
   if (memo.size > 5000) memo.clear();
   return v;
+}
+
+/** The token's account, role and profile while all are still usable (account enabled, role known, profile of the account, sender device approved). */
+async function liveOwner(ctx: Ctx, rec: CastRecord): Promise<{ user: UserRow; role: NonNullable<Awaited<ReturnType<typeof effectiveRole>>>; prof: ProfileRow } | null> {
+  const user = await getUserById(ctx, rec.userId);
+  const role = user && !user.disabled ? await effectiveRole(ctx, user.role) : undefined;
+  const prof = role ? await getProfile(ctx, rec.userId, rec.profileId) : null;
+  const dev = prof ? await ctx.db.query<{ approved: boolean }>('select approved from devices where user_id=$1 and device_id=$2', [rec.userId, rec.deviceId]) : null;
+  return user && role && prof && dev?.rows[0]?.approved ? { user, role, prof } : null;
+}
+
+/**
+ * Subtitles FriendFlix serves itself (capabilities.subtitleExtract: PlaybackDto subtitle URLs are /api/items/<id>/subtitle/<ms>/<index>/stream.vtt)
+ * are not under /media/, so the receiver cannot reach them through the gateway's /media/c/<ct>/ route, and the media token must not
+ * appear in an /api/ URL (proxy access logs). Instead the cast session gets a signed URL per subtitle track:
+ *   /api/cast/subtitle/<account>/<castId>/<expiry s>/<sig>/<itemId>/<ms>/<index>/stream.vtt
+ * sig = HMAC (key derived from APP_ENC_KEY) over everything else. It is valid while the cast token it was minted with is (same absolute
+ * cap, revoked with it, same account/role/profile/device checks) and only for that token's item + media source.
+ */
+export const CAST_SUBTITLE_SOURCE_RE = /^\/api\/items\/([0-9a-f]{32})\/subtitle\/([\w-]{1,64})\/(\d{1,3})\/stream\.vtt$/;
+export interface CastSubtitleRef { uid: string; cid: string; exp: number; itemId: string; ms: string; index: number }
+const subKey = (ctx: Pick<Ctx, 'encKey'>) => createHmac('sha256', ctx.encKey).update('friendflix cast subtitle v1').digest();
+const subSig = (ctx: Pick<Ctx, 'encKey'>, r: CastSubtitleRef) =>
+  createHmac('sha256', subKey(ctx)).update([r.uid, r.cid, r.exp, r.itemId, r.ms, r.index].join('|')).digest('base64url');
+
+/** Cast-reachable path for a FriendFlix-served subtitle URL, or null when `url` is not one. */
+export function castSubtitlePath(ctx: Pick<Ctx, 'encKey'>, url: string, cast: { userId: string; castId: string; expiresAt: number }): string | null {
+  const m = CAST_SUBTITLE_SOURCE_RE.exec(url);
+  if (!m) return null;
+  const r: CastSubtitleRef = { uid: cast.userId, cid: cast.castId, exp: Math.ceil(cast.expiresAt / 1000), itemId: m[1]!, ms: m[2]!, index: Number(m[3]) };
+  return `/api/cast/subtitle/${r.uid}/${r.cid}/${r.exp}/${subSig(ctx, r)}/${r.itemId}/${r.ms}/${r.index}/stream.vtt`;
+}
+
+/** Verifies a signed cast subtitle URL (see castSubtitlePath): the media user to fetch the track as, or null (invalid, expired, revoked). */
+export async function resolveCastSubtitle(ctx: Ctx, r: CastSubtitleRef, sig: string): Promise<JfUser | null> {
+  if (!castEnabled(ctx) || r.exp * 1000 <= Date.now()) return null;
+  const want = Buffer.from(subSig(ctx, r));
+  const got = Buffer.from(sig);
+  if (got.length !== want.length || !timingSafeEqual(got, want)) return null;
+  const idx = await ctx.kv.get(idxKey(r.uid, r.cid)); // gone = revoked or expired
+  const hash = idx ? (JSON.parse(idx) as IdxEntry).hash : undefined;
+  const raw = hash ? await ctx.kv.get(dataKey(hash)) : null;
+  const rec = raw ? (JSON.parse(raw) as CastRecord) : null;
+  if (!rec || rec.exp <= Date.now() || (rec.kind ?? 'media') !== 'media' || rec.userId !== r.uid || rec.itemId !== r.itemId || rec.mediaSourceId !== r.ms) return null;
+  const owner = await liveOwner(ctx, rec);
+  return owner ? jfUserFor(owner.user, owner.prof) : null;
 }
 
 /** First successful client wins the pin (SET NX, lives as long as the token can); everyone else must match it. */

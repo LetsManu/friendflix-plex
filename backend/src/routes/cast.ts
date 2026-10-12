@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CAST_MAX_BITRATE, CAST_MAX_HEIGHT, castEnabled, castTtlSeconds, createCast, revokeCast } from '../cast.js';
+import { CAST_MAX_BITRATE, CAST_MAX_HEIGHT, castEnabled, castSubtitlePath, castTtlSeconds, createCast, resolveCastSubtitle, revokeCast } from '../cast.js';
 import type { Ctx } from '../ctx.js';
 import { MediaError } from '../media/types.js';
 import { countLive } from '../live.js';
@@ -41,6 +41,12 @@ export function castRoutes(app: FastifyInstance, ctx: Ctx) {
       // Jellyfin returns /media/... URLs; the cast variant carries the token in the path: /media/c/<ct>/...
       const absWith = (t: string, u: string) => `${ctx.cfg.PUBLIC_URL.replace(/\/+$/, '')}/media/c/${t}${u.slice('/media'.length)}`;
       const abs = (u: string) => absWith(ct, u);
+      const origin = ctx.cfg.PUBLIC_URL.replace(/\/+$/, '');
+      // subtitles FriendFlix serves itself (/api/items/…/stream.vtt, capabilities.subtitleExtract) get a signed cast URL; Jellyfin: gateway path
+      const subUrl = (u: string) => {
+        const p = ctx.jf.capabilities.subtitleExtract ? castSubtitlePath(ctx, u, { userId: req.user!.id, castId, expiresAt }) : null;
+        return p ? `${origin}${p}` : abs(u);
+      };
       reply.header('Cache-Control', 'no-store');
       return {
         castId,
@@ -56,10 +62,34 @@ export function castRoutes(app: FastifyInstance, ctx: Ctx) {
         seriesName: item.seriesName,
         // the poster gets its own image-only token: the media token must never appear in a URL the receiver shows or fetches as an image
         imageUrl: imgCt ? absWith(imgCt, `/media/Items/${b.itemId}/Images/Primary?maxWidth=600`) : undefined,
-        subtitles: info.subtitles.map((s) => ({ index: s.index, language: s.language, title: s.title, url: abs(s.url) })),
+        subtitles: info.subtitles.map((s) => ({ index: s.index, language: s.language, title: s.title, url: subUrl(s.url) })),
       };
     } catch (e) {
       if (e instanceof MediaError) return reply.code(e.status === 404 ? 404 : e.status === 403 ? 403 : 502).send({ error: 'jellyfin', status: e.status });
+      throw e;
+    }
+  });
+
+  // FriendFlix-served subtitle for the receiver (no cookie): the signed URL from castSubtitlePath() is the credential
+  app.get('/api/cast/subtitle/:uid/:cid/:exp/:sig/:id/:ms/:index/stream.vtt', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req, reply) => {
+    reply.header('access-control-allow-origin', '*').header('cross-origin-resource-policy', 'cross-origin').header('cache-control', 'no-store');
+    const p = z.object({
+      uid: z.string().regex(/^[0-9a-f-]{36}$/), cid: z.string().regex(/^[0-9a-f]{32}$/), exp: z.coerce.number().int().positive(), sig: z.string().regex(/^[\w-]{43}$/),
+      id: itemId, ms: z.string().regex(/^[\w-]{1,64}$/), index: z.coerce.number().int().min(0).max(999),
+    }).safeParse(req.params);
+    if (!ctx.jf.capabilities.subtitleExtract || !p.success) return reply.code(404).send({ error: 'not_found' });
+    const { sig, id, ...rest } = p.data;
+    const user = await resolveCastSubtitle(ctx, { ...rest, itemId: id }, sig);
+    if (!user) return reply.code(404).send({ error: 'not_found' });
+    try {
+      await ctx.jf.item(user, p.data.id); // the profile must still see the item
+      const res = await ctx.jf.subtitleStream(user, p.data.id, p.data.ms, p.data.index, 'vtt');
+      if (!res.ok) return reply.code(404).send({ error: 'not_found' });
+      const body = Buffer.from(await res.arrayBuffer());
+      if (body.length > 10 * 1024 * 1024) return reply.code(502).send({ error: 'jellyfin', reason: 'too_large' });
+      return reply.header('content-type', 'text/vtt; charset=utf-8').send(body);
+    } catch (e) {
+      if (e instanceof MediaError) return [400, 403, 404].includes(e.status) ? reply.code(404).send({ error: 'not_found' }) : reply.code(502).send({ error: 'jellyfin', status: e.status });
       throw e;
     }
   });

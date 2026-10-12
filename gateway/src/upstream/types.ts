@@ -19,6 +19,17 @@ export interface AuthorizeContext {
   checkItem(itemId: string, kind: 'media' | 'image' | 'subtitle'): Promise<boolean>;
 }
 
+/** What a playlist() hook sees for one HLS playlist response (status 200, before the cast sanitising). */
+export interface PlaylistContext {
+  /** normalized upstream path (public shape, before rewrite) and the request query */
+  path: string;
+  query: URLSearchParams;
+  /** public path the client requested (/media/… or /media/c/<token>/…): relative URIs in the body resolve against it */
+  requestPath: string;
+  /** true on the Chromecast route; the result then still goes through the gateway's cast playlist sanitising */
+  cast: boolean;
+}
+
 export interface Upstream {
   readonly kind: string;
   /** env var holding the upstream base URL (e.g. JELLYFIN_URL) */
@@ -51,4 +62,15 @@ export interface Upstream {
    * request, after query filtering/clamping. Must stay server-relative. Jellyfin: absent (identity).
    */
   rewrite?(path: string, query: URLSearchParams): { path: string; query: URLSearchParams };
+  /**
+   * Optional startup check of the gateway environment (e.g. settings the adapter needs besides urlEnv). Non-empty = the gateway
+   * refuses to start and names the problems. Jellyfin: absent.
+   */
+  validateConfig?(env: NodeJS.ProcessEnv): string[];
+  /**
+   * Optional rewrite of HLS playlist bodies (*.m3u8, status 200) on the cookie path and the cast path, e.g. to drop a credential the
+   * server put into segment URIs. Defining it makes those playlists buffered (no Range / conditional requests). A throw answers 502.
+   * Jellyfin: absent, so cookie playlists stream through unchanged.
+   */
+  playlist?(body: string, ctx: PlaylistContext): string;
 }

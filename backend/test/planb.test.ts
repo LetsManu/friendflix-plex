@@ -84,6 +84,25 @@ describe('GET /internal/authz-nginx', () => {
     expect((await call(H, { ff_sid: sid }, `/media/Videos/${ID}/hls1/main/..%2f..%2f..%2fSystem`)).statusCode).toBe(403);
     expect((await call(H, { ff_sid: sid }, '')).statusCode).toBe(403);
   });
+  it('a server without Plan B support (capabilities.planB=false): 501 with a clear reason, no token header, secret still checked first', async () => {
+    const jf = env.ctx.jf as { capabilities: typeof env.ctx.jf.capabilities; planBAuthHeader: typeof env.ctx.jf.planBAuthHeader };
+    const prev = { caps: jf.capabilities, header: jf.planBAuthHeader };
+    jf.capabilities = { ...prev.caps, planB: false };
+    jf.planBAuthHeader = () => { throw new Error('not supported'); }; // what used to surface as a 500
+    try {
+      expect((await call({}, { ff_sid: sid })).statusCode).toBe(403);
+      for (let i = 0; i < 2; i++) {
+        const r = await call(H, { ff_sid: sid });
+        expect(r.statusCode).toBe(501);
+        expect(r.json()).toEqual({ error: 'plan_b_unsupported', kind: 'jellyfin' });
+        expect(r.headers['x-jellyfin-auth']).toBeUndefined();
+        expect(r.headers['x-jellyfin-uri']).toBeUndefined();
+      }
+    } finally {
+      Object.assign(jf, { capabilities: prev.caps, planBAuthHeader: prev.header });
+    }
+    expect((await call(H, { ff_sid: sid })).statusCode).toBe(204);
+  });
   it('a disabled user or removed session loses access within the memo window (<= 5 s)', async () => {
     await env.pool.query('update users set disabled = true');
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -93,6 +112,7 @@ describe('GET /internal/authz-nginx', () => {
   });
   it('counts decisions for monitoring', async () => {
     const m = (await env.app.inject('/metrics')).body;
+    expect(m).toMatch(/friendflix_authz_nginx_total\{result="unsupported"\} \d+/);
     expect(m).toMatch(/friendflix_authz_nginx_total\{result="ok"\} \d+/);
     expect(m).toMatch(/friendflix_authz_nginx_total\{result="path_denied"\} \d+/);
   });

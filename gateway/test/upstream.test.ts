@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { blocksDirectStream, createGateway, normalizeCastPath, normalizePath } from '../src/gateway.js';
-import { jellyfinUpstream, selectUpstream, UPSTREAMS, type Upstream } from '../src/upstream/index.js';
+import { checkUpstreamConfig, jellyfinUpstream, selectUpstream, UPSTREAMS, type PlaylistContext, type Upstream } from '../src/upstream/index.js';
 
 const ID = 'a'.repeat(32);
 const vectors = JSON.parse(readFileSync(new URL('../../test-vectors/media-paths.json', import.meta.url), 'utf8')) as {
@@ -15,9 +15,14 @@ describe('upstream adapter selection', () => {
     for (const v of [undefined, '', '  ', 'jellyfin', 'Jellyfin', ' JELLYFIN ']) expect(selectUpstream(v)).toBe(jellyfinUpstream);
     expect(jellyfinUpstream).toMatchObject({ kind: 'jellyfin', urlEnv: 'JELLYFIN_URL' });
   });
+  // only what this repository guarantees: a fork registers further adapters without touching this test
   it('refuses unknown kinds (a typo never starts a gateway), also prototype keys', () => {
-    for (const v of ['emby', '__proto__', 'constructor', 'toString']) expect(() => selectUpstream(v)).toThrow(/unknown MEDIA_SERVER/);
-    expect(Object.keys(UPSTREAMS)).toEqual(['jellyfin', 'plex']); // fork: Plex adapter (gateway/test/plex.test.ts)
+    for (const v of ['not-a-server', '__proto__', 'constructor', 'toString']) expect(() => selectUpstream(v)).toThrow(/unknown MEDIA_SERVER/);
+    expect(Object.keys(UPSTREAMS)).toContain('jellyfin');
+    expect(UPSTREAMS.jellyfin).toBe(jellyfinUpstream);
+  });
+  it('every registered adapter is selectable by its own kind', () => {
+    for (const [k, u] of Object.entries(UPSTREAMS)) expect(selectUpstream(k)).toBe(u);
   });
 });
 
@@ -183,8 +188,124 @@ describe('adapter hooks: authorize, rewrite, playlist credential params', () => 
     expect(body).not.toContain('LEAK');
     expect(seen.at(-1)).toBe(`/video/${ID}/start.m3u8?rk=aaaa`);
   });
-  it('the Jellyfin adapter has no hooks (no backend item checks, identity paths)', () => {
+  it('the Jellyfin adapter has no hooks (no backend item checks, identity paths, no config check, playlists untouched)', () => {
     expect(jellyfinUpstream.authorize).toBeUndefined();
     expect(jellyfinUpstream.rewrite).toBeUndefined();
+    expect(jellyfinUpstream.validateConfig).toBeUndefined();
+    expect(jellyfinUpstream.playlist).toBeUndefined();
+  });
+});
+
+describe('adapter hook: validateConfig (gateway startup)', () => {
+  const base: Upstream = { ...jellyfinUpstream, kind: 'cfg' };
+  it('no hook (Jellyfin) or no problems: starts', () => {
+    expect(() => checkUpstreamConfig(jellyfinUpstream, {})).not.toThrow();
+    expect(() => checkUpstreamConfig({ ...base, validateConfig: () => [] }, {})).not.toThrow();
+  });
+  it('problems: refuses with the kind and every problem in the message', () => {
+    const seen: NodeJS.ProcessEnv[] = [];
+    const up: Upstream = {
+      ...base,
+      validateConfig(env) {
+        seen.push(env);
+        return [env.CFG_TOKEN ? '' : 'CFG_TOKEN is required', env.CFG_MODE === 'x' ? 'CFG_MODE=x is not supported' : ''].filter(Boolean);
+      },
+    };
+    expect(() => checkUpstreamConfig(up, { CFG_MODE: 'x' })).toThrow('MEDIA_SERVER=cfg: invalid gateway configuration: CFG_TOKEN is required; CFG_MODE=x is not supported');
+    expect(() => checkUpstreamConfig(up, { CFG_TOKEN: 't' })).not.toThrow();
+    expect(seen.at(-1)).toEqual({ CFG_TOKEN: 't' }); // the hook gets the environment it is asked about
+  });
+});
+
+/** playlist(): a server that puts its credential into segment URIs (Plex: X-Plex-Token) needs it removed on the cookie path too. */
+describe('adapter hook: playlist (cookie and cast path)', () => {
+  const CT = 'B'.repeat(43);
+  const BODY = '#EXTM3U\n#EXT-X-MAP:URI="init.mp4?X-Srv-Token=LEAK0&x=1"\n#EXTINF:3,\nseg0.ts?X-Srv-Token=LEAK1&keep=1\n#EXTINF:3,\nseg1.ts?keep=2&x-srv-token=LEAK2\n';
+  const ctxs: PlaylistContext[] = [];
+  let mode: 'ok' | 'throw' = 'ok';
+  const stripToken = (u: string) => u.replace(/([?&])x-srv-token=[^&"\s]*&?/gi, '$1').replace(/[?&]$/, '');
+  const withHook: Upstream = {
+    kind: 'pl', urlEnv: 'PL_URL',
+    paths: [/^\/v\/[0-9a-f]{32}\/(p\.m3u8|seg\.ts)$/],
+    castPaths: [/^\/v\/[0-9a-f]{32}\/p\.m3u8$/],
+    directStream: /\/raw$/,
+    image: /\/img$/,
+    stripQuery: new Set(),
+    castDropQuery: new Set(),
+    clampHeight: [], clampWidth: [], clampBitrate: [],
+    authHeaders: (c) => ({ 'x-srv-token': c.token }),
+    playlist(body, c) {
+      ctxs.push(c);
+      if (mode === 'throw') throw new Error('unparseable');
+      return body.split('\n').map(stripToken).join('\n');
+    },
+  };
+  let up: Server, be: Server, gwHook: Server, gwPlain: Server;
+  let portHook = 0, portPlain = 0;
+  const upHeaders: Array<Record<string, string | string[] | undefined>> = [];
+  const listen = (s: Server) => new Promise<number>((r) => s.listen(0, '127.0.0.1', () => r((s.address() as AddressInfo).port)));
+  beforeAll(async () => {
+    up = createServer((req, res) => {
+      upHeaders.push(req.headers);
+      if (req.url!.includes('.m3u8')) return void res.writeHead(200, { 'content-type': 'application/vnd.apple.mpegurl', etag: '"e1"' }).end(BODY);
+      res.writeHead(200, { 'content-type': 'video/mp2t' }).end('seg?X-Srv-Token=NOT-A-PLAYLIST');
+    });
+    be = createServer((req, res) => {
+      let b = '';
+      req.on('data', (c) => (b += c));
+      req.on('end', () => {
+        const j = JSON.parse(b);
+        const base = { userId: 'u1', token: 'TOK', deviceId: 'dev', maxBitrate: 1000, canDownload: true };
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(j.ct ? { ...base, scope: { itemId: ID, mediaSourceId: 'b'.repeat(32), playSessionId: 'ps' } } : base));
+      });
+    });
+    const [upPort, bePort] = [await listen(up), await listen(be)];
+    const o = { upstreamUrl: `http://127.0.0.1:${upPort}`, backendUrl: `http://127.0.0.1:${bePort}`, internalSecret: 's3cret-s3cret-s3cret' };
+    gwHook = createGateway({ ...o, upstream: withHook }).server;
+    const { playlist: _p, ...noHook } = withHook;
+    gwPlain = createGateway({ ...o, upstream: noHook }).server;
+    [portHook, portPlain] = [await listen(gwHook), await listen(gwPlain)];
+  });
+  afterAll(() => [up, be, gwHook, gwPlain].forEach((s) => s.close()));
+  const get = (port: number, p: string, h: Record<string, string> = {}) => fetch(`http://127.0.0.1:${port}${p}`, { headers: { cookie: 'ff_sid=goodsid-goodsid-goodsid-1', ...h } });
+
+  it('cookie path: the hook rewrites the playlist (credential gone from every URI, rest kept), sees the request context', async () => {
+    ctxs.length = 0;
+    const r = await get(portHook, `/media/v/${ID}/p.m3u8?a=1`, { range: 'bytes=0-10', 'if-none-match': '"e1"' });
+    expect(r.status).toBe(200);
+    const body = await r.text();
+    expect(body).toBe('#EXTM3U\n#EXT-X-MAP:URI="init.mp4?x=1"\n#EXTINF:3,\nseg0.ts?keep=1\n#EXTINF:3,\nseg1.ts?keep=2\n');
+    expect(r.headers.get('content-length')).toBe(String(Buffer.byteLength(body)));
+    expect(r.headers.get('etag')).toBeNull(); // the body changed: the upstream validator no longer describes it
+    expect(upHeaders.at(-1)!.range).toBeUndefined(); // rewritten playlists are fetched whole and unconditionally
+    expect(upHeaders.at(-1)!['if-none-match']).toBeUndefined();
+    expect(ctxs).toHaveLength(1);
+    expect(ctxs[0]).toMatchObject({ path: `/v/${ID}/p.m3u8`, requestPath: `/media/v/${ID}/p.m3u8`, cast: false });
+    expect(ctxs[0]!.query.get('a')).toBe('1');
+  });
+  it('cast path: the hook runs first, the cast sanitising still applies', async () => {
+    ctxs.length = 0;
+    const r = await fetch(`http://127.0.0.1:${portHook}/media/c/${CT}/v/${ID}/p.m3u8`);
+    expect(r.status).toBe(200);
+    expect(await r.text()).not.toMatch(/LEAK/);
+    expect(ctxs).toEqual([expect.objectContaining({ cast: true, requestPath: `/media/c/${CT}/v/${ID}/p.m3u8` })]);
+  });
+  it('a throwing hook answers 502; segments are never passed to it', async () => {
+    mode = 'throw';
+    try {
+      expect((await get(portHook, `/media/v/${ID}/p.m3u8`)).status).toBe(502);
+    } finally {
+      mode = 'ok';
+    }
+    ctxs.length = 0;
+    const seg = await get(portHook, `/media/v/${ID}/seg.ts`);
+    expect(await seg.text()).toBe('seg?X-Srv-Token=NOT-A-PLAYLIST');
+    expect(ctxs).toHaveLength(0);
+  });
+  it('without the hook (Jellyfin) the cookie playlist is relayed byte for byte, Range and validators pass through', async () => {
+    const r = await get(portPlain, `/media/v/${ID}/p.m3u8`, { 'if-none-match': '"e0"' });
+    expect(await r.text()).toBe(BODY);
+    expect(r.headers.get('etag')).toBe('"e1"');
+    expect(upHeaders.at(-1)!['if-none-match']).toBe('"e0"');
   });
 });

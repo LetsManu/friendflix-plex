@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import { JellyfinError } from '../src/jellyfin/client.js';
@@ -17,13 +18,14 @@ const BASE = {
 };
 
 describe('MEDIA_SERVER config', () => {
+  // only what this repository guarantees: a fork registers further kinds without touching this test
   it('defaults to jellyfin and accepts jellyfin', () => {
     expect(loadConfig(BASE).MEDIA_SERVER).toBe('jellyfin');
     expect(loadConfig({ ...BASE, MEDIA_SERVER: 'jellyfin' }).MEDIA_SERVER).toBe('jellyfin');
-    expect(MEDIA_SERVERS).toContain('jellyfin'); // fork: + plex
+    expect(MEDIA_SERVERS).toContain('jellyfin');
   });
-  it('rejects anything else (no silent fallback on a typo)', () => {
-    for (const v of ['plex', 'emby', 'Jellyfin', ' jellyfin', '__proto__']) expect(() => loadConfig({ ...BASE, MEDIA_SERVER: v })).toThrow();
+  it('rejects unknown kinds (no silent fallback on a typo)', () => {
+    for (const v of ['not-a-server', 'Jellyfin', ' jellyfin', '__proto__']) expect(() => loadConfig({ ...BASE, MEDIA_SERVER: v })).toThrow();
   });
   it('jellyfin still requires JELLYFIN_URL and a non-empty admin key', () => {
     const { JELLYFIN_URL: _u, ...noUrl } = BASE;
@@ -37,9 +39,12 @@ describe('MEDIA_SERVER config', () => {
 });
 
 describe('createMediaServer factory', () => {
+  // the shared pool is handed to every implementation; Jellyfin ignores it (any use would throw here)
+  const unused = () => { throw new Error('Jellyfin must not use the shared pool'); };
+  const db = { query: unused, connect: unused } as unknown as pg.Pool;
   it('builds the Jellyfin implementation against JELLYFIN_URL with the admin key', async () => {
     const calls: Call[] = [];
-    const ms = createMediaServer({ cfg: { ...cfg, JELLYFIN_URL: 'http://jf.test:8096' }, kv: new MemoryKV(), encKey: keyFromBase64(ENC_KEY), fetchImpl: fakeHttp({ 'GET /System/Ping': () => ({ json: 'ok' }), 'GET /Library/MediaFolders': () => ({ json: { Items: [{ Id: 'f1', Name: 'Filme' }] } }) }, calls) });
+    const ms = createMediaServer({ cfg: { ...cfg, JELLYFIN_URL: 'http://jf.test:8096' }, kv: new MemoryKV(), db, encKey: keyFromBase64(ENC_KEY), fetchImpl: fakeHttp({ 'GET /System/Ping': () => ({ json: 'ok' }), 'GET /Library/MediaFolders': () => ({ json: { Items: [{ Id: 'f1', Name: 'Filme' }] } }) }, calls) });
     expect(ms).toBeInstanceOf(JellyfinService);
     expect(ms.kind).toBe('jellyfin');
     expect(await ms.admin.ping()).toBe(true);
@@ -47,7 +52,7 @@ describe('createMediaServer factory', () => {
     expect(calls.at(-1)).toMatchObject({ path: '/Library/MediaFolders', auth: expect.stringContaining('Token="adminkey"') });
   });
   it('refuses an unknown kind even if config validation was bypassed', () => {
-    expect(() => createMediaServer({ cfg: { ...cfg, MEDIA_SERVER: 'not-a-server' as never }, kv: new MemoryKV(), encKey: keyFromBase64(ENC_KEY) })).toThrow(/unknown MEDIA_SERVER/);
+    expect(() => createMediaServer({ cfg: { ...cfg, MEDIA_SERVER: 'not-a-server' as never }, kv: new MemoryKV(), db, encKey: keyFromBase64(ENC_KEY) })).toThrow(/unknown MEDIA_SERVER/);
   });
 });
 

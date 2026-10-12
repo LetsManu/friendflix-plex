@@ -1,3 +1,4 @@
+import type pg from 'pg';
 import type { Config } from '../config.js';
 import { JellyfinClient } from '../jellyfin/client.js';
 import { JellyfinService } from '../jellyfin/service.js';
@@ -12,7 +13,11 @@ import type { MediaServer } from './types.js';
 export const MEDIA_SERVERS = ['jellyfin', 'plex'] as const;
 export type MediaServerKind = (typeof MEDIA_SERVERS)[number];
 
-export interface MediaDeps { cfg: Config; kv: KV; encKey: Buffer; fetchImpl?: typeof fetch }
+/**
+ * What a factory gets. `db` is the backend's shared Postgres pool: implementations that keep state (an id map, sync cursors …) use it
+ * instead of opening a pool of their own. Jellyfin ignores it.
+ */
+export interface MediaDeps { cfg: Config; kv: KV; db: pg.Pool; encKey: Buffer; fetchImpl?: typeof fetch }
 
 const factories: Record<MediaServerKind, (d: MediaDeps) => MediaServer> = {
   jellyfin: (d) => new JellyfinService(new JellyfinClient(d.cfg.JELLYFIN_URL!, d.cfg.JELLYFIN_ADMIN_API_KEY!, d.fetchImpl), d.kv, d.encKey),

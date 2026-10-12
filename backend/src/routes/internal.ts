@@ -50,6 +50,7 @@ const ITEM_MEMO_MS = 5_000;
 const itemMemo = new Map<string, { exp: number; v: boolean }>();
 
 export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
+  let planBWarned = false; // the "Plan B unsupported" error is logged once per process, not per request
   /** The session's account, role and media server identity (active profile); null = no usable session. */
   async function sessionIdentity(sid: string) {
     const s = await loadSession(ctx, sid);
@@ -128,6 +129,15 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
     if (!checkSecret(req, 'x-internal-secret', ctx.cfg.INTERNAL_SECRET)) {
       authzNginx.inc({ result: 'bad_secret' });
       return reply.code(403).send();
+    }
+    if (!ctx.jf.capabilities.planB) {
+      // a server without Plan B support (capabilities.planB): refuse clearly instead of failing somewhere inside planBAuthHeader()
+      authzNginx.inc({ result: 'unsupported' });
+      if (!planBWarned) {
+        planBWarned = true;
+        req.log.error(`Plan B (nginx auth_request) is not supported with MEDIA_SERVER=${ctx.jf.kind}: route /media/ through the gateway (deploy/npm/portal.advanced.conf)`);
+      }
+      return reply.code(501).send({ error: 'plan_b_unsupported', kind: ctx.jf.kind });
     }
     const sid = req.cookies.ff_sid;
     if (!sid || !/^[\w-]{20,80}$/.test(sid)) {

@@ -573,12 +573,14 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
       if (target.origin !== base.origin) return end(res, 502, 'bad gateway');
     }
     const requestUrl = `${base.origin}${target.pathname}${target.search}`;
-    const playlist = cast && /\.m3u8$/.test(path);
+    const m3u8 = /\.m3u8$/.test(path);
+    // cast playlists are always sanitised; other playlists are only touched when the adapter has a playlist() hook (Jellyfin: none)
+    const playlist = m3u8 && (cast || Boolean(up.playlist));
     const extra = cast ? CAST_CORS : undefined;
 
     // identity: keep upstream bytes as-is so content-length matches the body we relay
     const headers: Record<string, string> = { ...up.authHeaders(auth), 'accept-encoding': 'identity' };
-    // cast playlists are rewritten, so they are always fetched whole and unconditionally
+    // rewritten playlists are always fetched whole and unconditionally
     for (const h of playlist ? ['accept'] : ['range', 'if-range', 'if-none-match', 'if-modified-since', 'accept']) {
       const v = req.headers[h];
       if (typeof v === 'string') headers[h] = v;
@@ -634,7 +636,15 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
         return void res.end();
       }
       const buf = Buffer.from(await upRes.arrayBuffer());
-      const clean = buf.length > CAST_PLAYLIST_MAX ? null : sanitizePlaylist(buf.toString('utf8'), url.pathname, up.stripQuery);
+      let text: string | null = buf.length > CAST_PLAYLIST_MAX ? null : buf.toString('utf8');
+      if (text !== null && up.playlist) {
+        try {
+          text = up.playlist(text, { path, query: url.searchParams, requestPath: url.pathname, cast });
+        } catch {
+          text = null;
+        }
+      }
+      const clean = text === null ? null : cast ? sanitizePlaylist(text, url.pathname, up.stripQuery) : text;
       if (clean === null) {
         countCode('502');
         return end(res, 502, 'bad gateway', 'text/plain', extra);
