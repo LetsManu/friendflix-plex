@@ -45,6 +45,12 @@ export interface MediaCapabilities {
    * the server cannot deliver them as WebVTT; PlaybackDto subtitle URLs then point there. false: the gateway path of the DTO.
    */
   subtitleExtract: boolean;
+  /**
+   * How FriendFlix accounts become Seerr users for wishes (backend only, not sent to the web). 'jellyfin-import': find the
+   * account's Jellyfin user in Seerr (import it via /user/import-from-jellyfin). 'local' (also when absent): a local Seerr user
+   * per account, found by the stored id or by email, else created with the REQUEST permission (seerr/service.ts).
+   */
+  requestUsers?: 'jellyfin-import' | 'local';
 }
 
 /** JSON form of the capabilities (sets as arrays), as sent to the web in /api/me and /api/server. */

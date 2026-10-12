@@ -1,0 +1,11 @@
+# OWASP ZAP baseline rule configuration (used by the `dast` job in .github/workflows/ci.yml).
+# Format: <plugin id> TAB <IGNORE|INFO|WARN|FAIL|OUTOFSCOPE> TAB (<rule name>) [TAB <reason>] - at least two tabs per line.
+# Policy: the CI gate fails on any High-risk alert and turns Medium/Low into warnings, independent of this file.
+# IGNORE removes a rule from the gate and the console summary (the HTML/JSON report still lists it).
+# Only add IGNORE for a documented false positive or a purely informational rule, with the reason in the 4th column.
+# Set a rule to FAIL to make it blocking even below High risk.
+#
+# Known, accepted findings (NOT suppressed, they show up as warnings):
+#   10055 CSP: Wildcard Directive (connect-src ws: wss:) and style-src 'unsafe-inline' - CSP lives in web/vite.config.ts
+#   10021 X-Content-Type-Options missing on static files (served before the SvelteKit hook that sets it; Low)
+10109	IGNORE	(Modern Web Application)	Informational only: tells the scanner that the AJAX spider would find more; not a vulnerability.

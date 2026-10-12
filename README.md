@@ -144,7 +144,7 @@ The FriendFlix interface is the same; what differs is what Plex can deliver. Sta
 | Chromecast | Works | Including text subtitles (signed FriendFlix subtitle URLs) |
 | TV mode, watch parties, recommendations, notifications | Works | FriendFlix features, independent of the media server |
 | "Upcoming episodes" | Not available | Plex does not offer it |
-| Wishes / request service | Not working yet | The Seerr user mapping relies on Jellyfin user ids |
+| Wishes / request service | Works | Each FriendFlix account gets its own local Seerr user (request permission only), created on the first wish |
 | nginx "Plan B" media path | Not available | Not supported with Plex |
 
 Details, setup and troubleshooting: [docs/plex.md](docs/plex.md).
@@ -268,7 +268,7 @@ flowchart LR
 
 - **Backups:** the opt-in `backup` sidecar runs `pg_dump` daily at `BACKUP_HOUR`, verifies each dump with `pg_restore --list`, keeps `BACKUP_KEEP_DAYS` days and turns `unhealthy` if a run fails. Restore steps and a monthly restore test (`scripts/restore-test.sh`) are in [docs/operations.md](docs/operations.md). Keep `APP_ENC_KEY` in a password manager, separate from the dumps.
 - **Updates:** *Admin → Update* shows the installed and latest version with the change list and redeploys the stack through Portainer (webhook or API). Manually: `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`. Database migrations run on start.
-- **Monitoring:** `/health` (liveness) and `/health/ready` (Redis, Postgres, media server) on `127.0.0.1:3081`; Prometheus metrics on `:3081/metrics` and `:3082/metrics` (Bearer `METRICS_TOKEN`). Icinga and Prometheus examples: [docs/monitoring.md](docs/monitoring.md).
+- **Monitoring:** `/health` (liveness) and `/health/ready` (Redis, Postgres, media server) on `127.0.0.1:3081`; Prometheus metrics on `:3081/metrics` and `:3082/metrics` (Bearer `METRICS_TOKEN`). Icinga and Prometheus examples and an optional Prometheus + Grafana stack with dashboard (`compose.monitoring.yaml`): [docs/monitoring.md](docs/monitoring.md).
 - **Performance:** every API response carries a `Server-Timing` header (`jf` = media server, `db` = Postgres, `kv` = Redis, `app` = total), the gateway adds `authz` and `upstream`; see them in the browser DevTools under *Network → Timing*. Requests ≥ 500 ms are logged as `slow request`. Browser errors are reported to the backend log and counted in `friendflix_client_errors_total`.
 
 ### Development
@@ -286,7 +286,8 @@ npm run e2e                                     # Playwright: builds the web app
 - `E2E_SKIP_BUILD=1` reuses an existing build; `PW_CHROMIUM=/path/to/chrome` uses a locally installed Chromium.
 - `./scripts/setup-hooks.sh` installs the gitleaks pre-commit hook.
 - Development against an http Authentik: `OIDC_ALLOW_INSECURE=true` (never in production).
-- CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)): lint, typecheck, tests, `npm audit`, e2e, gitleaks and Trivy; images are published by [publish.yml](.github/workflows/publish.yml) only after everything is green.
+- CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)): lint, typecheck, tests, `npm audit`, e2e, OWASP ZAP baseline scan (DAST, rules in `.zap/rules.tsv`), gitleaks and Trivy (results also in code scanning); images are published by [publish.yml](.github/workflows/publish.yml) only after everything is green, with SBOM + provenance attestations and a keyless cosign signature – verification and recommended branch protection: [docs/operations.md](docs/operations.md).
+- Supply-chain checks: OpenSSF Scorecard ([scorecard.yml](.github/workflows/scorecard.yml)), weekly and on every push to `main`. [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/LetsManu/friendflix/badge)](https://scorecard.dev/viewer/?uri=github.com/LetsManu/friendflix)
 - Translations: German is the source, all other languages live next to it – how to fix or add a language: [docs/i18n.md](docs/i18n.md).
 
 ### Documentation
@@ -297,8 +298,8 @@ npm run e2e                                     # Playwright: builds the web app
 | Authentik: installation, provider, flows, invitations | [docs/authentik.md](docs/authentik.md) |
 | **Plex setup, feature parity, troubleshooting, keeping in sync with upstream** | [docs/plex.md](docs/plex.md) · [Deutsch](docs/de/plex.md) |
 | Request service, Authentik, ntfy/Discord, web push (Jellyfin parts do not apply) | [docs/integrations.md](docs/integrations.md) |
-| Backups, restore, firewall, updates (Plan B not supported with Plex) | [docs/operations.md](docs/operations.md) |
-| Monitoring, metrics, Server-Timing, browser errors | [docs/monitoring.md](docs/monitoring.md) |
+| Backups, restore, firewall, updates, image verification, branch protection (Plan B not supported with Plex) | [docs/operations.md](docs/operations.md) |
+| Monitoring, metrics, Grafana dashboard, Server-Timing, browser errors | [docs/monitoring.md](docs/monitoring.md) |
 | Offline downloads (platforms, storage, limits) | [docs/downloads.md](docs/downloads.md) |
 | TV mode and phone remote | [docs/tv-mode.md](docs/tv-mode.md) |
 | Chromecast | [docs/cast.md](docs/cast.md) |
@@ -310,7 +311,7 @@ npm run e2e                                     # Playwright: builds the web app
 
 - One backend replica: watch-party rooms, rate limits and remote-control rooms live in memory.
 - Image-based subtitles (PGS) are not offered; text subtitles are delivered as WebVTT.
-- Plex (see the [table above](#plex-vs-jellyfin-what-works) and [docs/plex.md](docs/plex.md)): skip intro/credits only with Plex Pass markers (never recap/preview); scrub previews are single frames and need preview thumbnails enabled in Plex; no "upcoming episodes"; audio track selection is per Plex account (stream starts are serialized, use a dedicated token); subtitles are extracted and converted by FriendFlix; the server must be claimed and a token is required; wishes (request service) do not work yet; Plan B is not supported.
+- Plex (see the [table above](#plex-vs-jellyfin-what-works) and [docs/plex.md](docs/plex.md)): skip intro/credits only with Plex Pass markers (never recap/preview); scrub previews are single frames and need preview thumbnails enabled in Plex; no "upcoming episodes"; audio track selection is per Plex account (stream starts are serialized, use a dedicated token); subtitles are extracted and converted by FriendFlix; the server must be claimed and a token is required; Plan B is not supported.
 - The Plex implementation relies on partly undocumented Plex APIs, verified against Plex Media Server 1.43; other versions may behave differently.
 - Request service and Authentik APIs differ between versions – after upgrades see [docs/operations.md](docs/operations.md) and [docs/integrations.md](docs/integrations.md).
 - Profiles live in FriendFlix, not in Plex: they do not appear in Plex's user list and need no plex.tv account.

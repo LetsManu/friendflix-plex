@@ -1,5 +1,14 @@
 # Changelog
 ## [Unreleased]
+### Wishes on other media servers
+- Seerr wishes no longer depend on Jellyfin users: a new backend capability `requestUsers` (`'jellyfin-import'` for Jellyfin, unchanged; `'local'` for every other server and the default) maps each FriendFlix account to a local Seerr user: stored id (checked to still exist), else a Seerr user with the same email, else a new one with only the Request permission (placeholder `<account id>@friendflix.invalid` without email; re-created once when deleted in Seerr; one user under parallel wishes). No migration (uses `users.seerr_user_id`). See docs/integrations.md, "Seerr".
+### DevSecOps: supply chain, DAST, monitoring
+- CI push builds carry BuildKit SBOM (SPDX) + provenance (`mode=max`); Trivy findings (CRITICAL/HIGH/MEDIUM, fixable) are uploaded to code scanning as SARIF before the existing CRITICAL/HIGH gate.
+- `publish.yml` signs each promoted digest with cosign keyless (GitHub OIDC, no keys) and adds GitHub artifact attestations (SLSA provenance + SBOM, pushed to GHCR). Identities derive from the repo, so forks sign as themselves. Verification: docs/operations.md.
+- New `dast` CI job: OWASP ZAP baseline scan of the built web app (fails on High, warns on Medium/Low; `.zap/rules.tsv`, report artifact `zap-report`); publishing now also waits for it.
+- OpenSSF Scorecard workflow (weekly + push to `main`, SARIF + published results, README badge).
+- Optional `compose.monitoring.yaml` (Prometheus + Grafana on an internal network, provisioned datasource and dashboard `deploy/grafana/friendflix.json`, admin password only from `GRAFANA_ADMIN_PASSWORD`). docs/monitoring.md.
+- docs/operations.md: recommended branch protection with the exact required check names.
 ### Security: download visibility
 - Offline downloads: `/internal/authz {sid, dl}` now re-checks that the licence's profile can still see the item (`ctx.jf.item` as that profile, memoised 5 s) and revokes the licence when it cannot. Matters for media servers that use one shared token; Jellyfin already enforced this upstream.
 - `compose.yaml` / `compose.prod.yaml`: `JELLYFIN_URL` is no longer forced with `:?`, so another media server's override needs no placeholder. The backend still refuses to start for `MEDIA_SERVER=jellyfin` without `JELLYFIN_URL` / `JELLYFIN_ADMIN_API_KEY` (an empty `JELLYFIN_URL` gives the same "is required" message), the gateway with `missing env JELLYFIN_URL`.

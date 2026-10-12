@@ -19,13 +19,16 @@ Pause is derived from `isPaused` in progress events. Sessions started in the por
 
 ## Seerr
 - Users imported from Jellyfin get default permissions. Leave "auto-approve" **off** if the admin should approve every wish.
+- **How FriendFlix accounts appear in Seerr.** Wishes are always made in the account's name (`userId` in `POST /request`, sent with the admin API key); profiles share their account's Seerr user. The mapping is stored in `users.seerr_user_id`. The media server decides how the Seerr user is found (`capabilities.requestUsers`, backend only):
+  - **Jellyfin** (`jellyfin-import`, unchanged): the Seerr user carrying the account's Jellyfin user id, imported via `/user/import-from-jellyfin` on the first wish.
+  - **Other servers** (`local`, also the default when a server does not say), e.g. a Plex fork with one admin token and no per-user server account: a **local Seerr user** per account. On each wish the stored id is checked (`GET /user/{id}`); if it is missing or was deleted in Seerr, FriendFlix looks for a Seerr user with the account's email (case-insensitive) and adopts it unchanged, otherwise it creates one (`POST /user` with email, the account's display name as username and a random password FriendFlix never keeps) and sets its permissions to exactly **Request** (`PUT /user/{id}`, bit 32: no admin, no auto-approve, whatever Seerr's default permissions are). If that permission update fails the new user is deleted again and the wish fails. Accounts without an email (an OIDC provider without the `email` claim) use the placeholder `<account id>@friendflix.invalid` (deterministic, so the same Seerr user is found again; Seerr cannot mail it). Parallel wishes of one account create one user (advisory lock per account). The API key needs *Manage Users* (the admin API key from Settings → General has it). These users cannot log in to Seerr themselves unless the Seerr admin sets a password; to merge with an existing Seerr user, give it the same email before the first wish.
 - Settings → Notifications → Webhook:
   - Webhook URL `http://backend:3000/internal/webhook/seerr`
   - Authorization Header: `<WEBHOOK_SECRET>` (the portal accepts `Authorization` or `X-Webhook-Secret`)
   - Notification types: Request Pending Approval, Approved, Declined, Available
   - JSON payload: default template (`notification_type`, `subject`, `media.media_type`, `media.tmdbId`, `request.request_id`).
 - API key: Settings → General → `SEERR_API_KEY`.
-- Paths used (`/api/v1`): `/search`, `/movie/{id}`, `/tv/{id}`, `/request`, `/request/{id}/approve|decline`, `/user`, `/user/import-from-jellyfin`.
+- Paths used (`/api/v1`): `/search`, `/movie/{id}`, `/tv/{id}`, `/request`, `/request/{id}/approve|decline`, `/user`, `/user/import-from-jellyfin` (Jellyfin); `GET|PUT|DELETE /user/{id}`, `POST /user` (local users, other servers).
   Verify against your instance's `/api-docs`: the user import path differs between Jellyseerr/Seerr versions.
 
 ## Authentik

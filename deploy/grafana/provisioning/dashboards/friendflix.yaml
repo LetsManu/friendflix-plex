@@ -1,0 +1,12 @@
+# Loads deploy/grafana/friendflix.json (mounted read-only at /etc/grafana/dashboards). Changes made in the UI cannot be
+# saved over it; export the JSON and commit it instead.
+apiVersion: 1
+providers:
+  - name: friendflix
+    folder: FriendFlix
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /etc/grafana/dashboards
