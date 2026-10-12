@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import type { Ctx } from './ctx.js';
-import type { ItemDto } from './media/types.js';
+import { MediaError, type ItemDto } from './media/types.js';
 import { enqueueJob, jobProgress, preparer } from './downloadprep.js';
 import { getProfile, jfUserFor } from './profiles.js';
 import { effectiveRole, type RoleTemplate } from './roles.js';
@@ -559,8 +559,13 @@ export type DownloadAuthz =
   | { kind: 'file'; file: string; size: number; etag: string }
   | { kind: 'static'; path: string; query: Record<string, string> };
 
+/** Short memo of "may this licence's profile still see the item" (like /internal/authz/item); errors are never memoised. */
+const VISIBLE_MEMO_MS = 5_000;
+const visibleMemo = new Map<string, { exp: number; v: boolean }>();
+export const forgetDownloadVisibility = () => visibleMemo.clear();
+
 /** Used by /internal/authz {sid, dl}: may this session (with its active profile) fetch this license's file? null = no (the gateway answers 404). */
-export async function authorizeDownload(ctx: Ctx, session: Pick<Session, 'userId' | 'deviceId'>, user: Pick<UserRow, 'id' | 'role' | 'disabled'>, profileId: string, downloadId: string): Promise<DownloadAuthz | null> {
+export async function authorizeDownload(ctx: Ctx, session: Pick<Session, 'userId' | 'deviceId'>, user: Pick<UserRow, 'id' | 'role' | 'disabled'> & JfUser, profileId: string, downloadId: string): Promise<DownloadAuthz | null> {
   if (!downloadsEnabled(ctx) || !session.deviceId || user.disabled || session.userId !== user.id) return null;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(downloadId)) return null;
   const lic = (await ctx.db.query<LicenseRow>(`select * from downloads where id=$1 and user_id=$2 and device_id=$3 and profile_id=$4 and ${ACTIVE} and expires_at > now()`, [downloadId, user.id, session.deviceId, profileId])).rows[0];
@@ -568,6 +573,30 @@ export async function authorizeDownload(ctx: Ctx, session: Pick<Session, 'userId
   const dev = (await ctx.db.query<{ approved: boolean }>('select approved from devices where user_id=$1 and device_id=$2', [user.id, session.deviceId])).rows[0];
   if (!dev?.approved) return null;
   if (!roleAllowsDownloads(ctx, await effectiveRole(ctx, user.role))) return null;
+  // The media server may use one shared token (no per-user enforcement upstream): the profile must still be able to see the item
+  // (re-rating, kids cap, role libraries). Not visible -> deny and revoke the licence.
+  const vkey = `${lic.id}|${profileId}`;
+  let visible = visibleMemo.get(vkey);
+  if (!visible || visible.exp <= Date.now()) {
+    const prof = await getProfile(ctx, user.id, profileId);
+    if (!prof) return null;
+    let v: boolean;
+    try {
+      await ctx.jf.item(jfUserFor(user, prof), lic.item_id);
+      v = true;
+    } catch (e) {
+      if (!(e instanceof MediaError) || ![400, 403, 404].includes(e.status)) throw e; // server trouble: not memoised, not a revoke
+      v = false;
+    }
+    visible = { exp: Date.now() + VISIBLE_MEMO_MS, v };
+    visibleMemo.set(vkey, visible);
+    if (visibleMemo.size > 5000) visibleMemo.clear();
+  }
+  if (!visible.v) {
+    const k = await ctx.db.query<{ job_id: string | null }>(`update downloads set status='revoked' where id=$1 and ${ACTIVE} returning job_id`, [lic.id]);
+    await releaseJobs(ctx, k.rows.map((x) => x.job_id));
+    return null;
+  }
   if (!lic.job_id) {
     const ms = lic.meta?.mediaSourceId;
     if (lic.quality !== 'original' || !ms || !/^[\w-]{1,64}$/.test(ms)) return null;

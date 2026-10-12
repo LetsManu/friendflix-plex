@@ -37,7 +37,7 @@ const schema = z.object({
   /** which media server implementation backs this instance (one per instance), see docs/architecture.md "Media server seam" */
   MEDIA_SERVER: z.enum(MEDIA_SERVERS).default('jellyfin'),
   /** required when MEDIA_SERVER=jellyfin (see the check below) */
-  JELLYFIN_URL: z.string().url().optional(),
+  JELLYFIN_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()), // compose passes '' when unset
   JELLYFIN_ADMIN_API_KEY: opt,
   /** required when MEDIA_SERVER=plex: base URL of the existing Plex Media Server and its admin token (backend + gateway only) */
   PLEX_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),

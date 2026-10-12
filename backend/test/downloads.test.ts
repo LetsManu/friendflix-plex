@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MIGRATIONS } from '../src/db.js';
-import { qualityOptions } from '../src/downloads.js';
+import { forgetDownloadVisibility, qualityOptions } from '../src/downloads.js';
 import { DEFAULT_ROLES, invalidateRoles } from '../src/roles.js';
 import { cfg, makeEnv, type TestEnv } from './helpers.js';
 
@@ -21,6 +21,7 @@ let admin: Sess, family: Sess, guest: Sess;
 let original = false;
 let lastPlayed: string | undefined;
 let failInfoFor = '';
+let hiddenItem = '';
 
 const item = (id: string) => {
   const ep = EPS.indexOf(id);
@@ -55,8 +56,8 @@ const authz = (s: Sess, dl: string) => env.app.inject({ method: 'POST', url: '/i
 
 beforeAll(async () => {
   env = await makeEnv({
-    'GET /Items/[^/]+': (u) => (u.pathname.endsWith(GONE) ? { status: 404, raw: 'secret jellyfin detail' } : { json: item(u.pathname.split('/').pop()!) }),
-    'GET /Users/[^/]+/Items/[^/]+': (u) => (u.pathname.endsWith(GONE) ? { status: 404, raw: 'secret jellyfin detail' } : { json: item(u.pathname.split('/').pop()!) }),
+    'GET /Items/[^/]+': (u) => (u.pathname.endsWith(GONE) || (hiddenItem && u.pathname.endsWith(hiddenItem)) ? { status: 404, raw: 'secret jellyfin detail' } : { json: item(u.pathname.split('/').pop()!) }),
+    'GET /Users/[^/]+/Items/[^/]+': (u) => (u.pathname.endsWith(GONE) || (hiddenItem && u.pathname.endsWith(hiddenItem)) ? { status: 404, raw: 'secret jellyfin detail' } : { json: item(u.pathname.split('/').pop()!) }),
     'GET /Shows/[^/]+/Episodes': (u) => {
       const start = u.searchParams.get('startItemId');
       const i = EPS.indexOf(start ?? '');
@@ -468,6 +469,24 @@ describe('/internal/authz {sid, dl}', () => {
     expect((await authz(family, l.id)).statusCode).toBe(404);
     await env.pool.query("update downloads set status='revoked'");
     expect((await authz(family, l.id)).statusCode).toBe(404);
+  });
+
+  it('denies and revokes a licence once the item is no longer visible for its profile', async () => {
+    const l = (await create(family, { itemId: MOVIE })).json().licenses[0];
+    await ready(l);
+    forgetDownloadVisibility();
+    expect((await authz(family, l.id)).statusCode).toBe(200);
+    hiddenItem = MOVIE;
+    try {
+      expect((await authz(family, l.id)).statusCode).toBe(200); // memoised for a few seconds
+      forgetDownloadVisibility();
+      env.ctx.jf.forgetItems?.(); // the Jellyfin service memoises items too (10 s)
+      expect((await authz(family, l.id)).statusCode).toBe(404);
+      expect((await env.pool.query('select status from downloads where id=$1', [l.id])).rows[0].status).toBe('revoked');
+    } finally {
+      hiddenItem = '';
+      forgetDownloadVisibility();
+    }
   });
 
   it('denies a session of another device (401/404) and a disabled user', async () => {

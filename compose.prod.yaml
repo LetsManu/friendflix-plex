@@ -74,8 +74,8 @@ services:
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       MEDIA_SERVER: ${MEDIA_SERVER:-jellyfin}
-      JELLYFIN_URL: ${JELLYFIN_URL:?}
-      JELLYFIN_ADMIN_API_KEY: ${JELLYFIN_ADMIN_API_KEY:-}
+      JELLYFIN_URL: ${JELLYFIN_URL:-} # required when MEDIA_SERVER=jellyfin (the backend refuses to start without it)
+      JELLYFIN_ADMIN_API_KEY: ${JELLYFIN_ADMIN_API_KEY:-} # required when MEDIA_SERVER=jellyfin
       OIDC_ALLOW_INSECURE: ${OIDC_ALLOW_INSECURE:-false}
       SEERR_URL: ${SEERR_URL:?}
       SEERR_API_KEY: ${SEERR_API_KEY:-}
@@ -137,7 +137,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     environment:
       MEDIA_SERVER: ${MEDIA_SERVER:-jellyfin}
-      JELLYFIN_URL: ${JELLYFIN_URL:?}
+      JELLYFIN_URL: ${JELLYFIN_URL:-} # required when MEDIA_SERVER=jellyfin (the backend refuses to start without it)
       BACKEND_URL: http://backend:3000
       INTERNAL_SECRET: ${INTERNAL_SECRET:-}
       METRICS_TOKEN: ${METRICS_TOKEN:-}

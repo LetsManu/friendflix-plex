@@ -31,6 +31,8 @@ describe('MEDIA_SERVER config', () => {
     const { JELLYFIN_URL: _u, ...noUrl } = BASE;
     expect(() => loadConfig(noUrl)).toThrow(/JELLYFIN_URL/);
     expect(() => loadConfig({ ...BASE, JELLYFIN_ADMIN_API_KEY: '' })).toThrow(/JELLYFIN_ADMIN_API_KEY/);
+    // compose passes unset variables as '' (`${JELLYFIN_URL:-}`): same clear "required" message, not a URL parse error
+    expect(() => loadConfig({ ...BASE, JELLYFIN_URL: '' })).toThrow(/JELLYFIN_URL is required for MEDIA_SERVER=jellyfin/);
     expect(() => loadConfig({ ...BASE, JELLYFIN_URL: 'not a url' })).toThrow();
   });
   it('jellyfin has no unsupported settings', () => {
