@@ -1,0 +1,111 @@
+@import '@fontsource-variable/inter';
+
+/* ---- Design tokens (ui-ux-pro-max: OLED-dark cinematic, content-first, play-red accent, Inter) ---- */
+:root {
+  --bg: #141414;
+  --bg-deep: #000;
+  --surface: #181818;
+  --surface-2: #2a2a2a;
+  --card: #181818;
+  --fg: #f5f5f5;
+  --mut: #b3b3b3;       /* 8.6:1 on --bg */
+  --acc: #e50f2a;
+  --acc-hover: #f6283f;
+  --ok: #46d369;
+  --warn: #f5a623;
+  --err: #ff6b6b;
+  --line: #2f2f2f;
+  --pad-x: clamp(1rem, 4vw, 3.6rem);
+  --nav-h: 68px;
+  --radius: 4px;
+  --t-fast: 150ms;
+  --t-med: 260ms;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+/* no global smooth scrolling: it animated SvelteKit's scroll restoration on back/forward. In-page jumps pass behavior:'smooth' explicitly. */
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 16px/1.5 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+a { color: inherit; text-decoration: none; }
+h1, h2, h3 { margin: .2rem 0 .8rem; line-height: 1.2; letter-spacing: -.01em; }
+img { max-width: 100%; }
+:focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip { position: fixed; left: 1rem; top: -4rem; background: #fff; color: #000; padding: .6rem 1rem; border-radius: 4px; z-index: 100; transition: top var(--t-fast); }
+.skip:focus { top: 1rem; }
+
+/* ---- Buttons (min 44px touch target) ---- */
+button, .btn { font: inherit; font-weight: 600; background: var(--acc); color: #fff; border: 0; border-radius: 4px; padding: .6rem 1.2rem; min-height: 44px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: .5rem; transition: background var(--t-fast), transform var(--t-fast), opacity var(--t-fast); }
+button:hover:not(:disabled), .btn:hover { background: var(--acc-hover); }
+button:active:not(:disabled), .btn:active { transform: scale(.97); }
+button.sec, .btn.sec { background: rgba(109, 109, 110, .7); }
+button.sec:hover:not(:disabled), .btn.sec:hover { background: rgba(109, 109, 110, .45); }
+button.light, .btn.light { background: #fff; color: #000; }
+button.light:hover:not(:disabled), .btn.light:hover { background: rgba(255, 255, 255, .75); }
+button:disabled { opacity: .5; cursor: default; }
+.icon-btn { background: transparent; padding: 0; width: 44px; min-height: 44px; border-radius: 50%; color: #fff; }
+.icon-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .12); }
+input, select, textarea { background: #333; color: var(--fg); border: 1px solid transparent; border-radius: 4px; padding: .6rem .8rem; min-height: 44px; font: inherit; transition: border-color var(--t-fast); }
+input:hover, select:hover { border-color: #666; }
+input[type='checkbox'] { min-height: 0; width: 1.1rem; height: 1.1rem; accent-color: var(--acc); }
+label { color: var(--mut); font-size: .9rem; }
+
+/* ---- Generic content blocks (admin & secondary pages) ---- */
+.page { padding: calc(var(--nav-h) + 1.5rem) var(--pad-x) 4rem; max-width: 1500px; margin: 0 auto; }
+.panel { background: var(--surface); border-radius: 8px; padding: 1.1rem 1.3rem; margin-bottom: 1rem; border: 1px solid var(--line); }
+.muted { color: var(--mut); } .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); }
+.flex { display: flex; gap: .7rem; align-items: center; flex-wrap: wrap; }
+.badge { background: var(--surface-2); border-radius: 99px; padding: .1rem .7rem; font-size: .8rem; color: var(--fg); }
+table { width: 100%; border-collapse: collapse; } td, th { text-align: left; padding: .6rem .6rem; border-bottom: 1px solid var(--line); } th { color: var(--mut); font-weight: 500; font-size: .85rem; }
+.bar { height: 3px; background: #4d4d4d; border-radius: 2px; overflow: hidden; } .bar > i { display: block; height: 100%; background: var(--acc); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; }
+
+/* poster/landscape grid used by browse/search pages */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: .5rem; padding-bottom: 6rem; }
+.tiles > * { --card-w: 100%; }
+
+/* ---- Skeleton shimmer ---- */
+.skeleton { position: relative; overflow: hidden; background: #1f1f1f; border-radius: var(--radius); }
+/* gradient sweep on its own layer: only transform animates (GPU) */
+.skeleton::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .075) 50%, transparent 70%); transform: translateX(-100%); animation: ff-shimmer 1.5s ease-in-out infinite; will-change: transform; }
+@keyframes ff-shimmer { to { transform: translateX(100%); } }
+
+video { width: 100%; background: #000; }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after { animation: none; display: none; }
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; transition-delay: 0ms !important; }
+}
+
+/* ---- TV mode (paired televisions, or ?tv=1 preview): 10-foot UI, D-pad focus, no pointer ---- */
+html.tv { --nav-h: 76px; --pad-x: 3rem; }
+/* Many TVs report 960x540 or 1280x720 CSS pixels on a 4K panel (already scaled up): only a real 1080p viewport needs bigger type */
+@media (min-width: 1200px) { html.tv { font-size: 112.5%; --nav-h: 80px; --pad-x: 3.6rem; } }
+@media (min-width: 1700px) { html.tv { font-size: 125%; --nav-h: 84px; --pad-x: 4.2rem; } }
+/* the pointer (LG Magic Remote) stays usable; it hides itself after a few idle seconds */
+html.tv.idle-cursor, html.tv.idle-cursor * { cursor: none !important; }
+html.tv :focus-visible { outline: 4px solid #fff; outline-offset: 4px; box-shadow: 0 0 0 9px rgba(229, 15, 42, .6); border-radius: 8px; }
+html.tv .card:focus-within { transform: scale(1.1) !important; z-index: 6; transition-delay: 0s !important; }
+html.tv .card .thumb:focus-visible { box-shadow: 0 0 0 5px #fff, 0 12px 34px rgba(0, 0, 0, .7); outline: none; border-radius: var(--radius); }
+html.tv .pop, html.tv .arrow, html.tv .tabbar, html.tv .sheet { display: none !important; }
+html.tv .track { scroll-snap-type: none; }
+html.tv main { padding-bottom: 0; }
+html.tv button, html.tv .btn { min-height: 56px; font-size: 1.05rem; padding-inline: 1.5rem; }
+html.tv .icon-btn { width: 56px; min-height: 56px; }
+html.tv .nav .links a { font-size: 1.05rem; padding: .9rem .5rem; }
+html.tv .hide-s { display: none; }
+html.tv .nav .links { display: flex !important; } /* TV viewports can be narrow in CSS pixels (960x540 on 4K panels) */
+html.tv input, html.tv select { min-height: 56px; font-size: 1.05rem; }
+html.tv .ring { width: 60px; min-height: 60px; height: 60px; }
+html.tv .drop a, html.tv .drop .plain { min-height: 56px; font-size: 1.05rem; }
+
+/* ---- Page transitions (View Transitions API, started from +layout.svelte; skipped for /watch and reduced motion) ---- */
+@media (prefers-reduced-motion: no-preference) {
+  html.ff-vt main { view-transition-name: ff-main; }
+  ::view-transition-group(root), ::view-transition-group(ff-main) { animation-duration: 180ms; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 180ms; animation-timing-function: ease; }
+  ::view-transition-old(ff-main) { animation: ff-vt-out 180ms ease both; }
+  ::view-transition-new(ff-main) { animation: ff-vt-in 180ms var(--ease) both; }
+  @keyframes ff-vt-out { to { opacity: 0; } }
+  @keyframes ff-vt-in { from { opacity: 0; transform: translateY(8px); } }
+}

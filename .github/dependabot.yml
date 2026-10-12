@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    open-pull-requests-limit: 5
+    schedule: { interval: weekly }
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: docker
+    directory: /backend
+    open-pull-requests-limit: 5
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /gateway
+    open-pull-requests-limit: 5
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /web
+    open-pull-requests-limit: 5
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    open-pull-requests-limit: 5
+    schedule: { interval: weekly }

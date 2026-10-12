@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Blocks commits containing secrets. Install: git config core.hooksPath .githooks
+set -euo pipefail
+if git diff --cached --name-only | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$'; then
+  echo "ERROR: .env file staged. Aborting." >&2; exit 1
+fi
+if ! command -v gitleaks >/dev/null; then
+  echo "ERROR: gitleaks not installed (https://github.com/gitleaks/gitleaks). Aborting." >&2; exit 1
+fi
+gitleaks protect --staged --redact --verbose

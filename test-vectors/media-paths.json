@@ -1,0 +1,98 @@
+{
+  "_comment": "Shared by gateway and backend tests so both implementations of the /media allowlist can never drift apart. 'direct' = allowed paths that are original (untranscoded) streams: refused for height-capped roles and roles without download rights.",
+  "allow": [
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/master.m3u8",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/main.m3u8",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/hls1/main/0.ts",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/stream",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/stream.mp4",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/Subtitles/3/0/Stream.vtt",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Trickplay/320/0.jpg",
+    "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Primary",
+    "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Backdrop/0",
+    "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Logo"
+  ],
+  "direct": [
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/stream",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/stream.mp4"
+  ],
+  "deny": [
+    "/System/Info",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Trickplay/320/0.png",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Trickplay/../320/0.jpg",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Trickplay/32000/0.jpg",
+    "/Users/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Policy",
+    "/Users/AuthenticateByName",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/%2e%2e/x",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/hls1/main/..%2f..%2fetc",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/hls1/main/../../../System/Info",
+    "//evil.example/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/master.m3u8",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/master.m3u8/../../../Sessions",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\master.m3u8",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/master.m3u8%00.png",
+    "/Videos/short/master.m3u8",
+    "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Primary/../../../../System/Logs",
+    "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Download",
+    "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/master.m3u8/extra",
+    ""
+  ],
+  "cast": {
+    "_comment": "Stricter subset used on the cookie-less Chromecast route /media/c/<token>/...: tested by the gateway (the backend's Plan B auth_request does not support cast).",
+    "allow": [
+      "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/master.m3u8",
+      "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/main.m3u8",
+      "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/hls1/main/0.ts",
+      "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/Subtitles/3/0/Stream.vtt",
+      "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Primary",
+      "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Backdrop"
+    ],
+    "deny": [
+      "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/stream",
+      "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/stream.mp4",
+      "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Trickplay/320/0.jpg",
+      "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/Subtitles/3/0/Stream.srt",
+      "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Logo",
+      "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Primary/0",
+      "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Thumb",
+      "/System/Info",
+      "/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Download",
+      "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/hls1/main/..%2f..%2fetc",
+      "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/hls1/main/../../../System/Info",
+      "//evil.example/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/master.m3u8",
+      "/Users/AuthenticateByName",
+      ""
+    ]
+  },
+  "download": {
+    "_comment": "Offline-download route /media/d/<uuid> (cookie + licence check, no query string, lower-case ids only): tested by the gateway (matchDownloadPath); the backend vector tests read only allow/deny/cast and ignore this section. The nginx auth_request (Plan B) always denies /media/d/.",
+    "allow": [
+      "/media/d/123e4567-e89b-42d3-a456-426614174000",
+      "/media/d/00000000-0000-4000-8000-000000000000"
+    ],
+    "deny": [
+      "/media/d/123E4567-E89B-42D3-A456-426614174000",
+      "/media/d/123e4567-e89b-42d3-a456-42661417400",
+      "/media/d/123e4567-e89b-42d3-a456-4266141740000",
+      "/media/d/123e4567-e89b-42d3-a456-426614174000/",
+      "/media/d/123e4567-e89b-42d3-a456-426614174000/extra",
+      "/media/d/123e4567-e89b-42d3-a456-426614174000?x=1",
+      "/media/d/123e4567-e89b-42d3-a456-426614174000?",
+      "/media/d/123e4567-e89b-42d3-a456-426614174000#x",
+      "/media/d/123e4567-e89b-42d3-a456-426614174000.mp4",
+      "/media/d/------------------------------------",
+      "/media/d/123456789012345678901234567890123456",
+      "/media/d/123e4567e-89b-42d3-a456-426614174000",
+      "/media/d/123e4567-e89b-42d3-a456-42661417400g",
+      "/media/d/../123e4567-e89b-42d3-a456-426614174000",
+      "/media/d/..%2f..%2f..%2f..%2fetc%2fpasswd",
+      "/media/d/%2e%2e/123e4567-e89b-42d3-a456-426614174000",
+      "/media/d/123e4567-e89b-42d3-a456-42661417400%00",
+      "/media/d/..\\..\\..\\windows\\system.ini1234567",
+      "/media//123e4567-e89b-42d3-a456-426614174000",
+      "/media/d/",
+      "/media/d",
+      "/media/D/123e4567-e89b-42d3-a456-426614174000",
+      ""
+    ]
+  }
+}

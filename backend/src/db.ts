@@ -1,0 +1,531 @@
+import pg from 'pg';
+
+export type Db = Pick<pg.Pool, 'query'>;
+
+export const MIGRATIONS: string[] = [
+  // 1: core
+  `
+  create table users (
+    id uuid primary key,
+    authentik_sub text unique not null,
+    email text,
+    name text not null,
+    role text not null,
+    jellyfin_user_id text not null,
+    jellyfin_username text not null,
+    jellyfin_pw_enc text not null,
+    seerr_user_id integer,
+    disabled boolean not null default false,
+    created_at timestamptz not null default now()
+  );
+  create table audit_log (
+    id bigserial primary key,
+    at timestamptz not null default now(),
+    actor uuid,
+    action text not null,
+    target text,
+    meta jsonb not null default '{}'
+  );
+  create table watchlist (
+    user_id uuid not null references users(id) on delete cascade,
+    item_id text not null,
+    added_at timestamptz not null default now(),
+    primary key (user_id, item_id)
+  );
+  `,
+  // 2: invites + devices
+  `
+  create table invites (
+    id uuid primary key,
+    token_hash text unique not null,
+    role text not null,
+    note text,
+    expires_at timestamptz not null,
+    used_at timestamptz,
+    used_by uuid references users(id) on delete set null,
+    created_by uuid references users(id) on delete set null,
+    authentik_invite text,
+    created_at timestamptz not null default now()
+  );
+  create table devices (
+    user_id uuid not null references users(id) on delete cascade,
+    device_id text not null,
+    label text not null,
+    approved boolean not null default false,
+    created_at timestamptz not null default now(),
+    last_seen timestamptz not null default now(),
+    primary key (user_id, device_id)
+  );
+  `,
+  // 3: seerr request mapping + notifications
+  `
+  create table seerr_requests (
+    id bigserial primary key,
+    seerr_request_id integer unique not null,
+    user_id uuid not null references users(id) on delete cascade,
+    media_type text not null,
+    tmdb_id integer not null,
+    title text not null,
+    poster text,
+    created_at timestamptz not null default now()
+  );
+  create table notifications (
+    id bigserial primary key,
+    user_id uuid references users(id) on delete cascade,
+    kind text not null,
+    title text not null,
+    body text,
+    link text,
+    dedupe text unique,
+    created_at timestamptz not null default now(),
+    read_at timestamptz
+  );
+  create index notifications_user on notifications(user_id, created_at desc);
+  `,
+  // 4: polls, ratings, series follows
+  `
+  create table polls (
+    id uuid primary key,
+    title text not null,
+    created_by uuid not null references users(id) on delete cascade,
+    closes_at timestamptz not null,
+    starts_at timestamptz not null,
+    status text not null default 'open',
+    winner_option_id bigint,
+    room_id text,
+    seerr_request_id integer,
+    created_at timestamptz not null default now()
+  );
+  create table poll_options (
+    id bigserial primary key,
+    poll_id uuid not null references polls(id) on delete cascade,
+    jf_item_id text,
+    tmdb_id integer,
+    media_type text,
+    title text not null,
+    poster text
+  );
+  create table poll_votes (
+    poll_id uuid not null references polls(id) on delete cascade,
+    user_id uuid not null references users(id) on delete cascade,
+    option_id bigint not null references poll_options(id) on delete cascade,
+    primary key (poll_id, user_id)
+  );
+  create table ratings (
+    user_id uuid not null references users(id) on delete cascade,
+    item_id text not null,
+    item_name text not null,
+    stars smallint not null check (stars between 1 and 5),
+    review text,
+    created_at timestamptz not null default now(),
+    primary key (user_id, item_id)
+  );
+  create table series_follows (
+    user_id uuid not null references users(id) on delete cascade,
+    series_id text not null,
+    series_name text not null,
+    primary key (user_id, series_id)
+  );
+  `,
+  // 5: watch statistics + achievements
+  `
+  create table play_seconds (
+    user_id uuid not null references users(id) on delete cascade,
+    item_id text not null,
+    day date not null,
+    seconds integer not null default 0,
+    item_name text not null,
+    item_type text,
+    series_name text,
+    primary key (user_id, item_id, day)
+  );
+  create table achievements (
+    user_id uuid not null references users(id) on delete cascade,
+    key text not null,
+    earned_at timestamptz not null default now(),
+    primary key (user_id, key)
+  );
+  `,
+  // 6: viewing preferences
+  `
+  create table user_prefs (
+    user_id uuid primary key references users(id) on delete cascade,
+    data jsonb not null default '{}',
+    updated_at timestamptz not null default now()
+  );
+  `,
+  // 7: scene bookmarks, friend recommendations, thumbs
+  `
+  create table bookmarks (
+    id uuid primary key,
+    user_id uuid not null references users(id) on delete cascade,
+    item_id text not null,
+    item_name text not null,
+    position_sec integer not null check (position_sec >= 0),
+    note text,
+    created_at timestamptz not null default now()
+  );
+  create index bookmarks_user_item on bookmarks(user_id, item_id);
+  create table recommendations (
+    id bigserial primary key,
+    from_user uuid not null references users(id) on delete cascade,
+    to_user uuid not null references users(id) on delete cascade,
+    item_id text not null,
+    item_name text not null,
+    note text,
+    seen boolean not null default false,
+    created_at timestamptz not null default now()
+  );
+  create index recommendations_to on recommendations(to_user, created_at desc);
+  create table thumbs (
+    user_id uuid not null references users(id) on delete cascade,
+    item_id text not null,
+    value smallint not null check (value in (-1, 1)),
+    item_name text not null,
+    created_at timestamptz not null default now(),
+    primary key (user_id, item_id)
+  );
+  `,
+  // 8: per-user read marker for broadcast notifications
+  `
+  alter table users add column notifications_read_at timestamptz;
+  `,
+  // 9: atomic first-device auto-approval. Inside plpgsql every statement gets a fresh snapshot, so after the advisory lock
+  // (held until the calling statement's implicit transaction ends) the not-exists sees a competitor's committed row.
+  `
+  create function register_device(p_user uuid, p_dev text, p_label text) returns boolean language plpgsql as $$
+  declare v boolean;
+  begin
+    perform pg_advisory_xact_lock(hashtext(p_user::text));
+    insert into devices(user_id, device_id, label, approved)
+      select p_user, p_dev, p_label, not exists(select 1 from devices where user_id = p_user and approved)
+      on conflict do nothing returning approved into v;
+    return v;
+  end $$;
+  `,
+  // preview clips: transcoded once, stored under PREVIEW_DIR
+  `
+  create table preview_clips (
+    item_id text primary key,
+    status text not null check (status in ('ok','failed')),
+    bytes int,
+    error text,
+    created_at timestamptz not null default now()
+  );
+  `,
+  // playback health check: last finished report
+  `
+  create table playback_checks (
+    id serial primary key,
+    started_at timestamptz not null,
+    finished_at timestamptz not null,
+    results jsonb not null
+  );
+  `,
+  // preview clips: remember the audio language; drop clips built with random default tracks so the warmer rebuilds them
+  `
+  alter table preview_clips add column audio_lang text;
+  delete from preview_clips;
+  `,
+  // monthly Seerr request limit per role. seerr_requests.source tells user wishes from admin-approved poll requests (those are not counted);
+  // request_reservations holds a slot while Seerr is being called, reserve_request_slot takes it atomically (advisory lock per user).
+  `
+  create table role_settings (
+    role text primary key,
+    requests_per_month int check (requests_per_month between 0 and 100),
+    updated_at timestamptz not null default now()
+  );
+  alter table seerr_requests add column source text not null default 'user' check (source in ('user','poll'));
+  update seerr_requests set source='poll' where seerr_request_id in (select seerr_request_id from polls where seerr_request_id is not null);
+  create index seerr_requests_user_month on seerr_requests(user_id, created_at) where source = 'user';
+  create table request_reservations (
+    id bigserial primary key,
+    user_id uuid not null references users(id) on delete cascade,
+    created_at timestamptz not null default now()
+  );
+  create function reserve_request_slot(p_user uuid, p_limit int) returns bigint language plpgsql as $$
+  declare v bigint; n int;
+  begin
+    perform pg_advisory_xact_lock(hashtext('reqslot:' || p_user::text));
+    delete from request_reservations where created_at < now() - interval '5 minutes';
+    if p_limit is not null then
+      select (select count(*) from seerr_requests where user_id = p_user and source = 'user' and created_at >= date_trunc('month', now()))
+           + (select count(*) from request_reservations where user_id = p_user) into n;
+      if n >= p_limit then return null; end if;
+    end if;
+    insert into request_reservations(user_id) values (p_user) returning id into v;
+    return v;
+  end $$;
+  `,
+  // admin-editable guest playback: per-role transcoding / max height overrides (null = keep template; max_height 0 = unlimited);
+  // app_flags marks one-time startup jobs (reapplyPoliciesOnce).
+  `
+  alter table role_settings add column transcoding boolean;
+  alter table role_settings add column max_height int check (max_height between 0 and 4320);
+  create table app_flags (key text primary key, at timestamptz not null default now());
+  `,
+  // profiles (Netflix style). The owner profile has the same id as its account, so existing progress/token cache/device ids keep working.
+  // Watchlist, thumbs and bookmarks become per profile (backfilled with the owner profile); profile_prefs holds per-profile viewing prefs.
+  `
+  create table profiles (
+    id uuid primary key,
+    user_id uuid not null references users(id) on delete cascade,
+    name text not null check (char_length(name) between 1 and 20),
+    avatar text not null default 'red',
+    is_owner boolean not null default false,
+    pin_hash text,
+    jellyfin_user_id text,
+    jellyfin_username text,
+    jellyfin_pw_enc text,
+    created_at timestamptz not null default now(),
+    check (is_owner or jellyfin_user_id is not null)
+  );
+  create unique index profiles_user_name on profiles(user_id, lower(name));
+  create unique index profiles_owner on profiles(user_id) where is_owner;
+  insert into profiles(id, user_id, name, is_owner) select id, id, coalesce(nullif(btrim(left(name, 20)), ''), 'Profil'), true from users;
+  alter table watchlist add column profile_id uuid references profiles(id) on delete cascade;
+  update watchlist set profile_id = user_id;
+  alter table watchlist alter column profile_id set not null;
+  alter table watchlist drop constraint watchlist_pkey, add primary key (profile_id, item_id);
+  alter table thumbs add column profile_id uuid references profiles(id) on delete cascade;
+  update thumbs set profile_id = user_id;
+  alter table thumbs alter column profile_id set not null;
+  alter table thumbs drop constraint thumbs_pkey, add primary key (profile_id, item_id);
+  alter table bookmarks add column profile_id uuid references profiles(id) on delete cascade;
+  update bookmarks set profile_id = user_id;
+  alter table bookmarks alter column profile_id set not null;
+  create index bookmarks_profile_item on bookmarks(profile_id, item_id);
+  create table profile_prefs (
+    profile_id uuid primary key references profiles(id) on delete cascade,
+    data jsonb not null default '{}',
+    updated_at timestamptz not null default now()
+  );
+  insert into profile_prefs(profile_id, data) select user_id, data from user_prefs;
+  create table resume_hidden (
+    profile_id uuid not null references profiles(id) on delete cascade,
+    item_id text not null,
+    hidden_at timestamptz not null default now(),
+    primary key (profile_id, item_id)
+  );
+  `,
+  // 16: weekly digest
+  `
+  create table digests (
+    user_id uuid not null references users(id) on delete cascade,
+    week date not null,
+    sent_at timestamptz not null default now(),
+    data jsonb not null,
+    primary key (user_id, week)
+  );
+  create table app_settings (key text primary key, value jsonb not null, updated_at timestamptz not null default now());
+  `,
+  // 17: shared lists
+  `
+  create table lists (
+    id uuid primary key,
+    owner_id uuid not null references users(id) on delete cascade,
+    name text not null check (char_length(name) between 1 and 60),
+    description text check (char_length(description) <= 280),
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  );
+  create index lists_owner on lists(owner_id);
+  create table list_members (
+    list_id uuid not null references lists(id) on delete cascade,
+    user_id uuid not null references users(id) on delete cascade,
+    role text not null check (role in ('editor','viewer')),
+    added_at timestamptz not null default now(),
+    primary key (list_id, user_id)
+  );
+  create index list_members_user on list_members(user_id);
+  create table list_items (
+    list_id uuid not null references lists(id) on delete cascade,
+    item_id text not null,
+    item_name text not null,
+    note text check (char_length(note) <= 140),
+    added_by uuid references users(id) on delete set null,
+    added_at timestamptz not null default now(),
+    primary key (list_id, item_id)
+  );
+  `,
+  // 18: "Erinnere mich" reminders
+  `
+  create table reminders (
+    id bigserial primary key,
+    user_id uuid not null references users(id) on delete cascade,
+    profile_id uuid references profiles(id) on delete set null,
+    kind text not null check (kind in ('tmdb','episode')),
+    media_type text check (media_type in ('movie','tv')),
+    tmdb_id int,
+    jf_item_id text,
+    series_id text,
+    season int,
+    episode int,
+    title text not null,
+    poster text,
+    release_date date,
+    created_at timestamptz not null default now(),
+    fired_at timestamptz,
+    check ((kind='tmdb' and tmdb_id is not null and media_type is not null) or (kind='episode' and jf_item_id is not null))
+  );
+  create unique index reminders_tmdb on reminders(user_id, media_type, tmdb_id) where kind='tmdb';
+  create unique index reminders_ep on reminders(user_id, jf_item_id) where kind='episode';
+  create index reminders_open on reminders(kind) where fired_at is null;
+  `,
+  // 19: Web Push subscriptions (one per browser/device)
+  `
+  create table push_subscriptions (
+    id bigserial primary key,
+    user_id uuid not null,
+    device_id text not null,
+    profile_id uuid not null references profiles(id) on delete cascade,
+    endpoint text not null unique check (char_length(endpoint) <= 1024),
+    p256dh text not null check (char_length(p256dh) <= 200),
+    auth text not null check (char_length(auth) <= 64),
+    broadcast boolean not null default false,
+    created_at timestamptz not null default now(),
+    last_ok_at timestamptz,
+    fail_count int not null default 0,
+    foreign key (user_id, device_id) references devices(user_id, device_id) on delete cascade
+  );
+  create index push_subscriptions_user on push_subscriptions(user_id);
+  `,
+  // 20: offline downloads (licenses per device + shared prepared files)
+  `
+  alter table role_settings
+    add column download boolean,
+    add column max_downloads int check (max_downloads between 0 and 200),
+    add column download_max_height int check (download_max_height between 0 and 2160),
+    add column download_days int check (download_days between 1 and 90);
+  create table download_jobs (
+    id uuid primary key,
+    item_id text not null,
+    quality text not null check (quality in ('sd','hd','fhd','original')),
+    audio_lang text not null default '',
+    -- effective caps the file was prepared with (role height/bitrate clamp); part of the job key so roles with different caps never share a file
+    max_height int not null default 0,
+    max_bitrate int not null default 0,
+    media_source_id text,
+    status text not null check (status in ('queued','preparing','ready','failed')),
+    seg_done int not null default 0,
+    seg_total int,
+    init_sha text,
+    bytes bigint,
+    error text,
+    play_session_id text,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    last_used_at timestamptz not null default now()
+  );
+  create unique index download_jobs_key on download_jobs(item_id, quality, audio_lang, max_height, max_bitrate) where status <> 'failed';
+  create table downloads (
+    id uuid primary key,
+    user_id uuid not null,
+    device_id text not null,
+    profile_id uuid not null references profiles(id) on delete cascade,
+    item_id text not null,
+    job_id uuid references download_jobs(id) on delete set null,
+    quality text not null,
+    status text not null check (status in ('pending','fetched','deleted','revoked')),
+    created_at timestamptz not null default now(),
+    fetched_at timestamptz,
+    expires_at timestamptz not null,
+    checked_at timestamptz not null default now(),
+    progress_at timestamptz,
+    subs jsonb not null default '[]',
+    meta jsonb not null default '{}',
+    foreign key (user_id, device_id) references devices(user_id, device_id) on delete cascade
+  );
+  create unique index downloads_dev_item on downloads(user_id, device_id, profile_id, item_id) where status in ('pending','fetched');
+  create index downloads_user_active on downloads(user_id) where status in ('pending','fetched');
+  `,
+  // 21: indexes for per-item ratings and per-user thumbs lookups
+  `
+  create index if not exists ratings_item on ratings(item_id);
+  create index if not exists thumbs_user on thumbs(user_id);
+  `,
+  // 22: library audio/subtitle language index (filled by langindex.ts) and per-profile "dropped" titles
+  `
+  create table item_langs (
+    item_id text primary key,
+    type text not null,
+    audio text[] not null default '{}',
+    subs text[] not null default '{}',
+    indexed_at timestamptz not null default now()
+  );
+  create index item_langs_audio on item_langs using gin(audio);
+  create index item_langs_subs on item_langs using gin(subs);
+  create table dropped (
+    profile_id uuid not null references profiles(id) on delete cascade,
+    item_id text not null,
+    dropped_at timestamptz not null default now(),
+    primary key (profile_id, item_id)
+  );
+  `,
+  // 23: spoiler-gated reactions to watched movies/episodes
+  `
+  create table reactions (
+    user_id uuid not null references users(id) on delete cascade,
+    item_id text not null,
+    emoji text not null check (emoji in ('like','funny','wow','sad','love')),
+    comment text check (char_length(comment) <= 280),
+    created_at timestamptz not null default now(),
+    primary key (user_id, item_id)
+  );
+  create index reactions_item on reactions(item_id);
+  `,
+  // 24: curated ("featured") lists shown on everyone's home page
+  `
+  alter table lists add column featured_at timestamptz;
+  create index lists_featured on lists(featured_at) where featured_at is not null;
+  `,
+  // 25: reactions belong to a profile (the "watched" gate is per profile); owner profile id = user id
+  `
+  alter table reactions add column profile_id uuid references profiles(id) on delete cascade;
+  update reactions set profile_id = user_id;
+  alter table reactions alter column profile_id set not null;
+  alter table reactions drop constraint reactions_pkey;
+  alter table reactions add primary key (profile_id, item_id);
+  `,
+  // 26: thumbs get a third value 2 ("Super"); the inline check was auto-named thumbs_value_check, but drop whatever check guards value
+  `
+  do $$
+  declare c record;
+  begin
+    for c in select conname from pg_constraint
+              where conrelid = 'thumbs'::regclass and contype = 'c' and pg_get_constraintdef(oid) ilike '%value%'
+    loop
+      execute format('alter table thumbs drop constraint %I', c.conname);
+    end loop;
+  end $$;
+  alter table thumbs add constraint thumbs_value_check check (value in (-1, 1, 2));
+  `,
+  // 27: notifications keep their message keys + params (i18n.ts Text) so the inbox renders them in the reader's language
+  `
+  alter table notifications add column msg jsonb;
+  `,
+];
+
+export async function migrate(pool: pg.Pool): Promise<void> {
+  const c = await pool.connect();
+  try {
+    await c.query('select pg_advisory_lock(727274)');
+    await c.query('create table if not exists schema_migrations (version int primary key, at timestamptz not null default now())');
+    for (let i = 0; i < MIGRATIONS.length; i++) {
+      const done = await c.query('select 1 from schema_migrations where version = $1', [i + 1]);
+      if (done.rowCount) continue;
+      await c.query('begin');
+      try {
+        await c.query(MIGRATIONS[i]!);
+        await c.query('insert into schema_migrations(version) values ($1)', [i + 1]);
+        await c.query('commit');
+      } catch (e) {
+        await c.query('rollback');
+        throw e;
+      }
+    }
+  } finally {
+    await c.query('select pg_advisory_unlock(727274)').catch(() => undefined);
+    c.release();
+  }
+}

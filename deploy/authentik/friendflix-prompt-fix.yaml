@@ -1,0 +1,85 @@
+# FriendFlix – prompt fields WITHOUT placeholder expressions + one prompt stage for an existing enrollment flow.
+#
+# Why: Authentik's default-user-settings-field-* prompts evaluate their placeholder as an expression on the
+# logged-in user; during enrollment nobody is logged in yet and the flow fails with
+# "'AnonymousUser' object has no attribute 'group_attributes'".
+#
+# Import: Flows and Stages → Flows → Import → "File upload" → this file.
+# Then in your enrollment flow → Stage Bindings: edit the binding of the old prompt stage and select
+# "friendflix-prompt-fixed" instead (keep its order). Nothing else is changed.
+version: 1
+metadata:
+  name: FriendFlix - enrollment prompt (no expressions)
+entries:
+  - model: authentik_stages_prompt.prompt
+    id: ff-field-username
+    identifiers:
+      name: friendflix-field-username
+    attrs:
+      field_key: username
+      label: Benutzername
+      type: username
+      required: true
+      placeholder: Benutzername
+      placeholder_expression: false
+      order: 0
+  - model: authentik_stages_prompt.prompt
+    id: ff-field-password
+    identifiers:
+      name: friendflix-field-password
+    attrs:
+      field_key: password
+      label: Passwort
+      type: password
+      required: true
+      placeholder: Passwort
+      placeholder_expression: false
+      order: 3
+  - model: authentik_stages_prompt.prompt
+    id: ff-field-password-repeat
+    identifiers:
+      name: friendflix-field-password-repeat
+    attrs:
+      field_key: password_repeat
+      label: Passwort (wiederholen)
+      type: password
+      required: true
+      placeholder: Passwort (wiederholen)
+      placeholder_expression: false
+      order: 4
+  - model: authentik_stages_prompt.prompt
+    id: ff-field-name
+    identifiers:
+      name: friendflix-field-name
+    attrs:
+      field_key: name
+      label: Name
+      type: text
+      required: true
+      placeholder: Name
+      placeholder_expression: false
+      order: 1
+  - model: authentik_stages_prompt.prompt
+    id: ff-field-email
+    identifiers:
+      name: friendflix-field-email
+    attrs:
+      field_key: email
+      label: E-Mail
+      type: email
+      required: true
+      placeholder: E-Mail
+      placeholder_expression: false
+      order: 2
+
+  - model: authentik_stages_prompt.promptstage
+    id: ff-prompt-fixed
+    identifiers:
+      name: friendflix-prompt-fixed
+    attrs:
+      fields:
+        - !KeyOf ff-field-username
+        - !KeyOf ff-field-name
+        - !KeyOf ff-field-email
+        - !KeyOf ff-field-password
+        - !KeyOf ff-field-password-repeat

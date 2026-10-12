@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="FriendFlix">
+  <defs>
+    <linearGradient id="ffg" x1="8" y1="2" x2="56" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff3b52"/>
+      <stop offset="1" stop-color="#b80719"/>
+    </linearGradient>
+    <linearGradient id="ffs" x1="0" y1="2" x2="0" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity=".12"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#ffg)"/>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#ffs)"/>
+  <path fill="#fff" d="M19 18a4 4 0 0 1 4-4h23a4 4 0 0 1 0 8H28v28a4.5 4.5 0 0 1-9 0z"/>
+  <path fill="#fff" stroke="#fff" stroke-width="3" stroke-linejoin="round" d="M33.500 29.500 45.500 36 33.500 42.500z"/>
+</svg>

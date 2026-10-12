@@ -1,0 +1,247 @@
+# FriendFlix portal stack - PRODUCTION variant: pulls the prebuilt images from ghcr.io (no build on the server).
+# Images come from .github/workflows/publish.yml. Private packages: docker login ghcr.io -u <user> (PAT with read:packages).
+# Pin a version with FF_TAG=<sha|x.y.z> in .env, other owner with FF_REGISTRY=ghcr.io/<owner>.
+# FriendFlix portal stack.
+# - NPM runs OUTSIDE Docker (or in its own stack) and reaches the portal through three ports that are bound to
+#   127.0.0.1 only (BIND_ADDR): web, backend (API/auth/WebSocket) and gateway (/media). Nothing else is published.
+# - Jellyfin/Seerr have NO ports and are only reachable via the internal `media` network.
+# - `db` network is internal (no egress, no host access).
+# NPM proxy host -> 127.0.0.1:${WEB_PORT}; locations /api,/auth,/ws -> :${BACKEND_PORT}, /media -> :${GATEWAY_PORT}
+# (ready-made config: deploy/npm/portal.advanced.conf).
+
+name: friendflix
+
+networks:
+  # `front` is a normal bridge: Docker can only publish ports for containers that sit on a non-internal network
+  front: {}
+  db:
+    internal: true
+  media:
+    internal: true
+  egress: {} # outbound internet for Jellyfin/Seerr metadata only; nothing is published
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: friendflix
+      POSTGRES_USER: friendflix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [db]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U friendflix"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s   # first initialisation is slow on NAS disks
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set in .env}", "--save", "", "--appendonly", "no"]
+    read_only: true
+    networks: [db]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+  backend:
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-backend:${FF_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:?}
+      DATABASE_URL: postgres://friendflix:${POSTGRES_PASSWORD}@postgres:5432/friendflix
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      APP_ENC_KEY: ${APP_ENC_KEY:-}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      ADMIN_GROUP: ${ADMIN_GROUP:-friendflix-admins}
+      SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-7200}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-28800}
+      OIDC_ISSUER: ${OIDC_ISSUER:?}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      JELLYFIN_URL: ${JELLYFIN_URL:?}
+      JELLYFIN_ADMIN_API_KEY: ${JELLYFIN_ADMIN_API_KEY:-}
+      OIDC_ALLOW_INSECURE: ${OIDC_ALLOW_INSECURE:-false}
+      SEERR_URL: ${SEERR_URL:?}
+      SEERR_API_KEY: ${SEERR_API_KEY:-}
+      NTFY_URL: ${NTFY_URL:-}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      NTFY_BASE_URL: ${NTFY_BASE_URL:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      TZ: ${TZ:-Europe/Vienna}
+      DIGEST_DAY: ${DIGEST_DAY:-0}
+      DIGEST_HOUR: ${DIGEST_HOUR:-18}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      AUTHENTIK_URL: ${AUTHENTIK_URL:-}
+      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-}
+      AUTHENTIK_ENROLL_FLOW: ${AUTHENTIK_ENROLL_FLOW:-}
+      UPDATE_REPO: ${UPDATE_REPO:-LetsManu/friendflix}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      PORTAINER_WEBHOOK_URL: ${PORTAINER_WEBHOOK_URL:-}
+      PORTAINER_URL: ${PORTAINER_URL:-}
+      PORTAINER_API_KEY: ${PORTAINER_API_KEY:-}
+      PORTAINER_STACK_ID: ${PORTAINER_STACK_ID:-}
+      PORTAINER_ENDPOINT_ID: ${PORTAINER_ENDPOINT_ID:-1}
+      PLAYBACK_CHECK_HOUR: ${PLAYBACK_CHECK_HOUR:-4}
+      PREVIEW_WARM: ${PREVIEW_WARM:-true}
+      # download preparation + cleanup, audio/subtitle language index, Jellyfin session polling; false only for extra replicas
+      BACKGROUND_JOBS: ${BACKGROUND_JOBS:-true}
+      # gzip/brotli for JSON API responses >= 1 KB; false when the reverse proxy already compresses
+      API_COMPRESSION: ${API_COMPRESSION:-true}
+      CAST_ENABLED: ${CAST_ENABLED:-true}
+      DOWNLOADS_ENABLED: ${DOWNLOADS_ENABLED:-true}
+      DIRECT_PLAY_REQUIRES_DOWNLOAD: ${DIRECT_PLAY_REQUIRES_DOWNLOAD:-false}
+      DOWNLOAD_DIR: /data/downloads
+      DOWNLOAD_CACHE_MAX_GB: ${DOWNLOAD_CACHE_MAX_GB:-50}
+      DOWNLOAD_PREP_CONCURRENCY: ${DOWNLOAD_PREP_CONCURRENCY:-1}
+      DOWNLOAD_CREATE_PER_HOUR: ${DOWNLOAD_CREATE_PER_HOUR:-20}
+      DOWNLOAD_MIN_FREE_GB: ${DOWNLOAD_MIN_FREE_GB:-2}
+      DOWNLOAD_PAUSE_STREAMS: ${DOWNLOAD_PAUSE_STREAMS:-2}
+      DOWNLOAD_FILE_TTL_HOURS: ${DOWNLOAD_FILE_TTL_HOURS:-48}
+      DOWNLOAD_OFFLINE_GRACE_DAYS: ${DOWNLOAD_OFFLINE_GRACE_DAYS:-7}
+    # root fs is read-only. PREVIEWS_PATH / DOWNLOADS_PATH: named volume by default, or a host folder
+    # (e.g. /mnt/data/friendflix/downloads, must be writable by uid 1000) - see docs/downloads.md "Speicherort"
+    volumes:
+      - ${PREVIEWS_PATH:-previews}:/data/previews # cached hover/billboard clips
+      - ${DOWNLOADS_PATH:-downloads}:/data/downloads # prepared offline-download MP4s (rw here, ro in the gateway)
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports: ["${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-3081}:3000"]
+    networks: [front, db, media, egress] # egress: OIDC discovery + ntfy/Discord
+
+  gateway:
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-gateway:${FF_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      JELLYFIN_URL: ${JELLYFIN_URL:?}
+      BACKEND_URL: http://backend:3000
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      DOWNLOAD_DIR: /data/downloads
+    volumes: ["${DOWNLOADS_PATH:-downloads}:/data/downloads:ro"] # same folder as the backend, read-only
+    depends_on: [backend]
+    ports: ["${BIND_ADDR:-127.0.0.1}:${GATEWAY_PORT:-3082}:4000"]
+    networks: [front, media]
+
+  web:
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-web:${FF_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      ORIGIN: ${PUBLIC_URL:?}
+    ports: ["${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-3080}:3000"]
+    networks: [front]
+
+  # Nightly pg_dump sidecar (opt-in): `docker compose --profile backup up -d backup`  (docs/operations.md "Backups & Wiederherstellung")
+  # Host dir must be writable by uid 70:  mkdir -p backups && chown 70 backups
+  # Runs daily at BACKUP_HOUR (container TZ), dumps to a temp file, verifies with `pg_restore --list`, then renames and prunes.
+  backup:
+    profiles: [backup]
+    image: postgres:17-alpine # keep the same major version as `postgres`
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    user: "70:70"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
+      # alternative to PGPASSWORD: path of a mounted password file (e.g. a Docker secret)
+      PGPASSWORD_FILE: ${BACKUP_PGPASSWORD_FILE:-}
+      TZ: ${TZ:-Europe/Vienna}
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-${KEEP_DAYS:-14}}
+      BACKUP_RUN_ON_START: ${BACKUP_RUN_ON_START:-false}
+    volumes: ["${BACKUP_PATH:-./backups}:/backups"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        umask 077
+        S=/tmp/backup.status
+        log() { echo "$$(date '+%Y-%m-%d %H:%M:%S') backup: $$*"; }
+        [ -n "$${PGPASSWORD_FILE:-}" ] && [ -r "$$PGPASSWORD_FILE" ] && PGPASSWORD=$$(cat "$$PGPASSWORD_FILE") && export PGPASSWORD
+        run() {
+          f=/backups/friendflix-$$(date +%Y%m%d-%H%M).dump
+          if pg_dump -h postgres -U friendflix -Fc -f "$$f.tmp" friendflix && [ -s "$$f.tmp" ] \
+             && pg_restore --list "$$f.tmp" > /dev/null && mv "$$f.tmp" "$$f"; then
+            find /backups -maxdepth 1 -name 'friendflix-*.dump' -mtime +"$$BACKUP_KEEP_DAYS" -delete
+            log "OK $$f ($$(wc -c < "$$f") bytes), kept $$(ls /backups/friendflix-*.dump | wc -l) dumps, retention $${BACKUP_KEEP_DAYS}d"
+            echo OK > $$S
+          else
+            rc=$$?
+            rm -f "$$f.tmp"
+            log "FAIL exit=$$rc ($$f)"
+            echo FAIL > $$S
+          fi
+        }
+        [ "$$BACKUP_RUN_ON_START" = true ] && run
+        while true; do
+          h=$$(date +%H); m=$$(date +%M); s=$$(date +%S)
+          wait=$$(( ($${BACKUP_HOUR} - $${h#0}) * 3600 - $${m#0} * 60 - $${s#0} ))
+          [ $$wait -le 0 ] && wait=$$(( wait + 86400 ))
+          log "next run in $${wait}s (daily at $${BACKUP_HOUR}:00 $${TZ})"
+          sleep $$wait
+          run
+        done
+    healthcheck:
+      # unhealthy when the last run failed (no status file yet = fine, the first run is up to 24 h away)
+      test: ["CMD-SHELL", "! grep -q FAIL /tmp/backup.status 2>/dev/null"]
+      interval: 5m
+      timeout: 5s
+      retries: 1
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [db]
+
+  # Optional bundled media services. Remove this profile if you already run them;
+  # then attach your existing containers to the `friendflix_media` network instead.
+  jellyfin:
+    profiles: [bundled]
+    image: jellyfin/jellyfin:latest
+    restart: unless-stopped
+    volumes:
+      - jellyfin-config:/config
+      - jellyfin-cache:/cache
+      - ${MEDIA_PATH:-./media}:/media:ro
+    networks: [media, egress] # no ports, no NPM host (Plan B: see compose.planb.yaml)
+
+  seerr:
+    profiles: [bundled]
+    image: ghcr.io/seerr-team/seerr:latest
+    restart: unless-stopped
+    volumes: [seerr-config:/app/config]
+    networks: [media, egress]
+
+volumes:
+  pgdata:
+  previews:
+  downloads:
+  jellyfin-config:
+  jellyfin-cache:
+  seerr-config:

@@ -1,0 +1,60 @@
+# Authentik (SSO/OIDC for FriendFlix) as its own stack. Redis is gone since 2025.10: PostgreSQL does caching and tasks.
+# Required variables: AUTHENTIK_PG_PASSWORD (openssl rand -hex 24) and AUTHENTIK_SECRET_KEY (openssl rand -hex 40).
+# Optional: AUTHENTIK_TAG (pinned release, compare https://docs.goauthentik.io/ ), AUTHENTIK_PORT (default 9000; use 9100 if Portainer uses 9000),
+#           BIND_ADDR (default 127.0.0.1; NPM reaches Authentik there - NPM in a container: use the Docker host IP).
+# First start runs the migrations (a few minutes on a NAS). Then open /if/flow/initial-setup/ to create the admin account.
+name: friendflix-authentik
+
+networks:
+  front: {}                    # normal bridge: Docker can only publish ports for non-internal networks
+  ak-db: { internal: true }    # database is not reachable from outside
+  egress: {}                   # outbound only (e-mail, update checks)
+
+x-ak: &ak
+  image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG:-2026.8.3}
+  restart: unless-stopped
+  environment:
+    AUTHENTIK_POSTGRESQL__HOST: ak-postgres
+    AUTHENTIK_POSTGRESQL__USER: authentik
+    AUTHENTIK_POSTGRESQL__NAME: authentik
+    AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_PG_PASSWORD:?set AUTHENTIK_PG_PASSWORD}
+    AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?set AUTHENTIK_SECRET_KEY}
+    AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+  depends_on:
+    ak-postgres: { condition: service_healthy }
+
+services:
+  ak-postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+      POSTGRES_PASSWORD: ${AUTHENTIK_PG_PASSWORD:?set AUTHENTIK_PG_PASSWORD}
+    volumes: [ak-pg:/var/lib/postgresql/data]
+    networks: [ak-db]
+    healthcheck:   # generous: the first initialisation is slow on NAS disks
+      test: ["CMD-SHELL", "pg_isready -U authentik -d authentik"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  ak-server:
+    <<: *ak
+    command: server
+    ports: ["${BIND_ADDR:-127.0.0.1}:${AUTHENTIK_PORT:-9000}:9000"]
+    volumes: [ak-media:/media, ak-templates:/templates]
+    networks: [front, ak-db, egress]
+
+  ak-worker:
+    <<: *ak
+    command: worker
+    volumes: [ak-media:/media, ak-templates:/templates, ak-certs:/certs]
+    networks: [ak-db, egress]
+
+volumes:
+  ak-pg:
+  ak-media:
+  ak-templates:
+  ak-certs:

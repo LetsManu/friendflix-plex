@@ -1,0 +1,8 @@
+# Plan B only (docs/operations.md): lets NPM serve /media/ itself, so Jellyfin must be reachable from the host.
+# It is published on loopback ONLY. Never use 0.0.0.0 here, and keep the host firewall closed for 8096.
+#   docker compose -f compose.yaml -f compose.planb.yaml --profile bundled up -d
+# (If Jellyfin runs outside this stack, just make sure it listens on 127.0.0.1:8096 for NPM and is firewalled.)
+services:
+  jellyfin:
+    ports: ["127.0.0.1:${JELLYFIN_LOCAL_PORT:-8096}:8096"]
+    networks: [media, front, egress]

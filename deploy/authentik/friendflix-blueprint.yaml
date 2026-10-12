@@ -1,0 +1,181 @@
+# FriendFlix – Authentik setup for portal invitations with account creation.
+#
+# Import (Authentik admin UI): Flows and Stages → Flows → Import → "File upload" → this file → Import.
+# Re-importing is safe (entries are matched by their identifiers and updated, not duplicated).
+#
+# Creates:
+#   - service account "friendflix-invites" with exactly the global permissions the portal needs
+#     (look up the enrollment flow, create/view/delete invitations)
+#   - non-expiring API token "friendflix-invites-token" for it (copy the key in
+#     Directory → Tokens and App passwords → copy icon) → AUTHENTIK_API_TOKEN
+#   - enrollment flow "friendflix-enrollment" (→ AUTHENTIK_ENROLL_FLOW):
+#       invitation (required) → username/password → name/email → create user → MFA setup → login
+#     No redirect stage: after the last stage Authentik follows the portal's `next` back to the portal.
+version: 1
+metadata:
+  name: FriendFlix - invitations and enrollment
+  labels:
+    blueprints.goauthentik.io/description: "Service account, API token and invitation-only enrollment flow for the FriendFlix portal"
+entries:
+  # ---- service account + token ----
+  - model: authentik_core.user
+    id: ff-service-user
+    identifiers:
+      username: friendflix-invites
+    attrs:
+      name: FriendFlix (invitations)
+      type: service_account
+      path: goauthentik.io/service-accounts
+      is_active: true
+      permissions:
+        - authentik_flows.view_flow
+        - authentik_stages_invitation.add_invitation
+        - authentik_stages_invitation.view_invitation
+        - authentik_stages_invitation.delete_invitation
+
+  - model: authentik_core.token
+    identifiers:
+      identifier: friendflix-invites-token
+    attrs:
+      user: !KeyOf ff-service-user
+      intent: api
+      expiring: false
+      description: FriendFlix portal (AUTHENTIK_API_TOKEN)
+
+  # ---- enrollment flow ----
+  - model: authentik_flows.flow
+    id: ff-flow
+    identifiers:
+      slug: friendflix-enrollment
+    attrs:
+      name: FriendFlix Registrierung
+      title: Willkommen bei FriendFlix
+      designation: enrollment
+      authentication: require_unauthenticated
+
+  - model: authentik_stages_invitation.invitationstage
+    id: ff-invitation
+    identifiers:
+      name: friendflix-invitation
+    attrs:
+      continue_flow_without_invitation: false
+
+  - model: authentik_stages_prompt.prompt
+    id: ff-field-username
+    identifiers:
+      name: friendflix-field-username
+    attrs:
+      field_key: username
+      label: Benutzername
+      type: username
+      required: true
+      placeholder: Benutzername
+      placeholder_expression: false
+      order: 0
+  - model: authentik_stages_prompt.prompt
+    id: ff-field-password
+    identifiers:
+      name: friendflix-field-password
+    attrs:
+      field_key: password
+      label: Passwort
+      type: password
+      required: true
+      placeholder: Passwort
+      placeholder_expression: false
+      order: 1
+  - model: authentik_stages_prompt.prompt
+    id: ff-field-password-repeat
+    identifiers:
+      name: friendflix-field-password-repeat
+    attrs:
+      field_key: password_repeat
+      label: Passwort (wiederholen)
+      type: password
+      required: true
+      placeholder: Passwort (wiederholen)
+      placeholder_expression: false
+      order: 2
+  - model: authentik_stages_prompt.prompt
+    id: ff-field-name
+    identifiers:
+      name: friendflix-field-name
+    attrs:
+      field_key: name
+      label: Name
+      type: text
+      required: true
+      placeholder: Name
+      placeholder_expression: false
+      order: 0
+  - model: authentik_stages_prompt.prompt
+    id: ff-field-email
+    identifiers:
+      name: friendflix-field-email
+    attrs:
+      field_key: email
+      label: E-Mail
+      type: email
+      required: true
+      placeholder: E-Mail
+      placeholder_expression: false
+      order: 1
+
+  - model: authentik_stages_prompt.promptstage
+    id: ff-prompt-credentials
+    identifiers:
+      name: friendflix-prompt-credentials
+    attrs:
+      fields:
+        - !KeyOf ff-field-username
+        - !KeyOf ff-field-password
+        - !KeyOf ff-field-password-repeat
+  - model: authentik_stages_prompt.promptstage
+    id: ff-prompt-details
+    identifiers:
+      name: friendflix-prompt-details
+    attrs:
+      fields:
+        - !KeyOf ff-field-name
+        - !KeyOf ff-field-email
+
+  - model: authentik_stages_user_write.userwritestage
+    id: ff-user-write
+    identifiers:
+      name: friendflix-user-write
+    attrs:
+      user_creation_mode: always_create
+      user_type: internal
+      create_users_as_inactive: false
+      user_path_template: users/friendflix
+
+  # MFA is mandatory: users without an authenticator must set up TOTP or WebAuthn right here
+  - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
+    id: ff-mfa
+    identifiers:
+      name: friendflix-mfa
+    attrs:
+      device_classes: [totp, webauthn]
+      not_configured_action: configure
+      configuration_stages:
+        - !Find [authentik_stages_authenticator_totp.authenticatortotpstage, [name, default-authenticator-totp-setup]]
+        - !Find [authentik_stages_authenticator_webauthn.authenticatorwebauthnstage, [name, default-authenticator-webauthn-setup]]
+
+  - model: authentik_stages_user_login.userloginstage
+    id: ff-login
+    identifiers:
+      name: friendflix-user-login
+
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf ff-flow, stage: !KeyOf ff-invitation, order: 10 }
+    attrs: { evaluate_on_plan: true, re_evaluate_policies: true }
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf ff-flow, stage: !KeyOf ff-prompt-credentials, order: 20 }
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf ff-flow, stage: !KeyOf ff-prompt-details, order: 30 }
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf ff-flow, stage: !KeyOf ff-user-write, order: 40 }
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf ff-flow, stage: !KeyOf ff-mfa, order: 50 }
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf ff-flow, stage: !KeyOf ff-login, order: 100 }

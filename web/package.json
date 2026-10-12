@@ -1,0 +1,33 @@
+{
+  "name": "@friendflix/web",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#lib/i18n": "./src/lib/i18n/index.ts",
+    "#lib/*.svelte": "./src/lib/*.svelte",
+    "#lib/*": "./src/lib/*.ts"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "start": "node build",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error && svelte-check --tsconfig ./src/service-worker/tsconfig.json --threshold error",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "hls.js": "^1.5.18",
+    "qrcode-generator": "^2.0.4"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-node": "^6.0.0",
+    "@sveltejs/kit": "^3.0.1",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  }
+}
