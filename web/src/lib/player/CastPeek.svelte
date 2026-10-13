@@ -29,7 +29,7 @@
 </aside>
 
 <style>
-  .peek { position: absolute; z-index: 7; right: calc(clamp(.6rem, 2.4vw, 2.4rem) + var(--inset, 0px)); top: 4.8rem; width: min(280px, calc(100% - 1.2rem)); padding: .6rem .7rem .5rem;
+  .peek { position: absolute; z-index: 7; right: calc(max(clamp(.6rem, 2.4vw, 2.4rem), var(--safe-right)) + var(--inset, 0px)); top: calc(4.8rem + var(--safe-top)); width: min(280px, calc(100% - 1.2rem)); padding: .6rem .7rem .5rem;
     background: rgba(10,10,10,.78); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; backdrop-filter: blur(6px); pointer-events: none; animation: pkIn .22s ease-out; }
   @keyframes pkIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .peek { animation: none; } }
@@ -43,5 +43,5 @@
   .k { color: #cfcfcf; font-weight: 400; }
   p { margin: 0; font-size: .86rem; }
   :global(html.tv) .peek { width: 340px; } :global(html.tv) li { font-size: 1rem; } :global(html.tv) li img { width: 44px; height: 44px; }
-  @media (max-width: 720px) { .peek { top: 4.2rem; right: .5rem; width: min(250px, calc(100% - 1rem)); } }
+  @media (max-width: 720px) { .peek { top: calc(4.2rem + var(--safe-top)); right: max(.5rem, var(--safe-right)); width: min(250px, calc(100% - 1rem)); } }
 </style>

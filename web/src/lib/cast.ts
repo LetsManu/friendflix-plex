@@ -121,13 +121,19 @@ export function castCapableBrowser(): boolean {
   return !document.documentElement.classList.contains('tv');
 }
 
+/** GET /api/cast/config once per page (Chromecast SDK and the AirPlay button share it); a failure is asked again next time. */
+let cfgP: Promise<boolean> | null = null;
+export function castConfigEnabled(): Promise<boolean> {
+  cfgP ??= api<{ enabled: boolean }>('/api/cast/config').then((c) => Boolean(c?.enabled)).catch((e) => { cfgP = null; throw e; });
+  return cfgP;
+}
+
 /** Loads the SDK once if casting makes sense here. Safe to call repeatedly. Never throws. */
 export async function initCast(): Promise<void> {
   if (initStarted || !castCapableBrowser()) return;
   initStarted = true;
   try {
-    const cfg = await api<{ enabled: boolean }>('/api/cast/config');
-    if (!cfg.enabled) return;
+    if (!(await castConfigEnabled())) return;
     window.__onGCastApiAvailable = (ok) => { if (ok) setup(); };
     const s = document.createElement('script');
     s.src = SDK;

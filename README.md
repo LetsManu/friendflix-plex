@@ -118,7 +118,7 @@ An app-like layout with a bottom tab bar, a preview sheet when you tap a poster,
   </tr>
 </table>
 
-**On the big screen:** TV mode for smart-TV browsers, sticks and consoles – big type, arrow-key navigation, pairing with a code or QR code, and your **phone as the remote**. Chromecast from Chrome, Edge and Android.
+**On the big screen:** TV mode for smart-TV browsers, sticks and consoles – big type, arrow-key navigation, pairing with a code or QR code, and your **phone as the remote**. Chromecast from Chrome, Edge and Android; **AirPlay** from Safari on iPhone, iPad and Mac to Apple TV and AirPlay 2 TVs (e.g. LG webOS 2019+).
 
 **Downloads for the train and the plane:** download movies and episodes (or the next few episodes of a show in one go) and watch them offline in the browser. Progress syncs back the next time you are online. Per-device licences with expiry; works in Chrome, Edge, Firefox, Safari 17+ and as a home-screen app on iOS 17+.
 
@@ -263,7 +263,7 @@ Template: [.env.example](.env.example). Every variable can also be read from a f
 | `NTFY_URL`, `NTFY_BASE_URL`, `DISCORD_WEBHOOK_URL` | empty | Shared ntfy/Discord channel; ntfy server for personal topics |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | empty, empty, `PUBLIC_URL` | Web push; active only when both keys are set |
 | `DIGEST_DAY`, `DIGEST_HOUR` | `0` (Sunday), `18` | Weekly digest schedule; `-1` = off; can be changed in the admin area |
-| `CAST_ENABLED` | `true` | Chromecast (needs an https `PUBLIC_URL`); `false` with Plan B |
+| `CAST_ENABLED` | `true` | Chromecast and AirPlay (needs an https `PUBLIC_URL`); `false` with Plan B |
 | `DOWNLOADS_ENABLED` | `true` | Offline downloads; `false` with Plan B |
 | `DOWNLOADS_PATH`, `PREVIEWS_PATH` | named volumes `downloads`, `previews` | Host folder (absolute path, writable by uid 1000) for prepared downloads and preview clips |
 | `DOWNLOAD_CACHE_MAX_GB`, `DOWNLOAD_MIN_FREE_GB` | `50`, `2` | Size cap for prepared downloads; minimum free space to keep |
@@ -346,10 +346,14 @@ flowchart TB
 ### Operations
 
 - **Backups:** the opt-in `backup` sidecar runs `pg_dump` daily at `BACKUP_HOUR`, verifies each dump with `pg_restore --list`, keeps `BACKUP_KEEP_DAYS` days and turns `unhealthy` if a run fails. Restore steps and a monthly restore test (`scripts/restore-test.sh`) are in [docs/operations.md](docs/operations.md). Keep `APP_ENC_KEY` in a password manager, separate from the dumps.
-- **Updates:** *Admin → Update* shows the installed and latest version with the change list and redeploys the stack through Portainer (webhook or API). Manually: `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`. Database migrations run on start.
+- **Updates:** *Admin → Update* shows the installed version and the newest release with its notes (plus the commits on main) and redeploys the stack through Portainer (webhook or API). Manually: `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`. Database migrations run on start.
 - **Monitoring:** `/health` (liveness) and `/health/ready` (Redis, Postgres, media server) on `127.0.0.1:3081`; Prometheus metrics on `:3081/metrics` and `:3082/metrics` (Bearer `METRICS_TOKEN`). Icinga and Prometheus examples and an optional Prometheus + Grafana stack with a provisioned dashboard (`compose.monitoring.yaml`, internal network, no default password): [docs/monitoring.md](docs/monitoring.md).
 - **Supply chain:** images are scanned (Trivy), signed with cosign (keyless) and published with SBOM and provenance attestations; verify them before you deploy – [docs/operations.md](docs/operations.md).
 - **Performance:** every API response carries a `Server-Timing` header (`jf` = media server, `db` = Postgres, `kv` = Redis, `app` = total), the gateway adds `authz` and `upstream`; see them in the browser DevTools under *Network → Timing*. Requests ≥ 500 ms are logged as `slow request`. Browser errors are reported to the backend log and counted in `friendflix_client_errors_total`.
+
+### Versions & releases
+
+FriendFlix uses [SemVer](https://semver.org) (`version.json`, shown in the desktop footer and under *Admin → Update*). Every major version gets a codename: the next cinema snack from A to Z (1 = Arancini, 2 = Brezel, …; list in `codenames.json`). Releases are cut with the manual **Release** workflow (patch / minor / major): it bumps the version (`none` for the very first release publishes 1.0.0 as it is), moves the *Unreleased* part of [CHANGELOG.md](CHANGELOG.md) under the new version, tags `vX.Y.Z` and creates the GitHub Release. The workflow pushes with the optional `RELEASE_TOKEN` secret (a fine-grained token that is the only bypass actor of the main/tag rulesets; without it, main must accept direct pushes from GitHub Actions). Images are then published as `X.Y.Z`, `X.Y`, `X` and, for the highest version only, `latest`; set `FF_TAG=1` to stay on major version 1 and still get its minor and patch releases. Details: [docs/operations.md](docs/operations.md#release-erstellen).
 
 ### Development
 
@@ -383,7 +387,7 @@ npm run e2e                                     # Playwright: builds the web app
 | Monitoring, metrics, Grafana dashboard, Server-Timing, browser errors | [docs/monitoring.md](docs/monitoring.md) |
 | Offline downloads (platforms, storage, limits) | [docs/downloads.md](docs/downloads.md) |
 | TV mode and phone remote | [docs/tv-mode.md](docs/tv-mode.md) |
-| Chromecast | [docs/cast.md](docs/cast.md) |
+| Chromecast and AirPlay | [docs/cast.md](docs/cast.md) |
 | Search and discovery API, labels, leaving soon, quality, kids rules | [docs/discovery.md](docs/discovery.md) |
 | Themed lists, calm mode, sound in the player, phone shortcuts and badge | [docs/personal.md](docs/personal.md) |
 | UI kit and admin shell | [docs/ui-kit.md](docs/ui-kit.md) |
@@ -404,9 +408,15 @@ npm run e2e                                     # Playwright: builds the web app
 - Hardware transcoding in Plex is controlled by Plex (according to Plex it needs Plex Pass); FriendFlix does not change that.
 - Kids profiles are a parental guard, not a lock against someone who knows the account login. The owner PIN is reset with "Forgot PIN?" (`/auth/login?resetPin=1`): it needs a fresh sign-in at Authentik (checked via the token's `auth_time`) and is refused on any device that is tied to a kids profile – the owner resets it from their own device. Keep the Authentik login (and its second factor) away from the kids. If no PIN is set at all, leaving a kids profile is allowed and the owner sees a hint to set one.
 
+### Contributing
+
+Contributions are welcome – see [CONTRIBUTING.md](CONTRIBUTING.md) for the requirements (code standard, tests, all 7 languages) and [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+
 ### License
 
-Copyright © 2026 Manuel Weißböck. All rights reserved – see [LICENSE](LICENSE).
+Copyright © 2026 Manuel Weißböck.
+
+FriendFlix is free software: you can redistribute it and/or modify it under the terms of the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later) – see [LICENSE](LICENSE). If you run a modified version as a service for other people, you must offer them its source code. FriendFlix comes with no warranty.
 
 ### Trademarks
 

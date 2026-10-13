@@ -18,7 +18,15 @@ import type { JfUser, ProfileRow, UserRow } from './types.js';
  * - A second, image-only token (kind 'img') carries the poster URL: the poster is fetched by the receiver and may be
  *   shown/logged elsewhere, so it must not carry the media token.
  * - It must never be logged, put into metrics labels or error messages, or forwarded to Jellyfin.
+ * - AirPlay (Safari "video URL" mode, `via: 'airplay'`) uses the same tokens: the TV fetches the stream without the user's cookies.
+ *   Its pin admits TWO client addresses (castpin: + castpin2:): the player puts the token URL on the phone's <video> BEFORE the
+ *   AirPlay picker opens (the TV must never get a cookie URL it cannot load), so the phone pins the first address, and the TV,
+ *   once the user picked it, the second (on a home network they reach the server from different addresses). The second address
+ *   can only be taken within AIRPLAY_PIN2_WINDOW_MS of the token's creation; after that the token is locked to what it has.
  */
+export type CastVia = 'chromecast' | 'airplay';
+/** an AirPlay token's second pin can only be taken this soon after creation (the phone pins slot 1 when it loads the token stream, the TV slot 2 once the user picked it; the picker may take a while) */
+export const AIRPLAY_PIN2_WINDOW_MS = 120_000;
 export const CAST_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 export const MAX_CAST_TOKENS = 2;
 /** the Default Media Receiver decodes H.264 up to level 4.1 */
@@ -43,6 +51,8 @@ export interface CastRecord {
   kind?: 'media' | 'img';
   /** display title for the live record while no sender reports */
   title?: string;
+  /** which sender protocol asked for the token (audit; AirPlay gets a two-address pin). Default 'chromecast'. */
+  via?: CastVia;
   /** epoch ms, absolute cap */
   exp: number;
   createdAt: number;
@@ -63,6 +73,7 @@ export interface CastAuth {
 export const hashToken = (ct: string) => createHash('sha256').update(ct).digest('hex');
 const dataKey = (hash: string) => `cast:${hash}`;
 const pinKey = (hash: string) => `castpin:${hash}`;
+const pin2Key = (hash: string) => `castpin2:${hash}`;
 const idxKey = (userId: string, castId: string) => `castidx:${userId}:${castId}`;
 /** public, non-secret handle of a token (cannot be turned back into the token) */
 const castIdOf = (hash: string) => hash.slice(0, 32);
@@ -86,6 +97,7 @@ async function dropByHash(ctx: Ctx, userId: string, hash: string, imgHash?: stri
   for (const h of imgHash ? [hash, imgHash] : [hash]) {
     await ctx.kv.del(dataKey(h));
     await ctx.kv.del(pinKey(h));
+    await ctx.kv.del(pin2Key(h));
     await ctx.kv.del(idxKey(userId, castIdOf(h)));
   }
 }
@@ -185,7 +197,7 @@ export async function resolveCast(ctx: Ctx, ct: string, client: string): Promise
   const rec = raw ? (JSON.parse(raw) as CastRecord) : null;
   if (rec && rec.exp > Date.now()) {
     const owner = await liveOwner(ctx, rec);
-    if (owner && (await pinned(ctx, hash, client, rec.exp))) {
+    if (owner && (await pinned(ctx, hash, client, rec.exp, rec.via === 'airplay' && Date.now() - rec.createdAt <= AIRPLAY_PIN2_WINDOW_MS ? 2 : 1, rec.via === 'airplay'))) {
       const { user, role, prof } = owner;
       const jfUser = jfUserFor(user, prof);
       v = {
@@ -250,9 +262,17 @@ export async function resolveCastSubtitle(ctx: Ctx, r: CastSubtitleRef, sig: str
   return owner ? jfUserFor(owner.user, owner.prof) : null;
 }
 
-/** First successful client wins the pin (SET NX, lives as long as the token can); everyone else must match it. */
-async function pinned(ctx: Ctx, hash: string, client: string, exp: number): Promise<boolean> {
+/**
+ * First successful client wins the pin (SET NX, lives as long as the token can); everyone else must match it.
+ * `slots` = 2 (AirPlay, early): the second distinct client takes a second pin the same way; a third one is refused.
+ * `twoPins` (AirPlay, later): no new pin is taken any more, but an address pinned in either slot keeps working.
+ */
+async function pinned(ctx: Ctx, hash: string, client: string, exp: number, slots: 1 | 2 = 1, twoPins = false): Promise<boolean> {
   const ttl = Math.max(1, Math.ceil((exp - Date.now()) / 1000));
-  if (await ctx.kv.setnx(pinKey(hash), client, ttl)) return true;
-  return (await ctx.kv.get(pinKey(hash))) === client;
+  const keys = twoPins ? [pinKey(hash), pin2Key(hash)] : [pinKey(hash)];
+  for (const [i, key] of keys.entries()) {
+    if (i < slots && (await ctx.kv.setnx(key, client, ttl))) return true;
+    if ((await ctx.kv.get(key)) === client) return true;
+  }
+  return false;
 }

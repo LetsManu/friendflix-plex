@@ -17,6 +17,7 @@
   import { WheelAccumulator } from '#lib/player/wheel';
   import { parseVolume, stepVolume } from '#lib/player/volume';
   import { hlsConfig, loadHls } from '#lib/player/hls';
+  import { airPlaySupported, createAirPlay, type AirPlayController, type AirPlayState } from '#lib/player/airplay';
   import { AbrController, LADDER, autoBps, isOriginalBps, rungKey, type Decision } from '#lib/player/abr';
   import { BandwidthEstimator, loadStoredEstimate, storeEstimate } from '#lib/player/bandwidth';
   import QualityChip from '#lib/player/QualityChip.svelte';
@@ -32,7 +33,7 @@
   import { AudioFxEngine, fxActive, fxBlocked, fxFromPref, fxToPref, loadFx, saveFx, type AudioFx } from '#lib/player/audiofx';
   import { fmtDuration, getLocale, t, tr, type TFn, type TKey } from '#lib/i18n';
   import { animeAudio, animeDefaultApplies, animeSubtitle } from '#lib/player/anime';
-  import { castPause, castPlay, castPlayPause, castSeek, castSetSubtitle, castSetVolume, castState, castStop, castToggleMute, initCast, loadOnCast, onCastEvent, requestCastSession, type CastInfo, type CastState } from '#lib/cast';
+  import { castConfigEnabled, castPause, castPlay, castPlayPause, castSeek, castSetSubtitle, castSetVolume, castState, castStop, castToggleMute, initCast, loadOnCast, onCastEvent, requestCastSession, type CastInfo, type CastState } from '#lib/cast';
 
   export let itemId: string;
   /** shown on the phone's remote while this plays */
@@ -81,6 +82,10 @@
 
   // ---- Chromecast: while casting the local <video> stays paused and every control drives the receiver ----
   let casting = false, castBusy = false, castInfo: CastInfo | null = null, castPos = 0, castPaused: boolean | null = null, castOff: (() => void) | null = null;
+  // ---- AirPlay (Safari): the <video> itself plays on the receiver, from a cast token URL (lib/player/airplay.ts) ----
+  let air: AirPlayController | null = null, airState: AirPlayState = { available: false, active: false, busy: false, ready: false, error: false }, airInfo: CastInfo | null = null, airProbe: HTMLVideoElement | null = null;
+  $: airOn = airState.active;
+  let destroyed = false;
 
   // ---- UI state ----
   let paused = true, current = 0, duration = 0, buffered = 0, volume = 1, muted = false, rate = 1, waiting = true, fullscreen = false;
@@ -118,6 +123,15 @@
   $: chipDirect = mode === 'direct';
   // ---- touch gestures ----
   let locked = false, lockHint = false, lockT: ReturnType<typeof setTimeout>, lockHold = false, coarse = false, volOk = true, brightness = 1;
+  /**
+   * Phone layout (touch, not the TV): top bar with title + quality chip, play / ±10 in the centre, one bottom bar
+   * (time · seek bar · time, then a row of icons), everything inside the safe areas (--safe-* tokens). Desktop and TV keep their bar.
+   */
+  let phone = false, ctlH = 0;
+  $: ccOn = phone && showUi && !locked && !error && !reconnecting && !(posterOn && !posterOut);
+  $: phoneChip = phone && Boolean(info && mode && !casting);
+  /** height of the bottom bar: panels, the skip button and the page's cards sit above it (phones only; elsewhere the old fixed offsets apply) */
+  $: barVar = phone && ctlH ? `;--bar-h:${ctlH}px` : '';
   let hud: { icon: string; text: string; pct: number } | null = null, hudT: ReturnType<typeof setTimeout>;
   let ripple: { zone: Zone; total: number; n: number } | null = null, rippleT: ReturnType<typeof setTimeout>;
   let help = false, live = '', liveN = 0;
@@ -136,6 +150,8 @@
 
   const body = () => casting && castInfo
     ? { itemId, playSessionId: castInfo.playSessionId, mediaSourceId: castInfo.mediaSourceId, positionTicks: secToTicks(castPos), isPaused: $castState.paused, audioIndex, playMethod: 'Transcode' }
+    : airInfo
+    ? { itemId, playSessionId: airInfo.playSessionId, mediaSourceId: airInfo.mediaSourceId, positionTicks: secToTicks(video?.currentTime ?? 0), isPaused: video?.paused ?? false, audioIndex, playMethod: 'Transcode' }
     : {
       itemId, playSessionId: info!.playSessionId, mediaSourceId: info!.mediaSourceId,
       positionTicks: secToTicks(video?.currentTime ?? 0), isPaused: video?.paused ?? false, audioIndex, playMethod: mode === 'direct' ? 'DirectPlay' : 'Transcode',
@@ -219,7 +235,7 @@
 
   let attachSeq = 0;
   async function attach(startSec: number) {
-    if (!video || !info) return;
+    if (!video || !info || airInfo) return; // AirPlay plays its own token stream
     const my = ++attachSeq, cur = info;
     sessionPlaying = false; resetStall(); // the first buffering of each stream is a start, not a stall
     hls?.destroy(); hls = null;
@@ -249,6 +265,7 @@
       recover('network', true); // hls.js could not be loaded (offline): retry like a network error
       return;
     } else {
+      if (video.disableRemotePlayback) video.disableRemotePlayback = false; // set by an earlier hls.js ManagedMediaSource attach; it would block AirPlay
       video.src = info.hlsUrl; // Safari: native HLS
       video.addEventListener('loadedmetadata', seek, { once: true });
     }
@@ -268,7 +285,7 @@
   const lowerStep = () => lowerQuality(QUALITIES.map(([, b]) => b).filter((b) => b < (info?.roleMaxBitrate ?? Infinity)), quality, info?.maxBitrate ?? 0);
   let retryViaLoad = false;
   function recover(kind: ErrorKind, viaLoad = false) {
-    if (casting) return;
+    if (casting || airOn || airInfo || airState.busy) return;
     retryViaLoad = viaLoad;
     // the first retry already failed: the line is the problem, not a hiccup -> a lower rung (none = cooldown or 360p: the usual retries go on and end in giveUp)
     if (kind === 'network' && !viaLoad && abr && !switching && rec.networkTries >= 1) {
@@ -301,6 +318,8 @@
   function retryManually() { rec = freshRecovery(); reconnecting = 0; error = ''; errNote = ''; waiting = true; wantAutoplay = true; void load(posKnown ? resumePos() : undefined); }
   function leave() { if (history.length > 1) history.back(); else location.href = '/'; }
   function onVideoError() {
+    if (airState.ready && !airOn) { if (video?.error && video.error.code !== 1) air?.videoError(video.error.code, video.error.message); return; } // the phone plays the AirPlay token stream: back to normal
+    if (airOn) { if (video?.error && video.error.code !== 1) air?.videoError(video.error.code, video.error.message); return; } // the TV's token stream failed: Retry, never the cookie URL
     if (hls || casting || !video?.error || !info) return; // hls.js reports its own errors
     const kind = kindOfMediaError(video.error.code);
     if (video.error.code === 1) return; // aborted by us
@@ -309,13 +328,13 @@
   /** waiting -> start timing; playing -> the stall is over. Seeks and the first buffering after a (re)start are no stalls. */
   function onWaiting() {
     waiting = true;
-    if (!video || casting || !started || stopped || !sessionPlaying || video.seeking || waitSince) return;
+    if (!video || casting || airOn || !started || stopped || !sessionPlaying || video.seeking || waitSince) return;
     waitSince = performance.now(); stallHandled = false;
     clearTimeout(stallT); stallT = setTimeout(() => { if (waitSince) { stallHandled = true; onStall(performance.now() - waitSince); } }, STALL_NOW_MS);
   }
   function resetStall() { clearTimeout(stallT); waitSince = 0; stallHandled = false; }
   function onStall(ms: number) {
-    if (!abr || casting || switching || reconnecting || error) return;
+    if (!abr || casting || airOn || airInfo || switching || reconnecting || error) return;
     applyAbr(abr.onStall(ms)); // 'fail' needs nothing here: a stall at the lowest rung just keeps buffering
   }
   function onPlaying() {
@@ -327,7 +346,7 @@
   // ---- Chromecast session lifecycle ----
   const castErr = (e: any) => e?.body?.error === 'max_streams' ? tr('player.error.maxStreams', { n: Number(e.body.max) })
     : e?.body?.error === 'transcoding_disabled' ? tr('player.cast.needsTranscode') : tr('player.cast.failed');
-  const castRequest = (pos: number) => api<CastInfo>('/api/cast/session', { method: 'POST', body: { itemId, startTicks: secToTicks(pos), audioIndex, maxBitrate: quality || undefined } });
+  const castRequest = (pos: number, via?: 'airplay') => api<CastInfo>('/api/cast/session', { method: 'POST', body: { itemId, startTicks: secToTicks(pos), audioIndex, maxBitrate: quality || undefined, via } });
   const castRevoke = (ci: CastInfo | null) => { if (ci) api(`/api/cast/session/${ci.castId}`, { method: 'DELETE' }).catch(() => undefined); };
 
   /** local playback -> receiver: reports the local stop, frees the stream slot, asks for a cast token and loads it */
@@ -387,6 +406,45 @@
     else if (casting && !castBusy) { if (duration > 0 && castPos >= duration - 20) void finishCast(); else void endCast(castPos, tr('player.cast.continuedLocally')); }
   }
   /** mirrors the receiver into the player state and reports start/progress to the server */
+  // ---- AirPlay session lifecycle (the controller tells when Safari's playback target becomes / stops being wireless) ----
+  const airErr = (e: any) => e?.body?.error === 'max_streams' ? tr('player.error.maxStreams', { n: Number(e.body.max) })
+    : e?.body?.error === 'transcoding_disabled' ? tr('player.airplay.needsTranscode') : tr('player.airplay.failed');
+  function startAirPlay(v: HTMLVideoElement) {
+    air = createAirPlay(v, {
+      request: (pos) => castRequest(pos, 'airplay'),
+      revoke: (ci) => castRevoke(ci),
+      async detach() {
+        // before the token stream (tap on the button, or a new token): the TV must never get the MSE / cookie URL
+        attachSeq++; clearTimeout(retryT); reconnecting = 0; error = '';
+        if (started && !stopped) { stopped = true; await send('stop'); } // frees the stream slot (maxStreams) for the token's session
+        hls?.destroy(); hls = null;
+        if (video?.disableRemotePlayback) video.disableRemotePlayback = false; // hls.js sets it for ManagedMediaSource; it would block AirPlay
+        started = false; stopped = false;
+      },
+      started(ci) { airInfo = ci; started = false; stopped = false; mode = 'hls'; },
+      async restore(pos, play, ci) {
+        if (ci && started && !stopped) { stopped = true; await send('stop'); }
+        airInfo = null; started = false; stopped = false;
+        if (destroyed) return;
+        wantAutoplay = play;
+        await load(pos);
+      },
+      fail: (e) => flash(airErr(e), 4000),
+      change: (st) => { airState = st; },
+    }, airProbe);
+  }
+  /** the player's AirPlay button: same gate as Chromecast (/api/cast/config); a hidden non-MSE probe <video> reports receivers */
+  async function initAirPlay() {
+    if (partyMode || !video || !airPlaySupported(video) || !(await castConfigEnabled().catch(() => false)) || destroyed || !video) return;
+    airProbe = document.createElement('video');
+    airProbe.setAttribute('x-webkit-airplay', 'allow');
+    airProbe.setAttribute('playsinline', '');
+    airProbe.muted = true; airProbe.preload = 'none'; airProbe.className = 'airprobe';
+    airProbe.setAttribute('aria-hidden', 'true');
+    stage?.appendChild(airProbe);
+    startAirPlay(video);
+  }
+
   function castTick(s: CastState) {
     waiting = !s.loaded || s.state === 'buffering';
     if (!s.loaded) return;
@@ -403,6 +461,7 @@
     const lang = info?.audioTracks.find((a) => a.index === i)?.language;
     if (lang && lang !== 'und') rememberLang({ audio: lang });
     if (casting) { audioIndex = i; await recast(castPos); return; }
+    if (airInfo) { audioIndex = i; await air?.refresh(); return; } // AirPlay: a new token stream with that track
     const pos = video?.currentTime ?? 0;
     await send('stop');
     audioIndex = i;
@@ -477,6 +536,7 @@
     menu = '';
     if (how === 'manual' && bps === shownQ) return;
     if (casting) { quality = bps; shownQ = bps; await recast(castPos); flash(qualityToast(bps)); return; }
+    if (airInfo) { quality = bps; shownQ = bps; await air?.refresh(); flash(qualityToast(bps)); return; }
     if (switching) { if (how === 'manual') queuedPick = bps; return; } // a pick during a running switch is applied right after it
     switching = true;
     if (how === 'manual') {
@@ -560,7 +620,7 @@
     casting: isCasting, nativeHls: m === 'hls' && !h, src: video.currentSrc || video.src || '', crossOrigin: video.crossOrigin, origin: location.origin,
     hasWebAudio: typeof window !== 'undefined' && ('AudioContext' in window || 'webkitAudioContext' in window),
   }) : 'unsupported';
-  $: fxDisabled = menu === 'tracks' ? (casting ? 'casting' : fxNote === 'unsupported' ? 'unsupported' : fxBlockFor(casting, mode, hls)) : null;
+  $: fxDisabled = menu === 'tracks' ? (casting || airOn ? 'casting' : fxNote === 'unsupported' ? 'unsupported' : fxBlockFor(casting, mode, hls)) : null;
   async function applyFx(quiet = false) {
     if (!video || (!fxActive(fx) && !fxEngine)) return;
     const b = fxBlockFor(casting, mode, hls);
@@ -625,7 +685,7 @@
   // ---- Chromecast entry in the "Mehr" menu (the SDK loads lazily, Chromium only) ----
   function castClick() { menu = ''; if (!$castState.connected) void requestCastSession(); else if (casting) castStop(); else void startCast(); }
   $: castLabel = casting ? $t('player.cast.stopOn', { name: $castState.deviceName || 'Chromecast' }) : $castState.connected ? $t('player.cast.playOn', { name: $castState.deviceName || 'Chromecast' }) : $t('player.cast.castTo');
-  $: modeLabel = casting ? 'Chromecast' : mode === 'direct' ? $t('player.mode.direct') : mode ? $t('player.mode.hls') : '';
+  $: modeLabel = casting ? 'Chromecast' : airOn ? 'AirPlay' : mode === 'direct' ? $t('player.mode.direct') : mode ? $t('player.mode.hls') : '';
   const toggleMenu = (m: typeof menu) => (menu = menu === m ? '' : m);
   /** Large control icons (~40px); smaller on phones */
   let ICON = 36;
@@ -856,14 +916,17 @@
   }
 
   onMount(() => {
-    if (video) volOk = volumeSettable(video); // iOS cannot set the volume: no volume swipe there
+    // iOS / iPadOS ignore a volume set from script (only the hardware buttons change it): no volume swipe and no volume button there
+    if (video) volOk = volumeSettable(video);
     coarse = matchMedia('(pointer: coarse)').matches;
+    phone = coarse && !tvMode();
     const narrow = matchMedia('(max-width: 720px)'), setIcon = () => (ICON = narrow.matches ? 28 : 36);
     setIcon(); narrow.addEventListener?.('change', setIcon);
     try { const v = parseVolume(localStorage.getItem('ff_vol')); if (video && v !== null) { volume = v; video.volume = v; } } catch { /* ignore */ }
     load(startAt);
     castOff = onCastEvent(handleCast);
     if (!partyMode) void initCast();
+    void initAirPlay();
     loadBookmarks();
     if ($serverCaps.chapters) api(`/api/items/${itemId}/chapters`).then((r) => (chapters = r?.supported ? normalizeChapters(r.chapters) : [])).catch(() => undefined);
     if ($serverCaps.segments.length) api(`/api/items/${itemId}/segments`).then((r) => (segments = (r.segments as typeof segments).map((x) => ({ ...x, type: String(x.type).toLowerCase() })).filter((x) => segmentShown($serverCaps, x.type)))).catch(() => undefined);
@@ -872,19 +935,20 @@
     // every 5 s: direct-play bandwidth sample + step-up check; every 30 s the estimate is remembered
     abrTimer = setInterval(() => {
       sampleDirect();
-      if (!abr || casting || switching || !started || stopped || paused || waiting || reconnecting || error) return;
+      if (!abr || casting || airOn || airInfo || switching || !started || stopped || paused || waiting || reconnecting || error) return;
       applyAbr(abr.onTick({ estimate: est.estimate, bufferSec: Math.max(0, buffered - current) }));
     }, 5000);
     bwTimer = setInterval(persistEstimate, 30_000);
     activityTimer = setInterval(() => {
       tick = Date.now();
       if (casting && castInfo && !castBusy && castInfo.expiresAt - tick < 10 * 60_000) void recast(castPos); // renew the token before it expires
+      if (airInfo && !airState.busy && airInfo.expiresAt - tick < 10 * 60_000) void air?.refresh(); // same for AirPlay
       if (sleepAt) {
         if (tick >= sleepAt) { sleepAt = 0; sleepMin = 0; video?.pause(); flash(tr('player.sleep.paused'), 3000); }
         else sleepLeft = fmtClock((sleepAt - tick) / 1000);
       }
     }, 500);
-    const bye = () => { persistEstimate(); if (!stopped) { stopped = true; send('stop', true); } if (casting) { castRevoke(castInfo); castStop(); } };
+    const bye = () => { persistEstimate(); if (!stopped) { stopped = true; send('stop', true); } if (casting) { castRevoke(castInfo); castStop(); } if (airInfo) castRevoke(airInfo); };
     // keep the resume position safe when the tab is hidden / the phone locks (Picture-in-Picture keeps playing: only a progress report, no stop)
     const vis = () => { if (document.visibilityState === 'hidden' && started && !stopped && !casting) send('progress', true); };
     const online = () => { if (reconnecting) retryNow(resumePos()); };
@@ -923,13 +987,14 @@
     if (started && !stopped) { stopped = true; send('stop'); }
     holdPrefetch(Promise.resolve(lastStop)); // no cached info survives the player; the next prefetch waits for this stop (resume position)
     if (casting) { castRevoke(castInfo); castStop(); casting = false; } // leaving the page ends the cast session and revokes its token
+    destroyed = true; air?.destroy(); airInfo = null; airProbe?.remove(); // revokes a live AirPlay token
     castOff?.();
     hls?.destroy();
   });
 </script>
 
 <svelte:window on:keydown={onKey} on:keydown|capture={onBackCapture} />
-<div class="stage {subClasses($prefs.subtitleStyle)}" class:idle={!showUi} class:locked class:pre={posterOn} style="--inset:{inset}px" bind:this={stage} on:mousemove={() => { if (Date.now() - lastTouch > 800) wake(); }} on:click={onSurfaceClick} on:wheel|nonpassive={onWheel} on:keydown={() => {}}
+<div class="stage {subClasses($prefs.subtitleStyle)}" class:idle={!showUi} class:locked class:pre={posterOn} class:phone style="--inset:{inset}px{barVar}" bind:this={stage} on:mousemove={() => { if (Date.now() - lastTouch > 800) wake(); }} on:click={onSurfaceClick} on:wheel|nonpassive={onWheel} on:keydown={() => {}}
   on:pointerdown={gDown} on:pointermove={gMove} on:pointerup={gUp} on:pointercancel={gCancel} role="presentation">
   <!-- svelte-ignore a11y_media_has_caption -->
   <video bind:this={video} playsinline crossorigin="use-credentials" style:filter={brightness < 1 ? `brightness(${brightness})` : null}
@@ -962,12 +1027,30 @@
     </div>
   {:else if reconnecting}
     <div class="center" role="status"><div class="reco ui"><div class="spin sm"></div><span>{$t('player.reconnecting')}</span><small>{$t('player.attempt', { n: reconnecting, max: MAX_NETWORK_TRIES })}</small></div></div>
-  {:else if spin && waiting && !casting && !posterOn}<div class="center" role="status" aria-label={$t('player.loading')}><div class="spin"></div></div>
-  {:else if posterOn && !posterOut && !casting}<div class="sr" role="status">{$t('player.loading')}</div>{/if}
+  {:else if spin && waiting && !casting && !posterOn && !ccOn}<div class="center" role="status" aria-label={$t('player.loading')}><div class="spin"></div></div>
+  {:else if (posterOn && !posterOut && !casting) || (spin && waiting && !casting && !posterOn)}<div class="sr" role="status">{$t('player.loading')}</div>{/if}
   {#if casting}
     <div class="center castov" role="status"><div class="castbox"><Icon name="cast" size={56} /><b>{$t('player.cast.playingOn', { name: $castState.deviceName || 'Chromecast' })}</b><button class="btn light ui" on:click|stopPropagation={() => castStop()}>{$t('player.cast.stop')}</button></div></div>
+  {:else if airOn || airState.error}
+    <!-- Safari does not tell which receiver was picked; ending AirPlay happens in its picker (choose this device).
+         Also while `ready` (no TV yet) when a token request failed: Retry, the src stays as it is (no restore loop) -->
+    <div class="center castov" role="status" data-testid="airplay-active"><div class="castbox">
+      <Icon name="airplay" size={56} />
+      {#if airState.error}
+        <b>{$t('player.airplay.failed')}</b><span class="airhint">{$t('player.airplay.endHint')}</span>
+        <button class="btn light ui" on:click|stopPropagation={() => air?.retry()}>{$t('player.error.retry')}</button>
+      {:else}<b>{$t('player.airplay.playing')}</b>{/if}
+      <button class="btn light ui" on:click|stopPropagation={() => air?.pick()}>{$t('player.airplay.change')}</button>
+    </div></div>
+  {:else if airState.ready}
+    <!-- the token stream is on the element; the picker may not have opened (no gesture after the await): open it from this tap -->
+    <div class="center airready" role="status" data-testid="airplay-ready"><div class="castbox">
+      <Icon name="airplay" size={40} />
+      <span class="airhint">{$t('player.airplay.chooseHint')}</span>
+      <button class="btn light ui" on:click|stopPropagation={() => air?.pick()}>{$t('player.airplay.choose')}</button>
+    </div></div>
   {/if}
-  {#if paused && !waiting && !error && !casting && !locked && !reconnecting}
+  {#if !phone && paused && !waiting && !error && !casting && !locked && !reconnecting}
     <button class="bigplay ui" aria-label={$t('player.controls.play')} on:click|stopPropagation={togglePlay}><Icon name="play" size={44} /></button>
   {/if}
   {#if toast}<div class="toast" aria-hidden="true">{toast}</div>{/if}
@@ -978,7 +1061,7 @@
   {#if hud}
     <div class="hud" aria-hidden="true"><Icon name={hud.icon} size={26} /><span>{hud.text}</span><i style="--p:{Math.max(0, Math.min(100, hud.pct))}%"></i></div>
   {/if}
-  {#if coarse && !tvMode() && !casting && (locked ? lockHint : showUi)}
+  {#if coarse && !tvMode() && !casting && (locked ? lockHint : showUi && !phone)}
     <button class="lockbtn ic" class:holding={lockHold} aria-label={locked ? $t('player.lock.unlockAria') : $t('player.lock.lockAria')}
       on:pointerdown|stopPropagation={() => (locked ? unlockDown() : undefined)} on:pointerup|stopPropagation={unlockUp} on:pointercancel={unlockUp} on:pointerleave={unlockUp}
       on:keydown={lockKey} on:click|stopPropagation={() => { if (!locked && Date.now() - unlockedAt > 1000) lockNow(); }} on:contextmenu|preventDefault>
@@ -995,7 +1078,18 @@
   {/if}
 
   <!-- overlays from the page (back button, next episode card, party chat/reactions) -->
-  <div class="ovl" class:hide={!showUi}><slot name="top" /></div>
+  <div class="ovl" class:hide={!showUi} class:withchip={phoneChip}>
+    <slot name="top" />
+    {#if phoneChip && info}<div class="qtop"><QualityChip bind:open={chipOpen} compact direct={chipDirect} label={rungLabel(info.maxBitrate)} reason={info.transcodeReason ?? 'other'} /></div>{/if}
+  </div>
+  {#if phone && !locked && !error && !reconnecting}
+    <!-- phones: play / pause between -10 and +10 in the middle of the picture (shown and hidden with the bar) -->
+    <div class="cc" class:hide={!ccOn}>
+      <button class="ic ccs" class:locked={!canControl} aria-label={$t('player.controls.back10')} on:click|stopPropagation={() => seekBy(-10)}><Icon name="rewind10" size={34} /></button>
+      <button class="ic ccp" class:locked={!canControl} class:busy={spin && waiting && !casting} aria-label={paused ? $t('player.controls.play') : $t('player.controls.pause')} on:click|stopPropagation={togglePlay}><Icon name={paused ? 'play' : 'pause'} size={44} /></button>
+      <button class="ic ccs" class:locked={!canControl} aria-label={$t('player.controls.forward10')} on:click|stopPropagation={() => seekBy(10)}><Icon name="forward10" size={34} /></button>
+    </div>
+  {/if}
   <slot />
 
   {#if skip && !locked}<button class="skipbtn light" aria-keyshortcuts="S" on:click|stopPropagation={doSkip}>{segText($t, skip.type, 'skip')}{tvMode() ? $t('player.skipOk') : ''}</button>{/if}
@@ -1014,8 +1108,9 @@
     </div>
   {/if}
 
-  <div class="ui ctl" data-nav class:hide={!showUi || (posterOn && !posterOut)} on:click|stopPropagation on:keydown={ctlKey} role="toolbar" tabindex="-1" aria-label={$t('player.controls.toolbar')}>
+  <div class="ui ctl" data-nav bind:offsetHeight={ctlH} class:hide={!showUi || (posterOn && !posterOut)} on:click|stopPropagation on:keydown={ctlKey} role="toolbar" tabindex="-1" aria-label={$t('player.controls.toolbar')}>
     <div class="timeline">
+      {#if phone}<span class="cur" aria-hidden="true">{fmtClock(shown)}</span>{/if}
       <div class="track" bind:this={trackEl} class:locked={!canControl} role="slider" tabindex="0" aria-label={$t('player.positionLabel')} aria-valuemin="0" aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(shown)}
         aria-valuetext={$t('player.valueText', { a: fmtClock(shown), b: fmtClock(duration) })}
         on:pointermove={onTrackMove} on:pointerleave={() => (hoverX = -1)} on:pointerdown={onTrackDown} on:pointerup={onTrackUp} on:pointercancel={onTrackUp} on:keydown={onTrackKey}>
@@ -1033,21 +1128,23 @@
           </div>
         {/if}
       </div>
-      <span class="rem" aria-hidden="true">{duration ? fmtClock(Math.max(0, duration - shown)) : '–'}</span>
+      <span class="rem" aria-hidden="true">{duration ? `${phone ? '−' : ''}${fmtClock(Math.max(0, duration - shown))}` : '–'}</span>
     </div>
     <div class="row">
       <div class="grp">
-        <button class="ic" class:locked={!canControl} aria-label={paused ? $t('player.controls.play') : $t('player.controls.pause')} on:click={togglePlay}><Icon name={paused ? 'play' : 'pause'} size={ICON} /></button>
-        <button class="ic" class:locked={!canControl} aria-label={$t('player.controls.back10')} on:click={() => seekBy(-10)}><Icon name="rewind10" size={ICON} /></button>
-        <button class="ic" class:locked={!canControl} aria-label={$t('player.controls.forward10')} on:click={() => seekBy(10)}><Icon name="forward10" size={ICON} /></button>
-        <div class="vol">
+        {#if !phone}
+          <button class="ic" class:locked={!canControl} aria-label={paused ? $t('player.controls.play') : $t('player.controls.pause')} on:click={togglePlay}><Icon name={paused ? 'play' : 'pause'} size={ICON} /></button>
+          <button class="ic" class:locked={!canControl} aria-label={$t('player.controls.back10')} on:click={() => seekBy(-10)}><Icon name="rewind10" size={ICON} /></button>
+          <button class="ic" class:locked={!canControl} aria-label={$t('player.controls.forward10')} on:click={() => seekBy(10)}><Icon name="forward10" size={ICON} /></button>
+        {/if}
+        {#if !phone || volOk}<div class="vol">
           <button class="ic" aria-label={muted ? $t('player.unmute') : $t('player.mute')} on:click={toggleMute}><Icon name={muted || volume === 0 ? 'volume-off' : volume < 0.5 ? 'volume-low' : 'volume'} size={ICON} /></button>
-          <input class="vslider" type="range" min="0" max="1" step="0.05" value={muted ? 0 : volume} aria-label={$t('player.volume.label')} on:input={(e) => setVolume(Number(e.currentTarget.value))} />
-        </div>
-        <span class="clock">{fmtClock(shown)} / {fmtClock(duration)}</span>
-        {#if info && mode && !casting}<QualityChip bind:open={chipOpen} direct={chipDirect} label={rungLabel(info.maxBitrate)} reason={info.transcodeReason ?? 'other'} />{/if}
+          {#if !phone}<input class="vslider" type="range" min="0" max="1" step="0.05" value={muted ? 0 : volume} aria-label={$t('player.volume.label')} on:input={(e) => setVolume(Number(e.currentTarget.value))} />{/if}
+        </div>{/if}
+        {#if !phone}<span class="clock">{fmtClock(shown)} / {fmtClock(duration)}</span>{/if}
+        {#if info && mode && !casting && !phone}<QualityChip bind:open={chipOpen} direct={chipDirect} label={rungLabel(info.maxBitrate)} reason={info.transcodeReason ?? 'other'} />{/if}
       </div>
-      <div class="mid" title={barSub ? `${barTitle} · ${barSub}` : barTitle}>{#if barTitle}<b>{barTitle}</b>{#if barSub}<span>{barSub}</span>{/if}{/if}</div>
+      {#if !phone}<div class="mid" title={barSub ? `${barTitle} · ${barSub}` : barTitle}>{#if barTitle}<b>{barTitle}</b>{#if barSub}<span>{barSub}</span>{/if}{/if}</div>{/if}
       <div class="grp right">
         <slot name="extra" />
         {#if hasNext}<button class="ic" aria-label={$t('player.controls.next')} title={$t('player.controls.nextKey')} on:click={() => dispatch('next')}><Icon name="skip-next" size={ICON} /></button>{/if}
@@ -1063,6 +1160,7 @@
             {#if menu === 'chapters'}<div class="menu bare"><ScenesPanel {chapters} current={shown} {duration} trickplay={info?.trickplay} on:seek={(e) => { seekTo(e.detail.time); closeScenes(); }} on:close={closeScenes} /></div>{/if}
           </div>
         {/if}
+        {#if air && (airState.available || airOn || airState.ready || airState.busy)}<button class="ic" class:on={airOn} class:airbusy={airState.busy} aria-pressed={airOn} aria-busy={airState.busy} data-testid="airplay" aria-label={$t(airOn ? 'player.airplay.playing' : 'player.airplay.play')} title={$t(airOn ? 'player.airplay.playing' : 'player.airplay.play')} on:click={() => air?.pick()}><Icon name="airplay" size={ICON} /></button>{/if}
         <button class="ic" class:on={showXray || peek} bind:this={castBtn} aria-label={$t('scenes.info.open')} title={$t(coarse ? 'scenes.info.open' : 'scenes.info.openKey')} aria-pressed={showXray} on:click={castButton}><Icon name="users" size={ICON} /></button>
         {#if info}
           <div class="mwrap">
@@ -1113,8 +1211,10 @@
               <button class="mi" on:click={() => (menu = 'scenes')}><Icon name="bookmark" size={20} />{$t('player.bookmark.menu')}<span class="chev" aria-hidden="true">›</span></button>
               <button class="mi" class:on={showXray} aria-pressed={showXray} on:click={() => { if (showXray) { menu = ''; closeCastInfo(); } else openCastInfo(tvMode()); }}><Icon name="users" size={20} />{$t('scenes.info.open')}</button>
               {#if !partyMode && ($castState.available || $castState.connected)}<button class="mi" class:on={casting} aria-pressed={casting} on:click={castClick}><Icon name="cast" size={20} />{castLabel}</button>{/if}
+              {#if phone && !casting}<button class="mi" on:click={lockNow}><Icon name="lock" size={20} />{$t('player.lock.lockAria')}</button>{/if}
               {#if pipOk && !casting}<button class="mi" class:on={inPip} aria-pressed={inPip} aria-keyshortcuts="P" on:click={() => { menu = ''; void pip(); }}><Icon name="pip" size={20} />{$t('player.controls.pip')}</button>{/if}
               <button class="mi" on:click={() => (menu = 'settings')}><Icon name="settings" size={20} />{$t('player.controls.settings')}{#if sleepAt}<span class="muted"> · {$t('player.sleep.left', { t: sleepLeft })}</span>{/if}<span class="chev" aria-hidden="true">›</span></button>
+              {#if coarse && !tvMode() && !casting && !airOn && !airState.available && !$castState.available}<p class="modeinfo tvhint" data-testid="tv-hint"><Icon name="tv" size={16} /><span>{$t('player.airplay.tvHint', { url: `${location.host}/tv` })}</span></p>{/if}
               {#if modeLabel}<p class="modeinfo"><Icon name="info" size={16} /><span>{$t('player.mode.label', { mode: modeLabel })}</span></p>{/if}
             </div>
           {:else if menu === 'scenes'}
@@ -1173,6 +1273,8 @@
   .stage :global(button:focus-visible), .stage :global(a:focus-visible), .stage :global([role=slider]:focus-visible) { outline: 3px solid #fff; outline-offset: 2px; }
   .stage.idle { cursor: none; }
   .stage :global(video) { display: block; width: 100%; height: 100%; max-height: 100%; object-fit: contain; background: #000; }
+  /* AirPlay availability probe: rendered (WebKit may skip hidden elements) but invisible and inert */
+  .stage :global(video.airprobe) { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   .stage :global(video::cue) { background: rgba(0,0,0,.65); font-size: 1.15em; color: #fff; font-family: sans-serif; }
   .stage.sub-size-s :global(video::cue) { font-size: .9em; }
   .stage.sub-size-m :global(video::cue) { font-size: 1.15em; }
@@ -1204,7 +1306,8 @@
   .riplbl.left { left: 12%; } .riplbl.right { right: 12%; }
   .hud { position: absolute; top: 12%; left: 50%; transform: translateX(-50%); z-index: 9; display: flex; align-items: center; gap: .6rem; padding: .55rem 1.1rem; border-radius: 999px; background: rgba(0,0,0,.72); font-weight: 600; pointer-events: none; font-variant-numeric: tabular-nums; position: absolute; overflow: hidden; }
   .hud i { position: absolute; left: 0; bottom: 0; height: 3px; width: var(--p); background: var(--acc); }
-  .lockbtn { position: absolute; left: max(.8rem, env(safe-area-inset-left)); bottom: 8rem; z-index: 10; width: 48px; min-height: 48px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.5); }
+  /* .ic.lockbtn: .ic (position: relative) comes later in this sheet and would win over a plain .lockbtn */
+  .ic.lockbtn { position: absolute; left: max(.8rem, var(--safe-left)); bottom: 8rem; z-index: 10; width: 48px; min-height: 48px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.5); }
   .lockbtn.holding { background: var(--acc); }
   .stage.locked { cursor: none; }
   .help { position: absolute; inset: 0; z-index: 13; display: grid; place-items: center; background: rgba(0,0,0,.7); }
@@ -1219,6 +1322,10 @@
   .bigplay:hover:not(:disabled) { background: rgba(0,0,0,.75); }
   .castov { background: #000; pointer-events: none; z-index: 2; }
   .castbox { display: grid; justify-items: center; gap: .9rem; text-align: center; color: #fff; }
+  .airhint { font-size: .85rem; opacity: .8; max-width: 22rem; }
+  .ic.airbusy { opacity: .55; }
+  .airready .castbox { background: rgba(0,0,0,.72); padding: 1rem 1.4rem; border-radius: 14px; }
+  .airready .airhint { opacity: .95; }
   .castbox button { pointer-events: auto; border: 1px solid #fff; padding: .6rem 1.4rem; }
   .toast { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); background: rgba(0,0,0,.75); padding: .55rem 1.2rem; border-radius: 999px; z-index: 9; font-weight: 600; max-width: 90%; text-align: center; }
   .skipbtn { position: absolute; right: calc(var(--pad-x) + var(--inset, 0px)); bottom: 7.5rem; z-index: 8; border: 1px solid #fff; padding: .7rem 1.5rem; }
@@ -1226,7 +1333,7 @@
   .ovl :global(*) { pointer-events: auto; }
   .ovl.hide { opacity: 0; } .ovl.hide :global(*) { pointer-events: none; }
 
-  .ctl { position: absolute; left: 0; right: var(--inset, 0px); bottom: 0; z-index: 8; padding: 3.5rem clamp(.6rem, 2.4vw, 2.4rem) .9rem; background: linear-gradient(transparent, rgba(0,0,0,.85)); transition: opacity var(--t-med); }
+  .ctl { position: absolute; left: 0; right: var(--inset, 0px); bottom: 0; z-index: 8; padding: 3.5rem max(clamp(.6rem, 2.4vw, 2.4rem), var(--safe-right)) .9rem max(clamp(.6rem, 2.4vw, 2.4rem), var(--safe-left)); background: linear-gradient(transparent, rgba(0,0,0,.85)); transition: opacity var(--t-med); }
   .ctl.hide { opacity: 0; pointer-events: none; }
   .timeline { display: flex; align-items: center; gap: 1rem; }
   .track { position: relative; flex: 1; height: 5px; background: rgba(255,255,255,.28); border-radius: 3px; cursor: pointer; touch-action: none; transition: height var(--t-fast); margin: 10px 0; }
@@ -1276,6 +1383,7 @@
   .menu.more .mi { min-height: 48px; font-size: .98rem; gap: .8rem; }
   .chev { margin-left: auto; font-size: 1.3rem; color: var(--mut); padding-left: .8rem; }
   .modeinfo { display: flex; gap: .5rem; align-items: center; margin: .3rem .6rem .2rem; padding-top: .5rem; border-top: 1px solid #2b333c; color: var(--mut); font-size: .82rem; }
+  .modeinfo.tvhint ~ .modeinfo { border-top: 0; padding-top: .2rem; }
   .menu h3 .back { background: transparent; padding: 0; width: 32px; min-height: 32px; margin-right: .3rem; font-size: 1.4rem; line-height: 1; color: #fff; border-radius: 50%; }
   .menu h3 .back:hover:not(:disabled) { background: rgba(255,255,255,.12); }
   .menu.speed { padding: 1rem 1.2rem 1.1rem; min-width: 0; }
@@ -1322,9 +1430,62 @@
     .menu, .menu.tracks, .menu.more, .menu.scenes, .menu.speed, .menu.bare { position: fixed; left: .5rem; right: .5rem; bottom: 8.6rem; min-width: 0; max-width: none; max-height: 60vh; overflow-y: auto; }
     .menu.bare { overflow: visible; }
     .menu.bare :global(.eps), .menu.bare :global(.scn) { width: 100%; max-height: 60vh; }
-    .lockbtn { bottom: auto; top: 5.5rem; } /* the two-row bar is taller on phones: keep the lock clear of the timeline */
+    .ic.lockbtn { bottom: auto; top: calc(5.5rem + var(--safe-top)); } /* the two-row bar is taller on phones: keep the lock clear of the timeline */
     .speeds { flex-wrap: wrap; justify-content: center; } .speeds::before { display: none; } .sp-opt { min-width: 64px; }
   }
   /* touch: every main-bar target is at least 48 px */
   @media (pointer: coarse) { .ic { min-width: 48px; min-height: 48px; } }
+
+  /* ---- phone layout (touch, not TV): the stage fills the screen incl. the safe areas, every control stays inside them ---- */
+  .stage.phone { --menu-gap: calc(var(--bar-h, 8.6rem) + var(--safe-top) + 1rem); }
+  /* top bar: the page's back button + title, the quality chip on the right */
+  .ovl.withchip { display: flex; align-items: stretch; }
+  .ovl.withchip > :global(:first-child) { flex: 1; min-width: 0; }
+  .qtop { flex: none; display: flex; align-items: center; padding: var(--safe-top) max(.75rem, var(--safe-right)) 0 0; background: linear-gradient(rgba(0,0,0,.8), transparent); }
+  /* centre: -10 · play / pause · +10 */
+  .cc { position: absolute; left: var(--safe-left); right: calc(var(--safe-right) + var(--inset, 0px)); top: 50%; transform: translateY(-50%); z-index: 8; display: flex; justify-content: center; align-items: center; gap: clamp(1.5rem, 9vw, 3.5rem); pointer-events: none; transition: opacity var(--t-med); }
+  .cc .ic { pointer-events: auto; background: rgba(0,0,0,.4); }
+  .stage.phone .cc .ccs { width: 60px; min-width: 60px; min-height: 60px; }
+  .stage.phone .cc .ccp { width: 76px; min-width: 76px; min-height: 76px; }
+  .stage.phone .cc .ic:hover:not(:disabled) { transform: none; background: rgba(0,0,0,.55); }
+  .cc.hide { opacity: 0; pointer-events: none; } .cc.hide .ic { pointer-events: none; }
+  .ccp.busy::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 4px solid rgba(255,255,255,.2); border-top-color: var(--acc); animation: sp .9s linear infinite; pointer-events: none; }
+  /* bottom: time · seek bar · time, then one row of evenly spaced icons; reaches the screen edge, padded by the home indicator */
+  .stage.phone .ctl { padding: 2rem max(.75rem, var(--safe-right)) calc(.2rem + var(--safe-bottom)) max(.75rem, var(--safe-left)); }
+  .stage.phone .timeline { gap: .75rem; min-height: 44px; }
+  .stage.phone .cur, .stage.phone .rem { min-width: 3.2rem; font-size: .85rem; font-variant-numeric: tabular-nums; color: #e8e8e8; }
+  .stage.phone .rem { text-align: right; }
+  .stage.phone .track { margin: 0; }
+  .stage.phone .row { display: flex; flex-wrap: nowrap; justify-content: space-evenly; align-items: center; gap: 0; }
+  .stage.phone .grp, .stage.phone .vol, .stage.phone .mwrap { display: contents; }
+  .stage.phone .ic { width: 48px; min-width: 48px; min-height: 48px; }
+  .stage.phone .row .ic:hover:not(:disabled) { transform: none; }
+  /* menus and panels: above the bottom bar, inside the safe area */
+  .stage.phone .menu, .stage.phone .menu.tracks, .stage.phone .menu.more, .stage.phone .menu.scenes, .stage.phone .menu.speed, .stage.phone .menu.bare {
+    position: fixed; left: max(.5rem, var(--safe-left)); right: calc(max(.5rem, var(--safe-right)) + var(--inset, 0px)); bottom: calc(var(--bar-h, 8.6rem) + .25rem);
+    min-width: 0; max-width: none; max-height: calc(100dvh - var(--menu-gap)); overflow-y: auto;
+  }
+  .stage.phone .menu.tracks { flex-direction: column; }
+  .stage.phone .menu.tracks > div { max-height: none; overflow: visible; }
+  .stage.phone .menu.bare { overflow: visible; }
+  .stage.phone .menu.bare :global(.eps), .stage.phone .menu.bare :global(.scn) { width: 100%; max-height: calc(100dvh - var(--menu-gap)); }
+  .stage.phone .skipbtn { right: calc(max(.8rem, var(--safe-right)) + var(--inset, 0px)); bottom: calc(var(--bar-h, 7rem) + .5rem); }
+  /* locked: the unlock button alone, centred above the home indicator */
+  .stage.phone .lockbtn { top: auto; left: 50%; transform: translateX(-50%); bottom: calc(1.5rem + var(--safe-bottom)); width: 56px; min-height: 56px; }
+  /* casting: the device line moves up, the centre keeps play / ±10 for the receiver */
+  .stage.phone .castov { place-items: start center; padding-top: calc(4.6rem + var(--safe-top)); }
+  .stage.phone .castbox { grid-auto-flow: column; align-items: center; gap: .7rem; font-size: .9rem; }
+  .stage.phone .castbox button { padding: .4rem .9rem; min-height: 44px; }
+  /* landscape phone: seek row and icons on one line when they fit (else the icons wrap below), tighter spacing = more picture */
+  @media (orientation: landscape) and (max-height: 540px) {
+    .stage.phone .ctl { display: flex; flex-wrap: wrap; align-items: center; column-gap: .75rem; padding-top: 1.4rem; }
+    .stage.phone .timeline { flex: 1 1 20rem; min-width: 0; }
+    .stage.phone .row { flex: 0 1 auto; margin-left: auto; justify-content: flex-end; }
+    .stage.phone .menu, .stage.phone .menu.tracks, .stage.phone .menu.more, .stage.phone .menu.scenes, .stage.phone .menu.speed, .stage.phone .menu.bare { left: auto; width: min(34rem, calc(100vw - 1rem - var(--safe-left) - var(--safe-right) - var(--inset, 0px))); }
+    .stage.phone .menu.tracks { flex-direction: row; overflow: hidden; }
+    .stage.phone .menu.tracks > div { max-height: calc(100dvh - var(--menu-gap) - 1.6rem); overflow-y: auto; }
+    .stage.phone .castov { padding-top: calc(3.6rem + var(--safe-top)); }
+    .stage.phone .cc .ccs { width: 56px; min-width: 56px; min-height: 56px; }
+    .stage.phone .cc .ccp { width: 68px; min-width: 68px; min-height: 68px; }
+  }
 </style>

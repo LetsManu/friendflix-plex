@@ -66,7 +66,7 @@
 </div>
 
 <style>
-  .kids-page { --k-ink: #20233a; --k-card: #fff; --k-focus: #ffb703; --k-accent: #ff5d8f; min-height: 100vh; min-height: 100dvh; padding: calc(var(--nav-h) + 1.2rem) 0 3rem; color: var(--k-ink);
+  .kids-page { --k-ink: #20233a; --k-card: #fff; --k-focus: #ffb703; --k-accent: #ff5d8f; min-height: 100vh; min-height: 100dvh; padding: calc(var(--nav-total) + 1.2rem) 0 3rem; color: var(--k-ink);
     background: radial-gradient(circle at 12% 8%, #fff6c9 0, transparent 38%), radial-gradient(circle at 92% 18%, #ffd6e8 0, transparent 34%), linear-gradient(180deg, #bfe9ff 0%, #e8f7ff 55%, #fffaf0 100%); }
   .hello { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: 0 var(--pad-x); margin-bottom: 1.2rem; }
   .hi { margin: 0; font-size: 1.2rem; font-weight: 700; color: #3c4a8f; }
@@ -81,5 +81,5 @@
   .skel { flex: none; width: clamp(132px, 38vw, 210px); aspect-ratio: 2 / 3; border-radius: 24px; background: rgba(255, 255, 255, .7); }
   .note { margin: 2rem var(--pad-x); font-size: 1.2rem; font-weight: 700; }
   .again { margin-left: .6rem; border-radius: 99px; background: var(--k-ink); color: #fff; min-height: 48px; padding: 0 1.2rem; }
-  @media (max-width: 720px) { .kids-page { padding-top: calc(var(--nav-h) + .6rem); } .bigsearch { width: 100%; justify-content: center; } }
+  @media (max-width: 720px) { .kids-page { padding-top: calc(var(--nav-total) + .6rem); } .bigsearch { width: 100%; justify-content: center; } }
 </style>

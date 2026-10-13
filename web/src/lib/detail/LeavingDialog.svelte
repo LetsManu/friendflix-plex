@@ -63,5 +63,5 @@
   .hint { margin: 0; font-size: .8rem; color: var(--mut); }
   .acts { display: flex; flex-wrap: wrap; gap: .5rem; }
   .acts button { flex: 1; min-height: 44px; }
-  @media (max-width: 640px) { .dlg { top: auto; bottom: 0; left: 0; right: 0; transform: none; width: auto; border-radius: 14px 14px 0 0; padding-bottom: calc(1.3rem + env(safe-area-inset-bottom)); } }
+  @media (max-width: 640px) { .dlg { top: auto; bottom: 0; left: 0; right: 0; transform: none; width: auto; border-radius: 14px 14px 0 0; padding-bottom: calc(1.3rem + var(--safe-bottom)); } }
 </style>

@@ -117,6 +117,17 @@ export default {
     playingOn: 'Wird auf {name} abgespielt',
     stop: 'Übertragung beenden',
   },
+  airplay: {
+    play: 'Auf AirPlay-Gerät abspielen',
+    playing: 'Läuft über AirPlay',
+    change: 'AirPlay-Gerät wechseln',
+    failed: 'Übertragung per AirPlay fehlgeschlagen.',
+    endHint: 'Zum Beenden in der AirPlay-Auswahl dieses Gerät wählen.',
+    choose: 'Fernseher auswählen',
+    chooseHint: 'Jetzt den Fernseher in der Liste auswählen.',
+    needsTranscode: 'AirPlay braucht Transcoding – mit deiner Rolle nicht erlaubt.',
+    tvHint: 'Kein AirPlay oder Chromecast am Fernseher? Öffne {url} im Browser des Fernsehers und kopple dein Handy als Fernbedienung.',
+  },
   mode: {
     label: 'Wiedergabe: {mode}',
     direct: 'Direct Play (Originaldatei)',

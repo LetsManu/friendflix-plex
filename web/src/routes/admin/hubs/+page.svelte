@@ -235,7 +235,7 @@
   .intro { flex: 1 1 24rem; margin: 0; max-width: 70ch; }
   .cap { flex: 0 1 16rem; min-width: 10rem; }
   .small { font-size: .85rem; margin: 0; }
-  .form { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; margin-bottom: 1rem; scroll-margin-top: calc(var(--nav-h) + 1rem); }
+  .form { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; margin-bottom: 1rem; scroll-margin-top: calc(var(--nav-total) + 1rem); }
   .form h2 { margin: 0 0 .9rem; font-size: 1.1rem; }
   .fgrid { display: grid; gap: 1.2rem; grid-template-columns: minmax(0, 1fr); }
   @media (min-width: 900px) { .fgrid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }

@@ -3,6 +3,7 @@
 FriendFlix läuft auf jedem Fernseher mit modernem Browser (Android TV / Google TV, Fire TV, Samsung Tizen, LG webOS, Konsolen, Mini-PC am HDMI).
 Der Fernseher bekommt eine eigene Oberfläche (große Schrift, Fokusrahmen, Steuerung mit Pfeiltasten) und wird vom Handy aus gesteuert.
 Es wird **kein** Cast-/AirPlay-Protokoll benutzt: Das Portal selbst ist die Fernbedienung (WebSocket zwischen Handy und Fernseher desselben Nutzers).
+Das ist auch die Lösung für Fernseher ohne AirPlay und ohne Chromecast; wer AirPlay oder Chromecast hat, kann alternativ direkt aus dem Player übertragen ([cast.md](cast.md)).
 
 ## Einrichten (einmalig pro Fernseher)
 1. Auf dem Fernseher im Browser `https://portal.<domain>/tv` öffnen (als Lesezeichen/Startseite speichern). Es erscheinen ein **Code** (`ABCD-EFGH`) und ein QR-Code.

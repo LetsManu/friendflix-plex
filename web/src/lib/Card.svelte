@@ -216,7 +216,7 @@
   .mb span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(16,20,24,.7); border: 1.5px solid rgba(255,255,255,.6); font-size: 1rem; line-height: 1; padding-bottom: .3rem; }
   @media (hover: none), (pointer: coarse) { .rm { display: grid; } .mb { display: grid; } .cap { right: 2.8rem; } }
   .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 84; }
-  .sheet { outline: none; position: fixed; z-index: 85; left: 0; right: 0; bottom: 0; max-width: 560px; margin: 0 auto; background: var(--surface); border-radius: 14px 14px 0 0; padding: .6rem .6rem calc(.6rem + env(safe-area-inset-bottom)); box-shadow: 0 -10px 40px rgba(0,0,0,.7); display: flex; flex-direction: column; gap: .1rem; }
+  .sheet { outline: none; position: fixed; z-index: 85; left: 0; right: 0; bottom: 0; max-width: 560px; margin: 0 auto; background: var(--surface); border-radius: 14px 14px 0 0; padding: .6rem .6rem calc(.6rem + var(--safe-bottom)); box-shadow: 0 -10px 40px rgba(0,0,0,.7); display: flex; flex-direction: column; gap: .1rem; }
   .st { margin: .2rem 1rem .5rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .act { display: flex; gap: .8rem; align-items: center; min-height: 48px; padding: 0 1rem; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; width: 100%; text-decoration: none; }
   .act:hover, .act:focus-visible { background: rgba(255,255,255,.08); }

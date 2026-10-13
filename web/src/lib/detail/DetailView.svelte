@@ -608,7 +608,7 @@
 
   /* ---- phone: 16:9 media on top, everything else below it ---- */
   .phone .hero { height: auto; aspect-ratio: 16 / 9; }
-  .phone.vp { padding-top: var(--nav-h); } /* the video starts below the app bar , so nothing covers it */
+  .phone.vp { padding-top: var(--nav-total); } /* the video starts below the app bar , so nothing covers it */
   .phone .fade { background: linear-gradient(to top, rgba(0, 0, 0, .35), transparent 40%); }
   .phone .snd { right: .7rem; bottom: .7rem; width: 44px; height: 44px; }
   .pcap { display: flex; flex-direction: column; gap: .6rem; padding: .8rem 1rem .2rem; background: var(--dv-bg); }
@@ -623,7 +623,7 @@
   .ov.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
   .more-syn { min-height: 44px; padding: 0 .2rem; font-weight: 600; text-decoration: none; }
   /* phone: the tab bar sticks under the app bar (in the popup: at the top of its scroll box) */
-  .phone .tabs { position: sticky; top: var(--nav-h); z-index: 5; margin-left: -1rem; margin-right: -1rem; padding: 0 1rem; }
+  .phone .tabs { position: sticky; top: var(--nav-total); z-index: 5; margin-left: -1rem; margin-right: -1rem; padding: 0 1rem; }
   .phone.vm .tabs { top: 0; }
   .phone .tab { min-height: 44px; }
   .pcap .small { margin: 0; }

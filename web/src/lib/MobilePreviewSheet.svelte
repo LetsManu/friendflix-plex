@@ -82,7 +82,7 @@
 
 <style>
   .backdrop { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,.62); animation: fade .2s ease-out; }
-  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 91; max-width: 560px; margin: 0 auto; max-height: 88dvh; overflow-y: auto; overscroll-behavior: contain; outline: none; background: #161b21; border-radius: 16px 16px 0 0; padding: 0 var(--pad-x) calc(.8rem + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px rgba(0,0,0,.7); animation: rise .26s var(--ease, ease-out); }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 91; max-width: 560px; margin: 0 auto; max-height: min(88dvh, calc(100dvh - var(--safe-top) - .5rem)); overflow-y: auto; overscroll-behavior: contain; outline: none; background: #161b21; border-radius: 16px 16px 0 0; padding: 0 var(--pad-x) calc(.8rem + var(--safe-bottom)); box-shadow: 0 -12px 40px rgba(0,0,0,.7); animation: rise .26s var(--ease, ease-out); }
   .sheet.dragging { transition: none; }
   .grab { touch-action: none; cursor: grab; padding: 0 0 .2rem; margin: 0 calc(var(--pad-x) * -1); }
   .handle { display: block; width: 40px; height: 4px; border-radius: 99px; background: #6a7480; margin: 10px auto 8px; }

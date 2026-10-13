@@ -2,15 +2,16 @@
   "name": "friendflix",
   "private": true,
   "type": "module",
-  "version": "0.1.0",
-  "license": "UNLICENSED",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-or-later",
   "engines": { "node": ">=22" },
   "workspaces": ["backend", "gateway", "web"],
   "scripts": {
     "build": "npm run build --workspaces",
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces && tsc -p e2e/tsconfig.json",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present && npm run test:scripts",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {

@@ -130,6 +130,17 @@ const pl: Translation<typeof de> = {
     playingOn: 'Odtwarzanie na: {name}',
     stop: 'Zakończ przesyłanie',
   },
+  airplay: {
+    play: 'Odtwórz na urządzeniu AirPlay',
+    playing: 'Odtwarzanie przez AirPlay',
+    change: 'Zmień urządzenie AirPlay',
+    failed: 'Odtwarzanie przez AirPlay nie powiodło się.',
+    endHint: 'Aby zakończyć, wybierz to urządzenie w menu AirPlay.',
+    choose: 'Wybierz telewizor',
+    chooseHint: 'Teraz wybierz telewizor z listy.',
+    needsTranscode: 'AirPlay wymaga transkodowania – niedozwolone dla Twojej roli.',
+    tvHint: 'Brak AirPlay lub Chromecasta w telewizorze? Otwórz {url} w przeglądarce telewizora i sparuj telefon jako pilota.',
+  },
   mode: {
     label: 'Odtwarzanie: {mode}',
     direct: 'Direct Play (plik oryginalny)',

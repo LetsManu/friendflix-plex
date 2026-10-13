@@ -95,7 +95,7 @@
   .txt strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rm { width: 44px; height: 44px; min-height: 44px; flex: none; padding: 0; border-radius: 50%; display: grid; place-items: center; background: transparent; border: 1.5px solid rgba(255,255,255,.4); color: #fff; }
   .err { color: var(--err, #e5484d); }
-  .dlg { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: grid; place-items: center; z-index: 100; padding: 1rem; }
+  .dlg { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: grid; place-items: center; z-index: 100; padding: max(1rem, var(--safe-top)) 1rem max(1rem, var(--safe-bottom)); }
   .box { background: var(--surface); border-radius: var(--radius); padding: 1.2rem; max-width: 26rem; width: 100%; }
   .btns { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; }
   @media (max-width: 520px) { .thumb { flex-basis: 6rem; } }

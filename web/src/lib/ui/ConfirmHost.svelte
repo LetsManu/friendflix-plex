@@ -54,7 +54,7 @@
 {/if}
 
 <style>
-  .ov { position: fixed; inset: 0; z-index: 130; background: rgba(0,0,0,.7); display: grid; place-items: center; padding: 1rem; }
+  .ov { position: fixed; inset: 0; z-index: 130; background: rgba(0,0,0,.7); display: grid; place-items: center; padding: max(1rem, var(--safe-top)) 1rem max(1rem, var(--safe-bottom)); }
   .dlg { width: min(460px, 100%); background: #1b2127; border: 1px solid #323a43; border-radius: 12px; padding: 1.4rem 1.4rem 1.2rem; box-shadow: var(--shadow-pop); }
   .head { display: flex; align-items: center; gap: .7rem; }
   .ic { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 50%; background: var(--tone-err); color: var(--err); }

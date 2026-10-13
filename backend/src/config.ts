@@ -77,6 +77,9 @@ const schema = z.object({
   /** baked into the images at build time (Dockerfile ARG), 'dev' when built locally */
   GIT_SHA: z.string().default('dev').transform((v) => v || 'dev'),
   BUILD_TIME: opt,
+  /** release version + codename from version.json, baked into the images at build time; unset = read version.json */
+  APP_VERSION: opt,
+  APP_CODENAME: opt,
   /** GitHub repo checked for newer versions (Admin -> Update) */
   UPDATE_REPO: z.string().regex(/^[\w.-]+\/[\w.-]+$/).default('LetsManu/friendflix'),
   GITHUB_TOKEN: opt,

@@ -1,0 +1,131 @@
+# Cuts a release by hand (Actions → Release → Run workflow, on main):
+#   bump version.json (a major bump takes the next codename; `none` keeps it - first release), sync every package.json +
+#   package-lock.json, turn CHANGELOG "## [Unreleased]" into "## [x.y.z] – Codename – date" (scripts/release.mjs, tested),
+#   commit "release: vX.Y.Z Codename", tag vX.Y.Z, push both, create the GitHub Release with that changelog section as notes.
+# Token: the optional secret RELEASE_TOKEN (fine-grained PAT or GitHub App token, contents: write on this repo only; the
+#   one actor allowed to bypass the main/tag rulesets) is used for checkout + push. Its pushes start CI by themselves.
+#   Without it GITHUB_TOKEN pushes (main must then accept direct pushes from github-actions[bot]) and, because those
+#   pushes start no workflows, CI is dispatched for the tag. CI publishes the images as X.Y.Z, X.Y, X (+ latest).
+# Resumable: when the tag already exists on the remote and its version.json is the requested version (a run that pushed
+#   but then failed; re-run it, or run again with `none`), bump/commit/push are skipped; only the missing GitHub Release
+#   is created and CI is dispatched. Any other existing tag is refused. How to: docs/operations.md → "Release erstellen".
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump (major = next codename; none = release version.json as is / resume: first release 1.0.0, or finish a half-done run)"
+        required: true
+        type: choice
+        options: [patch, minor, major, none]
+        default: minor
+permissions: { contents: read }
+concurrency: { group: release, cancel-in-progress: false }
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # release commit, tag, GitHub Release (GITHUB_TOKEN path)
+      actions: write # start CI for the tag (workflow_dispatch)
+    env:
+      HAS_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 26 }
+      - name: Release script tests
+        run: node --test scripts/release.test.mjs
+      - name: Plan (new release or resume)
+        id: plan
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin
+          node scripts/release.mjs plan "$BUMP" > "$RUNNER_TEMP/plan.json"
+          cat "$RUNNER_TEMP/plan.json"
+          tag=$(jq -er .tag "$RUNNER_TEMP/plan.json")
+          version=$(jq -er .version "$RUNNER_TEMP/plan.json")
+          codename=$(jq -er .codename "$RUNNER_TEMP/plan.json")
+          resume=false
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            at=$(git show "refs/tags/$tag^{commit}:version.json" 2>/dev/null | jq -r '.version // empty' || true)
+            if [ "$at" != "$version" ]; then
+              echo "::error::tag $tag already exists (its version.json says '${at:-?}'), refusing"; exit 1
+            fi
+            resume=true
+            codename=$(git show "refs/tags/$tag^{commit}:version.json" | jq -er .codename)
+            echo "::notice::$tag already exists with version $version: resuming (GitHub Release + CI only)"
+          fi
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "codename=$codename"
+            echo "resume=$resume"
+          } >> "$GITHUB_OUTPUT"
+      - name: Bump version, sync packages, cut changelog
+        if: steps.plan.outputs.resume != 'true'
+        env:
+          BUMP: ${{ inputs.bump }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          node scripts/release.mjs "$BUMP" --notes "$RUNNER_TEMP/notes.md" > "$RUNNER_TEMP/release.json"
+          cat "$RUNNER_TEMP/release.json"
+          [ "$(jq -er .tag "$RUNNER_TEMP/release.json")" = "$TAG" ] || { echo "::error::plan and release disagree"; exit 1; }
+      - name: Commit, tag and push
+        if: steps.plan.outputs.resume != 'true'
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+          CODENAME: ${{ steps.plan.outputs.codename }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          jq -r '.files[]' "$RUNNER_TEMP/release.json" | xargs git add --
+          git commit -m "release: $TAG $CODENAME"
+          git tag -a "$TAG" -m "$TAG $CODENAME"
+          git push --atomic origin "HEAD:refs/heads/main" "refs/tags/$TAG"
+      - name: Release notes of the existing tag (resume)
+        if: steps.plan.outputs.resume == 'true'
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          git show "refs/tags/$TAG^{commit}:CHANGELOG.md" > "$RUNNER_TEMP/CHANGELOG.tag.md"
+          node scripts/release.mjs notes "$VERSION" --from "$RUNNER_TEMP/CHANGELOG.tag.md" --notes "$RUNNER_TEMP/notes.md"
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          CODENAME: ${{ steps.plan.outputs.codename }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::GitHub Release $TAG already exists"
+          else
+            gh release create "$TAG" --verify-tag --latest --title "$TAG $CODENAME" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
+      # RELEASE_TOKEN pushes start CI for main and the tag themselves; GITHUB_TOKEN pushes (and resumed runs) need the dispatch
+      - name: Build and publish the images (CI for the tag)
+        if: env.HAS_RELEASE_TOKEN != 'true' || steps.plan.outputs.resume == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: gh workflow run ci.yml --ref "$TAG"
+      - name: Summary
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+          CODENAME: ${{ steps.plan.outputs.codename }}
+          RESUME: ${{ steps.plan.outputs.resume }}
+        run: |
+          {
+            echo "### Released $TAG $CODENAME"
+            [ "$RESUME" = true ] && echo "Resumed: the tag already existed, only the GitHub Release / CI were (re)started."
+            echo "CI builds $TAG; images are published as X.Y.Z, X.Y, X (and latest if it is the highest version) once every check passed."
+          } >> "$GITHUB_STEP_SUMMARY"

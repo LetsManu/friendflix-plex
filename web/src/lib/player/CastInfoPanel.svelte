@@ -89,7 +89,8 @@
 </aside>
 
 <style>
-  .ci { position: absolute; z-index: 7; left: clamp(.6rem, 2.4vw, 2.4rem); top: 4.8rem; bottom: 9rem; width: min(360px, calc(100% - 1.2rem - var(--inset, 0px))); display: flex; flex-direction: column;
+  /* bottom: above the player's bar (--bar-h is set on phones, where the bar's height is measured; elsewhere the fixed offsets) */
+  .ci { position: absolute; z-index: 7; left: max(clamp(.6rem, 2.4vw, 2.4rem), var(--safe-left)); top: calc(4.8rem + var(--safe-top)); bottom: calc(var(--bar-h, 8.5rem) + .5rem); width: min(360px, calc(100% - 1.2rem - var(--inset, 0px))); display: flex; flex-direction: column;
     background: rgba(14,14,14,.9); border: 1px solid #2b333c; border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.6); overflow: hidden; animation: ciIn var(--t-med, .2s) ease-out; }
   @keyframes ciIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .ci { animation: none; } }
@@ -121,6 +122,6 @@
   p.muted { margin: .6rem .4rem; }
   :global(html.tv) .person { min-height: 60px; font-size: 1.05rem; }
   /* phones: a sheet across the width between the top bar and the two-row control bar */
-  @media (max-width: 720px) { .ci { left: .5rem; right: .5rem; width: auto; top: 4.2rem; bottom: 9.6rem; } }
-  @media (max-height: 520px) { .ci { top: .6rem; bottom: 6.2rem; } }
+  @media (max-width: 720px) { .ci { left: max(.5rem, var(--safe-left)); right: max(.5rem, var(--safe-right)); width: auto; top: calc(4.2rem + var(--safe-top)); bottom: calc(var(--bar-h, 9.1rem) + .5rem); } }
+  @media (max-height: 520px) { .ci { top: calc(.6rem + var(--safe-top)); bottom: calc(var(--bar-h, 5.7rem) + .5rem); } }
 </style>

@@ -51,15 +51,38 @@ Prüfung von außen: `nmap -p 8096,8920,5055 <öffentliche-IP>` → alle `filter
 Nach Jellyfin-Updates: `JELLYFIN_URL=… ./scripts/gen-jellyfin-client.sh` und Diff prüfen (Pfade ändern sich zwischen Versionen; der Client probiert alte/neue Pfade für Views/Resume/Item/Favoriten/Gesehen).
 
 ## Updates aus dem Portal
-*Admin → Update* vergleicht die installierte Version (`GIT_SHA`, beim Image-Build eingebacken) mit dem letzten erfolgreichen CI-Lauf auf `main`, listet die Änderungen und kann das Portainer-Stack sofort neu ziehen. Portainer selbst zieht Images ohnehin alle 12 Stunden. Der Knopf bleibt deaktiviert, solange eine der beiden Varianten fehlt:
+*Admin → Update* vergleicht die installierte Version (`APP_VERSION`/`APP_CODENAME` aus `version.json` und `GIT_SHA`, beim Image-Build eingebacken) mit dem neuesten GitHub-Release von `UPDATE_REPO` (*Update verfügbar*, Notizen unter *Was ist neu*) und zeigt zusätzlich, wie viele Commits der letzte erfolgreiche CI-Lauf auf `main` weiter ist (vor dem ersten Release ist das der einzige Vergleich). Das Portainer-Stack lässt sich sofort neu ziehen. Portainer selbst zieht Images ohnehin alle 12 Stunden. Der Knopf bleibt deaktiviert, solange eine der beiden Varianten fehlt:
 
 - **Webhook (einfach):** In Portainer → Stacks → *dein Stack* → *Stack-Webhook* aktivieren, URL kopieren und als `PORTAINER_WEBHOOK_URL` setzen. Die URL enthält ein Token und ist ein Secret (auch als `PORTAINER_WEBHOOK_URL_FILE` möglich).
 - **API:** In Portainer → *My account* → *Access tokens* ein Token anlegen (`PORTAINER_API_KEY`), `PORTAINER_URL` (intern erreichbar vom Backend), `PORTAINER_STACK_ID` (steht in der URL des Stacks, `…/stacks/<id>`) und ggf. `PORTAINER_ENDPOINT_ID` (Default 1) setzen. Das Portal liest den Stack (Git- oder Datei-Stack), behält dessen Umgebungsvariablen unverändert und löst ein Redeploy mit Image-Pull aus.
 
 Sicherheit: Webhook-URL und Token können den Stack neu deployen. Am besten einen eigenen Portainer-Benutzer nur mit Zugriff auf dieses eine Stack verwenden (kein Admin) und das Token ausschließlich in der `.env`/den Docker-Secrets ablegen. Beide Werte erscheinen weder in Antworten noch in Logs. Pro 2 Minuten ist ein Update möglich; jeder Auslöser steht als `system.update` im Audit-Log. Optional senkt `GITHUB_TOKEN` (ohne Rechte) das GitHub-Limit-Risiko; Ergebnisse werden 10 Minuten gecacht.
 
+## Release erstellen
+Versionen folgen SemVer; die Quelle ist `version.json` im Repo-Wurzelverzeichnis (`{ "version": "1.0.0", "codename": "Arancini" }`). Jede **Hauptversion** bekommt den nächsten Codenamen aus `codenames.json` (Kino-Snacks von A bis Z: 1 Arancini, 2 Brezel, 3 Churros, …). Minor- und Patch-Releases behalten den Codenamen.
+
+1. Unter `## [Unreleased]` im `CHANGELOG.md` stehen die Änderungen seit dem letzten Release (ist der Abschnitt leer, bricht der Workflow ab).
+2. GitHub → *Actions* → **Release** → *Run workflow* auf `main`, `bump` wählen: `patch` (Fehlerbehebungen), `minor` (neue Funktionen), `major` (inkompatible Änderungen, neuer Codename). **Erstes Release: mit `none` starten** – das veröffentlicht die Version, die schon in `version.json` steht (1.0.0 Arancini), als `v1.0.0`; existiert ihr Tag bereits, lehnt der Workflow `none` ab.
+3. Der Workflow ([release.yml](../.github/workflows/release.yml), Logik in `scripts/release.mjs` mit Tests) erhöht `version.json`, gleicht `version` in allen `package.json` und der `package-lock.json` an, macht aus `## [Unreleased]` den Abschnitt `## [x.y.z] – Codename – JJJJ-MM-TT` (darüber ein neuer, leerer Unreleased-Abschnitt), committet `release: vX.Y.Z Codename` auf `main`, setzt den Tag `vX.Y.Z` und legt das GitHub-Release mit diesem Abschnitt als Notizen an.
+4. CI baut den Tag: mit `RELEASE_TOKEN` startet der Push CI von selbst, sonst stößt der Workflow CI für den Tag an (Pushes mit `GITHUB_TOKEN` lösen keine Workflows aus). Nach Tests und Scans veröffentlicht `publish.yml` die Images als `X.Y.Z`, `X.Y`, `X` und – nur wenn es die höchste Version ist – `latest`. Ein Backport-Tag (z. B. `v1.2.4` nach `v1.3.0`), Vorabversionen (`-rc.1`) und andere Tags verschieben `latest` nie.
+
+Vorher lokal ausprobieren, ohne etwas zu ändern: `node scripts/release.mjs minor --dry-run` (zeigt neue Version, Codename, Dateien und die Release-Notizen).
+
+**Token und Branch-Schutz.** GitHub Actions selbst gehört **nicht** in die *Bypass list* eines Rulesets (dann dürfte jeder Workflow, auch ein manipulierter, an `main` vorbei pushen). Stattdessen:
+
+- **Empfohlen – Secret `RELEASE_TOKEN`:** ein fine-grained Personal Access Token (nur dieses Repo, Berechtigung *Contents: Read and write*) oder ein Token einer eigenen GitHub App mit denselben Rechten, als Repository-Secret `RELEASE_TOKEN`. Genau dieser Akteur (dein Konto bzw. die App) steht als einziger in der *Bypass list* der Rulesets für `main` und für `v*`-Tags. Der Workflow checkt damit aus und pusht damit; seine Pushes starten CI für `main` und den Tag selbst.
+- **Ohne `RELEASE_TOKEN`:** der Workflow pusht mit `GITHUB_TOKEN` als `github-actions[bot]` und stößt CI für den Tag an. Dann darf `main` für diesen Akteur **nicht** gegen direkte Pushes gesperrt sein (für ein Repo mit dem empfohlenen Branch-Schutz also nur mit `RELEASE_TOKEN` nutzbar).
+
+Der Push ist atomar: scheitert er, entstehen weder Commit noch Tag noch Release.
+
+**Tags schützen:** ein zweites Ruleset (*Target: Tags*, Muster `v*`) mit *Restrict creations*, *Restrict updates* und *Restrict deletions*, Bypass nur für den Release-Akteur (`RELEASE_TOKEN`-Inhaber bzw. Repo-Admins). Wer einen `v*`-Tag anlegen kann, kann Images als Release veröffentlichen.
+
+**Abgebrochenes Release wiederaufnehmen:** Ist der Tag schon gepusht, aber z. B. das GitHub-Release oder der CI-Start fehlgeschlagen, den Lauf mit *Re-run jobs* wiederholen oder neu mit `bump: none` starten. Zeigt der Tag auf einen Commit, dessen `version.json` genau diese Version enthält, überspringt der Workflow Bump, Commit und Push, legt nur das fehlende GitHub-Release an (Notizen aus dem `CHANGELOG.md` am Tag) und startet CI. Jeder andere schon existierende Tag wird abgelehnt. Von Hand geht es so: `gh release create vX.Y.Z --verify-tag --title "vX.Y.Z Codename" --notes-file <(node scripts/release.mjs notes X.Y.Z)` und `gh workflow run ci.yml --ref vX.Y.Z`. Ist dagegen gar nichts gepusht worden, einfach neu starten – lokal ändert der Workflow nichts dauerhaft.
+
+**Auf einer Hauptversion bleiben:** In der `.env` des Stacks `FF_TAG=1` setzen (`compose.prod.yaml` nutzt `…/friendflix-<dienst>:${FF_TAG:-latest}`). Dann ziehen Portainer bzw. `docker compose pull` alle 1.x-Releases, aber nie 2.0. `FF_TAG=1.4` bleibt auf 1.4.x, `FF_TAG=1.4.2` friert genau eine Version ein. `latest` folgt `main` (auch Commits zwischen Releases) und dem höchsten Release-Tag.
+
 ## Images prüfen: Signatur, SBOM, Provenienz
-Jedes veröffentlichte Image (`ghcr.io/<owner>/friendflix-{backend,gateway,web}`, Tags `latest`, Kurz-SHA, `x.y.z`) ist
+Jedes veröffentlichte Image (`ghcr.io/<owner>/friendflix-{backend,gateway,web}`, Tags `latest`, Kurz-SHA, `x.y.z`, `x.y`, `x`) ist
 - mit **cosign keyless** signiert: kein Schlüssel, kein Secret. Der Publish-Job holt sich per GitHub-OIDC ein kurzlebiges Zertifikat von Sigstore (Fulcio), die Signatur steht im öffentlichen Transparenz-Log (Rekor). Die Identität im Zertifikat ist der Workflow, der signiert hat: `https://github.com/<Owner>/<Repo>/.github/workflows/publish.yml@refs/heads/main` bzw. `@refs/tags/vX.Y.Z`.
 - mit **GitHub-Attestations** versehen: SLSA-Provenienz (welcher Commit, welcher Workflow-Lauf) und die SBOM (SPDX, von BuildKit beim Build erzeugt), beide auch in GHCR neben dem Image abgelegt.
 - zusätzlich mit den BuildKit-Attestations (SBOM + Provenienz `mode=max`) direkt im Image-Index.
@@ -145,6 +168,7 @@ Strenger (nur `main` und Versions-Tags): `--certificate-identity-regexp '^https:
 ## Empfohlener Branch-Schutz
 GitHub → *Settings* → *Rules* → *Rulesets* (oder *Branches* → *Branch protection rule*) für `main`:
 - **Require a pull request before merging** (ohne Pflicht-Review reicht für ein Ein-Personen-Projekt), **Block force pushes**, **Restrict deletions**.
+- *Bypass list*: nur der Akteur hinter `RELEASE_TOKEN` (für den Release-Commit), nie „GitHub Actions“. Dazu ein Tag-Ruleset für `v*` (siehe *Release erstellen*).
 - **Require status checks to pass** mit genau diesen Checks aus `.github/workflows/ci.yml` (Namen wie in der Auswahl; sie erscheinen dort erst, nachdem sie einmal gelaufen sind):
   `test (22)`, `test (26)`, `e2e`, `dast`, `secrets`, `docker (backend)`, `docker (gateway)`, `docker (web)`
 - **Require branches to be up to date before merging** (*Require status checks to pass* → *Require branches to be up to date before merging*): die Checks müssen gegen den aktuellen Stand von `main` gelaufen sein.

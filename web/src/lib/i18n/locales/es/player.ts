@@ -115,6 +115,17 @@ const es: Translation<typeof de> = {
     playingOn: 'Reproduciendo en {name}',
     stop: 'Dejar de transmitir',
   },
+  airplay: {
+    play: 'Reproducir en dispositivo AirPlay',
+    playing: 'Reproduciendo por AirPlay',
+    change: 'Cambiar dispositivo AirPlay',
+    failed: 'La reproducción por AirPlay falló.',
+    endHint: 'Para terminar, elige este dispositivo en el menú AirPlay.',
+    choose: 'Elegir televisor',
+    chooseHint: 'Ahora elige el televisor de la lista.',
+    needsTranscode: 'AirPlay necesita transcodificación – no permitida para tu rol.',
+    tvHint: '¿Tu tele no tiene AirPlay ni Chromecast? Abre {url} en el navegador de la tele y vincula tu móvil como mando.',
+  },
   mode: {
     label: 'Reproducción: {mode}',
     direct: 'Direct Play (archivo original)',

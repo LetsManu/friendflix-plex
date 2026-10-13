@@ -330,11 +330,12 @@ test.describe('admin content pages (desktop)', () => {
       await page.goto('/admin/update');
       await expect(page.getByRole('heading', { level: 1, name: 'Update' })).toBeVisible();
       const ver = page.getByRole('region', { name: 'Version' });
-      await expect(ver).toContainText('c0be6c5');
-      await expect(ver).toContainText('3 Updates verfügbar');
+      await expect(ver).toContainText('Build c0be6c5');
+      await expect(ver).toContainText('Update verfügbar');
+      await expect(ver).toContainText('main ist 3 Commits weiter als diese Version');
       await expect(page.getByRole('table', { name: 'Änderungen' }).getByRole('row', { name: /local request-service users/ })).toBeVisible();
       await ver.getByRole('button', { name: 'Neu prüfen' }).click();
-      await expect(toasts(page).getByText('3 Updates verfügbar')).toBeVisible();
+      await expect(toasts(page).getByText('Update verfügbar')).toBeVisible();
 
       const go = page.getByRole('button', { name: 'Jetzt aktualisieren' });
       await go.click();
@@ -347,6 +348,20 @@ test.describe('admin content pages (desktop)', () => {
       await expect.poll(() => api.log.some((l) => l.startsWith('POST /api/admin/update'))).toBe(true);
       await expect(page.getByRole('list').filter({ hasText: 'Update angestoßen' })).toBeVisible();
       await expect(page.getByText('Fertig – die Seite lädt neu')).toBeVisible({ timeout: 10_000 });
+    });
+
+    test('before the first release: commits ahead decide the state', async ({ page }) => {
+      const now = new Date().toISOString();
+      await page.route('**/api/admin/update', (r) => (r.request().method() !== 'GET' ? r.fallback() : r.fulfill({ json: {
+        current: { sha: 'c0be6c5deadbeef', builtAt: now, version: '1.0.0', codename: 'Arancini' }, release: null, updateAvailable: null,
+        latest: { sha: 'ff00aa1deadbeef', date: now, runUrl: 'https://example.org/run' }, behind: 3, portainer: { configured: true, mode: 'webhook' }, autoUpdateNote: true, commits: [],
+      } })));
+      await page.goto('/admin/update');
+      const ver = page.getByRole('region', { name: 'Version' });
+      await expect(ver).toContainText('3 Updates verfügbar');
+      await expect(ver).toContainText('Noch kein Release veröffentlicht');
+      await expect(ver.getByText('Neueste:')).toHaveCount(0);
+      await expect(page.getByText(/Was ist neu/)).toHaveCount(0);
     });
 
     test('a Portainer error is explained in a toast', async ({ page }) => {

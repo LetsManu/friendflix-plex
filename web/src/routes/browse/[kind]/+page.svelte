@@ -184,7 +184,7 @@
   .chip:hover:not(:disabled) { background: #323a43; }
   .state { text-align: center; padding: 1rem 0 3rem; }
   .backdrop { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.6); animation: fade .2s ease-out; }
-  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 71; flex-direction: column; max-height: 85vh; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain; background: #0d1115; border-top: 1px solid #2b333c; border-radius: 16px 16px 0 0; padding: 0 1rem calc(1rem + env(safe-area-inset-bottom)); animation: rise .26s var(--ease, ease-out); }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 71; flex-direction: column; max-height: 85vh; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain; background: #0d1115; border-top: 1px solid #2b333c; border-radius: 16px 16px 0 0; padding: 0 1rem calc(1rem + var(--safe-bottom)); animation: rise .26s var(--ease, ease-out); }
   .sheet.dragging { transition: none; }
   .grab { touch-action: none; cursor: grab; position: sticky; top: 0; background: #0d1115; z-index: 1; padding: 0 0 .4rem; margin: 0 -1rem; }
   .handle { display: block; width: 40px; height: 4px; border-radius: 99px; background: #4a5560; margin: 10px auto 8px; }
@@ -193,7 +193,7 @@
   .fl { display: grid; gap: .3rem; color: var(--mut); font-size: .82rem; font-weight: 600; }
   .fl select { width: 100%; min-height: 48px; color: var(--fg); font-size: 1rem; font-weight: 400; }
   .sheet form { gap: .7rem; }
-  .sacts { display: flex; gap: .6rem; position: sticky; bottom: calc(-1rem - env(safe-area-inset-bottom)); margin: .2rem -1rem calc(-1rem - env(safe-area-inset-bottom)); padding: .7rem 1rem calc(1rem + env(safe-area-inset-bottom)); background: #0d1115; border-top: 1px solid #20262d; }
+  .sacts { display: flex; gap: .6rem; position: sticky; bottom: calc(-1rem - var(--safe-bottom)); margin: .2rem -1rem calc(-1rem - var(--safe-bottom)); padding: .7rem 1rem calc(1rem + var(--safe-bottom)); background: #0d1115; border-top: 1px solid #20262d; }
   .sacts button { flex: 1; min-height: 48px; }
   @keyframes rise { from { transform: translateY(100%); } to { transform: none; } }
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }

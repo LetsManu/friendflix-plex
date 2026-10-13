@@ -4,6 +4,8 @@
   import Logo from '#lib/Logo.svelte';
   import { LOCALES, locale, t, type Locale } from '#lib/i18n';
   import { saveLanguage } from '#lib/stores';
+  import VersionEgg from '#lib/version/VersionEgg.svelte';
+  import { APP_CODENAME, APP_VERSION } from '#lib/version/codenames';
   /** opens the help dialog of the layout */
   export let onHelp: () => void = () => undefined;
   /** kids profile: no link columns (party, lists, stats … are not for kids), language and help stay */
@@ -32,6 +34,7 @@
       {#if langErr}<span class="err" role="alert">{$t('account.language.saveFailed')}</span>{/if}
       <button type="button" class="help" on:click={onHelp}>{$t('shell.footer.help')}</button>
       <span class="brand"><Logo size={18} label="" /> {$t('shell.footer.tagline')}</span>
+      <span class="version"><VersionEgg version={APP_VERSION} codename={APP_CODENAME} label="{$t('common.appName')} {APP_VERSION} · {APP_CODENAME}" /></span>
     </div>
   </div>
 </footer>
@@ -53,6 +56,7 @@
   .help { background: transparent; border: 1px solid #808080; color: #808080; font-weight: 400; font-size: .82rem; min-height: 44px; padding: .3rem .9rem; border-radius: 2px; }
   .help:hover:not(:disabled) { background: transparent; color: #fff; border-color: #fff; }
   .brand { display: inline-flex; align-items: center; gap: .45rem; opacity: .85; }
+  .version { margin-left: auto; font-size: .76rem; opacity: .8; }
   .foot.kids { background: #fffaf0; color: #5b6280; }
   .foot.kids .meta { margin-top: 0; }
   .foot.kids .lang select, .foot.kids .help { color: #20233a; border-color: #9aa0b8; border-radius: 99px; }

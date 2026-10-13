@@ -21,6 +21,8 @@ export function castRoutes(app: FastifyInstance, ctx: Ctx) {
       startTicks: z.number().int().min(0).optional(),
       audioIndex: z.number().int().min(0).optional(),
       maxBitrate: z.number().int().min(300_000).max(200_000_000).optional(),
+      /** sender protocol: Chromecast (default) or Safari AirPlay (same token flow, two-address pin, see cast.ts) */
+      via: z.enum(['chromecast', 'airplay']).optional(),
     }).parse(req.body);
     const deviceId = req.session!.deviceId;
     if (!deviceId) return reply.code(403).send({ error: 'device_pending' });
@@ -40,7 +42,7 @@ export function castRoutes(app: FastifyInstance, ctx: Ctx) {
       if (ctx.jf.preparePlayback) info = await ctx.jf.preparePlayback(req.jfUser!, info, opts);
       const ttl = castTtlSeconds(info.runtimeTicks, startTicks);
       const { ct, imgCt, castId, expiresAt } = await createCast(ctx, {
-        userId: req.user!.id, profileId: req.profile!.id, deviceId, itemId: b.itemId, mediaSourceId: info.mediaSourceId, playSessionId: info.playSessionId, maxBitrate, title: item.name,
+        userId: req.user!.id, profileId: req.profile!.id, deviceId, itemId: b.itemId, mediaSourceId: info.mediaSourceId, playSessionId: info.playSessionId, maxBitrate, title: item.name, via: b.via ?? 'chromecast',
       }, ttl, Boolean(item.image));
       // Jellyfin returns /media/... URLs; the cast variant carries the token in the path: /media/c/<ct>/...
       const absWith = (t: string, u: string) => `${ctx.cfg.PUBLIC_URL.replace(/\/+$/, '')}/media/c/${t}${u.slice('/media'.length)}`;

@@ -82,7 +82,7 @@
 {#if playing}<OfflinePlayer dl={playing} on:close={closePlayer} />{/if}
 
 <style>
-  .offline { min-height: 60vh; display: flex; flex-direction: column; align-items: center; gap: 1rem; text-align: center; padding: 3rem 1rem; }
+  .offline { min-height: 60vh; display: flex; flex-direction: column; align-items: center; gap: 1rem; text-align: center; padding: calc(3rem + var(--safe-top)) max(1rem, var(--safe-right)) calc(3rem + var(--safe-bottom)) max(1rem, var(--safe-left)); }
   h1 { margin: 0; }
   p { margin: 0; max-width: 32rem; }
   .muted { opacity: .8; }

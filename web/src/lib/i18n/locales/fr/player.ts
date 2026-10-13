@@ -115,6 +115,17 @@ const fr: Translation<typeof de> = {
     playingOn: 'Lecture en cours sur {name}',
     stop: 'Arrêter la diffusion',
   },
+  airplay: {
+    play: 'Lire sur un appareil AirPlay',
+    playing: 'Lecture via AirPlay',
+    change: 'Changer d’appareil AirPlay',
+    failed: 'La lecture AirPlay a échoué.',
+    endHint: 'Pour arrêter, choisissez cet appareil dans le menu AirPlay.',
+    choose: 'Choisir le téléviseur',
+    chooseHint: 'Choisissez maintenant le téléviseur dans la liste.',
+    needsTranscode: 'AirPlay nécessite le transcodage – non autorisé pour votre rôle.',
+    tvHint: 'Pas d’AirPlay ni de Chromecast sur la télé ? Ouvrez {url} dans le navigateur de la télé et associez votre téléphone comme télécommande.',
+  },
   mode: {
     label: 'Lecture : {mode}',
     direct: 'Direct Play (fichier d’origine)',
