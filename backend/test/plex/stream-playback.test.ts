@@ -9,7 +9,8 @@ import { chapterImageUrl, chSig, partSig, sessionFor, tpSig, verifyChSig, verify
 import { langMatches, PlexPlayback, plexPlaybackFactory } from '../../src/plex/playback.js';
 import { decodeText, srtToVtt } from '../../src/plex/subtitles.js';
 import { parseBifHeader } from '../../src/plex/trickplay.js';
-import { KeyedMutex, plexHttpFromClient, transcodeQuery, waitForIndex } from '../../src/plex/transcode.js';
+import { KeyedMutex, plexHttpFromClient, rungHeight, transcodeQuery, waitForIndex } from '../../src/plex/transcode.js';
+import { parseDecision, plexTranscodeReason, type ReasonFacts } from '../../src/plex/reason.js';
 import { bifHeader, FakeFfmpeg, STREAM_TOKEN, TranscoderFake } from './streamfake.js';
 
 const SECRET = 'x'.repeat(32); // test-only HMAC key
@@ -160,6 +161,79 @@ describe('preparePlayback / transcoder flow', () => {
     await pb.preparePlayback(ALICE, c, opts);
     expect(fake.sessions.get(c.playSessionId)!.platform).toBe('Android');
     expect(fake.sessions.get(c.playSessionId)!.query.get('videoResolution')).toBeNull(); // 360p source
+  });
+
+  it('Block 20: a converted stream gets the rung\'s bitrate and height (4K source at 8 / 4 Mbit/s -> 1080p / 720p), in-cap copies stay unlimited', async () => {
+    const { pb, fake } = setup();
+    const m = fake.meta.get('1')!.Media[0];
+    Object.assign(m, { height: 2160, width: 3840, bitrate: 40_000 });
+    const q = async (o: Record<string, unknown>) => {
+      const i = await pb.playbackInfo(ALICE, MOVIE, { ...opts, ...o });
+      await pb.preparePlayback(ALICE, i, opts);
+      return fake.sessions.get(i.playSessionId)!.query;
+    };
+    let s = await q({ maxBitrate: 8_000_000 });
+    expect([s.get('maxVideoBitrate'), s.get('videoResolution')]).toEqual(['7808', '1920x1080']);
+    s = await q({ maxBitrate: 4_000_000 });
+    expect([s.get('maxVideoBitrate'), s.get('videoResolution')]).toEqual(['3808', '1280x720']);
+    s = await q({ maxBitrate: 1_000_000 });
+    expect([s.get('maxVideoBitrate'), s.get('videoResolution')]).toEqual(['808', '640x360']);
+    s = await q({ maxBitrate: 4_000_000, maxHeight: 480 }); // the role's height cap wins when it is lower
+    expect(s.get('videoResolution')).toBe('854x480');
+    s = await q({ maxBitrate: 60_000_000 }); // 4K h264 within the cap: stream copy, no limits
+    expect([s.get('maxVideoBitrate'), s.get('videoResolution')]).toEqual([null, null]);
+    const h = setup(); // the video is converted anyway (hevc): rung limits even within the cap
+    Object.assign(h.fake.meta.get('1')!.Media[0], { height: 2160, width: 3840, bitrate: 40_000, videoCodec: 'hevc' });
+    const hi = await h.pb.playbackInfo(ALICE, MOVIE, { maxBitrate: 60_000_000 });
+    await h.pb.preparePlayback(ALICE, hi, opts);
+    s = h.fake.sessions.get(hi.playSessionId)!.query;
+    expect([s.get('maxVideoBitrate'), s.get('videoResolution')]).toEqual(['59808', '1920x1080']);
+    expect([rungHeight(8e6), rungHeight(7_999_999), rungHeight(4e6), rungHeight(1.5e6), rungHeight(1e6)]).toEqual([1080, 720, 720, 480, 360]);
+  });
+
+  it('Block 20: transcodeReason from the source and Plex\'s stream decisions; undefined for direct play', async () => {
+    let { pb, fake } = setup(); // metadata is memoized per backend: one setup per source shape
+    const reason = async (o: Record<string, unknown>, id = MOVIE) => {
+      const i = await pb.playbackInfo(ALICE, id, { ...opts, ...o });
+      return (await pb.preparePlayback(ALICE, i, opts)).transcodeReason;
+    };
+    fake.meta.get('1')!.Media[0].container = 'mp4';
+    expect(await reason({})).toBeUndefined(); // direct play
+    expect(await reason({ maxBitrate: 1_000_000, capReason: 'remoteCap' })).toBe('remoteCap');
+    expect(await reason({ maxBitrate: 1_000_000, capReason: 'roleCap' })).toBe('roleCap');
+    expect(await reason({ maxBitrate: 1_000_000, capReason: 'manual' })).toBe('manual');
+    expect(await reason({ maxBitrate: 1_000_000 })).toBe('network');
+    expect(await reason({ audioIndex: 2 })).toBe('audioTrack');
+    ({ pb, fake } = setup()); // mkv
+    expect(await reason({})).toBe('container'); // h264/aac in mkv: remuxed
+    expect(await reason({ maxBitrate: 1_000_000, capReason: 'remoteCap' })).toBe('remoteCap'); // the cap re-encodes the video
+    expect(await reason({}, HEVC)).toBe('videoCodec');
+    expect(await reason({ maxBitrate: 300_000, capReason: 'remoteCap' }, HEVC)).toBe('videoCodec'); // server reasons outrank caps
+    fake.decisionStreams = { video: 'copy', audio: 'transcode' }; // e.g. 7.1 audio the Web profile converts
+    expect(await reason({})).toBe('audioCodec');
+    fake.decisionStreams = { video: 'copy', audio: 'copy' };
+    expect(await reason({})).toBe('container');
+    const info = await pb.playbackInfo(ALICE, MOVIE, { ...opts, maxBitrate: 1_000_000, capReason: 'remoteCap' });
+    expect(info.transcodeReason).toBe('remoteCap'); // already on the DTO before the decision
+  });
+
+  it('plexTranscodeReason / parseDecision (PMS decision JSON, lenient)', () => {
+    const f: ReasonFacts = { container: 'mp4', videoCodec: 'h264', bitDepth: 8, audioCodec: 'aac', srcBps: 5e6, srcHeight: 1080, maxBitrate: 20e6 };
+    expect(plexTranscodeReason(f)).toBe('other');
+    expect(plexTranscodeReason({ ...f, bitDepth: 10 })).toBe('videoCodec');
+    expect(plexTranscodeReason({ ...f, audioCodec: 'truehd' })).toBe('audioCodec');
+    expect(plexTranscodeReason({ ...f, audioCodec: 'eac3' }, { audio: 'copy' })).toBe('other');
+    expect(plexTranscodeReason({ ...f, maxHeight: 720 })).toBe('height');
+    expect(plexTranscodeReason({ ...f, srcBps: 0 }, { video: 'transcode' })).toBe('network');
+    expect(plexTranscodeReason({ ...f, srcBps: 0, capReason: 'roleCap' }, { video: 'transcode' })).toBe('roleCap');
+    expect(plexTranscodeReason({ ...f, audioIndex: 2, audioCodec: 'dts' })).toBe('audioCodec');
+    const pms = { MediaContainer: { generalDecisionCode: 1001, transcodeDecisionText: 'Direct play not available; Conversion OK.', Metadata: [{ Media: [{ selected: true, Part: [{ decision: 'transcode', Stream: [
+      { streamType: 1, decision: 'copy' }, { streamType: 2, decision: 'transcode', selected: true }, { streamType: 3, decision: 'burn' },
+    ] }] }] }] } };
+    expect(parseDecision(pms)).toEqual({ video: 'copy', audio: 'transcode' });
+    expect(parseDecision({ MediaContainer: { TranscodeSession: [{ videoDecision: 'transcode', audioDecision: 'copy' }] } })).toEqual({ video: 'transcode', audio: 'copy' });
+    expect(parseDecision({ MediaContainer: { generalDecisionCode: 1001 } })).toEqual({ video: undefined, audio: undefined });
+    expect(parseDecision(null)).toEqual({});
   });
 
   it('the default track is re-selected for sessions without a choice (the account selection may have been flipped)', async () => {

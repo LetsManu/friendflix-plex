@@ -240,6 +240,9 @@ export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
     clampHeight: ['maxheight', 'height'],
     clampWidth: ['maxwidth', 'width'],
     clampBitrate: [], // bitrate and resolution caps are applied by the backend when it starts the transcode
+    // No requireBitrate (Block 20): rewrite() rebuilds every Plex query from scratch, so a bitrate param injected or clamped here would
+    // never reach Plex. The transcode's maxVideoBitrate / videoResolution are fixed by the backend at start (decision + start.m3u8 with
+    // the role / remote cap of POST /api/playback/info); the session URLs the client fetches carry no parameters Plex would read.
     // cred.token is the FriendFlix identity (no secret); the Plex token comes from this process' env only
     authHeaders: (_c: UpstreamCredentials) => ({ 'X-Plex-Token': token(), 'X-Plex-Client-Identifier': 'friendflix-gateway', 'X-Plex-Product': 'FriendFlix' }),
     authorize,

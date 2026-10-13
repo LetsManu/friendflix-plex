@@ -243,6 +243,7 @@ What the preview implements (checked by the test suite against the fake Plex ser
 | Direct play | Works | Browser-compatible files (MP4/WebM, H.264/VP9/AV1, AAC/MP3/Opus/FLAC) within the role's limits |
 | Adaptive streaming (HLS) | Works | Plex universal transcoder (MPEG-TS segments), session-bound URLs through the gateway |
 | Role limits | Works | Bitrate and height caps when the transcode starts; roles without transcoding get Direct Play only (otherwise `403 transcoding_not_allowed`); max. streams per account and per profile |
+| Smooth streaming (Auto quality, remote limit, quality chip) | Works | Each quality change starts a new Plex transcode at the chosen rung (bitrate plus 1080p / 720p / 480p / 360p); the remote limit is applied when the transcode starts; the chip's reason comes from the source and Plex's per-stream decision (copy / transcode) |
 | Subtitles | Limited | Text subtitles only (SRT, ASS/SSA, VTT, mov_text …); sidecar files converted, **embedded tracks extracted by FriendFlix** with ffmpeg; no PGS/VobSub; no subtitle search |
 | Audio track selection | Limited | Plex keeps it per Plex account; FriendFlix serializes stream starts, see [Audio tracks](#audio-tracks) |
 | Skip intro / credits | Limited | Only with Plex Pass markers; recap and preview skipping are never available |
@@ -267,6 +268,7 @@ Plex's transcoder ignores an audio track chosen in the request; it uses the trac
 Plex only knows one token, so FriendFlix enforces the role settings itself:
 
 - **Bitrate / height caps** are sent with every transcode start; a capped role never gets Direct Play of a larger file.
+- **Remote limit** (Block 20, `HOME_NETWORKS`): outside the home networks the role's remote limit is the cap of `POST /api/playback/info`, so it is part of the transcode start (`maxVideoBitrate` = cap − 192 kbit/s for audio, `videoResolution` = the rung's height: 1080p from 8 Mbit/s, 720p from 4, 480p from 1.5, else 360p; never above the role's height cap). The gateway cannot change a running Plex transcode and needs no bitrate rule for it: it never passes client parameters to Plex. A session started at home keeps its limit when the viewer leaves the home network until the next quality change or playback start.
 - **Transcoding off** (role template or *Admin → Roles*): only Direct Play. Titles that would need the transcoder answer `403 transcoding_not_allowed`; no Plex transcode is started. Casting and transcoded downloads are refused the same way.
 - **Max. streams**: counted per account (as upstream) and per profile identity, on the server: every Plex transcode FriendFlix started for the profile counts as long as Plex still runs it (`/transcode/sessions`; Plex ends transcodes nobody fetches), plus Direct Play sessions with a progress report in the last 60 s. A title beyond the limit answers `429 max_streams` before a transcode starts. Changing quality or audio on the same title never counts twice. A stop report ends the Plex transcode immediately.
 

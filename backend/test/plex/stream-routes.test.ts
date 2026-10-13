@@ -71,6 +71,9 @@ describe('through the routes (makeEnv server: plex)', () => {
   let tf: TranscoderFake;
   const bodies: string[] = [];
   const fake = new PlexFake();
+  // Block 20: a 4K h264/aac mp4 at 30 Mbit/s (direct play at home without caps)
+  const big = fake.addMovie({ title: 'Big Picture' });
+  Object.assign(fake.items.get(big)!.Media[0], { bitrate: 30_000, height: 2160, width: 3840, container: 'mp4' });
   beforeAll(async () => {
     let built: ReturnType<typeof build> | undefined;
     env = await makeEnv({}, {
@@ -106,5 +109,32 @@ describe('through the routes (makeEnv server: plex)', () => {
     expect(sub.statusCode).toBe(200);
     expect(sub.headers['content-type']).toContain('text/vtt');
     expect(sub.body).toContain('00:00:01.000 --> 00:00:03.500');
+  });
+
+  it('Block 20 on Plex: remote cap from the client address, transcodeReason, rung bitrate + height reach the transcoder', async () => {
+    const s = await env.login();
+    const play = async (ip: string, body: object = {}) => {
+      const r = await env.app.inject({ method: 'POST', url: '/api/playback/info', cookies: s.cookies, headers: { 'x-csrf-token': s.csrf, 'x-real-ip': ip }, payload: { itemId: item(big), ...body } });
+      bodies.push(r.body);
+      expect(r.statusCode).toBe(200);
+      const info = r.json();
+      return { info, q: tf.sessions.get(info.playSessionId)?.query };
+    };
+    const home = await play('192.168.1.10');
+    expect(home.info.directUrl).toBeDefined();
+    expect(home.info.transcodeReason).toBeUndefined();
+    const away = await play('203.0.113.9');
+    expect(away.info.directUrl).toBeUndefined();
+    expect(away.info.maxBitrate).toBeLessThan(home.info.maxBitrate);
+    expect(away.info.roleMaxBitrate).toBe(away.info.maxBitrate); // the effective ceiling outside the home networks
+    expect(away.info.transcodeReason).toBe('remoteCap');
+    expect(away.q!.get('maxVideoBitrate')).toBe(String(away.info.maxBitrate / 1000 - 192));
+    expect(away.q!.get('videoResolution')).toBe('1920x1080');
+    const slow = await play('192.168.1.10', { maxBitrate: 4_000_000, reasonHint: 'network' });
+    expect(slow.info.transcodeReason).toBe('network');
+    expect([slow.q!.get('maxVideoBitrate'), slow.q!.get('videoResolution')]).toEqual(['3808', '1280x720']);
+    const picked = await play('192.168.1.10', { maxBitrate: 1_500_000, reasonHint: 'manual' });
+    expect(picked.info.transcodeReason).toBe('manual');
+    expect(picked.q!.get('videoResolution')).toBe('854x480');
   });
 });

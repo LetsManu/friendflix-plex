@@ -70,6 +70,17 @@ describe('Plex behind the FriendFlix routes', () => {
     expect(await reapplyRole(env.ctx, 'admin')).toBe(0);
   });
 
+  it('Block 20: GET /api/home answers every part from the Plex implementation, without the token or Plex paths', async () => {
+    const s = await env.login();
+    const r = await call(s, 'GET', '/api/home');
+    expect(r.statusCode, r.body).toBe(200);
+    const home = r.json();
+    expect(home.failed).toEqual([]);
+    expect(Object.keys(home.parts).sort()).toEqual(['because', 'hero', 'hubs', 'leaving', 'nextup', 'recs', 'resume', 'themed']);
+    expect(['Home Video', 'Kinderfilm', 'MAD TEST', 'Test Movie One', 'Test Movie Two']).toContain(home.parts.hero?.name);
+    expect(r.body).not.toMatch(/\/library\/|\/video\/:|plex\.test|32400|X-Plex/i);
+  });
+
   it('played / favourite / resume go to FriendFlix tables, never to Plex', async () => {
     const s = await env.login();
     fake.calls.length = 0;
