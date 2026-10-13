@@ -171,14 +171,14 @@
 </div>
 
 <style>
-  .dt { min-width: 0; scroll-margin-top: calc(var(--nav-h) + 1rem); }
+  .dt { min-width: 0; scroll-margin-top: calc(var(--nav-total) + 1rem); }
   .bar { height: auto; background: none; overflow: visible; display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin-bottom: .8rem; }
   .search { position: relative; display: flex; align-items: center; flex: 1 1 240px; max-width: 420px; color: var(--mut); }
   .search :global(svg) { position: absolute; left: .75rem; pointer-events: none; }
   .search input { width: 100%; padding-left: 2.4rem; }
   table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
   caption.sr-only { position: absolute; }
-  th { position: sticky; top: var(--nav-h); z-index: 2; background: #181e24; text-align: left; padding: .55rem .8rem; font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--mut); border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { position: sticky; top: var(--nav-total); z-index: 2; background: #181e24; text-align: left; padding: .55rem .8rem; font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--mut); border-bottom: 1px solid var(--line); white-space: nowrap; }
   th:first-child { border-top-left-radius: 8px; } th:last-child { border-top-right-radius: 8px; }
   td { padding: .6rem .8rem; border-bottom: 1px solid var(--line); vertical-align: middle; overflow-wrap: anywhere; }
   tbody tr:last-child td { border-bottom: 0; }

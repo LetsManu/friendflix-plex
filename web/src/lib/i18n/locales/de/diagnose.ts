@@ -5,4 +5,9 @@ export default {
   copy: 'Werte kopieren',
   copied: 'Kopiert.',
   copyFailed: 'Kopieren nicht möglich, bitte Text markieren.',
+  airplayTitle: 'AirPlay-Protokoll',
+  airplayHint: 'Die letzten AirPlay-Ereignisse dieses Geräts (ohne Adressen und Tokens). Bei Problemen kopieren und mitschicken.',
+  airplayCopy: 'Kopieren',
+  airplayClear: 'Leeren',
+  airplayEmpty: 'Noch keine Einträge.',
 } as const;

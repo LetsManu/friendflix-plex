@@ -1,12 +1,33 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { t } from '#lib/i18n';
+  import { airLogStart, clearAirLog, formatAirLog, readAirLog, type AirLogEntry } from '#lib/player/airplayLog';
 
   type Row = [string, string];
   let rows: Row[] = [];
   let probe: HTMLElement, svh: HTMLElement, lvh: HTMLElement, dvh: HTMLElement, vh: HTMLElement;
   let table: HTMLElement;
   let note = '';
+  // AirPlay event log (lib/player/airplayLog.ts): no URLs / tokens are ever stored there
+  let air: AirLogEntry[] = [];
+  let airNote = '';
+  let airPre: HTMLElement;
+  const airText = () => formatAirLog(air, airLogStart());
+  const readAir = () => { air = readAirLog(); };
+  async function copyAir() {
+    try {
+      await navigator.clipboard.writeText(airText());
+      airNote = $t('diagnose.copied');
+    } catch {
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(airPre);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      airNote = $t('diagnose.copyFailed');
+    }
+  }
+  function clearAir() { clearAirLog(); readAir(); airNote = ''; }
 
   const r1 = (n: number) => String(Math.round(n * 100) / 100);
   const rect = (el: Element | null) => {
@@ -75,6 +96,7 @@
 
   onMount(() => {
     measure();
+    readAir();
     const id = setInterval(measure, 1000);
     window.addEventListener('resize', measure);
     window.addEventListener('orientationchange', measure);
@@ -102,6 +124,16 @@
       {/each}
     </tbody>
   </table>
+
+  <h2>{$t('diagnose.airplayTitle')}</h2>
+  <p class="hint">{$t('diagnose.airplayHint')}</p>
+  <div class="row">
+    <button type="button" on:click={copyAir} disabled={!air.length}>{$t('diagnose.airplayCopy')}</button>
+    <button type="button" on:click={clearAir} disabled={!air.length}>{$t('diagnose.airplayClear')}</button>
+    {#if airNote}<span role="status" class="note">{airNote}</span>{/if}
+  </div>
+  {#if air.length}<pre class="airlog" bind:this={airPre} data-testid="airplay-log">{formatAirLog(air, airLogStart())}</pre>
+  {:else}<p class="hint" data-testid="airplay-log-empty">{$t('diagnose.airplayEmpty')}</p>{/if}
 </div>
 
 <div class="probe" bind:this={probe} aria-hidden="true"></div>
@@ -119,6 +151,9 @@
   th, td { text-align: left; padding: .3rem .4rem; border-bottom: 1px solid #2b333c; vertical-align: top; word-break: break-word; }
   th { font-weight: 600; color: #cfd6dd; width: 48%; }
   .note { margin-left: .8rem; }
+  h2 { margin-top: 2rem; }
+  .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+  .airlog { margin-top: 1rem; padding: .6rem; background: #12171c; border: 1px solid #2b333c; border-radius: 6px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; user-select: text; -webkit-user-select: text; }
   .probe { position: fixed; visibility: hidden; pointer-events: none; width: 0; height: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
   .unit { position: fixed; left: 0; width: 1px; top: 0; visibility: hidden; pointer-events: none; }
   .vh { height: 100vh; } .svh { height: 100svh; } .lvh { height: 100lvh; } .dvh { height: 100dvh; }

@@ -90,7 +90,7 @@
 
 <style>
   .op { position: fixed; inset: 0; z-index: 100; background: #000; display: flex; flex-direction: column; }
-  .bar { display: flex; align-items: center; gap: 1rem; padding: .5rem 1rem; padding-top: max(.5rem, env(safe-area-inset-top)); min-height: 52px; }
+  .bar { display: flex; align-items: center; gap: 1rem; padding: .5rem 1rem; padding-top: max(.5rem, var(--safe-top)); min-height: 52px; }
   .back { background: transparent; font-size: 1rem; }
   .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .85; }
   video { flex: 1; min-height: 0; width: 100%; background: #000; }

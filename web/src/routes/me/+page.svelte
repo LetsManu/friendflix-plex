@@ -81,6 +81,7 @@
             {#if isAcc}<li><a href="/settings#language"><Icon name="globe" size={20} />{$t('account.me.language', { name: localeName($locale) })}<Icon name="chevron-right" size={18} /></a></li>{/if}
             {#if isAcc}<li><button type="button" class="rowbtn" on:click={() => window.dispatchEvent(new Event('ff-help'))}><Icon name="info" size={20} />{$t('shell.menu.help')}<Icon name="chevron-right" size={18} /></button></li>{/if}
             {#if isAcc && admin}<li><a href="/admin"><Icon name="shield" size={20} />{$t('shell.menu.admin')}<Icon name="chevron-right" size={18} /></a></li>{/if}
+            {#if isAcc && admin}<li><a href="/diagnose" data-testid="me-diagnose"><Icon name="info" size={20} />{$t('diagnose.title')}<Icon name="chevron-right" size={18} /></a></li>{/if}
           </ul>
         </section>
       {/if}

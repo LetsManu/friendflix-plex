@@ -65,8 +65,8 @@
 </div>
 
 <style>
-  .lg { position: fixed; inset: 0; z-index: 120; background: var(--bg, #101418); overflow-y: auto; display: grid; place-items: center; padding: 4.5rem var(--pad-x) 2rem; }
-  .brand { position: absolute; top: 1.2rem; left: var(--pad-x); display: inline-flex; }
+  .lg { position: fixed; inset: 0; z-index: 120; background: var(--bg, #101418); overflow-y: auto; display: grid; place-items: center; padding: calc(4.5rem + var(--safe-top)) var(--pad-x) calc(2rem + var(--safe-bottom)); }
+  .brand { position: absolute; top: calc(1.2rem + var(--safe-top)); left: max(var(--pad-x), var(--safe-left)); display: inline-flex; }
   .inner { width: min(760px, 100%); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
   h1 { font-size: clamp(1.7rem, 4vw, 2.8rem); font-weight: 500; margin: 0; }
   .en { color: var(--mut); }

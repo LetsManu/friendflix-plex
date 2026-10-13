@@ -1,4 +1,5 @@
 import type { Ctx } from './ctx.js';
+import { appVersion, codenameFor, compareSemver, parseSemver } from './version.js';
 
 const TTL = 600;
 const CACHE_MS = 'update:info:';
@@ -6,8 +7,15 @@ const GH = 'https://api.github.com';
 
 export interface Latest { sha: string; date: string; runUrl: string }
 export interface CommitInfo { sha: string; message: string; author: string; date: string; url: string }
+/** newest published GitHub release (releases/latest) */
+export interface Release { version: string; codename: string | null; tag: string; name: string; url: string; publishedAt: string | null; notes: string }
 export interface UpdateInfo {
-  current: { sha: string; builtAt: string | null };
+  current: { sha: string; builtAt: string | null; version: string; codename: string };
+  /** newest release; null when none is published yet (or its tag is not a version) */
+  release: Release | null;
+  /** release-based answer; null = nothing to compare with, fall back to `behind` */
+  updateAvailable: boolean | null;
+  /** secondary: newest successful CI build on main and how many commits it is ahead of the installed build */
   latest: Latest | null;
   behind: number | null;
   commits: CommitInfo[];
@@ -23,26 +31,37 @@ export function portainerMode(ctx: Ctx): 'webhook' | 'api' | null {
   return null;
 }
 
-async function gh<T>(ctx: Ctx, path: string): Promise<T> {
+/** GitHub GET; `null` for a 404 when `missingOk` (e.g. no release published yet) */
+async function gh<T>(ctx: Ctx, path: string, missingOk = false): Promise<T | null> {
   const headers: Record<string, string> = { accept: 'application/vnd.github+json', 'user-agent': 'friendflix' };
   if (ctx.cfg.GITHUB_TOKEN) headers.authorization = `Bearer ${ctx.cfg.GITHUB_TOKEN}`;
   const r = await ctx.fetchImpl(`${GH}${path}`, { headers, signal: AbortSignal.timeout(10_000) });
+  if (missingOk && r.status === 404) return null;
   if (!r.ok) throw new Error(`GitHub ${r.status}`);
   return (await r.json()) as T;
 }
 
-type Fetched = Pick<UpdateInfo, 'latest' | 'behind' | 'commits'>;
+type Fetched = Pick<UpdateInfo, 'release' | 'latest' | 'behind' | 'commits'>;
+const NOTES_MAX = 20_000;
 
-async function fetchLatest(ctx: Ctx): Promise<Fetched> {
+async function fetchRelease(ctx: Ctx): Promise<Release | null> {
+  const r = await gh<{ tag_name?: string; name?: string | null; html_url?: string; published_at?: string | null; body?: string | null; draft?: boolean; prerelease?: boolean }>(ctx, `/repos/${ctx.cfg.UPDATE_REPO}/releases/latest`, true);
+  const tag = r?.tag_name ?? '';
+  if (!r || r.draft || r.prerelease || !parseSemver(tag)) return null;
+  const version = tag.replace(/^v/, '');
+  return { version, codename: codenameFor(version), tag, name: r.name || tag, url: r.html_url ?? '', publishedAt: r.published_at ?? null, notes: (r.body ?? '').slice(0, NOTES_MAX) };
+}
+
+async function fetchMain(ctx: Ctx): Promise<Pick<Fetched, 'latest' | 'behind' | 'commits'> | null> {
   const repo = ctx.cfg.UPDATE_REPO;
   const runs = await gh<{ workflow_runs?: Array<{ head_sha: string; updated_at: string; html_url: string }> }>(ctx, `/repos/${repo}/actions/workflows/ci.yml/runs?branch=main&status=success&event=push&per_page=1`);
-  const run = runs.workflow_runs?.[0];
-  if (!run) throw new Error('no successful CI run found');
+  const run = runs?.workflow_runs?.[0];
+  if (!run) return null;
   const latest: Latest = { sha: run.head_sha, date: run.updated_at, runUrl: run.html_url };
   const cur = ctx.cfg.GIT_SHA;
   if (cur === 'dev' || cur === latest.sha) return { latest, behind: cur === latest.sha ? 0 : null, commits: [] };
   try {
-    const cmp = await gh<{ ahead_by: number; commits?: Array<{ sha: string; html_url: string; commit: { message: string; author?: { name?: string; date?: string } }; author?: { login?: string } | null }> }>(ctx, `/repos/${repo}/compare/${cur}...${latest.sha}`);
+    const cmp = (await gh<{ ahead_by: number; commits?: Array<{ sha: string; html_url: string; commit: { message: string; author?: { name?: string; date?: string } }; author?: { login?: string } | null }> }>(ctx, `/repos/${repo}/compare/${cur}...${latest.sha}`))!;
     const commits = (cmp.commits ?? []).slice(-50).reverse().map((c) => ({
       sha: c.sha, message: c.commit.message.split('\n')[0]!, author: c.commit.author?.name ?? c.author?.login ?? '', date: c.commit.author?.date ?? '', url: c.html_url,
     }));
@@ -52,21 +71,32 @@ async function fetchLatest(ctx: Ctx): Promise<Fetched> {
   }
 }
 
-/** Installed vs latest version. GitHub answers are cached for 10 min (unauthenticated limit: 60/h); an outage never throws. */
+async function fetchLatest(ctx: Ctx): Promise<Fetched> {
+  const [release, main] = await Promise.all([fetchRelease(ctx), fetchMain(ctx)]);
+  if (!release && !main) throw new Error('no release and no successful CI run found');
+  return { release, ...(main ?? { latest: null, behind: null, commits: [] }) };
+}
+
+/**
+ * Installed vs newest release (primary) and vs the newest CI build on main (secondary: commits ahead, also the only
+ * comparison before the first release). GitHub answers are cached for 10 min (unauthenticated limit: 60/h); an outage never throws.
+ */
 export async function updateInfo(ctx: Ctx, refresh = false): Promise<UpdateInfo> {
   const mode = portainerMode(ctx);
-  const base = { current: { sha: ctx.cfg.GIT_SHA, builtAt: ctx.cfg.BUILD_TIME ?? null }, portainer: { configured: mode !== null, mode }, autoUpdateNote: true as const };
-  const key = `${CACHE_MS}${ctx.cfg.UPDATE_REPO}:${ctx.cfg.GIT_SHA}`;
+  const ver = appVersion(ctx.cfg);
+  const base = { current: { sha: ctx.cfg.GIT_SHA, builtAt: ctx.cfg.BUILD_TIME ?? null, ...ver }, portainer: { configured: mode !== null, mode }, autoUpdateNote: true as const };
+  const withState = (f: Fetched): UpdateInfo => ({ ...base, ...f, updateAvailable: f.release ? compareSemver(f.release.version, ver.version) > 0 : null });
+  const key = `${CACHE_MS}${ctx.cfg.UPDATE_REPO}:${ctx.cfg.GIT_SHA}:${ver.version}`;
   if (!refresh) {
     const hit = await ctx.kv.get(key).catch(() => null);
-    if (hit) return { ...base, ...(JSON.parse(hit) as Fetched) };
+    if (hit) return withState(JSON.parse(hit) as Fetched);
   }
   try {
     const f = await fetchLatest(ctx);
     await ctx.kv.set(key, JSON.stringify(f), TTL).catch(() => undefined);
-    return { ...base, ...f };
+    return withState(f);
   } catch (e) {
-    return { ...base, latest: null, behind: null, commits: [], error: e instanceof Error && e.message.startsWith('GitHub ') ? e.message : 'github_unreachable' };
+    return { ...base, release: null, updateAvailable: null, latest: null, behind: null, commits: [], error: e instanceof Error && e.message.startsWith('GitHub ') ? e.message : 'github_unreachable' };
   }
 }
 

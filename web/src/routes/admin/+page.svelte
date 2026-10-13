@@ -19,7 +19,7 @@
   const TOP = 3;
   let reqs: Req[] | null = null, devs: Dev[] | null = null, audit: AuditEntry[] | null = null;
   let reqErr = false, devErr = false, auditErr = false;
-  let update: { behind: number | null } | null | 'err' = null;
+  let update: { behind: number | null; updateAvailable?: boolean | null } | null | 'err' = null;
 
   const loadReqs = () => api<{ requests: Req[] }>('/api/admin/requests?filter=pending').then((r) => { reqs = r.requests; reqErr = false; }, () => { reqs = []; reqErr = true; });
   const loadDevs = () => api<{ devices: Dev[] }>('/api/admin/devices').then((r) => { devs = r.devices.filter((d) => !d.approved); devErr = false; }, () => { devs = []; devErr = true; });
@@ -71,6 +71,7 @@
     s ? svc($t('admin.dash.svc.jellyfin'), 'film', '/admin/status', s.services.jellyfin ? 'ok' : 'err', s.services.jellyfin ? $t('admin.dash.state.ok') : $t('admin.dash.state.down')) : null,
     s ? svc($t('admin.dash.svc.seerr'), 'inbox', '/admin/requests', s.services.seerr ? 'ok' : 'err', s.services.seerr ? $t('admin.dash.state.ok') : $t('admin.dash.state.down')) : null,
     update === null ? null
+      : update !== 'err' && update.updateAvailable != null ? svc($t('admin.dash.svc.update'), 'refresh', '/admin/update', update.updateAvailable ? 'warn' : 'ok', update.updateAvailable ? $t('admin.dash.state.updateAvailable') : $t('admin.dash.state.upToDate'))
       : update === 'err' || update.behind === null || update.behind === undefined ? svc($t('admin.dash.svc.update'), 'refresh', '/admin/update', 'muted', $t('admin.dash.state.unknown'))
       : svc($t('admin.dash.svc.update'), 'refresh', '/admin/update', update.behind ? 'warn' : 'ok', update.behind ? $t('admin.dash.state.behind', { n: update.behind }) : $t('admin.dash.state.upToDate')),
     s ? svc($t('admin.dash.svc.previews'), 'image', '/admin/previews', s.pending.previewsFailed ? 'err' : 'ok', s.pending.previewsFailed ? $t('admin.dash.state.failed', { n: s.pending.previewsFailed }) : $t('admin.dash.state.allOk')) : null,

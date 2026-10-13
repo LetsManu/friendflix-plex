@@ -243,10 +243,10 @@
 {/if}
 
 <style>
-  .brand { position: absolute; top: 1.2rem; left: var(--pad-x); display: inline-flex; z-index: 1; }
+  .brand { position: absolute; top: calc(1.2rem + var(--safe-top)); left: max(var(--pad-x), var(--safe-left)); display: inline-flex; z-index: 1; }
   .face.add { border: 2px solid transparent; }
   .prof:hover .face.add, .prof:focus-visible .face.add { background: #323a43; color: #fff; }
-  .wrap { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem var(--pad-x); gap: 1rem; }
+  .wrap { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: calc(2rem + var(--safe-top)) max(var(--pad-x), var(--safe-right)) calc(2rem + var(--safe-bottom)) max(var(--pad-x), var(--safe-left)); gap: 1rem; }
   h1 { font-size: clamp(1.8rem, 4vw, 3rem); font-weight: 500; margin: 0 0 1rem; }
   .grid2 { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: clamp(.8rem, 2.5vw, 2rem); }
   .prof { flex-direction: column; justify-content: flex-start; background: transparent; color: var(--mut); width: clamp(96px, 20vw, 160px); padding: .4rem; gap: .6rem; height: auto; font-weight: 400; }
@@ -261,7 +261,7 @@
   .lock { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.65); border-radius: 99px; width: 28px; height: 28px; display: grid; place-items: center; }
   .edit { position: absolute; inset: 0; border-radius: 24%; background: rgba(0,0,0,.55); display: grid; place-items: center; font-size: .95rem; font-weight: 600; }
   .sk { width: 140px; height: 140px; }
-  .ov { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.88); display: grid; place-items: center; padding: 1rem; overflow-y: auto; }
+  .ov { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.88); display: grid; place-items: center; padding: max(1rem, var(--safe-top)) 1rem max(1rem, var(--safe-bottom)); overflow-y: auto; }
   .box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1.6rem; display: flex; flex-direction: column; align-items: center; max-width: 100%; }
   .ed { width: min(440px, 100%); align-items: stretch; gap: .8rem; text-align: left; }
   .ed h2 { margin: 0; text-align: center; }

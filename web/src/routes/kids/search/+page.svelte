@@ -51,7 +51,7 @@
 </div>
 
 <style>
-  .kids-page { --k-ink: #20233a; --k-card: #fff; --k-focus: #ffb703; --k-accent: #ff5d8f; min-height: 100vh; min-height: 100dvh; padding: calc(var(--nav-h) + 1rem) var(--pad-x) 3rem; color: var(--k-ink);
+  .kids-page { --k-ink: #20233a; --k-card: #fff; --k-focus: #ffb703; --k-accent: #ff5d8f; min-height: 100vh; min-height: 100dvh; padding: calc(var(--nav-total) + 1rem) var(--pad-x) 3rem; color: var(--k-ink);
     background: radial-gradient(circle at 88% 6%, #ffe8a3 0, transparent 34%), linear-gradient(180deg, #c9f0d8 0%, #ecfbf2 60%, #fffaf0 100%); }
   .back { display: inline-flex; align-items: center; gap: .3rem; min-height: 44px; font-weight: 800; color: #2d6a4f; }
   .back:focus-visible { outline: 4px solid var(--k-focus); border-radius: 12px; }

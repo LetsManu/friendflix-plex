@@ -136,6 +136,9 @@ export function toPlaybackDto(args: {
     hls.set('Level', '41');
     hls.set('MaxVideoBitDepth', '8');
     hls.set('RequireAvc', 'true');
+    // no `#EXT-X-IMAGE-STREAM-INF` trickplay line (Jellyfin 10.9+, Roku-style image playlist): AirPlay receivers (LG webOS) reject
+    // the whole master on it (MEDIA_ERR_SRC_NOT_SUPPORTED, no variant fetched); the gateway strips it too (defence in depth)
+    hls.set('EnableTrickplay', 'false');
   }
   const srcHeight = Number(streams.find((s) => s.Type === 'Video')?.Height ?? 0);
   const withinCap = !maxHeight || (srcHeight > 0 && srcHeight <= maxHeight); // direct play must not bypass the cap (unknown height = no direct)

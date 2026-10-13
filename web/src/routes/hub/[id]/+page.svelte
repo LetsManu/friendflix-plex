@@ -92,7 +92,7 @@
   .fill { position: absolute; inset: 0; border-radius: 0; }
   .bd { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 22%; }
   .fade { position: absolute; inset: 0; background: linear-gradient(to top, var(--bg) 2%, rgba(0, 0, 0, 0) 60%), linear-gradient(77deg, rgba(0, 0, 0, .55), transparent 60%); box-shadow: inset 0 -90px 90px -60px var(--glow); pointer-events: none; }
-  .cap { position: relative; z-index: 1; padding: calc(var(--nav-h) + 1.5rem) var(--pad-x) 1.6rem; }
+  .cap { position: relative; z-index: 1; padding: calc(var(--nav-total) + 1.5rem) var(--pad-x) 1.6rem; }
   h1 { margin: 0; font-size: clamp(1.9rem, 4.6vw, 3.6rem); font-weight: 800; letter-spacing: -.02em; line-height: 1.05; text-shadow: 0 2px 14px rgba(0, 0, 0, .7); }
   .cap p { margin: .3rem 0 0; text-shadow: 0 1px 8px #000; }
   .rows { position: relative; z-index: 2; padding-bottom: 5rem; }

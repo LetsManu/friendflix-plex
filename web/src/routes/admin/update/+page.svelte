@@ -15,10 +15,16 @@
   import StatusPill from '#lib/ui/StatusPill.svelte';
   import Toggle from '#lib/ui/Toggle.svelte';
   import type { Column } from '#lib/ui/table';
+  import VersionEgg from '#lib/version/VersionEgg.svelte';
+  import { parseNotes } from '#lib/version/notes';
 
   interface Commit { sha: string; url: string; message: string; author: string; date: string }
+  interface Release { version: string; codename: string | null; tag: string; name: string; url: string; publishedAt: string | null; notes: string }
   interface Info {
-    current: { sha: string; builtAt?: string | null };
+    current: { sha: string; builtAt?: string | null; version?: string; codename?: string };
+    /** newest GitHub release (primary comparison); null before the first release */
+    release?: Release | null;
+    updateAvailable?: boolean | null;
     latest?: { sha: string; date?: string | null; runUrl?: string } | null;
     behind?: number | null;
     error?: string;
@@ -48,7 +54,11 @@
   let t0 = 0, now = Date.now();
   const sha7 = (s: string) => s.slice(0, 7);
   const dt = (d?: string | null) => (d ? fmtDateTime(d) : tr('admin.update.unknown'));
-  $: upToDate = u?.behind === 0;
+  /** release-based when a release exists, else the commit comparison with main (older backends send no release fields) */
+  $: byRelease = u?.updateAvailable === true || u?.updateAvailable === false;
+  $: upToDate = byRelease ? u?.updateAvailable === false && !u?.behind : u?.behind === 0;
+  $: notes = u?.release?.notes ? parseNotes(u.release.notes) : [];
+  const verLabel = (v: string, c?: string | null) => (c ? `${v} · ${c}` : v);
   $: busy = $busyKeys.has('update:check') || $busyKeys.has('update:start');
   $: running = phase === 'started' || phase === 'restarting' || phase === 'newversion';
 
@@ -59,7 +69,9 @@
   function check() {
     void runAction({
       key: 'update:check', run: () => api<Info>('/api/admin/update?refresh=1'),
-      success: (r) => (r?.behind === 0 ? tr('adminContent.update.checkedUpToDate') : r?.behind ? tr('admin.update.behind', { n: r.behind }) : tr('adminContent.update.checked')),
+      success: (r) => (r?.updateAvailable ? tr('admin.update.updateAvailable')
+        : r?.updateAvailable === false || r?.behind === 0 ? tr('adminContent.update.checkedUpToDate')
+          : r?.behind ? tr('admin.update.behind', { n: r.behind }) : tr('adminContent.update.checked')),
     }).then((res) => { if (res.ok && res.value) u = res.value; });
   }
 
@@ -112,18 +124,41 @@
       <Button variant="secondary" icon="refresh" pending={$busyKeys.has('update:check')} disabled={running || $busyKeys.has('update:start')} on:click={check}>{$t('admin.update.check')}</Button>
     </svelte:fragment>
     <dl class="ver">
-      <div><dt>{$t('admin.update.installed')}</dt><dd><code>{sha7(u.current.sha)}</code> <span class="muted">{$t('admin.update.builtAt', { date: dt(u.current.builtAt) })}</span></dd></div>
+      <div><dt>{$t('admin.update.installed')}</dt><dd>
+        {#if u.current.version}<span class="v"><VersionEgg version={u.current.version} codename={u.current.codename ?? ''} label={verLabel(u.current.version, u.current.codename)} /></span>
+          <span class="muted">{$t('admin.update.buildSha', { sha: sha7(u.current.sha) })}</span>
+        {:else}<code>{sha7(u.current.sha)}</code>{/if}
+        <span class="muted">{$t('admin.update.builtAt', { date: dt(u.current.builtAt) })}</span></dd></div>
+      {#if u.release}
+        <div><dt>{$t('admin.update.latestRelease')}</dt><dd><span class="v">{verLabel(u.release.version, u.release.codename)}</span>{#if u.release.publishedAt} <span class="muted">{$t('admin.update.builtAt', { date: dt(u.release.publishedAt) })}</span>{/if}{#if u.release.url}<span aria-hidden="true"> · </span><a href={u.release.url} target="_blank" rel="noopener">{$t('admin.update.releaseLink')}</a>{/if}</dd></div>
+      {/if}
       {#if u.latest}
         <div><dt>{$t('admin.update.latest')}</dt><dd><code>{sha7(u.latest.sha)}</code> <span class="muted">{$t('admin.update.builtAt', { date: dt(u.latest.date) })}</span>{#if u.latest.runUrl}<span aria-hidden="true"> · </span><a href={u.latest.runUrl} target="_blank" rel="noopener">{$t('admin.update.ciRun')}</a>{/if}</dd></div>
       {/if}
       <div><dt>{$t('adminContent.update.state')}</dt><dd>
-        {#if !u.latest}<StatusPill tone="muted" label={$t('admin.update.unknownState')} />
+        {#if u.updateAvailable}<StatusPill tone="warn" icon="download" label={$t('admin.update.updateAvailable')} />
+        {:else if u.updateAvailable === false}<StatusPill tone="ok" label={$t('admin.update.upToDate')} />
+        {:else if !u.latest}<StatusPill tone="muted" label={$t('admin.update.unknownState')} />
         {:else if upToDate}<StatusPill tone="ok" label={$t('admin.update.upToDate')} />
         {:else if u.behind}<StatusPill tone="warn" icon="download" label={$t('admin.update.behind', { n: u.behind })} />
         {:else}<StatusPill tone="muted" label={$t('admin.update.unknownState')} />{/if}
       </dd></div>
     </dl>
-    {#if !u.latest}<p class="err small" role="alert">{$t('admin.update.latestFailed', { error: u.error ?? $t('admin.update.unknown') })}</p>{/if}
+    {#if byRelease && u.behind}<p class="muted small">{$t('admin.update.mainAhead', { n: u.behind })}</p>{/if}
+    {#if !u.release && !u.error && u.latest}<p class="muted small">{$t('admin.update.noRelease')}</p>{/if}
+    {#if !u.latest && !u.release}<p class="err small" role="alert">{$t('admin.update.latestFailed', { error: u.error ?? $t('admin.update.unknown') })}</p>{/if}
+    {#if u.release && notes.length}
+      <details class="notes">
+        <summary>{$t('admin.update.whatsNew', { version: verLabel(u.release.version, u.release.codename) })}</summary>
+        <div class="md">
+          {#each notes as b, i (i)}
+            {#if b.kind === 'h'}<h3>{b.text}</h3>
+            {:else if b.kind === 'ul'}<ul>{#each b.items as it, j (j)}<li>{it}</li>{/each}</ul>
+            {:else}<p>{b.text}</p>{/if}
+          {/each}
+        </div>
+      </details>
+    {/if}
     {#if u.current.sha === 'dev'}<p class="muted small">{$t('admin.update.devBuild')}</p>{/if}
   </AdminCard>
 
@@ -186,6 +221,10 @@
   .dot { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #46505a; flex: none; font-size: .7rem; }
   .done .dot { background: var(--ok); border-color: var(--ok); color: #06210e; } .cur .dot { border-color: var(--warn); color: var(--warn); }
   .sk { display: grid; gap: .8rem; }
+  .v { font-weight: 600; }
+  .notes { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .8rem; }
+  .notes summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+  .md { max-width: 70ch; } .md h3 { font-size: 1rem; margin: 1rem 0 .3rem; } .md ul { margin: 0; padding-left: 1.2rem; } .md li { margin: .25rem 0; } .md p { margin: .4rem 0; }
   .state { display: flex; flex-direction: column; align-items: center; gap: .6rem; text-align: center; padding: 2rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
   .state p { margin: 0; } .state :global(svg) { color: var(--err); }
   time { color: var(--mut); white-space: nowrap; font-size: .9rem; }

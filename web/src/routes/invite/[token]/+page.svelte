@@ -47,7 +47,7 @@
 </div>
 
 <style>
-  .auth { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem; background: linear-gradient(rgba(0,0,0,.65), rgba(0,0,0,.9)), radial-gradient(circle at 20% 10%, #5a0b14, #000 60%); }
+  .auth { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: calc(2rem + var(--safe-top)) max(1rem, var(--safe-right)) calc(2rem + var(--safe-bottom)) max(1rem, var(--safe-left)); background: linear-gradient(rgba(0,0,0,.65), rgba(0,0,0,.9)), radial-gradient(circle at 20% 10%, #5a0b14, #000 60%); }
   .logo { display: inline-flex; align-self: flex-start; }
   .card { background: rgba(0,0,0,.78); padding: 2.4rem clamp(1.4rem, 5vw, 4rem); border-radius: 8px; width: min(100%, 460px); margin: auto; }
   h1 { font-size: 2rem; } .small { font-size: .85rem; }

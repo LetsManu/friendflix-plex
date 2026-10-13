@@ -170,5 +170,5 @@
   .pair { margin-top: 1.5rem; } summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
   .code { font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 1.5rem; letter-spacing: .15em; text-transform: uppercase; width: 11ch; text-align: center; }
   .small { font-size: .85rem; }
-  .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom)); background: rgba(16,20,24, .96); border: 1px solid #3b444e; padding: .7rem 1.1rem; border-radius: 8px; z-index: 70; max-width: 90vw; }
+  .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(76px + var(--safe-bottom)); background: rgba(16,20,24, .96); border: 1px solid #3b444e; padding: .7rem 1.1rem; border-radius: 8px; z-index: 70; max-width: 90vw; }
 </style>

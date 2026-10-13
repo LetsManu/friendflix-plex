@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Ctx } from '../src/ctx.js';
+import { readFileSync } from 'node:fs';
 import { makeEnv, type TestEnv } from './helpers.js';
+
+const VERSION_JSON = JSON.parse(readFileSync(new URL('../../version.json', import.meta.url), 'utf8')) as { version: string; codename: string };
 
 const CUR = 'c'.repeat(40);
 const NEW = 'd'.repeat(40);
@@ -11,6 +14,8 @@ interface Seen { method: string; url: string; headers: Record<string, string>; b
 let env: TestEnv;
 let seen: Seen[];
 let stack: any;
+/** GitHub releases/latest answer; null = no release published (404) */
+let release: any;
 const host = (u: string) => new URL(u).host;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
 const mockFetch = (gh: 'ok' | 'fail' = 'ok') => vi.fn(async (input: any, init: RequestInit = {}) => {
@@ -18,6 +23,7 @@ const mockFetch = (gh: 'ok' | 'fail' = 'ok') => vi.fn(async (input: any, init: R
   seen.push({ method: init.method ?? 'GET', url, headers: (init.headers ?? {}) as Record<string, string>, body: init.body ? JSON.parse(String(init.body)) : undefined });
   if (host(url) === 'api.github.com') {
     if (gh === 'fail') return json({}, 500);
+    if (url.endsWith('/releases/latest')) return release ? json(release) : json({ message: 'Not Found' }, 404);
     if (url.includes('/actions/workflows/ci.yml/runs')) return json({ workflow_runs: [{ head_sha: NEW, updated_at: '2026-01-02T00:00:00Z', html_url: 'https://github.com/x/runs/1' }] });
     if (url.includes(`/compare/${CUR}...${NEW}`)) return json({ ahead_by: 2, commits: [1, 2].map((n) => ({ sha: `s${n}`, html_url: `https://github.com/c/${n}`, commit: { message: `msg ${n}\n\nbody`, author: { name: 'Ann', date: '2026-01-01T00:00:00Z' } } })) });
   }
@@ -37,7 +43,7 @@ async function setup(cfg: Record<string, unknown> = {}, gh: 'ok' | 'fail' = 'ok'
 }
 const ghCalls = () => seen.filter((s) => host(s.url) === 'api.github.com').length;
 
-beforeEach(() => { seen = []; stack = { Env: [{ name: 'A', value: '1' }, { name: 'B', value: 'x y' }], GitConfig: null }; });
+beforeEach(() => { seen = []; release = null; stack = { Env: [{ name: 'A', value: '1' }, { name: 'B', value: 'x y' }], GitConfig: null }; });
 afterEach(() => env?.close());
 
 describe('admin update', () => {
@@ -49,13 +55,15 @@ describe('admin update', () => {
     expect(b.latest).toEqual({ sha: NEW, date: '2026-01-02T00:00:00Z', runUrl: 'https://github.com/x/runs/1' });
     expect(b.behind).toBe(2);
     expect(b.commits.map((c: any) => c.message)).toEqual(['msg 2', 'msg 1']);
-    expect(b.current).toEqual({ sha: CUR, builtAt: '2026-01-01T00:00:00Z' });
+    expect(b.current).toEqual({ sha: CUR, builtAt: '2026-01-01T00:00:00Z', ...VERSION_JSON }); // no APP_VERSION: read from version.json
+    expect(b.release).toBeNull();
+    expect(b.updateAvailable).toBeNull();
     expect(b.portainer).toEqual({ configured: false, mode: null });
-    expect(ghCalls()).toBe(2);
+    expect(ghCalls()).toBe(3);
     await get();
-    expect(ghCalls()).toBe(2);
+    expect(ghCalls()).toBe(3);
     await get('?refresh=1');
-    expect(ghCalls()).toBe(4);
+    expect(ghCalls()).toBe(6);
     expect(seen[0]!.headers['user-agent']).toBe('friendflix');
   });
 
@@ -63,7 +71,7 @@ describe('admin update', () => {
     const { get } = await setup({}, 'fail');
     const r = await get();
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toMatchObject({ latest: null, behind: null, commits: [], error: 'GitHub 500' });
+    expect(r.json()).toMatchObject({ release: null, updateAvailable: null, latest: null, behind: null, commits: [], error: 'GitHub 500' });
   });
 
   it('dev build returns latest without compare', async () => {
@@ -71,12 +79,70 @@ describe('admin update', () => {
     const b = (await get()).json();
     expect(b.latest.sha).toBe(NEW);
     expect(b.commits).toEqual([]);
-    expect(ghCalls()).toBe(1);
+    expect(ghCalls()).toBe(2);
+  });
+
+  const rel = (tag: string, extra: Record<string, unknown> = {}) => ({ tag_name: tag, name: `${tag} Arancini`, html_url: `https://github.com/x/releases/tag/${tag}`, published_at: '2026-10-01T00:00:00Z', body: '### Neu\n- <b>fett</b> & mehr', draft: false, prerelease: false, ...extra });
+
+  it('release newer than the installed version: update available, notes and codename', async () => {
+    release = rel('v1.1.0');
+    const { get } = await setup({ APP_VERSION: '1.0.0', APP_CODENAME: 'Arancini' });
+    const b = (await get()).json();
+    expect(b.updateAvailable).toBe(true);
+    expect(b.release).toEqual({ version: '1.1.0', codename: 'Arancini', tag: 'v1.1.0', name: 'v1.1.0 Arancini', url: 'https://github.com/x/releases/tag/v1.1.0', publishedAt: '2026-10-01T00:00:00Z', notes: '### Neu\n- <b>fett</b> & mehr' });
+    expect(b.current).toMatchObject({ version: '1.0.0', codename: 'Arancini', sha: CUR });
+    expect(b.behind).toBe(2); // commits ahead stay as secondary info
+    expect(seen.some((s) => s.url === 'https://api.github.com/repos/LetsManu/friendflix/releases/latest')).toBe(true);
+  });
+
+  it('a new major release carries the next codename', async () => {
+    release = rel('v2.0.0');
+    const { get } = await setup({ APP_VERSION: '1.4.2' });
+    const b = (await get()).json();
+    expect(b.updateAvailable).toBe(true);
+    expect(b.release.codename).toBe('Brezel');
+    expect(b.current.codename).toBe('Arancini'); // derived from the major when APP_CODENAME is unset
+  });
+
+  it('installed version equals the newest release: up to date', async () => {
+    release = rel('v1.1.0');
+    const { get } = await setup({ APP_VERSION: '1.1.0', APP_CODENAME: 'Arancini' });
+    const b = (await get()).json();
+    expect(b.updateAvailable).toBe(false);
+    expect(b.release.version).toBe('1.1.0');
+  });
+
+  it('no release yet: no release answer, commits ahead decide', async () => {
+    const { get } = await setup({ APP_VERSION: '1.0.0' });
+    const b = (await get()).json();
+    expect(b.release).toBeNull();
+    expect(b.updateAvailable).toBeNull();
+    expect(b.behind).toBe(2);
+    expect(b.error).toBeUndefined();
+  });
+
+  it('dev/main build newer than the last release: not an update, main build stays secondary info', async () => {
+    release = rel('v1.1.0');
+    const { get } = await setup({ GIT_SHA: 'dev', APP_VERSION: '1.2.0' });
+    const b = (await get()).json();
+    expect(b.updateAvailable).toBe(false);
+    expect(b.latest.sha).toBe(NEW);
+    expect(b.current).toMatchObject({ sha: 'dev', version: '1.2.0' });
+  });
+
+  it('drafts, pre-releases and non-version tags are ignored', async () => {
+    release = rel('v9.0.0', { prerelease: true });
+    const { get } = await setup({ APP_VERSION: '1.0.0' });
+    expect((await get()).json()).toMatchObject({ release: null, updateAvailable: null });
+    for (const r of [rel('nightly'), rel('v9.0.0', { draft: true })]) {
+      release = r;
+      expect((await get('?refresh=1')).json()).toMatchObject({ release: null, updateAvailable: null });
+    }
   });
 
   it('exposes the version unauthenticated', async () => {
-    await setup();
-    expect((await env.app.inject('/api/version')).json()).toEqual({ sha: CUR });
+    await setup({ APP_VERSION: '1.3.0', APP_CODENAME: 'Arancini' });
+    expect((await env.app.inject('/api/version')).json()).toEqual({ sha: CUR, version: '1.3.0', codename: 'Arancini' });
     expect((await env.app.inject('/health')).json().version).toBe(CUR.slice(0, 7));
   });
 

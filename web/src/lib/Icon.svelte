@@ -64,6 +64,7 @@
   {:else if name === 'send'}<path d="M21 3L3 10.500l7 3L13 21zM10 13.500L21 3" />
   {:else if name === 'download'}<path d="M12 3v12M7 10l5 5 5-5M4 21h16" />
   {:else if name === 'list'}<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01" />
+  {:else if name === 'airplay'}<path d="M6 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2" /><path d="M12 14l5 7H7z" />
   {:else if name === 'cast'}<path d="M2 8V6a2 2 0 012-2h16a2 2 0 012 2v12a2 2 0 01-2 2h-6M2 12a9 9 0 019 9M2 16a5 5 0 015 5M2 20h.01" />
   {:else if name === 'copy'}<path d="M9 9h11v11H9zM5 15V4h11" />
   {:else if name === 'sun'}<circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />

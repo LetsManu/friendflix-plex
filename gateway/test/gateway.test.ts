@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFile
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { authClientIp, blocksDirectStream, createGateway, matchDownloadPath, normalizeCastPath, normalizePath, sanitizePlaylist } from '../src/gateway.js';
+import { authClientIp, blocksDirectStream, compatPlaylist, createGateway, hlsAttrs, matchDownloadPath, normalizeCastPath, normalizePath, sanitizePlaylist } from '../src/gateway.js';
 
 const ID = 'a'.repeat(32);
 let jf: Server, be: Server, gw: Server;
@@ -34,12 +34,30 @@ const dlDir = mkdtempSync(join(tmpdir(), 'ff-dl-'));
 const dlOutside = mkdtempSync(join(tmpdir(), 'ff-dl-out-'));
 const dlBody = Buffer.from(Array.from({ length: DL_SIZE }, (_, i) => i % 251));
 const castBase = `/media/c/${CT}`;
+/** a Jellyfin 10.10 master as the cast path gets it: subtitle group, VIDEO-RANGE, trickplay image playlist (field: LG webOS rejects it) */
+const JF_MASTER = [
+  '#EXTM3U',
+  `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",DEFAULT=YES,AUTOSELECT=YES,FORCED=NO,LANGUAGE="eng",URI="${MS}/Subtitles/3/subtitles.m3u8?SegmentLength=3&api_key=LEAK"`,
+  '#EXT-X-STREAM-INF:BANDWIDTH=11088278,AVERAGE-BANDWIDTH=11088278,VIDEO-RANGE=SDR,CODECS="avc1.640028,mp4a.40.2",RESOLUTION=1920x1080,FRAME-RATE=23.976,SUBTITLES="subs"',
+  `main.m3u8?DeviceId=d&MediaSourceId=${MS}&VideoCodec=h264&AudioCodec=aac&PlaySessionId=ps-1&api_key=LEAK&TranscodeReasons=ContainerNotSupported`,
+  `#EXT-X-IMAGE-STREAM-INF:BANDWIDTH=9768,RESOLUTION=320x180,CODECS="jpeg",URI="Trickplay/320/tiles.m3u8?MediaSourceId=${MS}&api_key=LEAK"`,
+  '',
+].join('\n');
+const JF_COMPAT = [
+  '#EXTM3U',
+  '#EXT-X-STREAM-INF:BANDWIDTH=11088278,AVERAGE-BANDWIDTH=11088278,CODECS="avc1.640028,mp4a.40.2",RESOLUTION=1920x1080,FRAME-RATE=23.976',
+  `main.m3u8?DeviceId=d&MediaSourceId=${MS}&VideoCodec=h264&AudioCodec=aac&PlaySessionId=ps-1&TranscodeReasons=ContainerNotSupported`,
+  '',
+].join('\n');
 
 const listen = (s: Server) => new Promise<number>((r) => s.listen(0, '127.0.0.1', () => r((s.address() as AddressInfo).port)));
 
 beforeAll(async () => {
   jf = createServer((req, res) => {
     seen.push({ url: req.url!, auth: req.headers.authorization, range: req.headers.range, acceptEncoding: req.headers['accept-encoding'], cookie: req.headers.cookie });
+    if (req.url!.includes('/master.m3u8') && req.url!.includes('jfmaster=1')) {
+      return void res.writeHead(200, { 'content-type': 'application/vnd.apple.mpegurl' }).end(JF_MASTER);
+    }
     if (req.url!.includes('/main.m3u8')) {
       if (req.url!.includes('big=1')) {
         // ~3 MB playlist (far above the old 1 MB cap)
@@ -319,6 +337,43 @@ describe('sanitizePlaylist', () => {
   it('rejects a request path that is not a cast path', () => {
     expect(sanitizePlaylist('x.ts', '/media/Videos/a/main.m3u8')).toBeNull();
   });
+  it('compatibility master: no trickplay line, no subtitle group, no VIDEO-RANGE (realistic Jellyfin master)', () => {
+    expect(sanitizePlaylist(JF_MASTER, `/media/c/${T}/Videos/${ID}/master.m3u8`)).toBe(JF_COMPAT);
+  });
+  it('a bad URI on a line the compat rewrite drops still rejects the playlist (hardening first)', () => {
+    expect(sp('#EXTM3U\n#EXT-X-IMAGE-STREAM-INF:BANDWIDTH=1,CODECS="jpeg",URI="https://evil.example/t.m3u8"\n')).toBeNull();
+    expect(sp('#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="s",URI="//evil/s.m3u8"\n')).toBeNull();
+  });
+  it('media playlists pass unchanged (only token params stripped)', () => {
+    const media = '#EXTM3U\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:7\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:6.006,\nhls1/main/0.ts?a=1\n#EXT-X-ENDLIST\n';
+    expect(sp(media)).toBe(media);
+  });
+});
+
+describe('compatPlaylist', () => {
+  const c = (lines: string[]) => compatPlaylist(lines);
+  it('keeps AUDIO / VIDEO group refs only while the group is declared; drops CLOSED-CAPTIONS and unknown attributes', () => {
+    expect(c([
+      '#EXTM3U',
+      '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="de",URI="a.m3u8"',
+      '#EXT-X-MEDIA:TYPE=CLOSED-CAPTIONS,GROUP-ID="cc",NAME="cc",INSTREAM-ID="CC1"',
+      '#EXT-X-STREAM-INF:BANDWIDTH=5,HDCP-LEVEL=NONE,AUDIO="aud",VIDEO="vid",CLOSED-CAPTIONS="cc",PROGRAM-ID=1,CODECS="avc1.64001f,mp4a.40.2"',
+      'v.m3u8',
+    ])).toEqual([
+      '#EXTM3U',
+      '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="de",URI="a.m3u8"',
+      '#EXT-X-STREAM-INF:BANDWIDTH=5,AUDIO="aud",CODECS="avc1.64001f,mp4a.40.2"',
+      'v.m3u8',
+    ]);
+  });
+  it('drops every #EXT-X-IMAGE-* tag; an image tag without URI= takes its URI line along', () => {
+    expect(c(['#EXTM3U', '#EXT-X-IMAGE-STREAM-INF:BANDWIDTH=1,CODECS="jpeg"', 'img.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=2', 'v.m3u8'])).toEqual(['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=2', 'v.m3u8']);
+    expect(c(['#EXTM3U', '#EXT-X-IMAGE-MEDIA-SEQUENCE:0', '#EXT-X-STREAM-INF:BANDWIDTH=2', 'v.m3u8'])).toEqual(['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=2', 'v.m3u8']);
+  });
+  it('keeps the other standard tags as they are', () => {
+    const l = ['#EXTM3U', '#EXT-X-VERSION:3', '#EXT-X-INDEPENDENT-SEGMENTS', '#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=1,URI="i.m3u8"', '#EXT-X-STREAM-INF:BANDWIDTH=2,RESOLUTION=1280x720', 'v.m3u8'];
+    expect(c(l)).toEqual(l);
+  });
 });
 
 describe('cast route /media/c/<token>/', () => {
@@ -341,6 +396,14 @@ describe('cast route /media/c/<token>/', () => {
       expect(u.url.startsWith(`/Videos/${ID}/`)).toBe(true);
     }
     expect(seen.at(-1)!.range).toBe('bytes=0-99');
+  });
+  it('serves the compatibility master on the cast path; the cookie path gets Jellyfin\'s master unchanged', async () => {
+    const cm = await cget(`/Videos/${ID}/master.m3u8?MediaSourceId=${MS}&PlaySessionId=ps-1&jfmaster=1`);
+    expect(cm.status).toBe(200);
+    expect(await cm.text()).toBe(JF_COMPAT);
+    const wm = await get(`/media/Videos/${ID}/master.m3u8?MediaSourceId=${MS}&jfmaster=1`);
+    expect(wm.status).toBe(200);
+    expect(await wm.text()).toBe(JF_MASTER);
   });
   it('clamps bitrate to the token limit', async () => {
     seen.length = 0;
@@ -638,5 +701,24 @@ describe('direct (static) streams vs. role limits', () => {
   });
   it('/Items/<id>/Download is not in the allowlist at all', async () => {
     expect((await as(`/media/Items/${ID}/Download`, 'goodsid')).status).toBe(403);
+  });
+});
+
+describe('hlsAttrs', () => {
+  it('parses quoted values with commas and plain values', () => {
+    expect(hlsAttrs('BANDWIDTH=11088278,CODECS="avc1.640028,mp4a.40.2",RESOLUTION=1920x1080,VIDEO-RANGE=SDR')).toEqual([
+      ['BANDWIDTH', '11088278'],
+      ['CODECS', '"avc1.640028,mp4a.40.2"'],
+      ['RESOLUTION', '1920x1080'],
+      ['VIDEO-RANGE', 'SDR'],
+    ]);
+  });
+  it('ignores malformed keys and stays linear on hostile input', () => {
+    expect(hlsAttrs('bad key=1,OK=2')).toEqual([['OK', '2']]);
+    const hostile = '-'.repeat(200_000);
+    const t0 = performance.now();
+    expect(hlsAttrs(hostile)).toEqual([]);
+    expect(hlsAttrs(`${hostile}=x,${hostile}`)).toHaveLength(1);
+    expect(performance.now() - t0).toBeLessThan(200);
   });
 });

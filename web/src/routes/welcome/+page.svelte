@@ -147,8 +147,8 @@
 </div>
 
 <style>
-  .wel { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; padding: 5rem var(--pad-x) 3rem; text-align: center; }
-  .brand { position: absolute; top: 1.2rem; left: var(--pad-x); display: inline-flex; }
+  .wel { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; padding: calc(5rem + var(--safe-top)) max(var(--pad-x), var(--safe-right)) calc(3rem + var(--safe-bottom)) max(var(--pad-x), var(--safe-left)); text-align: center; }
+  .brand { position: absolute; top: calc(1.2rem + var(--safe-top)); left: max(var(--pad-x), var(--safe-left)); display: inline-flex; }
   .step { margin: 0; color: var(--mut); font-size: .9rem; letter-spacing: .06em; text-transform: uppercase; }
   .dots { display: flex; gap: .4rem; margin: .5rem 0 1.4rem; }
   .dots i { width: 28px; height: 4px; border-radius: 99px; background: #3b444e; transition: background var(--t-med); }

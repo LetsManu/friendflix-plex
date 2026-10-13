@@ -9,10 +9,14 @@
 # findings go to code scanning as SARIF, and publish.yml signs the promoted digest with cosign keyless (GitHub OIDC) and
 # adds GitHub artifact attestations (provenance + SBOM). Nothing on pull_request can write packages, sign or attest.
 # DAST: `dast` runs an OWASP ZAP baseline scan against the built web app (rules: .zap/rules.tsv).
+# workflow_dispatch: release.yml starts CI for the new vX.Y.Z tag (its own pushes use GITHUB_TOKEN and trigger nothing);
+# a dispatch behaves like a push of that ref, but only main and v* tags are ever published.
+# Images carry APP_VERSION / APP_CODENAME from version.json next to GIT_SHA.
 name: CI
 on:
   push: { branches: [main], tags: ["v*"] }
   pull_request:
+  workflow_dispatch:
 permissions: { contents: read }
 jobs:
   test:
@@ -124,46 +128,60 @@ jobs:
       matrix: { service: [backend, gateway, web] }
     env:
       SERVICE: ${{ matrix.service }}
+      # push (main / v* tags) or a dispatch on main / a v* tag: push the candidate to GHCR; everything else builds locally
+      PUBLISHABLE: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Image name (GHCR needs lowercase)
         id: img
         run: repo="${GITHUB_REPOSITORY#*/}"; echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${repo,,}-${SERVICE}" >> "$GITHUB_OUTPUT"   # friendflix-<svc>; forks get <repo>-<svc>
+      - name: Release version (version.json) and build time
+        id: ver
+        env:
+          HEAD_TS: ${{ github.event.head_commit.timestamp }}
+        run: |
+          set -euo pipefail
+          echo "version=$(jq -er .version version.json)" >> "$GITHUB_OUTPUT"
+          echo "codename=$(jq -er .codename version.json)" >> "$GITHUB_OUTPUT"
+          echo "build_time=${HEAD_TS:-$(git log -1 --format=%cI)}" >> "$GITHUB_OUTPUT"   # dispatch / tag pushes carry no head_commit
       # ---- pull_request: build locally, scan, discard ----
-      - name: Build (PR, not pushed)
-        if: github.event_name != 'push'
+      - name: Build (PR / other dispatch, not pushed)
+        if: env.PUBLISHABLE != 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: ${{ matrix.service }}/Dockerfile
           load: true
           tags: friendflix-${{ matrix.service }}:ci
-          build-args: GIT_SHA=${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            APP_VERSION=${{ steps.ver.outputs.version }}
+            APP_CODENAME=${{ steps.ver.outputs.codename }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-      - name: Scan (PR)
-        if: github.event_name != 'push'
+      - name: Scan (PR / other dispatch)
+        if: env.PUBLISHABLE != 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: friendflix-${{ matrix.service }}:ci
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
-      # ---- push (main / v* tags): build once, push candidate tag, scan that exact digest ----
+      # ---- push (main / v* tags) or dispatch: build once, push candidate tag, scan that exact digest ----
       - name: Log in to GHCR
-        if: github.event_name == 'push'
+        if: env.PUBLISHABLE == 'true'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
       - name: OCI labels
         id: meta
-        if: github.event_name == 'push'
+        if: env.PUBLISHABLE == 'true'
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ steps.img.outputs.name }}
       - name: Build and push candidate
         id: build
-        if: github.event_name == 'push'
+        if: env.PUBLISHABLE == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
@@ -173,7 +191,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             GIT_SHA=${{ github.sha }}
-            BUILD_TIME=${{ github.event.head_commit.timestamp || github.event.repository.pushed_at }}
+            BUILD_TIME=${{ steps.ver.outputs.build_time }}
+            APP_VERSION=${{ steps.ver.outputs.version }}
+            APP_CODENAME=${{ steps.ver.outputs.codename }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
           # SPDX SBOM + full SLSA provenance stored next to the image (index digest); publish.yml re-uses the SBOM
@@ -181,7 +201,7 @@ jobs:
           provenance: mode=max
       # report first (never fails) so code scanning also gets the findings of a run that the gate below fails
       - name: Scan pushed digest (SARIF for code scanning)
-        if: github.event_name == 'push'
+        if: env.PUBLISHABLE == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_USERNAME: ${{ github.actor }}
@@ -195,13 +215,13 @@ jobs:
           ignore-unfixed: true
           exit-code: "0"
       - name: Upload Trivy SARIF
-        if: github.event_name == 'push'
+        if: env.PUBLISHABLE == 'true'
         uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           sarif_file: trivy-${{ matrix.service }}.sarif
           category: trivy-${{ matrix.service }}
       - name: Scan pushed digest (gate)
-        if: github.event_name == 'push'
+        if: env.PUBLISHABLE == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_USERNAME: ${{ github.actor }}
@@ -217,7 +237,7 @@ jobs:
   # images are only published after every check above passed (main -> latest + sha, v* tags -> semver)
   # signing/attesting (id-token, attestations) happens only here, i.e. only on push events
   publish:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
     needs: [test, e2e, dast, secrets, docker]
     permissions: { contents: read, packages: write, id-token: write, attestations: write }
     uses: ./.github/workflows/publish.yml

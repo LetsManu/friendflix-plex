@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { blocksDirectStream, createGateway, normalizeCastPath, normalizePath } from '../src/gateway.js';
+import { blocksDirectStream, createGateway, normalizeCastPath, normalizePath, sanitizePlaylist } from '../src/gateway.js';
 import { checkUpstreamConfig, selectUpstream, UPSTREAMS } from '../src/upstream/index.js';
 import { createPlexUpstream, decodePlexId, plexUpstream, verifyChSig, verifyPartSig, verifySession, verifyTpSig } from '../src/upstream/plex.js';
 
@@ -389,5 +389,28 @@ describe('Plex adapter hooks', () => {
     expect(out).not.toContain('SECRET');
     expect(out).toBe('#EXTM3U\n#EXT-X-MAP:URI="init.mp4?x=1"\n#EXTINF:8,\n00000.ts\n#EXTINF:8,\n00001.ts\n');
     for (const bad of ['http://plex:32400/x.ts', '//plex/x.ts', '/video/x.ts', '../x.ts', '#EXT-X-MAP:URI="http://plex/i.mp4"']) expect(() => p(`#EXTM3U\n${bad}\n`)).toThrow();
+  });
+
+  it('cast / AirPlay compatibility playlist on the Plex cast path: session playlists pass unchanged, a master is made strict', () => {
+    const CTK = 'A'.repeat(43);
+    const req = `/media/c/${CTK}/Videos/${I}/hls/${S1}/index.m3u8`;
+    expect(normalizeCastPath(req.slice(`/media/c/${CTK}`.length), up)).toBeTruthy();
+    // what Plex's transcoder answers for base/index.m3u8 (after the adapter's playlist hook): a media playlist, kept byte for byte
+    const media = '#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:8\n#EXT-X-ALLOW-CACHE:NO\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:8, nodesc\n00000.ts\n#EXTINF:8, nodesc\n00001.ts\n#EXT-X-ENDLIST';
+    const hooked = up.playlist!(media, { path: '', query: new URLSearchParams(), requestPath: req, cast: true });
+    expect(sanitizePlaylist(hooked, req, up.stripQuery)).toBe(media);
+    // credentials in a segment URI never survive (Plex strip set), relative URIs stay inside the token directory
+    expect(sanitizePlaylist('#EXTM3U\n#EXTINF:8,\n00000.ts?X-Plex-Token=SECRET&a=1', req, up.stripQuery)).toBe('#EXTM3U\n#EXTINF:8,\n00000.ts?a=1');
+    expect(sanitizePlaylist('#EXTM3U\nhttp://plex:32400/x.ts', req, up.stripQuery)).toBeNull();
+    // should a PMS ever answer with a master: subtitle groups, image playlists and newer STREAM-INF attributes are dropped
+    const master = [
+      '#EXTM3U',
+      '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="en",URI="subs.m3u8"',
+      '#EXT-X-STREAM-INF:BANDWIDTH=4000000,RESOLUTION=1920x1080,CODECS="avc1.640029,mp4a.40.2",VIDEO-RANGE=SDR,SUBTITLES="subs"',
+      'index.m3u8?X-Plex-Token=SECRET',
+      '#EXT-X-IMAGE-STREAM-INF:BANDWIDTH=1000,CODECS="jpeg"',
+      'img.m3u8',
+    ].join('\n');
+    expect(sanitizePlaylist(master, req, up.stripQuery)).toBe('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=4000000,RESOLUTION=1920x1080,CODECS="avc1.640029,mp4a.40.2"\nindex.m3u8');
   });
 });

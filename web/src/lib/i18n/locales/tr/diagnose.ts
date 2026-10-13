@@ -7,5 +7,10 @@ const dict: Translation<typeof de> = {
   copy: 'Değerleri kopyala',
   copied: 'Kopyalandı.',
   copyFailed: 'Kopyalanamadı, lütfen metni seçin.',
+  airplayTitle: 'AirPlay günlüğü',
+  airplayHint: 'Bu cihazdaki son AirPlay olayları (adres ve token olmadan). Bir sorun bildirirken kopyalayıp ekleyin.',
+  airplayCopy: 'Kopyala',
+  airplayClear: 'Temizle',
+  airplayEmpty: 'Henüz kayıt yok.',
 };
 export default dict;

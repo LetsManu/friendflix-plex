@@ -38,6 +38,7 @@ import { sourceRoutes } from './routes/sources.js';
 import { aboutRoutes } from './routes/about.js';
 import { syncFileKeys } from './sources/keys.js';
 import { testSourceKey } from './sources/omdb.js';
+import { appVersion } from './version.js';
 
 export interface Extra {
   /** Additional route registrars for later steps. */
@@ -117,7 +118,8 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
 
   app.get('/health', async () => ({ status: 'ok', version: ctx.cfg.GIT_SHA.slice(0, 7) }));
   // unauthenticated: the update page polls it while the backend restarts
-  app.get('/api/version', async () => ({ sha: ctx.cfg.GIT_SHA }));
+  // public and harmless (the web footer shows the same): release version, codename, build sha
+  app.get('/api/version', async () => ({ sha: ctx.cfg.GIT_SHA, ...appVersion(ctx.cfg) }));
   app.get('/health/ready', async (_req, reply) => {
     const checks: Record<string, boolean> = {
       redis: await ctx.kv.ping().catch(() => false),

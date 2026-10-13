@@ -127,7 +127,7 @@
 
 <style>
   .ph1 { margin-bottom: .6rem; }
-  .chips { position: sticky; top: var(--nav-h); z-index: 5; display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: none; padding: .5rem 0 .6rem; margin: 0 calc(var(--pad-x) * -1) .6rem; padding-inline: var(--pad-x); background: var(--bg); }
+  .chips { position: sticky; top: var(--nav-total); z-index: 5; display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: none; padding: .5rem 0 .6rem; margin: 0 calc(var(--pad-x) * -1) .6rem; padding-inline: var(--pad-x); background: var(--bg); }
   .chips::-webkit-scrollbar { display: none; }
   .chip::after { content: ''; position: absolute; inset: -2px 0; }
   .chip { position: relative; flex: none; min-height: 40px; padding: 0 1rem; border-radius: 99px; background: transparent; border: 1px solid rgba(255,255,255,.5); color: #fff; font-weight: 500; font-size: .92rem; white-space: nowrap; }

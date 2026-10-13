@@ -195,7 +195,7 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
     const mode = portainerMode(ctx);
     if (!mode) return reply.code(409).send({ error: 'not_configured' });
     const info = await updateInfo(ctx);
-    await audit(ctx, req.user!.id, 'system.update', undefined, { from: info.current.sha, to: info.latest?.sha ?? null, mode });
+    await audit(ctx, req.user!.id, 'system.update', undefined, { from: info.current.sha, to: info.latest?.sha ?? null, fromVersion: info.current.version, toVersion: info.release?.version ?? null, mode });
     const r = await triggerUpdate(ctx, mode);
     if (!r.ok) {
       req.log.error({ mode, step: r.step, status: r.status, error: r.error, code: r.code }, 'portainer update failed');

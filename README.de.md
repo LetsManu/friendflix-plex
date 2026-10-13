@@ -118,7 +118,7 @@ App-artige Oberfläche mit Tab-Leiste unten, einer Vorschau beim Antippen eines 
   </tr>
 </table>
 
-**Auf dem großen Bildschirm:** TV-Modus für Smart-TV-Browser, Sticks und Konsolen – große Schrift, Steuerung mit Pfeiltasten, Kopplung per Code oder QR-Code und das **Handy als Fernbedienung**. Chromecast aus Chrome, Edge und Android.
+**Auf dem großen Bildschirm:** TV-Modus für Smart-TV-Browser, Sticks und Konsolen – große Schrift, Steuerung mit Pfeiltasten, Kopplung per Code oder QR-Code und das **Handy als Fernbedienung**. Chromecast aus Chrome, Edge und Android; **AirPlay** aus Safari auf iPhone, iPad und Mac zu Apple TV und AirPlay-2-Fernsehern (z. B. LG webOS ab 2019).
 
 **Downloads für Zug und Flugzeug:** Filme und Folgen herunterladen (bei Serien auch gleich die nächsten Folgen) und offline im Browser ansehen. Der Fortschritt wird beim nächsten Online-Sein abgeglichen. Lizenzen pro Gerät mit Ablaufdatum; funktioniert in Chrome, Edge, Firefox, Safari 17+ und als Home-Bildschirm-App auf iOS 17+.
 
@@ -264,7 +264,7 @@ Vorlage: [.env.example](.env.example). Jede Variable kann mit der Endung `_FILE`
 | `NTFY_URL`, `NTFY_BASE_URL`, `DISCORD_WEBHOOK_URL` | leer | Gemeinsamer ntfy-/Discord-Kanal; ntfy-Server für persönliche Themen |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | leer, leer, `PUBLIC_URL` | Web-Push; nur aktiv, wenn beide Schlüssel gesetzt sind |
 | `DIGEST_DAY`, `DIGEST_HOUR` | `0` (Sonntag), `18` | Zeitplan des Wochenrückblicks; `-1` = aus; im Admin-Bereich änderbar |
-| `CAST_ENABLED` | `true` | Chromecast (braucht eine https-`PUBLIC_URL`); bei Plan B `false` |
+| `CAST_ENABLED` | `true` | Chromecast und AirPlay (braucht eine https-`PUBLIC_URL`); bei Plan B `false` |
 | `DOWNLOADS_ENABLED` | `true` | Offline-Downloads; bei Plan B `false` |
 | `DOWNLOADS_PATH`, `PREVIEWS_PATH` | Volumes `downloads`, `previews` | Host-Ordner (absoluter Pfad, beschreibbar für uid 1000) für vorbereitete Downloads und Vorschau-Clips |
 | `DOWNLOAD_CACHE_MAX_GB`, `DOWNLOAD_MIN_FREE_GB` | `50`, `2` | Obergrenze für vorbereitete Downloads; Mindest-Freiplatz |
@@ -347,10 +347,14 @@ flowchart TB
 ### Betrieb
 
 - **Backups:** Der optionale Sidecar `backup` macht täglich um `BACKUP_HOUR` einen `pg_dump`, prüft jeden Dump mit `pg_restore --list`, behält `BACKUP_KEEP_DAYS` Tage und wird `unhealthy`, wenn ein Lauf fehlschlägt. Wiederherstellung und monatlicher Restore-Test (`scripts/restore-test.sh`): [docs/operations.md](docs/operations.md). `APP_ENC_KEY` getrennt von den Dumps im Passwort-Manager aufbewahren.
-- **Updates:** *Admin → Update* zeigt installierte und neueste Version samt Änderungsliste und stößt über Portainer (Webhook oder API) ein Redeploy an. Von Hand: `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`. Datenbank-Migrationen laufen beim Start.
-- **Monitoring:** `/health` (Liveness) und `/health/ready` (Redis, Postgres, Medienserver) auf `127.0.0.1:3081`; Prometheus-Metriken unter `:3081/metrics` und `:3082/metrics` (Bearer `METRICS_TOKEN`). Beispiele für Icinga und Prometheus sowie ein optionaler Prometheus-+-Grafana-Stack mit Dashboard (`compose.monitoring.yaml`): [docs/monitoring.md](docs/monitoring.md).
-- **Lieferkette:** Images werden gescannt (Trivy), mit cosign signiert (keyless) und mit SBOM- und Provenienz-Attestierungen veröffentlicht; vor dem Deployment prüfen – [docs/operations.md](docs/operations.md).
+- **Updates:** *Admin → Update* zeigt die installierte Version und das neueste Release samt Notizen (dazu die Commits auf main) und stößt über Portainer (Webhook oder API) ein Redeploy an. Von Hand: `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`. Datenbank-Migrationen laufen beim Start.
+- **Monitoring:** `/health` (Liveness) und `/health/ready` (Redis, Postgres, Medienserver) auf `127.0.0.1:3081`; Prometheus-Metriken unter `:3081/metrics` und `:3082/metrics` (Bearer `METRICS_TOKEN`). Beispiele für Icinga und Prometheus sowie ein optionaler Prometheus-+-Grafana-Stack mit fertigem Dashboard (`compose.monitoring.yaml`, internes Netz, kein Standardpasswort): [docs/monitoring.md](docs/monitoring.md).
+- **Lieferkette:** Images werden gescannt (Trivy), keyless mit cosign signiert und mit SBOM- und Provenienz-Attestations veröffentlicht; vor dem Deployen lassen sie sich prüfen – [docs/operations.md](docs/operations.md).
 - **Ladezeiten:** Jede API-Antwort trägt einen `Server-Timing`-Header (`jf` = Medienserver, `db` = Postgres, `kv` = Redis, `app` = gesamt), das Gateway ergänzt `authz` und `upstream`; sichtbar in den Browser-DevTools unter *Network → Timing*. Anfragen ab 500 ms erscheinen als `slow request` im Log. Browser-Fehler landen im Backend-Log und in `friendflix_client_errors_total`.
+
+### Versionen und Releases
+
+FriendFlix nutzt [SemVer](https://semver.org) (`version.json`, angezeigt in der Fußzeile am Desktop und unter *Admin → Update*). Jede Hauptversion bekommt einen Codenamen: den nächsten Kino-Snack von A bis Z (1 = Arancini, 2 = Brezel, …; Liste in `codenames.json`). Releases entstehen über den manuellen Workflow **Release** (patch / minor / major): er erhöht die Version (`none` veröffentlicht beim allerersten Release 1.0.0 unverändert), verschiebt den *Unreleased*-Teil des [CHANGELOG.md](CHANGELOG.md) unter die neue Version, setzt den Tag `vX.Y.Z` und legt das GitHub-Release an. Gepusht wird mit dem optionalen Secret `RELEASE_TOKEN` (ein fine-grained Token, einziger Bypass-Akteur der Rulesets für main und Tags; ohne ihn muss main direkte Pushes von GitHub Actions zulassen). Die Images erscheinen danach als `X.Y.Z`, `X.Y`, `X` und, nur für die höchste Version, `latest`; mit `FF_TAG=1` bleibt die Installation auf Hauptversion 1 und bekommt trotzdem deren Minor- und Patch-Releases. Details: [docs/operations.md](docs/operations.md#release-erstellen).
 
 ### Entwicklung
 
@@ -384,7 +388,7 @@ npm run e2e                                     # Playwright: baut die Web-App u
 | Monitoring, Metriken, Grafana-Dashboard, Server-Timing, Browser-Fehler | [docs/monitoring.md](docs/monitoring.md) |
 | Offline-Downloads (Plattformen, Speicher, Grenzen) | [docs/downloads.md](docs/downloads.md) |
 | TV-Modus und Handy als Fernbedienung | [docs/tv-mode.md](docs/tv-mode.md) |
-| Chromecast | [docs/cast.md](docs/cast.md) |
+| Chromecast und AirPlay | [docs/cast.md](docs/cast.md) |
 | Such- und Entdecken-API, Labels, Bald weg, Qualität, Regeln für Kinderprofile | [docs/discovery.md](docs/discovery.md) |
 | Themenlisten, Ruhiger Modus, Klang im Player, Handy-Verknüpfungen und Badge | [docs/personal.md](docs/personal.md) |
 | UI-Kit und Admin-Rahmen | [docs/ui-kit.md](docs/ui-kit.md) |
@@ -405,11 +409,15 @@ npm run e2e                                     # Playwright: baut die Web-App u
 - Hardware-Transcoding steuert Plex selbst (laut Plex braucht es Plex Pass); FriendFlix ändert daran nichts.
 - Kinderprofile sind ein Jugendschutz, kein Schloss gegen jemanden, der den Konto-Login kennt. Die PIN des Hauptprofils setzt „PIN vergessen?“ (`/auth/login?resetPin=1`) zurück: Das verlangt eine frische Anmeldung bei Authentik (geprüft über `auth_time` im Token) und wird auf jedem Gerät abgelehnt, das an ein Kinderprofil gebunden ist – der Inhaber setzt sie auf seinem eigenen Gerät zurück. Den Authentik-Login (samt zweitem Faktor) also nicht den Kindern überlassen. Ist gar keine PIN gesetzt, lässt sich ein Kinderprofil frei verlassen; der Inhaber bekommt dann einen Hinweis, eine PIN zu setzen.
 
+### Mitmachen
+
+Beiträge sind willkommen – die Anforderungen (Code-Standard, Tests, alle 7 Sprachen) stehen in [CONTRIBUTING.md](CONTRIBUTING.md), Sicherheitslücken bitte wie in [SECURITY.md](SECURITY.md) beschrieben melden.
+
 ### Lizenz
 
 Copyright © 2026 Manuel Weißböck.
 
-Dieses Projekt ist freie Software: Du darfst es unter den Bedingungen der **GNU Affero General Public License v3.0 oder später** (AGPL-3.0-or-later) weitergeben und verändern – siehe [LICENSE](LICENSE). Wer eine veränderte Version als Dienst für andere betreibt, muss ihnen deren Quellcode anbieten. Es kommt ohne jede Gewährleistung.
+FriendFlix ist freie Software: Du darfst sie unter den Bedingungen der **GNU Affero General Public License v3.0 oder später** (AGPL-3.0-or-later) weitergeben und verändern – siehe [LICENSE](LICENSE). Wer eine veränderte Version als Dienst für andere betreibt, muss ihnen deren Quellcode anbieten. FriendFlix kommt ohne jede Gewährleistung.
 
 ### Markenhinweis
 

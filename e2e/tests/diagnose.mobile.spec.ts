@@ -21,6 +21,22 @@ test.describe('/diagnose (phone)', () => {
   });
 });
 
+test.describe('/diagnose link (phone)', () => {
+  test('admins reach the diagnose page from Mein Bereich without typing a URL', async ({ page, api }) => {
+    api.asAdmin = true;
+    await page.goto('/me');
+    await page.getByTestId('me-diagnose').click();
+    await expect(page).toHaveURL(/\/diagnose$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Anzeige-Diagnose' })).toBeVisible();
+  });
+
+  test('viewers without admin rights see no diagnose entry', async ({ page }) => {
+    await page.goto('/me');
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+    await expect(page.getByTestId('me-diagnose')).toHaveCount(0);
+  });
+});
+
 test.describe('tab bar (phone)', () => {
   test('labels share one baseline although the avatar is taller than the icons', async ({ page }) => {
     await page.goto('/me');

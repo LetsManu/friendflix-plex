@@ -512,7 +512,7 @@
   {/if}
 
   {#if !online}<div class="offbar" role="status">{$t('shell.offline.bar')} <a href="/offline" data-sveltekit-reload>{$t('shell.offline.toDownloads')}</a></div>{/if}
-  {#if replaced}<div class="panel" role="alert" style="position:fixed;z-index:90;top:5rem;left:50%;transform:translateX(-50%)"><b>{$t('shell.tvReplaced.text')}</b> <button on:click={() => location.reload()}>{$t('shell.tvReplaced.reconnect')}</button></div>{/if}
+  {#if replaced}<div class="panel" role="alert" style="position:fixed;z-index:90;top:calc(5rem + var(--safe-top));left:50%;transform:translateX(-50%)"><b>{$t('shell.tvReplaced.text')}</b> <button on:click={() => location.reload()}>{$t('shell.tvReplaced.reconnect')}</button></div>{/if}
   {#if modalId && Modal}<svelte:component this={Modal} id={modalId} />{/if}
   <main id="main" class:page={!heroPage && !watchPage && !profilesPage && !kidsPage}>
     {#if pending}
@@ -557,11 +557,11 @@
 <ConfirmHost />
 
 <style>
-  .offbar { position: fixed; z-index: 80; left: 0; right: 0; bottom: calc(56px + env(safe-area-inset-bottom)); background: #242b33; padding: .6rem var(--pad-x); text-align: center; font-size: .9rem; }
+  .offbar { position: fixed; z-index: 80; left: 0; right: 0; bottom: calc(56px + var(--safe-bottom)); background: #242b33; padding: .6rem var(--pad-x); text-align: center; font-size: .9rem; }
   .offbar a { text-decoration: underline; font-weight: 600; }
   @media (min-width: 721px) { .offbar { bottom: 0; } }
   .logo { display: inline-flex; align-items: center; }
-  .nav { position: fixed; top: 0; left: 0; right: 0; height: var(--nav-h); z-index: 50; display: flex; align-items: center; gap: .5rem; padding: 0 var(--pad-x); background: linear-gradient(to bottom, rgba(0,0,0,.9), rgba(0,0,0,.55) 55%, transparent); transition: background var(--t-med); }
+  .nav { position: fixed; top: 0; left: 0; right: 0; height: var(--nav-total); z-index: 50; display: flex; align-items: center; gap: .5rem; padding: var(--safe-top) max(var(--pad-x), var(--safe-right)) 0 max(var(--pad-x), var(--safe-left)); background: linear-gradient(to bottom, rgba(0,0,0,.9), rgba(0,0,0,.55) 55%, transparent); transition: background var(--t-med); }
   .nav.solid { background: var(--bg); }
   .links { display: flex; gap: 1.5rem; margin-left: 2.2rem; }
   .links a { font-size: .95rem; font-weight: 500; color: #e5e5e5; transition: color var(--t-fast); white-space: nowrap; padding: .6rem 0; }
@@ -590,7 +590,7 @@
   .kbtn:focus-visible, .kav:focus-visible, .klogo:focus-visible { outline: 4px solid #ffb703; outline-offset: 2px; }
   .kav .face { width: 46px; height: 46px; border-radius: 50%; font-size: 1.1rem; color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.85); }
   .top-sentinel { position: absolute; top: 0; left: 0; width: 1px; height: 10px; pointer-events: none; visibility: hidden; }
-  .drop { position: absolute; right: 0; top: calc(100% + 6px); background: rgba(0,0,0,.94); border: 1px solid #2b333c; border-radius: 4px; min-width: 220px; padding: .4rem 0; display: flex; flex-direction: column; box-shadow: 0 12px 30px rgba(0,0,0,.7); max-height: calc(100vh - var(--nav-h) - 16px); max-height: calc(100dvh - var(--nav-h) - 16px); overflow-y: auto; overscroll-behavior: contain; animation: drop-in .16s var(--ease); }
+  .drop { position: absolute; right: 0; top: calc(100% + 6px); background: rgba(0,0,0,.94); border: 1px solid #2b333c; border-radius: 4px; min-width: 220px; padding: .4rem 0; display: flex; flex-direction: column; box-shadow: 0 12px 30px rgba(0,0,0,.7); max-height: calc(100vh - var(--nav-total) - 16px); max-height: calc(100dvh - var(--nav-total) - 16px); overflow-y: auto; overscroll-behavior: contain; animation: drop-in .16s var(--ease); }
   @keyframes drop-in { from { opacity: 0; transform: translateY(-4px); } }
   .drop hr { border: 0; border-top: 1px solid #2b333c; margin: .3rem 0; width: 100%; }
   .acct { min-width: 240px; }
@@ -611,7 +611,7 @@
   .ccols section:last-child .glist { grid-template-columns: 1fr; }
   .catdrop .glist a { display: flex; align-items: center; min-height: 44px; padding: 0; font-size: .9rem; color: #e5e5e5; }
   .catdrop .glist a:hover { text-decoration: underline; background: transparent; }
-  .hov { position: fixed; inset: 0; z-index: 96; background: rgba(0,0,0,.7); display: grid; place-items: center; padding: 1rem; animation: fade .2s ease-out; }
+  .hov { position: fixed; inset: 0; z-index: 96; background: rgba(0,0,0,.7); display: grid; place-items: center; padding: max(1rem, var(--safe-top)) 1rem max(1rem, var(--safe-bottom)); animation: fade .2s ease-out; }
   .hbox { background: #161b21; border: 1px solid #2b333c; border-radius: 8px; width: min(560px, 100%); max-height: 90dvh; overflow-y: auto; padding: 1.2rem 1.4rem 1.4rem; box-shadow: 0 20px 60px rgba(0,0,0,.8); }
   .hhead { display: flex; align-items: center; justify-content: space-between; }
   .hhead h2 { margin: 0; font-size: 1.3rem; }
@@ -635,7 +635,7 @@
   @media (max-width: 900px) { .links { display: none; } }
   @media (max-width: 1100px) { .links { gap: 1.1rem; margin-left: 1.4rem; } }
   @media (max-width: 720px) {
-    .tabbar { display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; background: rgba(12,12,12,.97); border-top: 1px solid #20262d; padding-bottom: env(safe-area-inset-bottom); }
+    .tabbar { display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; background: rgba(12,12,12,.97); border-top: 1px solid #20262d; padding-bottom: var(--safe-bottom); }
     .tabbar a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .15rem; min-height: 56px; padding: 0 2px; font-size: .68rem; color: var(--mut); font-weight: 500; }
     .tabbar .ico { flex: none; width: 24px; height: 24px; display: grid; place-items: center; }
     .tabbar span:not(.face):not(.ico) { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -646,7 +646,8 @@
   }
 
   /* ---- phone header: transparent over the hero, solid + blurred once scrolled; sticky chip bar below ---- */
-  .nav.m { height: auto; flex-direction: column; align-items: stretch; gap: 0; padding: 0; background: linear-gradient(to bottom, rgba(0,0,0,.7), transparent); transition: background var(--t-med), backdrop-filter var(--t-med); }
+  /* padding-top keeps the rows below the status bar / Dynamic Island; the background (solid once scrolled) covers that strip too */
+  .nav.m { height: auto; flex-direction: column; align-items: stretch; gap: 0; padding: var(--safe-top) var(--safe-right) 0 var(--safe-left); background: linear-gradient(to bottom, rgba(0,0,0,.7), transparent); transition: background var(--t-med), backdrop-filter var(--t-med); }
   .nav.m.solid { background: rgba(16,20,24,.95); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
   .mrow { display: flex; align-items: center; gap: .1rem; height: 56px; padding: 0 calc(var(--pad-x) - 8px) 0 var(--pad-x); }
   .mlogo { display: inline-flex; align-items: center; gap: .6rem; min-height: 44px; min-width: 0; }
@@ -665,8 +666,9 @@
   @media (max-width: 720px) { :global(html:not(.m-chips)) { --nav-h: 56px; } }
 
   /* ---- categories overlay ---- */
-  .cats { position: fixed; inset: 0; z-index: 95; background: rgba(10,10,10,.97); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--pad-x) calc(2rem + env(safe-area-inset-bottom)); animation: fade .2s ease-out; }
-  .chead { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; padding: .7rem 0; background: linear-gradient(rgba(10,10,10,1) 70%, transparent); z-index: 1; }
+  .cats { position: fixed; inset: 0; z-index: 95; background: rgba(10,10,10,.97); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); overflow-y: auto; overscroll-behavior: contain; padding: 0 max(var(--pad-x), var(--safe-right)) calc(2rem + var(--safe-bottom)) max(var(--pad-x), var(--safe-left)); animation: fade .2s ease-out; }
+  /* the sticky head carries the status-bar inset itself, so its opaque background also covers that strip while scrolling */
+  .chead { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; padding: calc(.7rem + var(--safe-top)) 0 .7rem; background: linear-gradient(rgba(10,10,10,1) 70%, transparent); z-index: 1; }
   .seg { display: inline-flex; border: 1px solid #4a5560; border-radius: 99px; overflow: hidden; }
   .seg button { position: relative; background: transparent; border-radius: 0; min-height: 40px; padding: 0 1.1rem; color: #ddd; font-weight: 600; }
   .seg button:hover:not(:disabled) { background: rgba(255,255,255,.1); }

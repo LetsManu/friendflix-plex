@@ -196,7 +196,8 @@
   .wrap { position: fixed; inset: 0; background: #000; z-index: 40; }
   .wrap :global(.stage) { height: 100%; }
   .fatal { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 1rem; }
-  .top { padding: .8rem 1rem; display: flex; align-items: center; gap: .6rem; background: linear-gradient(rgba(0,0,0,.8), transparent); }
+  /* below the status bar / Dynamic Island (portrait) and clear of the notch (landscape); the gradient still covers the status bar */
+  .top { padding: calc(.8rem + var(--safe-top)) max(1rem, var(--safe-right)) .8rem max(1rem, var(--safe-left)); display: flex; align-items: center; gap: .6rem; background: linear-gradient(rgba(0,0,0,.8), transparent); }
   .ttl { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; } .ttl b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ttl span { color: var(--mut); font-size: .88rem; }
   .sp { flex: 1; }
   .avatars { display: flex; list-style: none; margin: 0 .4rem 0 0; padding: 0; }
@@ -219,7 +220,7 @@
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .bubbles { position: absolute; left: clamp(.8rem, 2.4vw, 2.4rem); bottom: 9.5rem; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .35rem; max-width: min(420px, 70vw); z-index: 6; pointer-events: none; }
   .bubbles li { background: rgba(0,0,0,.62); padding: .35rem .8rem; border-radius: 14px; font-size: .92rem; animation: fadein .25s; } @keyframes fadein { from { opacity: 0; transform: translateY(6px); } }
-  .chat { position: absolute; top: 0; right: 0; bottom: 0; width: min(340px, 92vw); background: rgba(14,14,14,.94); z-index: 10; display: flex; flex-direction: column; border-left: 1px solid #252c34; animation: slide var(--t-med) var(--ease); }
+  .chat { position: absolute; top: 0; right: 0; bottom: 0; width: min(340px, 92vw); padding: var(--safe-top) var(--safe-right) var(--safe-bottom) 0; background: rgba(14,14,14,.94); z-index: 10; display: flex; flex-direction: column; border-left: 1px solid #252c34; animation: slide var(--t-med) var(--ease); }
   @keyframes slide { from { transform: translateX(100%); } }
   .chat header { display: flex; justify-content: space-between; align-items: center; padding: .6rem .6rem .6rem 1rem; border-bottom: 1px solid #252c34; }
   .msgs { flex: 1; overflow-y: auto; padding: .8rem 1rem; display: flex; flex-direction: column; gap: .5rem; }
@@ -236,5 +237,11 @@
   .sp2 { width: 16px; flex: none; }
   .dot { position: absolute; top: 6px; right: 4px; background: var(--acc-fill); font-size: .65rem; min-width: 1.1rem; height: 1.1rem; border-radius: 99px; display: grid; place-items: center; font-weight: 700; }
   @media (max-width: 720px) { .avatars { display: none; } .bubbles { bottom: 12rem; } .rbar { right: 50%; transform: translateX(50%); bottom: 9rem; } .rbar .em { width: 36px; min-height: 36px; font-size: 1.2rem; } }
-.invite { position: absolute; top: 4.6rem; right: 1rem; z-index: 12; background: rgba(16,20,24,.97); border: 1px solid #323a43; border-radius: 10px; padding: 1rem 1.2rem; width: min(380px, 92vw); display: grid; gap: .8rem; } .invite header { display: flex; justify-content: space-between; align-items: center; } .chk { display: inline-flex; gap: .45rem; align-items: center; color: var(--fg); min-height: 40px; }
+  /* touch (phone player layout): reactions and chat bubbles sit above the measured control bar, clear of the side insets */
+  @media (pointer: coarse) {
+    :global(html:not(.tv)) .rbar:not(.shift) { right: max(.8rem, var(--safe-right)); bottom: calc(var(--bar-h, 9rem) + .5rem); }
+    :global(html:not(.tv)) .bubbles { left: max(.8rem, var(--safe-left)); bottom: calc(var(--bar-h, 9rem) + 4rem); }
+  }
+  @media (pointer: coarse) and (max-width: 720px) { :global(html:not(.tv)) .rbar:not(.shift) { right: 50%; } }
+.invite { position: absolute; top: calc(4.6rem + var(--safe-top)); right: max(1rem, var(--safe-right)); z-index: 12; background: rgba(16,20,24,.97); border: 1px solid #323a43; border-radius: 10px; padding: 1rem 1.2rem; width: min(380px, 92vw); display: grid; gap: .8rem; } .invite header { display: flex; justify-content: space-between; align-items: center; } .chk { display: inline-flex; gap: .45rem; align-items: center; color: var(--fg); min-height: 40px; }
 </style>

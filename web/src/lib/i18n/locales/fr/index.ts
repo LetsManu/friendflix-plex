@@ -20,6 +20,7 @@ import scenes from './scenes';
 import fresh from './fresh';
 import mine from './mine';
 import diagnose from './diagnose';
+import version from './version';
 
-const dict: Translation<typeof de> = { common, shell, home, detail, player, account, social, admin, hubs, anime, together, kids, scenes, fresh, mine, diagnose, ui, adminPeople, adminContent };
+const dict: Translation<typeof de> = { common, shell, home, detail, player, account, social, admin, hubs, anime, together, kids, scenes, fresh, mine, diagnose, version, ui, adminPeople, adminContent };
 export default dict;

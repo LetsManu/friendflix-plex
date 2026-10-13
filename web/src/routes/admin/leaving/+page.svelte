@@ -188,7 +188,7 @@
 
 <style>
   .intro { margin: 0 0 1rem; max-width: 70ch; }
-  .form { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; margin-bottom: 1.2rem; max-width: 760px; scroll-margin-top: calc(var(--nav-h) + 1rem); }
+  .form { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; margin-bottom: 1.2rem; max-width: 760px; scroll-margin-top: calc(var(--nav-total) + 1rem); }
   .form h2 { margin: 0 0 .8rem; font-size: 1.1rem; overflow-wrap: anywhere; }
   .fields { display: grid; gap: .9rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
   .picked { margin: 0 0 .8rem; font-weight: 600; overflow-wrap: anywhere; }

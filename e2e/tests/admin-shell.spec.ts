@@ -28,7 +28,7 @@ test.describe('admin shell + overview (desktop)', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Admin' })).toBeVisible();
     const health = page.getByRole('region', { name: 'Systemzustand' });
     await expect(health.getByRole('link', { name: /Medienserver.*Läuft/ })).toBeVisible();
-    await expect(health.getByRole('link', { name: /Version.*3 Updates verfügbar/ })).toBeVisible();
+    await expect(health.getByRole('link', { name: /Version.*Update verfügbar/ })).toBeVisible();
     const act = page.getByRole('region', { name: 'Letzte Aktivität' });
     await expect(act.getByText('Tester hat Emma Schneider gesperrt')).toBeVisible();
     await expect(act.getByText('Tester hat Ben Test die Rolle Freund gegeben')).toBeVisible();

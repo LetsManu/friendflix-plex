@@ -121,11 +121,96 @@ export function stripUriTokens(uri: string, strip: ReadonlySet<string> = jellyfi
   return keep.length ? `${uri.slice(0, q)}?${keep.join('&')}` : uri.slice(0, q);
 }
 
+/** `#EXT-X-STREAM-INF` attributes the compatibility master keeps (AUDIO / VIDEO only while their EXT-X-MEDIA group is kept) */
+const COMPAT_STREAM_ATTRS = new Set(['BANDWIDTH', 'AVERAGE-BANDWIDTH', 'CODECS', 'RESOLUTION', 'FRAME-RATE']);
+const COMPAT_GROUP_ATTRS = new Set(['AUDIO', 'VIDEO']);
+
+/**
+ * `KEY=value` pairs of an HLS attribute list (quoted values may contain commas). A single linear scan, no regex: the list comes
+ * from the upstream playlist, and a backtracking pattern would be quadratic on hostile input (long runs without `=`).
+ */
+export function hlsAttrs(list: string): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  let i = 0;
+  while (i < list.length) {
+    const eq = list.indexOf('=', i);
+    if (eq === -1) break;
+    const key = list.slice(i, eq).trim();
+    let end: number;
+    if (list[eq + 1] === '"') {
+      const close = list.indexOf('"', eq + 2);
+      end = close === -1 ? list.length : close + 1;
+    } else {
+      const comma = list.indexOf(',', eq + 1);
+      end = comma === -1 ? list.length : comma;
+    }
+    if (/^[A-Z0-9-]+$/.test(key)) out.push([key, list.slice(eq + 1, end)]);
+    const next = list.indexOf(',', end);
+    if (next === -1) break;
+    i = next + 1;
+  }
+  return out;
+}
+const unquote = (v: string) => v.replace(/^"|"$/g, '');
+
+/**
+ * Cast / AirPlay compatibility master: the receivers (Apple TV, AirPlay 2 TVs from LG, Samsung, Sony, Vizio, Roku ..., Chromecast's
+ * Default Media Receiver) get a strict, plain Apple-HLS master playlist. Field bug: an LG webOS TV fetched Jellyfin's master and then
+ * nothing else (MEDIA_ERR_SRC_NOT_SUPPORTED) - the only non-Apple element in it was Jellyfin's trickplay line.
+ * - `#EXT-X-IMAGE-*` (Roku-style trickplay image playlists, `#EXT-X-IMAGE-STREAM-INF ... CODECS="jpeg"`) is dropped, in any playlist;
+ *   an image tag without a URI attribute takes the URI line after it along.
+ * - `#EXT-X-MEDIA:TYPE=SUBTITLES` / `TYPE=CLOSED-CAPTIONS` groups are dropped (receivers have failed on subtitle groups; cast
+ *   subtitles use their own side-loaded path), and with them the `SUBTITLES=` / `CLOSED-CAPTIONS=` references.
+ * - `#EXT-X-STREAM-INF` keeps only BANDWIDTH, AVERAGE-BANDWIDTH, CODECS, RESOLUTION, FRAME-RATE, and AUDIO / VIDEO when that group
+ *   is still declared. VIDEO-RANGE ruling (draft-pantos-hls-rfc8216bis-17): it carries NO EXT-X-VERSION requirement (section 8 ties
+ *   versions only to IV, float EXTINF, BYTERANGE, MAP, INSTREAM-ID SERVICE, variable substitution, SKIP, QUERYPARAM and REQ-
+ *   attributes), but it is a 2nd-edition attribute that RFC 8216 (1st edition) parsers in older TV firmware do not know, and
+ *   "its absence implies a value of SDR". The cast stream is forced to H.264 8 bit (Level 41, MaxVideoBitDepth 8), i.e. SDR, so
+ *   dropping it loses nothing and removes one more thing a strict receiver can choke on. HDCP-LEVEL, ALLOWED-CPC, PATHWAY-ID,
+ *   SUPPLEMENTAL-CODECS, REQ-* and other newer attributes go for the same reason.
+ * - Every other tag (EXTM3U, EXT-X-VERSION, EXT-X-INDEPENDENT-SEGMENTS, media playlist tags, EXT-X-I-FRAME-STREAM-INF ...) and all
+ *   media playlists stay as they are.
+ * Runs on the already URI-checked / token-stripped lines (sanitizePlaylist), so the hardening is unaffected.
+ */
+export function compatPlaylist(lines: string[]): string[] {
+  const dropTypes = /^(SUBTITLES|CLOSED-CAPTIONS)$/;
+  const groups = new Set<string>(); // `TYPE:GROUP-ID` of kept EXT-X-MEDIA renditions
+  for (const line of lines) {
+    if (!line.startsWith('#EXT-X-MEDIA:')) continue;
+    const a = new Map(hlsAttrs(line.slice(13)));
+    const type = a.get('TYPE') ?? '';
+    if (!dropTypes.test(type)) groups.add(`${type}:${unquote(a.get('GROUP-ID') ?? '')}`);
+  }
+  const out: string[] = [];
+  let skipUri = false;
+  for (const line of lines) {
+    const t = line.trim();
+    if (skipUri && t && !t.startsWith('#')) { skipUri = false; continue; }
+    if (t.startsWith('#EXT-X-IMAGE-')) {
+      if (/-INF:/.test(t) && !/URI\s*=/i.test(t)) skipUri = true;
+      continue;
+    }
+    if (t.startsWith('#EXT-X-MEDIA:')) {
+      if (dropTypes.test(new Map(hlsAttrs(t.slice(13))).get('TYPE') ?? '')) continue;
+      out.push(line);
+      continue;
+    }
+    if (t.startsWith('#EXT-X-STREAM-INF:')) {
+      const kept = hlsAttrs(t.slice(18)).filter(([k, v]) => COMPAT_STREAM_ATTRS.has(k) || (COMPAT_GROUP_ATTRS.has(k) && groups.has(`${k}:${unquote(v)}`)));
+      out.push(`#EXT-X-STREAM-INF:${kept.map(([k, v]) => `${k}=${v}`).join(',')}`);
+      continue;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
 /**
  * Cast playlist hardening: strips api_key-like params from every URI and refuses (null) any URI that does not stay inside
  * /media/c/<token>/ on the same origin once resolved against the playlist's own URL (absolute URLs, //host, /abs paths,
  * ../ escapes, backslash tricks): the receiver would otherwise fetch from another host/path and leak or bypass the gateway.
  * `requestPath` is the public path the playlist was requested at (/media/c/<token>/Videos/<id>/main.m3u8).
+ * Then the compatibility rewrite for the receivers (compatPlaylist). Every line is URI-checked, also the ones it drops.
  */
 export function sanitizePlaylist(text: string, requestPath: string, strip: ReadonlySet<string> = jellyfinUpstream.stripQuery): string | null {
   const m = CAST_ROUTE.exec(requestPath);
@@ -154,7 +239,7 @@ export function sanitizePlaylist(text: string, requestPath: string, strip: Reado
     check(t);
     return stripUriTokens(t, strip);
   });
-  return bad ? null : out.join('\n');
+  return bad ? null : compatPlaylist(out).join('\n');
 }
 
 export function createGateway(opts: GatewayOptions): { server: Server; metrics: () => string } {

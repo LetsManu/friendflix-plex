@@ -198,7 +198,7 @@
   @media (max-width: 700px) { .hero { height: 68vh; margin-bottom: -5vh; } .content { bottom: 17%; } .btns .btn { padding: .5rem 1.1rem; font-size: 1rem; min-height: 46px; } .side { right: var(--pad-x); } }
 
   /* ---- phone billboard: centered poster card on a blurred copy of the poster ---- */
-  .mh { position: relative; overflow: hidden; padding: calc(var(--nav-h) + .6rem) 0 1.4rem; background: var(--bg); }
+  .mh { position: relative; overflow: hidden; padding: calc(var(--nav-total) + .6rem) 0 1.4rem; background: var(--bg); }
   .blurbg { position: absolute; left: -10%; top: -6%; width: 120%; height: 78%; object-fit: cover; filter: blur(34px) saturate(1.5); opacity: .55; transform: translateZ(0); pointer-events: none; }
   .mshade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(16,20,24,.25), rgba(16,20,24,.55) 45%, var(--bg) 92%); pointer-events: none; }
   .pcard { position: relative; display: block; width: min(80vw, 360px); aspect-ratio: 2 / 3; margin: 0 auto; border-radius: 8px; overflow: hidden; background: #1c2228; box-shadow: 0 14px 40px rgba(0,0,0,.65); z-index: 1; }

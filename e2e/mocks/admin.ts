@@ -353,8 +353,12 @@ export function adminRoute(st: AdminState, m: string, p: string, sp: URLSearchPa
     }
   }
   if (p === '/api/admin/update') {
+    const UPDATE_RELEASE = {
+      updateAvailable: true,
+      release: { version: '1.1.0', codename: 'Arancini', tag: 'v1.1.0', name: 'v1.1.0 Arancini', url: 'https://example.org/releases/v1.1.0', publishedAt: ago(5), notes: '### Streaming\n- **Adaptive quality** for every <kbd>connection</kbd>\n- <img src=x onerror="window.__xss=1">Night mode\n\nThanks!' },
+    };
     if (m === 'POST') return J({ ok: true, mode: 'webhook' }, 202);
-    return J({ current: { sha: 'c0be6c5deadbeef', builtAt: ago(70) }, latest: { sha: 'ff00aa1deadbeef', date: ago(5), runUrl: 'https://example.org/run' }, behind: 3, portainer: { configured: true, mode: 'webhook' }, autoUpdateNote: true, commits: [{ sha: 'ff00aa1', url: 'https://example.org/c/1', message: 'feat(wishes): local request-service users', author: 'Manu', date: ago(5) }, { sha: 'ee11bb2', url: 'https://example.org/c/2', message: 'ci: signing', author: 'Manu', date: ago(9) }] });
+    return J({ ...UPDATE_RELEASE, current: { sha: 'c0be6c5deadbeef', builtAt: ago(70), version: '1.0.0', codename: 'Arancini' }, latest: { sha: 'ff00aa1deadbeef', date: ago(5), runUrl: 'https://example.org/run' }, behind: 3, portainer: { configured: true, mode: 'webhook' }, autoUpdateNote: true, commits: [{ sha: 'ff00aa1', url: 'https://example.org/c/1', message: 'feat(wishes): local request-service users', author: 'Manu', date: ago(5) }, { sha: 'ee11bb2', url: 'https://example.org/c/2', message: 'ci: signing', author: 'Manu', date: ago(9) }] });
   }
   return null;
 }

@@ -62,5 +62,6 @@
   .x { position: absolute; right: .8rem; top: .8rem; z-index: 5; width: 40px; min-height: 40px; height: 40px; padding: 0; border-radius: 50%; background: rgba(24, 24, 24, .85); }
   @keyframes fade { from { opacity: 0; } } @keyframes pop { from { opacity: 0; transform: translateY(18px) scale(.97); } }
   @media (hover: none), (pointer: coarse) { .x { width: 44px; min-height: 44px; height: 44px; } }
-  @media (max-width: 640px) { .overlay { padding: 0; } .modal { width: 100vw; min-height: 100vh; border-radius: 0; } }
+  /* phones: full screen below the status bar; a border (outside the scroll box) rather than padding, so sticky tabs stop under it */
+  @media (max-width: 640px) { .overlay { padding: 0; border-top: var(--safe-top) solid var(--surface); } .modal { width: 100vw; min-height: calc(100vh - var(--safe-top)); border-radius: 0; } }
 </style>

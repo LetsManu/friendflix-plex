@@ -19,6 +19,14 @@
   --line: #2a323b;
   --pad-x: clamp(1rem, 4vw, 3.6rem);
   --nav-h: 68px;
+  /* device safe areas (notch / Dynamic Island / home indicator in the iPhone home-screen app, viewport-fit=cover).
+     Always use these instead of raw env(): tests and the TV build can override them, and they are 0 everywhere else. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  /* space taken by the fixed header incl. the status bar above it (--nav-h is the header's own height) */
+  --nav-total: calc(var(--nav-h) + var(--safe-top));
   --radius: 4px;
   --t-fast: 150ms;
   --t-med: 260ms;
@@ -34,7 +42,7 @@ img { max-width: 100%; }
 :focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: 4px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .skip { position: fixed; left: 1rem; top: -4rem; background: #fff; color: #000; padding: .6rem 1rem; border-radius: 4px; z-index: 100; transition: top var(--t-fast); }
-.skip:focus { top: 1rem; }
+.skip:focus { top: calc(1rem + var(--safe-top)); }
 
 /* ---- Buttons (min 44px touch target) ---- */
 button, .btn { font: inherit; font-weight: 600; background: var(--acc-fill); color: #fff; border: 0; border-radius: 4px; padding: .6rem 1.2rem; min-height: 44px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: .5rem; transition: background var(--t-fast), transform var(--t-fast), opacity var(--t-fast); }
@@ -57,7 +65,7 @@ input[type='checkbox'] { min-height: 0; width: 1.1rem; height: 1.1rem; accent-co
 label { color: var(--mut); font-size: .9rem; }
 
 /* ---- Generic content blocks (admin & secondary pages) ---- */
-.page { padding: calc(var(--nav-h) + 1.5rem) var(--pad-x) 4rem; max-width: 1500px; margin: 0 auto; }
+.page { padding: calc(var(--nav-total) + 1.5rem) var(--pad-x) 4rem; max-width: 1500px; margin: 0 auto; }
 .panel { background: var(--surface); border-radius: 8px; padding: 1.1rem 1.3rem; margin-bottom: 1rem; border: 1px solid var(--line); }
 .muted { color: var(--mut); } .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); }
 .flex { display: flex; gap: .7rem; align-items: center; flex-wrap: wrap; }

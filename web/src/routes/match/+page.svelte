@@ -72,5 +72,5 @@
   .sel.on .pickbtn { background: var(--acc); border-color: var(--acc); }
   .bar2 { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); background: rgba(16,20,24,.97); border: 1px solid #3b444e; border-radius: 99px; padding: .5rem .8rem .5rem 1.4rem; display: flex; gap: 1rem; align-items: center; z-index: 30; }
   /* phones: sit above the fixed tab bar (56px + safe area) */
-  @media (max-width: 720px) { .bar2 { bottom: calc(56px + env(safe-area-inset-bottom) + .6rem); z-index: 61; max-width: calc(100vw - 1.5rem); gap: .6rem; padding-left: 1rem; } .bar2 span, .bar2 button { white-space: nowrap; } }
+  @media (max-width: 720px) { .bar2 { bottom: calc(56px + var(--safe-bottom) + .6rem); z-index: 61; max-width: calc(100vw - 1.5rem); gap: .6rem; padding-left: 1rem; } .bar2 span, .bar2 button { white-space: nowrap; } }
 </style>

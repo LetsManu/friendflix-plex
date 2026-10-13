@@ -215,3 +215,18 @@ describe('explicit video/audio bitrate on the transcode URL', () => {
     expect([q(20_000_000, 480).get('MaxHeight'), q(20_000_000, 480).get('MaxWidth')]).toEqual(['480', '854']);
   });
 });
+
+describe('cast / AirPlay master without trickplay', () => {
+  const url = (cast?: boolean) => new URL(toPlaybackDto({
+    itemId: 'a'.repeat(32), deviceId: 'd', maxBitrate: 20_000_000, resumeTicks: 0, cast,
+    info: { PlaySessionId: 'ps', MediaSources: [{ Id: 'ms', Container: 'mkv', Bitrate: 8_000_000, MediaStreams: [{ Type: 'Video', Height: 1080 }] }] },
+  }).hlsUrl, 'http://x').searchParams;
+  it('cast: EnableTrickplay=false (no #EXT-X-IMAGE-STREAM-INF in the master the receiver gets)', () => {
+    expect(url(true).get('EnableTrickplay')).toBe('false');
+    expect(url(true).get('Level')).toBe('41');
+  });
+  it('normal web playback: unchanged (Jellyfin default)', () => {
+    expect(url(false).has('EnableTrickplay')).toBe(false);
+    expect(url().has('EnableTrickplay')).toBe(false);
+  });
+});

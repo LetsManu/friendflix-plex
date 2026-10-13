@@ -118,7 +118,7 @@
 
   @media (min-width: 900px) {
     .adm { grid-template-columns: 232px minmax(0, 1fr); gap: 2.4rem; }
-    .side { display: block; position: sticky; top: calc(var(--nav-h) + 1rem); align-self: start; max-height: calc(100vh - var(--nav-h) - 2rem); overflow-y: auto; overscroll-behavior: contain; padding: .2rem .2rem 1rem; margin-left: -.2rem; }
+    .side { display: block; position: sticky; top: calc(var(--nav-total) + 1rem); align-self: start; max-height: calc(100vh - var(--nav-total) - 2rem); overflow-y: auto; overscroll-behavior: contain; padding: .2rem .2rem 1rem; margin-left: -.2rem; }
     .plist, .back { display: none; }
     .crumb { display: flex; }
   }

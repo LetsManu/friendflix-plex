@@ -1,0 +1,38 @@
+/** Area 'version' (German source): version in the footer and Admin → Update, the codename easter egg (7 taps). */
+export default {
+  egg: {
+    hint: 'Noch {n}…',
+    dialog: 'Versions-Codename',
+    kicker: 'Codename',
+    close: 'Schließen',
+  },
+  /** one line per codename snack (ids: /codenames.json) */
+  snack: {
+    arancini: 'Frittierte Reisbällchen mit Käseherz: außen knusprig, innen ein Plot-Twist.',
+    brezel: 'Salzig, verschlungen und hat trotzdem nie den Faden verloren.',
+    churros: 'Zimt, Zucker, Fett: die heilige Dreifaltigkeit der Spätvorstellung.',
+    donut: 'Hat ein Loch in der Mitte, aber keins in der Handlung.',
+    eclair: 'Lang, cremig und schneller weg als der Abspann.',
+    fudge: 'So zäh wie der zweite Akt, nur deutlich süßer.',
+    gummibaer: 'Kleine Bären, große Gefühle: jede Farbe bekommt ihren eigenen Handlungsbogen.',
+    hotdog: 'Senf drauf, Licht aus, Film ab.',
+    ingwerkeks: 'Scharf genug, um selbst beim Abspann wach zu bleiben.',
+    jellybean: 'Jede Bohne ein Cliffhanger: Erdbeere oder doch Popcorn?',
+    karamell: 'Klebt an den Zähnen wie ein Ohrwurm aus dem Soundtrack.',
+    lakritz: 'Man liebt es oder man hasst es, wie jeden echten Kultfilm.',
+    marshmallow: 'Weich, fluffig und überlebt jedes Lagerfeuer-Horrorfinale.',
+    nachos: 'Knuspern in leisen Szenen ist verboten. Hält sich nur niemand dran.',
+    onionring: 'Der Donut unter den herzhaften Snacks: rund, knusprig, kein Ende in Sicht.',
+    popcorn: 'Das Original. Ohne uns wäre das hier nur ein Film.',
+    quarkbaellchen: 'Klein, rund, gezuckert: der Geheimtipp vom Bäcker nebenan.',
+    reiswaffel: 'Leise knuspern ist eine Kunst. Wir üben noch.',
+    softeis: 'Schmilzt schneller als dein Herz in der Liebeskomödie.',
+    toffee: 'Hart von außen, weich im Kern: ein klassischer Antiheld.',
+    ube: 'Lila Süßkartoffel von den Philippinen: das Plot-Twist-Dessert.',
+    vanilleeis: 'Unterschätzt wie die Nebenrolle, die am Ende alle Preise abräumt.',
+    waffel: 'Kariert, warm und nie zu viel. Außer mit Sahne.',
+    xocolatl: 'Der Kakao der Azteken: älter als jeder Stummfilm.',
+    yuzu: 'Sauer, frisch und unerwartet, wie ein gutes Drehbuch.',
+    zimtschnecke: 'Die letzte Rolle des Alphabets. Danach: Abspann.',
+  },
+} as const;

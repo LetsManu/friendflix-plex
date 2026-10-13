@@ -7,5 +7,10 @@ const dict: Translation<typeof de> = {
   copy: 'Copia i valori',
   copied: 'Copiato.',
   copyFailed: 'Copia non riuscita, seleziona il testo.',
+  airplayTitle: 'Registro AirPlay',
+  airplayHint: 'Gli ultimi eventi AirPlay di questo dispositivo (senza indirizzi né token). Copialo e invialo quando segnali un problema.',
+  airplayCopy: 'Copia',
+  airplayClear: 'Svuota',
+  airplayEmpty: 'Nessuna voce finora.',
 };
 export default dict;

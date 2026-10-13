@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { pageStore } from '#lib/page';
   const page = pageStore();
   import { goto } from '$app/navigation';
@@ -98,6 +98,8 @@
   const playEpisode = (e: CustomEvent<{ id: string }>) => goto(`/watch/${e.detail.id}${langQ ? '?' + langQ : ''}`);
   const label = (i: Item | null) => (i ? (i.seriesName ? `${i.seriesName} · S${i.parentIndexNumber}:E${i.indexNumber} ${i.name}` : i.name) : '');
   onDestroy(stopCountdown);
+  // the player fills the whole screen: whatever the system draws over (status bar, home indicator) sits on black, not on the page colour
+  onMount(() => { root.classList.add('ff-watch'); return () => root.classList.remove('ff-watch'); });
 </script>
 
 <svelte:window on:keydown={onKey} />
@@ -142,11 +144,20 @@
 
 <style>
   .wrap { position: fixed; inset: 0; background: var(--bg); z-index: 40; }
+  :global(html.ff-watch), :global(html.ff-watch body) { background: #000; }
   .wrap :global(.stage) { height: 100%; }
-  .top { padding: .8rem 1rem; display: flex; align-items: center; gap: .6rem; background: linear-gradient(rgba(0,0,0,.8), transparent); }
+  /* below the status bar / Dynamic Island (portrait) and clear of the notch (landscape); the gradient still covers the status bar */
+  .top { padding: calc(.8rem + var(--safe-top)) max(1rem, var(--safe-right)) .8rem max(1rem, var(--safe-left)); display: flex; align-items: center; gap: .6rem; background: linear-gradient(rgba(0,0,0,.8), transparent); }
   .ttl { display: flex; flex-direction: column; line-height: 1.2; } .ttl span { color: var(--mut); font-size: .9rem; }
   /* desktop: the title sits centred in the control bar; phones keep it at the top */
   @media (min-width: 721px) { .ttl.phone { display: none; } }
+  /* touch (phones, also in landscape): series · S1:E3 · episode on one line, ellipsis at the end, the whole top bar wide */
+  @media (pointer: coarse) {
+    :global(html:not(.tv)) .ttl.phone { display: block; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+    :global(html:not(.tv)) .ttl.phone span { font-size: .9rem; }
+    :global(html:not(.tv)) .ttl.phone span::before { content: ' · '; }
+    :global(html:not(.tv)) .next { bottom: calc(var(--bar-h, 10rem) + 4rem); right: max(1rem, var(--safe-right)); }
+  }
   .next { position: absolute; right: var(--pad-x); bottom: 8.5rem; z-index: 9; background: rgba(16,20,24,.94); border: 1px solid #3b444e; border-radius: 8px; padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: .8rem; max-width: min(380px, 92vw); }
   .nt { display: flex; flex-direction: column; gap: .15rem; }
   .next { width: min(400px, calc(100vw - 2rem)); } .next.more { width: min(440px, calc(100vw - 2rem)); }

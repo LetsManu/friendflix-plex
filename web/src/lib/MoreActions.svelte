@@ -174,7 +174,7 @@
   .slot:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
   .ma-wrap.modal { position: fixed; inset: 0; z-index: 88; }
   .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.6); animation: ma-fade 160ms ease-out both; }
-  .sheet { position: absolute; left: 0; right: 0; bottom: 0; max-width: 560px; max-height: 82vh; margin: 0 auto; overflow: auto; overscroll-behavior: contain; outline: none; background: var(--surface, #161b21); color: var(--fg, #fff); border-radius: 14px 14px 0 0; padding: .4rem .6rem calc(.6rem + env(safe-area-inset-bottom)); box-shadow: 0 -10px 40px rgba(0,0,0,.7); animation: ma-up 200ms var(--ease, ease-out) both; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; max-width: 560px; max-height: 82vh; margin: 0 auto; overflow: auto; overscroll-behavior: contain; outline: none; background: var(--surface, #161b21); color: var(--fg, #fff); border-radius: 14px 14px 0 0; padding: .4rem .6rem calc(.6rem + var(--safe-bottom)); box-shadow: 0 -10px 40px rgba(0,0,0,.7); animation: ma-up 200ms var(--ease, ease-out) both; }
   .grab { display: block; width: 40px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.3); margin: .3rem auto .5rem; }
   .sheet .mi { min-height: 48px; padding: 0 1rem; border-radius: 8px; }
   .cancel { justify-content: center; color: var(--mut); margin-top: .3rem; }
