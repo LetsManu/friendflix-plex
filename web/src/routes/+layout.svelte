@@ -35,6 +35,7 @@
   import { flushDeferred } from '#lib/ui/action';
   import ConfirmHost from '#lib/ui/ConfirmHost.svelte';
   import { saveLanguage } from '#lib/stores';
+  import { PLAY_ART_NAME, playTransition, takePlayArt } from '#lib/player/transition';
 
   let me: Me | null = null;
   /** The page renders before /api/me returns when the last answer allows it (see lib/gate.ts): its data requests start right away. */
@@ -245,10 +246,25 @@
 
   // ---- page transitions: View Transitions API where available (180 ms crossfade, main content rises 8 px; see app.css) ----
   const immersive = (p: string) => /^\/(watch|party)\//.test(p);
+  const isWatch = (p: string) => p.startsWith('/watch/');
   onNavigate((nav) => {
     const start = (document as Document & { startViewTransition?: (cb: () => Promise<void>) => { finished: Promise<unknown> } }).startViewTransition;
-    if (typeof start !== 'function' || tv || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const from = nav.from?.url.pathname ?? '', to = nav.to?.url.pathname ?? '';
+    // into / out of the player: the clicked artwork grows into the player poster (shared name ff-play-art, see app.css and
+    // lib/player/transition.ts). Without the API or with reduced motion the player page fades itself in; TV has no transition.
+    if (nav.to && isWatch(to) !== isWatch(from) && !immersive(isWatch(to) ? from : to) && !intro) {
+      const into = isWatch(to);
+      if (playTransition({ tv, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, hasApi: typeof start === 'function' }) !== 'view') { if (into) takePlayArt(); return; }
+      const root = document.documentElement, art = into ? takePlayArt() : null;
+      return new Promise<void>((resolve) => {
+        root.classList.add('ff-vt-play');
+        if (into) root.classList.add('ff-vt-in');
+        if (art) art.style.setProperty('view-transition-name', PLAY_ART_NAME); // this one element only, just for the transition
+        const t = start!.call(document, async () => { resolve(); await nav.complete; });
+        void t.finished.catch(() => undefined).finally(() => { root.classList.remove('ff-vt-play', 'ff-vt-in'); art?.style.removeProperty('view-transition-name'); });
+      });
+    }
+    if (typeof start !== 'function' || tv || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     // typing in the header search must not freeze the screen for a crossfade
     if (!nav.to || from === to || to === '/search' || immersive(from) || immersive(to) || intro) return;
     const root = document.documentElement;

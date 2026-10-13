@@ -92,6 +92,18 @@ export function normalizePath(raw: string, allow: RegExp[] = ALLOWED_PATHS): str
   return allow.some((re) => re.test(p)) ? p : null;
 }
 
+/**
+ * Address sent as `ip` to /internal/authz (decides the remote bitrate cap): X-Real-IP, else the LAST X-Forwarded-For entry (clientKey rule).
+ * Without a usable forwarding header only a loopback peer is passed on; any other peer (a docker bridge, say) is 'unknown' = remote.
+ */
+export function authClientIp(headers: IncomingMessage['headers'], peer: string | undefined): string {
+  const real = headers['x-real-ip'];
+  const xff = headers['x-forwarded-for'];
+  const fwd = (typeof real === 'string' ? real.trim() : '') || (typeof xff === 'string' ? xff : '').split(',').pop()?.trim() || '';
+  if (fwd) return fwd.slice(0, 64);
+  return peer && (peer === '::1' || /^(::ffff:)?127\./.test(peer)) ? peer.slice(0, 64) : 'unknown';
+}
+
 export const normalizeCastPath = (raw: string, up: Upstream = jellyfinUpstream) => normalizePath(raw, up.castPaths);
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
@@ -200,12 +212,14 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
     if (itemCache.size > 5000) itemCache.clear();
     return v;
   }
-  async function authorize(cookie: string | undefined): Promise<Authz | null> {
+  /** The backend lowers maxBitrate for callers outside the home networks, so the answer depends on the client address (same rule as clientKey). */
+  async function authorize(cookie: string | undefined, ip: string): Promise<Authz | null> {
     const sid = /(?:^|;\s*)ff_sid=([\w-]+)/.exec(cookie ?? '')?.[1];
     if (!sid) return null;
-    const hit = authCache.get(sid);
+    const key = `${sid}|${ip}`;
+    const hit = authCache.get(key);
     if (hit && hit.exp > Date.now()) return hit.v;
-    const running = authInflight.get(sid);
+    const running = authInflight.get(key);
     if (running) return running;
     const p = (async () => {
       let v: Authz | null = null;
@@ -214,7 +228,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
         const r = await f(new URL('/internal/authz', opts.backendUrl), {
           method: 'POST',
           headers: { 'x-internal-secret': opts.internalSecret, 'content-type': 'application/json' },
-          body: JSON.stringify({ sid }),
+          body: JSON.stringify({ sid, ip }),
           signal: AbortSignal.timeout(5000),
         });
         if (r.ok) v = (await r.json()) as Authz;
@@ -224,12 +238,12 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
         cacheable = false;
       }
       if (cacheable) {
-        authCache.set(sid, { exp: Date.now() + (v ? 5_000 : 2_000), v });
+        authCache.set(key, { exp: Date.now() + (v ? 5_000 : 2_000), v });
         if (authCache.size > 5000) authCache.clear();
       }
       return v;
-    })().finally(() => authInflight.delete(sid));
-    authInflight.set(sid, p);
+    })().finally(() => authInflight.delete(key));
+    authInflight.set(key, p);
     return p;
   }
 
@@ -255,7 +269,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
       return end(res, 414, 'query too long');
     }
     const t0 = performance.now();
-    const auth = await authorize(req.headers.cookie);
+    const auth = await authorize(req.headers.cookie, authClientIp(req.headers, req.socket.remoteAddress));
     const authzMs = performance.now() - t0;
     if (!auth) {
       count('401');
@@ -564,6 +578,11 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
         continue;
       }
       target.searchParams.append(k, v);
+    }
+    // a transcoded stream without the bitrate params would run at the source bitrate: add the missing ones at the cap
+    if (up.requireBitrate?.path.test(path)) {
+      const have = new Set([...target.searchParams.keys()].map((k) => k.toLowerCase()));
+      for (const p of up.requireBitrate.params) if (!have.has(p.toLowerCase())) target.searchParams.set(p, String(auth.maxBitrate));
     }
     if (up.rewrite) {
       const r = up.rewrite(target.pathname, target.searchParams);

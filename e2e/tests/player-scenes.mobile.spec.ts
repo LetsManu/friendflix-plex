@@ -33,6 +33,7 @@ test('phone: cast peek -> panel, scenes panel, no horizontal overflow', async ({
   await expect(ci).toHaveCount(0);
 
   await showControls(page);
+  await page.getByRole('button', { name: 'Mehr', exact: true }).tap(); // phones: scenes live in "More"
   await page.getByRole('button', { name: 'Szenen', exact: true }).tap();
   const scenes = page.getByRole('dialog', { name: 'Szenen' });
   await expect(scenes.getByRole('button', { name: /^Die Verfolgung/ })).toBeVisible();

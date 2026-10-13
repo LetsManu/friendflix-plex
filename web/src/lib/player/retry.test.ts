@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { backoffMs, decideRecovery, freshRecovery, kindOfMediaError, lowerQuality } from './retry';
+import { backoffMs, decideRecovery, freshRecovery, kindOfMediaError, lowerQuality, networkStep } from './retry';
+import { AbrController } from './abr';
 import { parseVolume, stepVolume } from './volume';
 
 const hls = { isHls: true, canLowerQuality: true };
@@ -36,5 +37,19 @@ describe('helpers', () => {
   it('volume parsing and stepping', () => {
     expect(parseVolume('0.4')).toBe(0.4); expect(parseVolume(null)).toBeNull(); expect(parseVolume('')).toBeNull(); expect(parseVolume('2')).toBeNull(); expect(parseVolume('abc')).toBeNull(); expect(parseVolume('0')).toBe(0);
     expect(stepVolume(0.95, 0.1)).toBe(1); expect(stepVolume(0.05, -0.1)).toBe(0); expect(stepVolume(0.3, 0.1)).toBe(0.4);
+  });
+});
+
+describe('networkStep (network error after the first failed retry)', () => {
+  it('steps down, waits during the cooldown without spending the retry budget, gives up only at the lowest rung', () => {
+    let t = 0;
+    const c = new AbrController({ now: () => t, cap: 8e6, start: 1_500_000 });
+    expect(networkStep(c.onNetworkError())).toBe('switch'); // 480p -> 360p
+    t = 3000;
+    const rec = freshRecovery(); rec.networkTries = 1;
+    expect(networkStep(c.onNetworkError())).toBe('wait'); // cooldown
+    expect(rec.networkTries).toBe(1); // the budget stays untouched
+    t = 11_000;
+    expect(networkStep(c.onNetworkError())).toBe('giveup'); // at 360p after the cooldown
   });
 });

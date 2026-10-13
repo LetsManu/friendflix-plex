@@ -42,6 +42,8 @@ export class TranscoderFake {
   meta = new Map<string, Record<string, any>>();
   /** extra delay inside decision (to widen race windows in lock tests) */
   decisionDelayMs = 0;
+  /** per-stream decisions in the decision answer (PMS shape: Metadata[0].Media[0].Part[0].Stream[].decision); undefined = none reported */
+  decisionStreams?: { video?: string; audio?: string };
 
   constructor(private readonly fallback?: typeof fetch) {
     for (const m of [fixtureMeta('movie1_detail'), fixtureMeta('ep_detail'), fixtureMeta('movie2_hevc_detail')]) this.meta.set(String(m.ratingKey), JSON.parse(JSON.stringify(m)));
@@ -78,7 +80,12 @@ export class TranscoderFake {
       if (!plat || !prod) return new Response('no client profile', { status: 400 });
       if (this.decisionDelayMs) await new Promise((r) => setTimeout(r, this.decisionDelayMs));
       this.decided.add(q.get('session') ?? '');
-      return Response.json({ MediaContainer: { generalDecisionCode: this.decisionCode, generalDecisionText: 'x' } });
+      const ds = this.decisionStreams;
+      const Metadata = ds ? [{ Media: [{ selected: true, protocol: 'hls', Part: [{ decision: 'transcode', selected: true, Stream: [
+        { streamType: 1, codec: 'h264', decision: ds.video, location: 'segments-video' },
+        { streamType: 2, codec: 'aac', selected: true, decision: ds.audio, location: 'segments-audio' },
+      ] }] }] }] : undefined;
+      return Response.json({ MediaContainer: { generalDecisionCode: this.decisionCode, generalDecisionText: 'x', ...(Metadata ? { Metadata } : {}) } });
     }
     if (path === '/video/:/transcode/universal/start.m3u8') {
       const s = q.get('session') ?? '';

@@ -99,7 +99,7 @@ describe('guest playback', () => {
   it('null maxHeight means unlimited; unchanged values do not re-apply', async () => {
     expect((await call(admin, 'PUT', '/api/admin/roles/guest', { transcoding: true, maxHeight: null })).statusCode).toBe(200);
     const p = (await call(guest, 'POST', '/api/playback/info', { itemId: ID })).json();
-    expect(p.hlsUrl).not.toContain('MaxHeight');
+    expect(new URL(p.hlsUrl, 'http://x').searchParams.get('MaxHeight')).toBe('1080'); // only the bitrate rung (guest 8 Mbit/s), no role height cap
     const n = policies().length;
     await call(admin, 'PUT', '/api/admin/roles/guest', { requestsPerMonth: 3 });
     expect(policies()).toHaveLength(n);

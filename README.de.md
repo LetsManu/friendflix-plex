@@ -68,6 +68,7 @@ Intro und Abspann überspringen (wo Plex Marker hat, siehe [Grenzen](#plex-und-j
 - **Besetzung & Infos** (<kbd>I</kbd> für einen kurzen Blick, dann „Alle Infos“): wer wen spielt, die Gaststars dieser Folge, Regie, Drehbuch, Studio und Labels – ein Tipp auf eine Person zeigt ihre weiteren Titel in deiner Bibliothek (Plex hat keine Personenbilder).
 - **Szenen**: Kapitelmarken auf der Zeitleiste und ein Fenster mit einem Vorschaubild je Szene (nur, wenn Plex Kapitelbilder erzeugt) – direkt zur besten Stelle springen.
 - **Klare Stimmen** und **Nachtmodus** im Klang-Menü: Dialoge hervorheben oder dafür sorgen, dass laute Szenen nicht das ganze Haus wecken.
+- **Ruckelfreies Streaming**: Die Qualität „Automatisch“ passt sich deiner Verbindung an und sinkt, wenn das Bild hängt (ein Chip erklärt den Grund). Unterwegs, also außerhalb des Heimnetzes, gilt je Rolle ein Bitraten-Limit; der Player startet mit einem Poster des Titels statt mit einem schwarzen Bild.
 
 <p align="center"><img src="docs/images/de/player.jpg" alt="Player mit geöffnetem Fenster „Besetzung & Infos“ neben dem Bild" width="900"></p>
 

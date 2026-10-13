@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSwr, firstNonEmptyTab, pageCount, pageIndex, swrLoad } from './home';
+import { createSwr, failedParts, firstNonEmptyTab, HOME_PARTS, pageCount, pageIndex, swrLoad } from './home';
 
 describe('row paging', () => {
   it('counts pages', () => {
@@ -70,5 +70,24 @@ describe('firstNonEmptyTab', () => {
   it('waits while an earlier tab is loading', () => {
     expect(firstNonEmptyTab(tabs, { soon: null, week: [1] })).toBeNull();
     expect(firstNonEmptyTab(tabs, { soon: [], week: null, added: [1] })).toBeNull();
+  });
+});
+
+describe('GET /api/home response', () => {
+  const ok = { hero: null, resume: [], nextup: [], leaving: [], recs: { items: [], recIds: [], friends: [] }, because: { because: null, items: [], more: [] }, hubs: [], themed: [] };
+  it('nothing failed when every part is there', () => {
+    expect([...failedParts({ parts: ok, failed: [] })]).toEqual([]);
+  });
+  it('names listed in `failed` are loaded the old way', () => {
+    expect([...failedParts({ parts: ok, failed: ['recs', 'hubs'] })].sort()).toEqual(['hubs', 'recs']);
+  });
+  it('a missing or malformed part counts as failed, unknown names are ignored', () => {
+    const { resume: _r, ...rest } = ok;
+    const bad = failedParts({ parts: { ...rest, recs: { items: [] }, hubs: null } as never, failed: ['x'] });
+    expect([...bad].sort()).toEqual(['hubs', 'recs', 'resume']);
+    expect([...failedParts(null as never)].length).toBe(HOME_PARTS.length);
+  });
+  it('hero may be null (empty library) without being a failure', () => {
+    expect(failedParts({ parts: { ...ok, hero: null }, failed: [] }).has('hero')).toBe(false);
   });
 });

@@ -126,7 +126,7 @@ html.tv input, html.tv select { min-height: 56px; font-size: 1.05rem; }
 html.tv .ring { width: 60px; min-height: 60px; height: 60px; }
 html.tv .drop a, html.tv .drop .plain { min-height: 56px; font-size: 1.05rem; }
 
-/* ---- Page transitions (View Transitions API, started from +layout.svelte; skipped for /watch and reduced motion) ---- */
+/* ---- Page transitions (View Transitions API, started from +layout.svelte; skipped for reduced motion, TV and /party) ---- */
 @media (prefers-reduced-motion: no-preference) {
   html.ff-vt main { view-transition-name: ff-main; }
   ::view-transition-group(root), ::view-transition-group(ff-main) { animation-duration: 180ms; }
@@ -135,4 +135,15 @@ html.tv .drop a, html.tv .drop .plain { min-height: 56px; font-size: 1.05rem; }
   ::view-transition-new(ff-main) { animation: ff-vt-in 180ms var(--ease) both; }
   @keyframes ff-vt-out { to { opacity: 0; } }
   @keyframes ff-vt-in { from { opacity: 0; transform: translateY(8px); } }
+  /* into / out of the player (+layout.svelte, lib/player/transition.ts): the page crossfades in 200 ms while the clicked artwork
+     (named ff-play-art for this one transition) grows into the player poster. Snapshots are cover-fitted: no stretching, no layout
+     shift; the header and the phone tab bar are hidden on the way in (the player has none). */
+  html.ff-vt-play::view-transition-group(root) { animation-duration: 200ms; }
+  html.ff-vt-play::view-transition-old(root), html.ff-vt-play::view-transition-new(root) { animation-duration: 200ms; animation-timing-function: ease; }
+  html.ff-vt-in .ff-poster { view-transition-name: ff-play-art; }
+  html.ff-vt-in header.nav, html.ff-vt-in nav.tabbar { visibility: hidden; }
+  ::view-transition-group(ff-play-art) { animation-duration: 320ms; animation-timing-function: var(--ease); }
+  ::view-transition-old(ff-play-art), ::view-transition-new(ff-play-art) { animation-duration: 320ms; height: 100%; object-fit: cover; overflow: clip; }
 }
+/* the player page fades itself in where no view transition runs (no API: 200 ms; reduced motion: instant cut plus 120 ms) */
+@keyframes ff-fade-in { from { opacity: 0; } }

@@ -34,5 +34,7 @@ export const jellyfinUpstream: Upstream = {
   clampHeight: ['maxheight', 'height'],
   clampWidth: ['maxwidth', 'width'],
   clampBitrate: ['maxstreamingbitrate', 'videobitrate'],
+  // HLS playlists and segments: Jellyfin falls back to the source bitrate (or stream copy) when these are missing
+  requireBitrate: { path: new RegExp(`^/Videos/${ID}/((master|main)\\.m3u8|(hls1?|hls)/[\\w.-]+/[\\w.-]+)$`), params: ['MaxStreamingBitrate', 'VideoBitrate'] },
   authHeaders: (c: UpstreamCredentials) => ({ Authorization: mediaBrowserHeader(c.deviceId, c.token) }),
 };

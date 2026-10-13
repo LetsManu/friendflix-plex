@@ -68,6 +68,7 @@ Skip intro and credits (where Plex has markers, see [limits](#plex-vs-jellyfin-w
 - **Cast & info** (press <kbd>I</kbd> for a quick look, then "All info"): who plays whom, the guest stars of this episode, director, writers, studio and labels – tap a person to see their other titles in your library (Plex has no person images).
 - **Scenes**: chapter marks on the timeline and a panel with a thumbnail for every scene (thumbnails need Plex's chapter thumbnails) – jump straight to the good part.
 - **Clear voices** and **Night mode** in the sound menu: bring dialogue forward, or keep loud scenes from waking the house.
+- **Smooth streaming**: *Auto* quality adapts to your connection and steps down when the picture stalls (a chip says why); outside your home network each role has its own bitrate limit, and the player starts from a poster of the title instead of a black screen.
 
 <p align="center"><img src="docs/images/en/player.jpg" alt="Player with the Cast and info panel open next to the picture" width="900"></p>
 

@@ -50,6 +50,12 @@ export interface Upstream {
   readonly clampHeight: readonly string[];
   readonly clampWidth: readonly string[];
   readonly clampBitrate: readonly string[];
+  /**
+   * Bitrate params every request on `path` (the transcoded streams) must carry: a missing one is added, set to the bitrate cap
+   * (present ones are clamped through clampBitrate). Without it the media server could pick the source bitrate and bypass the cap.
+   * `params` are written exactly as the media server spells them.
+   */
+  readonly requireBitrate?: { readonly path: RegExp; readonly params: readonly string[] };
   /** headers that authenticate an upstream request as the user */
   authHeaders(cred: UpstreamCredentials): Record<string, string>;
   /**

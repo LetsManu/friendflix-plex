@@ -13,7 +13,7 @@
   import { toThumb, type Thumb } from '#lib/rating';
   import { byType, moodTags, remainingLabel, type Person } from '#lib/detail/format';
   import { autoStartAllowed, AUTOSTART_COUNTDOWN_S, countdownLabel, interactionCancels, isTextEntry, previewDone } from '#lib/detail/autostart';
-  import { prefetchPlayer } from '#lib/player/prefetch';
+  import { playPrefetch } from '#lib/player/prefetch';
   import Icon from '#lib/Icon.svelte';
   import ListMenu from '#lib/ListMenu.svelte';
   import DownloadButton from '#lib/DownloadButton.svelte';
@@ -312,12 +312,12 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="dv" class:vm={variant === 'modal'} class:vp={variant === 'page'} class:phone bind:this={dvEl}
+<div class="dv" data-play-scope class:vm={variant === 'modal'} class:vp={variant === 'page'} class:phone bind:this={dvEl}
   on:pointerdown|capture={onUse} on:keydown|capture={onUse} on:focusin={onUse} on:wheel|capture|passive={onUse}>
   <!-- ================= hero ================= -->
   <div class="hero" bind:this={heroEl}>
     {#if item}
-      {#if item.backdrop}<img class="bg" class:loaded={heroLoaded} src={backdrop(item.id, variant === 'modal' ? 960 : 1280)} srcset={srcset('Backdrop', item.id, variant === 'modal' ? MODAL_WIDTHS : HERO_WIDTHS)} sizes={variant === 'modal' ? '(min-width: 890px) 850px, 100vw' : '100vw'} alt="" fetchpriority="high" on:load={() => (heroLoaded = true)} />{/if}
+      {#if item.backdrop}<img class="bg" data-play-art class:loaded={heroLoaded} src={backdrop(item.id, variant === 'modal' ? 960 : 1280)} srcset={srcset('Backdrop', item.id, variant === 'modal' ? MODAL_WIDTHS : HERO_WIDTHS)} sizes={variant === 'modal' ? '(min-width: 890px) 850px, 100vw' : '100vw'} alt="" fetchpriority="high" on:load={() => (heroLoaded = true)} />{/if}
       <!-- svelte-ignore a11y_media_has_caption -->
       <video bind:this={hv} class="hv" class:on={heroPlaying} loop={!autoOn} playsinline aria-hidden="true" tabindex="-1" on:volumechange={() => (hmuted = hv.muted)} on:playing={() => (hmuted = hv.muted)}
         on:timeupdate={maybeAuto} on:ended={onHeroEnded}></video>
@@ -327,7 +327,7 @@
           <svelte:element this={heroTitleTag()} id={titleId} class:sr-only={item.logo && !logoFailed} class="ttl">{item.name}</svelte:element>
           {#if item.logo && !logoFailed}<img class="tlogo" src={logoUrl(item.id)} alt="" on:error={() => (logoFailed = true)} />{/if}
           <div class="btns">
-            <a class="btn pill play" data-autofocus href={playHref} on:pointerenter={prefetchPlayer} on:focus={prefetchPlayer}><Icon name="play" size={24} />{playLabel}</a>
+            <a class="btn pill play" data-autofocus href={playHref} use:playPrefetch><Icon name="play" size={24} />{playLabel}</a>
             <button type="button" class="rb" class:on={inList} aria-pressed={inList} aria-label={inList ? $t('detail.view.removeFromList') : $t('detail.view.addToList')} title={$t('detail.view.myList')} on:click={toggleMine}><Icon name={inList ? 'check' : 'plus'} size={22} /></button>
             <RatingButton itemId={item.id} bind:value={thumb} size={44} on:change={onThumb} />
             <MoreActions actions={moreActions} variant="ring" title={item.name} up={variant === 'modal'}>
@@ -369,7 +369,7 @@
         {#if len}<span>{len}</span>{/if}
       </p>
       <TitleFacts {facts} episode={item.type === 'Episode'} />
-      <a class="btn pill play wide" data-autofocus href={playHref} on:touchstart|passive={prefetchPlayer} on:focus={prefetchPlayer}><Icon name="play" size={24} />{playLabel}</a>
+      <a class="btn pill play wide" data-autofocus href={playHref} use:playPrefetch><Icon name="play" size={24} />{playLabel}</a>
       {#if item.type !== 'Series'}<DownloadButton itemId={item.id} block />{:else if playTarget}<DownloadButton itemId={playTarget} seriesId={item.id} block />{/if}
       {#if resumeLine}<p class="resume">{resumeLine}</p>{/if}
       <p class="ov">{overview || $t('detail.view.noOverview')}</p>

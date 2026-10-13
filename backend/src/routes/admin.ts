@@ -214,11 +214,12 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/api/admin/roles', admin, async () => {
     invalidateRoles(ctx);
     const set = new Map((await ctx.db.query<{ role: string; requests_per_month: number | null }>('select role, requests_per_month from role_settings')).rows.map((r) => [r.role, r.requests_per_month]));
+    const remoteSet = new Set((await ctx.db.query<{ role: string }>('select role from role_settings where remote_max_bitrate is not null')).rows.map((r) => r.role));
     // builtinLabel: the label is the built-in (German) default of that role → the web app shows its translation; a label
     // renamed via ROLES_JSON is shown as configured (same rule as roleLabel() in /api/me and /api/invite)
     const builtin = (k: string, label: string) => Boolean(DEFAULT_ROLES[k] && DEFAULT_ROLES[k]!.label === label);
     const roles = Object.fromEntries(await Promise.all(Object.keys(ctx.roles).map(async (k) => { const r = (await effectiveRole(ctx, k))!; return [k, { ...r, builtinLabel: builtin(k, r.label) }] as const; })));
-    const limits = Object.entries(roles).map(([role, t]) => ({ role, label: t.label, builtinLabel: t.builtinLabel, requestsPerMonth: set.has(role) ? set.get(role)! : defaultLimit(role), isDefault: !set.has(role), transcoding: t.transcoding, maxHeight: t.maxHeight, download: t.download, maxDownloads: t.maxDownloads, downloadMaxHeight: t.downloadMaxHeight, downloadDays: t.downloadDays }));
+    const limits = Object.entries(roles).map(([role, t]) => ({ role, label: t.label, builtinLabel: t.builtinLabel, requestsPerMonth: set.has(role) ? set.get(role)! : defaultLimit(role), isDefault: !set.has(role), transcoding: t.transcoding, maxHeight: t.maxHeight, download: t.download, maxDownloads: t.maxDownloads, downloadMaxHeight: t.downloadMaxHeight, downloadDays: t.downloadDays, maxBitrate: t.maxBitrate, remoteMaxBitrate: t.remoteMaxBitrate, remoteDefault: ctx.roles[role]!.remoteMaxBitrate, remoteIsDefault: !remoteSet.has(role) }));
     return { roles, invitable: INVITABLE_ROLES, limits };
   });
 
@@ -233,20 +234,22 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
       maxDownloads: z.number().int().min(0).max(200).optional(),
       downloadMaxHeight: z.number().int().min(0).max(2160).optional(), // 0 = no downloads
       downloadDays: z.number().int().min(1).max(90).optional(),
+      remoteMaxBitrate: z.number().int().min(300_000).max(200_000_000).nullable().optional(), // bit/s outside the home networks; null = back to the role default
     }).parse(req.body);
     const before = await effectiveRole(ctx, role);
     const cur = (await ctx.db.query<{ requests_per_month: number | null }>('select requests_per_month from role_settings where role=$1', [role])).rows[0];
     const limit = b.requestsPerMonth !== undefined ? b.requestsPerMonth : cur ? cur.requests_per_month : defaultLimit(role);
     await ctx.db.query(
-      `insert into role_settings(role, requests_per_month, transcoding, max_height, download, max_downloads, download_max_height, download_days) values ($1,$2,$3,$4,$5,$6,$7,$8)
+      `insert into role_settings(role, requests_per_month, transcoding, max_height, download, max_downloads, download_max_height, download_days, remote_max_bitrate) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        on conflict (role) do update set requests_per_month=$2, transcoding=coalesce($3, role_settings.transcoding), max_height=coalesce($4, role_settings.max_height),
          download=coalesce($5, role_settings.download), max_downloads=coalesce($6, role_settings.max_downloads), download_max_height=coalesce($7, role_settings.download_max_height),
-         download_days=coalesce($8, role_settings.download_days), updated_at=now()`,
-      [role, limit, b.transcoding ?? null, b.maxHeight === undefined ? null : (b.maxHeight ?? 0), b.download ?? null, b.maxDownloads ?? null, b.downloadMaxHeight ?? null, b.downloadDays ?? null],
+         download_days=coalesce($8, role_settings.download_days), remote_max_bitrate=case when $10 then null else coalesce($9, role_settings.remote_max_bitrate) end, updated_at=now()`,
+      [role, limit, b.transcoding ?? null, b.maxHeight === undefined ? null : (b.maxHeight ?? 0), b.download ?? null, b.maxDownloads ?? null, b.downloadMaxHeight ?? null, b.downloadDays ?? null, b.remoteMaxBitrate ?? null, b.remoteMaxBitrate === null],
     );
     invalidateRoles(ctx);
     const after = (await effectiveRole(ctx, role))!;
     if (b.requestsPerMonth !== undefined) await audit(ctx, req.user!.id, 'role.request_limit', role, { requestsPerMonth: b.requestsPerMonth });
+    if (after.remoteMaxBitrate !== before?.remoteMaxBitrate) await audit(ctx, req.user!.id, 'role.remote_cap', role, { remoteMaxBitrate: after.remoteMaxBitrate });
     const dlChanged = after.download !== before?.download || after.maxDownloads !== before?.maxDownloads || after.downloadMaxHeight !== before?.downloadMaxHeight || after.downloadDays !== before?.downloadDays;
     if (dlChanged) await audit(ctx, req.user!.id, 'role.downloads', role, { download: after.download, maxDownloads: after.maxDownloads, downloadMaxHeight: after.downloadMaxHeight, downloadDays: after.downloadDays });
     if (after.transcoding !== before?.transcoding || after.maxHeight !== before?.maxHeight || after.download !== before?.download) {

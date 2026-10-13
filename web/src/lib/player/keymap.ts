@@ -5,11 +5,11 @@ export type KeyAction =
   | { type: 'seek'; by: number } | { type: 'seekPct'; pct: number }
   | { type: 'volume'; delta: number } | { type: 'mute' } | { type: 'fullscreen' }
   | { type: 'subtitles' } | { type: 'skip' } | { type: 'next' } | { type: 'help' } | { type: 'escape' }
-  | { type: 'tvControls' } | { type: 'pip' }
+  | { type: 'tvControls' } | { type: 'pip' } | { type: 'speed'; delta: 1 | -1 }
   /** "Besetzung & Infos": quick peek while playing (I, TV: up, remote Info) / the full panel from an open peek (OK, I) */
   | { type: 'peek' } | { type: 'castInfo' };
 
-export interface KeyInput { key: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean }
+export interface KeyInput { key: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean }
 export interface KeyContext {
   /** 10-foot UI: D-pad + spatial navigation own the arrows, digits/letters stay free for the TV */
   tv: boolean;
@@ -56,6 +56,8 @@ export function resolveKey(e: KeyInput, c: KeyContext): KeyAction | null {
   if (k === 'p') return { type: 'pip' };
   if (k === 'i') return c.overlayOpen ? null : { type: 'peek' };
   if (k === '?') return { type: 'help' };
+  if (k === '<' || (k === ',' && e.shiftKey)) return { type: 'speed', delta: -1 };
+  if (k === '>' || (k === '.' && e.shiftKey)) return { type: 'speed', delta: 1 };
   if (/^[0-9]$/.test(k)) return { type: 'seekPct', pct: Number(k) * 10 };
   return null;
 }
@@ -82,6 +84,7 @@ export const SHORTCUTS: Array<{ k: string; kKey?: TKey; d: TKey }> = [
   { k: 'S', d: 'player.shortcuts.skip' },
   { k: 'N', d: 'player.shortcuts.next' },
   { k: 'P', d: 'player.shortcuts.pip' },
+  { k: '< / >', d: 'player.shortcuts.speed' },
   { k: 'I', d: 'scenes.shortcuts.peek' },
   { k: '0 – 9', d: 'player.shortcuts.jump' },
   { k: 'Esc', d: 'player.shortcuts.escape' },

@@ -9,7 +9,9 @@ import { notify } from '../notify.js';
 import { isKidsProfile, requireGrownUp } from '../kids.js';
 import { requireAdmin, requireUser } from '../session.js';
 import { audit } from '../audit.js';
+import { bumpHomeAll } from '../homegen.js';
 import { itemsByIds } from './discover.js';
+import type { JfUser } from '../types.js';
 import { id32 } from './_shared.js';
 
 const uuid = z.string().uuid();
@@ -21,6 +23,23 @@ interface ThemedRow { id: string; name: string; description: string | null; emoj
 
 async function isFeaturedThemed(ctx: Pick<Ctx, 'db'>, listId: string): Promise<boolean> {
   return Boolean((await ctx.db.query('select 1 from lists where id = $1 and themed and featured_at is not null', [listId])).rowCount);
+}
+
+/** Data of GET /api/lists/themed (also part of GET /api/home): featured themed lists with the items this viewer may see. */
+export async function themedLists(ctx: Ctx, jfUser: JfUser, kids: boolean) {
+  const ls = (await ctx.db.query<ThemedRow>(
+    `select l.id, l.name, l.description, l.emoji, l.cover_color, o.name as owner_name from lists l join users o on o.id = l.owner_id
+      where l.featured_at is not null and l.themed order by l.featured_pos asc nulls last, l.featured_at desc limit $1`, [MAX_FEATURED])).rows;
+  const ids = new Map<string, string[]>();
+  for (const l of ls) {
+    ids.set(l.id, (await ctx.db.query<{ item_id: string }>('select item_id from list_items where list_id = $1 order by added_at desc limit 80', [l.id])).rows.map((x) => x.item_id));
+  }
+  const byId = new Map((await itemsByIds(ctx, jfUser, [...new Set([...ids.values()].flat())]).catch(() => [])).map((i) => [i.id, i]));
+  const lists = ls.map((l) => ({
+    id: l.id, name: l.name, description: l.description, emoji: l.emoji, coverColor: l.cover_color, ...(kids ? {} : { owner: { name: l.owner_name } }),
+    items: ids.get(l.id)!.map((i) => byId.get(i)).filter((x): x is NonNullable<typeof x> => Boolean(x)).slice(0, MAX_FEATURED_ITEMS),
+  })).filter((l) => l.items.length > 0);
+  return { lists };
 }
 
 export function listRoutes(app: FastifyInstance, ctx: Ctx) {
@@ -57,22 +76,7 @@ export function listRoutes(app: FastifyInstance, ctx: Ctx) {
    * Featured themed lists for the home page (ThemedListRows), pinned order first. Open to kids profiles: the items come through
    * the viewer's own Jellyfin user (parental cap applies), lists without a visible item are dropped, and kids get no owner name.
    */
-  app.get('/api/lists/themed', open, async (req) => {
-    const ls = (await ctx.db.query<ThemedRow>(
-      `select l.id, l.name, l.description, l.emoji, l.cover_color, o.name as owner_name from lists l join users o on o.id = l.owner_id
-        where l.featured_at is not null and l.themed order by l.featured_pos asc nulls last, l.featured_at desc limit $1`, [MAX_FEATURED])).rows;
-    const kids = isKidsProfile(req);
-    const ids = new Map<string, string[]>();
-    for (const l of ls) {
-      ids.set(l.id, (await ctx.db.query<{ item_id: string }>('select item_id from list_items where list_id = $1 order by added_at desc limit 80', [l.id])).rows.map((x) => x.item_id));
-    }
-    const byId = new Map((await itemsByIds(ctx, req.jfUser!, [...new Set([...ids.values()].flat())]).catch(() => [])).map((i) => [i.id, i]));
-    const lists = ls.map((l) => ({
-      id: l.id, name: l.name, description: l.description, emoji: l.emoji, coverColor: l.cover_color, ...(kids ? {} : { owner: { name: l.owner_name } }),
-      items: ids.get(l.id)!.map((i) => byId.get(i)).filter((x): x is NonNullable<typeof x> => Boolean(x)).slice(0, MAX_FEATURED_ITEMS),
-    })).filter((l) => l.items.length > 0);
-    return { lists };
-  });
+  app.get('/api/lists/themed', open, async (req) => themedLists(ctx, req.jfUser!, isKidsProfile(req)));
 
   /** Admin: every themed list with its home-page state (pinned = featured, `position` = order among the pinned ones). */
   app.get('/api/lists/themed/manage', admin, async () => {
@@ -91,6 +95,7 @@ export function listRoutes(app: FastifyInstance, ctx: Ctx) {
     order.push(...pinned.filter((i) => !order.includes(i)));
     for (let i = 0; i < order.length; i++) await ctx.db.query('update lists set featured_pos = $2 where id = $1', [order[i], i]);
     await audit(ctx, req.user!.id, 'list.themed_order', undefined, { ids: order });
+    await bumpHomeAll(ctx);
     return { ok: true };
   });
 
@@ -111,6 +116,7 @@ export function listRoutes(app: FastifyInstance, ctx: Ctx) {
         `update lists set featured_at = case when $2::boolean then now() else null end,
                 featured_pos = case when $2::boolean then coalesce((select max(featured_pos) from lists), -1) + 1 else null end where id = $1`, [id.data, pinned]);
       await audit(ctx, req.user!.id, pinned ? 'list.feature' : 'list.unfeature', id.data);
+      await bumpHomeAll(ctx);
     }
     return { ok: true, pinned };
   });
@@ -208,10 +214,12 @@ export function listRoutes(app: FastifyInstance, ctx: Ctx) {
     // therefore unfeatures it (the admin can pin it again); the owner learns it from `unfeatured`.
     if (before && b.themed !== undefined && b.themed !== before.themed && before.featured) {
       await ctx.db.query('update lists set featured_at = null, featured_pos = null where id = $1', [a.id]);
+      await bumpHomeAll(ctx); // after the unfeature write: a home request in between must not cache the list as a featured row
       await audit(ctx, req.user!.id, 'list.unfeature', a.id);
       return { ok: true, unfeatured: true };
     }
     if (b.themed === false) await ctx.db.query('update lists set featured_pos = null where id = $1', [a.id]);
+    if (before?.featured) await bumpHomeAll(ctx); // look / name / kind of a pinned themed list is on every home page (after the last write)
     return { ok: true };
   });
 
@@ -219,7 +227,9 @@ export function listRoutes(app: FastifyInstance, ctx: Ctx) {
     const a = await access(req, reply);
     if (!a) return;
     if (a.role !== 'owner') return reply.code(403).send({ error: 'forbidden' });
+    const pinned = await isFeaturedThemed(ctx, a.id);
     await ctx.db.query('delete from lists where id = $1', [a.id]);
+    if (pinned) await bumpHomeAll(ctx);
     return { ok: true };
   });
 
@@ -279,6 +289,7 @@ export function listRoutes(app: FastifyInstance, ctx: Ctx) {
     );
     if (!r.rowCount) return reply.code(409).send({ error: 'exists' });
     await ctx.db.query('update lists set updated_at = now() where id = $1', [a.id]);
+    if (await isFeaturedThemed(ctx, a.id)) await bumpHomeAll(ctx);
     return { ok: true, itemId: item.id };
   });
 
@@ -288,7 +299,10 @@ export function listRoutes(app: FastifyInstance, ctx: Ctx) {
     if (!canEdit(a.role)) return reply.code(403).send({ error: 'forbidden' });
     const itemId = id32.parse((req.params as { itemId: string }).itemId);
     const r = await ctx.db.query('delete from list_items where list_id = $1 and item_id = $2', [a.id, itemId]);
-    if (r.rowCount) await ctx.db.query('update lists set updated_at = now() where id = $1', [a.id]);
+    if (r.rowCount) {
+      await ctx.db.query('update lists set updated_at = now() where id = $1', [a.id]);
+      if (await isFeaturedThemed(ctx, a.id)) await bumpHomeAll(ctx);
+    }
     return { ok: true };
   });
 

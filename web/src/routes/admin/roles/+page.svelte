@@ -15,24 +15,25 @@
   import StatusPill from '#lib/ui/StatusPill.svelte';
   import Toggle from '#lib/ui/Toggle.svelte';
 
-  interface Form { perMonth: number | null; unlimited: boolean; transcoding: boolean; maxHeight: string; download: boolean; maxDownloads: number | null; dlHeight: string; days: number | null }
-  interface Card { role: string; label: string; builtinLabel: boolean; isDefault: boolean; form: Form; base: Form }
-  interface Limit { role: string; label: string; builtinLabel?: boolean; requestsPerMonth: number | null; isDefault: boolean; transcoding: boolean; maxHeight: number | null; download?: boolean; maxDownloads?: number | null; downloadMaxHeight?: number | null; downloadDays?: number | null }
+  interface Form { perMonth: number | null; unlimited: boolean; transcoding: boolean; maxHeight: string; download: boolean; maxDownloads: number | null; dlHeight: string; days: number | null; remoteCap: string }
+  interface Card { role: string; label: string; builtinLabel: boolean; isDefault: boolean; maxBitrate: number; remoteDefault: number; form: Form; base: Form }
+  interface Limit { role: string; label: string; builtinLabel?: boolean; requestsPerMonth: number | null; isDefault: boolean; transcoding: boolean; maxHeight: number | null; download?: boolean; maxDownloads?: number | null; downloadMaxHeight?: number | null; downloadDays?: number | null; maxBitrate: number; remoteMaxBitrate: number; remoteDefault: number; remoteIsDefault: boolean }
 
   const HEIGHTS = [720, 1080, 1440, 2160];
   const DL_HEIGHTS = [480, 720, 1080];
+  const REMOTE_CAPS = [2, 4, 8, 12, 20, 40]; // Mbit/s
   const LIKE_PLAYBACK = 2160; // no extra cap for downloads
   let cards: Card[] | null = null, error: string | null = null;
 
   const toForm = (l: Limit): Form => ({
     perMonth: l.requestsPerMonth ?? 2, unlimited: l.requestsPerMonth === null, transcoding: l.transcoding, maxHeight: l.maxHeight ? String(l.maxHeight) : '',
-    download: Boolean(l.download), maxDownloads: l.maxDownloads ?? 0, dlHeight: l.downloadMaxHeight && DL_HEIGHTS.includes(l.downloadMaxHeight) ? String(l.downloadMaxHeight) : '', days: l.downloadDays ?? 30,
+    download: Boolean(l.download), maxDownloads: l.maxDownloads ?? 0, dlHeight: l.downloadMaxHeight && DL_HEIGHTS.includes(l.downloadMaxHeight) ? String(l.downloadMaxHeight) : '', days: l.downloadDays ?? 30, remoteCap: l.remoteIsDefault ? '' : String(l.remoteMaxBitrate), // '' = the role default
   });
   async function load() {
     error = null;
     try {
       const r = await api<{ limits: Limit[] }>('/api/admin/roles');
-      cards = r.limits.map((l) => ({ role: l.role, label: l.label, builtinLabel: Boolean(l.builtinLabel), isDefault: l.isDefault, form: toForm(l), base: toForm(l) }));
+      cards = r.limits.map((l) => ({ role: l.role, label: l.label, builtinLabel: Boolean(l.builtinLabel), isDefault: l.isDefault, maxBitrate: l.maxBitrate, remoteDefault: l.remoteDefault, form: toForm(l), base: toForm(l) }));
     } catch { error = tr('adminPeople.loadFailed'); }
   }
   onMount(load);
@@ -56,6 +57,7 @@
     if (f.download && int(f.maxDownloads) !== int(b.maxDownloads)) body.maxDownloads = int(f.maxDownloads);
     if (f.dlHeight !== b.dlHeight) body.downloadMaxHeight = f.dlHeight ? Number(f.dlHeight) : LIKE_PLAYBACK;
     if (f.download && int(f.days) !== int(b.days)) body.downloadDays = int(f.days);
+    if (f.remoteCap !== b.remoteCap) body.remoteMaxBitrate = f.remoteCap ? Number(f.remoteCap) : null; // null = back to the default
     return body;
   }
   const dirty = (c: Card): boolean => Object.keys(diff(c)).length > 0;
@@ -93,6 +95,13 @@
   });
 
   $: heightOptions = [...HEIGHTS.map((h) => ({ value: String(h), label: `${h}p` })), { value: '', label: $t('adminPeople.roles.heightUnlimited') }];
+  /** presets up to the role's own limit (a higher remote cap would have no effect); the stored value stays selectable; '' = role default */
+  const capOptions = (c: Card, cur: string) => {
+    const vals = REMOTE_CAPS.map((m) => m * 1_000_000).filter((v) => v <= c.maxBitrate);
+    if (cur && !vals.includes(Number(cur))) vals.push(Number(cur));
+    const n = String(Math.min(c.remoteDefault, c.maxBitrate) / 1_000_000);
+    return [{ value: '', label: tr('adminPeople.roles.remoteCapDefault', { n }) }, ...vals.sort((x, y) => x - y).map((v) => ({ value: String(v), label: `${v / 1_000_000} Mbit/s` }))];
+  };
   $: dlOptions = [...DL_HEIGHTS.map((h) => ({ value: String(h), label: `${h}p` })), { value: '', label: $t('adminPeople.roles.likePlayback') }];
 </script>
 
@@ -133,6 +142,7 @@
           <h3 id="g-{c.role}-pb">{$t('adminPeople.roles.playback')}</h3>
           <Toggle label={$t('adminPeople.roles.transcoding')} hint={$t('adminPeople.roles.transcodingHint')} bind:checked={c.form.transcoding} on:change={() => (cards = cards)} />
           <Select label={$t('adminPeople.roles.maxHeight')} options={heightOptions} bind:value={c.form.maxHeight} hint={$t('adminPeople.roles.heightHint')} />
+          <Select label={$t('adminPeople.roles.remoteCap')} options={capOptions(c, c.base.remoteCap)} bind:value={c.form.remoteCap} hint={$t('adminPeople.roles.remoteCapHint')} />
         </section>
 
         <section aria-labelledby="g-{c.role}-dl">

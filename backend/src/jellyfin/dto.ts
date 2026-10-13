@@ -1,5 +1,5 @@
 /** Jellyfin JSON -> the server-neutral DTOs of ../media/types.ts (re-exported here for existing imports). */
-import { DOWNLOAD_PRESETS, maxWidthFor, type DownloadQuality, type DownloadSourceDto, type ImageTags, type ItemDto, type MediaTraits, type PlaybackDto, type TrickplayDto } from '../media/types.js';
+import { DOWNLOAD_PRESETS, maxWidthFor, type DownloadQuality, type DownloadSourceDto, type ImageTags, type ItemDto, type MediaTraits, type PlaybackDto, type TranscodeReason, type TrickplayDto } from '../media/types.js';
 import type { ChapterDto, ItemCreditsDto } from '../media/types.js'; // Block 17 P1
 
 export { DOWNLOAD_PRESETS, maxWidthFor };
@@ -56,6 +56,42 @@ export function toItemDto(i: Record<string, any>): ItemDto {
 
 const TEXT_SUBS = new Set(['srt', 'subrip', 'ass', 'ssa', 'vtt', 'webvtt', 'mov_text', 'subviewer']);
 
+const AUDIO_BITRATE = 192_000;
+const MIN_VIDEO_BITRATE = 300_000;
+
+const REASON_MAP: Record<string, TranscodeReason | 'bitrate'> = {
+  ContainerNotSupported: 'container',
+  VideoCodecNotSupported: 'videoCodec',
+  AudioCodecNotSupported: 'audioCodec',
+  AudioChannelsNotSupported: 'audioCodec',
+  SubtitleCodecNotSupported: 'subtitles',
+  VideoResolutionNotSupported: 'height',
+  ContainerBitrateExceedsLimit: 'bitrate',
+  VideoBitrateNotSupported: 'bitrate',
+};
+/** codec/container reasons outrank a cap, a cap outranks Jellyfin's bitrate reasons */
+const REASON_ORDER: TranscodeReason[] = ['container', 'videoCodec', 'audioCodec', 'subtitles', 'height'];
+
+function transcodeReasonOf(
+  src: Record<string, any>,
+  o: { audioIndex?: number; capReason?: TranscodeReason; maxBitrate: number; noDirect?: boolean; maxHeight?: number | null; srcHeight: number },
+): TranscodeReason {
+  const url = String(src.TranscodingUrl ?? '');
+  const raw = url.includes('?') ? new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('TranscodeReasons') : null;
+  const mapped = (raw ?? '').split(',').map((r) => r.trim()).filter(Boolean).map((r) => REASON_MAP[r] ?? 'other');
+  const hard = REASON_ORDER.find((r) => mapped.includes(r));
+  if (hard) return hard;
+  const srcBitrate = Number(src.Bitrate ?? 0);
+  // our cap is blamed only when it really lies below the source (it outranks the audio track: a remote limit must not read as "audio track");
+  // a bitrate reason with the cap above it is a plain network/device limit
+  if (srcBitrate > o.maxBitrate) return o.capReason ?? 'network';
+  if (o.audioIndex !== undefined) return 'audioTrack';
+  if (mapped.includes('bitrate') && !srcBitrate) return o.capReason ?? 'network';
+  if (mapped.includes('bitrate')) return 'network';
+  if (o.maxHeight && o.srcHeight > o.maxHeight) return 'height';
+  return 'other';
+}
+
 export function toPlaybackDto(args: {
   itemId: string;
   info: Record<string, any>;
@@ -69,8 +105,10 @@ export function toPlaybackDto(args: {
   cast?: boolean;
   /** no direct URL (role with a height cap or without download rights: the gateway refuses direct streams for it) */
   noDirect?: boolean;
+  /** which of our caps is the lowest one (bitrate reasons from the server are attributed to it) */
+  capReason?: 'remoteCap' | 'roleCap' | 'manual' | 'network';
 }): PlaybackDto {
-  const { itemId, info, deviceId, maxBitrate, resumeTicks, audioIndex, maxHeight, cast, noDirect } = args;
+  const { itemId, info, deviceId, maxBitrate, resumeTicks, audioIndex, maxHeight, cast, noDirect, capReason } = args;
   const src = (info.MediaSources ?? [])[0];
   if (!src) throw new Error('no media source');
   const streams: Array<Record<string, any>> = src.MediaStreams ?? [];
@@ -85,10 +123,14 @@ export function toPlaybackDto(args: {
   hls.set('TranscodingMaxAudioChannels', '2');
   hls.set('MaxStreamingBitrate', String(maxBitrate));
   if (audioIndex !== undefined) hls.set('AudioStreamIndex', String(audioIndex));
-  if (maxHeight) {
-    hls.set('MaxHeight', String(maxHeight));
-    hls.set('MaxWidth', String(maxWidthFor(maxHeight)));
-  }
+  // Explicit budgets: otherwise Jellyfin subtracts the SOURCE audio bitrate (TrueHD / DTS-HD MA: several Mbit/s) and starves the video
+  hls.set('AudioBitrate', String(AUDIO_BITRATE));
+  hls.set('AudioChannels', '2');
+  hls.set('VideoBitrate', String(Math.max(MIN_VIDEO_BITRATE, maxBitrate - AUDIO_BITRATE)));
+  const rungHeight = maxBitrate >= 8e6 ? 1080 : maxBitrate >= 4e6 ? 720 : maxBitrate >= 1.5e6 ? 480 : 360;
+  const height = maxHeight ? Math.min(rungHeight, maxHeight) : rungHeight;
+  hls.set('MaxHeight', String(height));
+  hls.set('MaxWidth', String(maxWidthFor(height)));
   if (cast) {
     // keep Jellyfin from stream-copying a source the Default Media Receiver cannot decode (H.264 > level 4.1, 10 bit)
     hls.set('Level', '41');
@@ -103,6 +145,8 @@ export function toPlaybackDto(args: {
   const direct = new URLSearchParams(common);
   direct.set('static', 'true');
 
+  const transcodeReason = directOk ? undefined : transcodeReasonOf(src, { audioIndex, capReason, maxBitrate, noDirect, maxHeight, srcHeight });
+
   return {
     itemId,
     playSessionId: info.PlaySessionId,
@@ -112,6 +156,7 @@ export function toPlaybackDto(args: {
     runtimeTicks: src.RunTimeTicks,
     resumeTicks,
     maxBitrate,
+    ...(transcodeReason ? { transcodeReason } : {}),
     ...(audioIndex !== undefined ? { audioIndex } : {}),
     audioTracks: streams
       .filter((s) => s.Type === 'Audio')

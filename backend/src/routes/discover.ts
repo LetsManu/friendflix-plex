@@ -7,6 +7,7 @@ import { MediaError, type ItemDto, type MediaTraits } from '../media/types.js';
 import { audit } from '../audit.js';
 import { badgesFor, instanceToday, leavingFor, LEAVING_ROW_DAYS, storySoFar } from '../fresh.js';
 import { m } from '../i18n.js';
+import { bumpHomeAll, bumpHome } from '../homegen.js';
 import { notify } from '../notify.js';
 import { clipPath, previews } from '../previews.js';
 import { loadPrefs } from './prefs.js';
@@ -43,6 +44,39 @@ export async function inPool<T, R>(xs: T[], n: number, fn: (x: T, i: number) => 
     }
   }));
   return out;
+}
+
+/** Data of GET /api/recommendations (also part of GET /api/home): what friends recommended to this user, newest unseen first. */
+export async function recommendationsFor(ctx: Ctx, jfUser: JfUser, userId: string) {
+  const rows = (await ctx.db.query<{ id: string; item_id: string; note: string | null; from_name: string }>(
+    `select r.id, r.item_id, r.note, u.name from_name from recommendations r join users u on u.id=r.from_user
+      where r.to_user=$1 and r.created_at > now() - interval '60 days' order by r.seen, r.created_at desc limit 30`, [userId])).rows;
+  const items = await itemsByIds(ctx, jfUser, [...new Set(rows.map((r) => r.item_id))]);
+  const meta = new Map(rows.map((r) => [r.item_id, `Von ${r.from_name}${r.note ? `: ${r.note}` : ''}`]));
+  const shown = new Set(items.map((i) => i.id));
+  return { items: items.map((i) => ({ ...i, caption: meta.get(i.id) })), recIds: rows.filter((r) => shown.has(r.item_id)).map((r) => Number(r.id)) }; // recIds: send back to /seen
+}
+
+/** Data of GET /api/library/friends-rated (also part of GET /api/home). */
+export async function friendsRatedFor(ctx: Ctx, jfUser: JfUser, userId: string, profileId: string) {
+  const rows = (await ctx.db.query<{ item_id: string; names: string[]; avg: string }>(
+    `select r.item_id, array_agg(u.name || ' ' || r.stars || '★' order by r.created_at desc) names, avg(r.stars) avg
+       from ratings r join users u on u.id = r.user_id left join user_prefs p on p.user_id = r.user_id
+      where r.user_id <> $1 and r.stars >= 4 and r.created_at > now() - interval '90 days' and not u.disabled
+        and coalesce((p.data->>'shareRatings')::boolean, true)
+        and r.item_id not in (select item_id from ratings where user_id = $1)
+        and r.item_id not in (select item_id from thumbs where profile_id = $2 and value = -1)
+      group by r.item_id order by max(r.created_at) desc limit 24`, [userId, profileId])).rows;
+  const items = await itemsByIds(ctx, jfUser, rows.map((r) => r.item_id));
+  const cap = new Map(rows.map((r) => [r.item_id, r.names.slice(0, 2).join(', ')]));
+  return { items: items.filter((i) => !i.played).map((i) => ({ ...i, caption: cap.get(i.id) })) };
+}
+
+/** Data of GET /api/library/leaving (also part of GET /api/home): home row "Bald nicht mehr verfügbar", only titles the viewer can see. */
+export async function leavingRow(ctx: Ctx, jfUser: JfUser) {
+  const days = await leavingFor(ctx, (await ctx.db.query<{ item_id: string }>('select item_id from leaving_soon where leaves_at >= $2::date and leaves_at - $2::date <= $1 order by leaves_at limit 60', [LEAVING_ROW_DAYS, instanceToday()])).rows.map((r) => r.item_id), LEAVING_ROW_DAYS);
+  const items = await itemsByIds(ctx, jfUser, [...days.keys()]);
+  return { items: items.map((i) => ({ ...i, daysLeft: days.get(i.id) ?? 0 })).sort((a, b) => a.daysLeft - b.daysLeft || a.name.localeCompare(b.name, 'de')).slice(0, 30) };
 }
 
 /** "Weil du ... gesehen hast" cache lifetime (seconds). */
@@ -223,15 +257,7 @@ export function discoverRoutes(app: FastifyInstance, ctx: Ctx) {
     return { sent };
   }));
 
-  app.get('/api/recommendations', grown, wrap(async (req) => {
-    const rows = (await ctx.db.query<{ id: string; item_id: string; note: string | null; from_name: string }>(
-      `select r.id, r.item_id, r.note, u.name from_name from recommendations r join users u on u.id=r.from_user
-        where r.to_user=$1 and r.created_at > now() - interval '60 days' order by r.seen, r.created_at desc limit 30`, [req.user!.id])).rows;
-    const items = await itemsByIds(ctx, req.jfUser!, [...new Set(rows.map((r) => r.item_id))]);
-    const meta = new Map(rows.map((r) => [r.item_id, `Von ${r.from_name}${r.note ? `: ${r.note}` : ''}`]));
-    const shown = new Set(items.map((i) => i.id));
-    return { items: items.map((i) => ({ ...i, caption: meta.get(i.id) })), recIds: rows.filter((r) => shown.has(r.item_id)).map((r) => Number(r.id)) }; // recIds: send back to /seen
-  }));
+  app.get('/api/recommendations', grown, wrap(async (req) => recommendationsFor(ctx, req.jfUser!, req.user!.id)));
   app.post('/api/recommendations/seen', grown, async (req) => {
     const b = z.object({ ids: z.array(z.union([z.number().int().positive(), z.string().regex(/^\d{1,15}$/)])).max(200).optional() }).nullish().parse(req.body);
     if (b?.ids) await ctx.db.query('update recommendations set seen = true where to_user = $1 and id = any($2::bigint[])', [req.user!.id, b.ids.map(String)]);
@@ -242,19 +268,7 @@ export function discoverRoutes(app: FastifyInstance, ctx: Ctx) {
   // more "Weil du ... geschaut hast" rows for the home page (2-3 recent distinct titles)
   app.get('/api/library/because-more', pre, wrap(async (req) => libraryBecauseMore(ctx, req.jfUser!, req.profile!.id)));
 
-  app.get('/api/library/friends-rated', grown, wrap(async (req) => {
-    const rows = (await ctx.db.query<{ item_id: string; names: string[]; avg: string }>(
-      `select r.item_id, array_agg(u.name || ' ' || r.stars || '★' order by r.created_at desc) names, avg(r.stars) avg
-         from ratings r join users u on u.id = r.user_id left join user_prefs p on p.user_id = r.user_id
-        where r.user_id <> $1 and r.stars >= 4 and r.created_at > now() - interval '90 days' and not u.disabled
-          and coalesce((p.data->>'shareRatings')::boolean, true)
-          and r.item_id not in (select item_id from ratings where user_id = $1)
-          and r.item_id not in (select item_id from thumbs where profile_id = $2 and value = -1)
-        group by r.item_id order by max(r.created_at) desc limit 24`, [req.user!.id, req.profile!.id])).rows;
-    const items = await itemsByIds(ctx, req.jfUser!, rows.map((r) => r.item_id));
-    const cap = new Map(rows.map((r) => [r.item_id, r.names.slice(0, 2).join(', ')]));
-    return { items: items.filter((i) => !i.played).map((i) => ({ ...i, caption: cap.get(i.id) })) };
-  }));
+  app.get('/api/library/friends-rated', grown, wrap(async (req) => friendsRatedFor(ctx, req.jfUser!, req.user!.id, req.profile!.id)));
 
   // ---- Thumbs: -1 Naja, 1 Gut, 2 Geliebt (>= 1 feeds "Weil du ... gesehen hast") ----
   app.put('/api/items/:id/thumb', pre, wrap(async (req) => {
@@ -262,6 +276,7 @@ export function discoverRoutes(app: FastifyInstance, ctx: Ctx) {
     const { value } = z.object({ value: z.union([z.literal(-1), z.literal(0), z.literal(1), z.literal(2)]) }).parse(req.body);
     if (value === 0) {
       await ctx.db.query('delete from thumbs where profile_id=$1 and item_id=$2', [req.profile!.id, id]);
+      await bumpHome(ctx, req.profile!.id);
       return { value: 0 };
     }
     const item = await ctx.jf.item(req.jfUser!, id);
@@ -270,6 +285,7 @@ export function discoverRoutes(app: FastifyInstance, ctx: Ctx) {
        on conflict (profile_id,item_id) do update set value = excluded.value, created_at = now()`,
       [req.profile!.id, req.user!.id, id, value, item.name],
     );
+    await bumpHome(ctx, req.profile!.id);
     return { value };
   }));
 
@@ -419,11 +435,7 @@ function freshRoutes(app: FastifyInstance, ctx: Ctx) {
   }));
 
   // ---- home row "Bald nicht mehr verfügbar": only titles the viewer can see ----
-  app.get('/api/library/leaving', pre, wrap(async (req) => {
-    const days = await leavingFor(ctx, (await ctx.db.query<{ item_id: string }>('select item_id from leaving_soon where leaves_at >= $2::date and leaves_at - $2::date <= $1 order by leaves_at limit 60', [LEAVING_ROW_DAYS, instanceToday()])).rows.map((r) => r.item_id), LEAVING_ROW_DAYS);
-    const items = await itemsByIds(ctx, req.jfUser!, [...days.keys()]);
-    return { items: items.map((i) => ({ ...i, daysLeft: days.get(i.id) ?? 0 })).sort((a, b) => a.daysLeft - b.daysLeft || a.name.localeCompare(b.name, 'de')).slice(0, 30) };
-  }));
+  app.get('/api/library/leaving', pre, wrap(async (req) => leavingRow(ctx, req.jfUser!)));
 
   // ---- admin: list / set / clear removal dates (nothing is deleted on the media server) ----
   app.get('/api/admin/leaving', admin, wrap(async (req) => {
@@ -446,12 +458,13 @@ function freshRoutes(app: FastifyInstance, ctx: Ctx) {
       [id, b.leavesAt, b.note || null, req.user!.id],
     );
     await audit(ctx, req.user!.id, 'leaving.set', id, { name: item.name, leavesAt: b.leavesAt });
+    await bumpHomeAll(ctx);
     return { itemId: id, leavesAt: b.leavesAt, note: b.note || null };
   }));
   app.delete('/api/admin/leaving/:id', admin, async (req) => {
     const id = id32.parse((req.params as { id: string }).id);
     const r = await ctx.db.query('delete from leaving_soon where item_id = $1', [id]);
-    if (r.rowCount) await audit(ctx, req.user!.id, 'leaving.clear', id);
+    if (r.rowCount) { await audit(ctx, req.user!.id, 'leaving.clear', id); await bumpHomeAll(ctx); }
     return { ok: true };
   });
 

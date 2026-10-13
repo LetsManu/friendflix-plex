@@ -19,7 +19,8 @@ import { directUrl, hlsUrl, SESSION_FILE_RE, sessionFor, sessionPath, subtitleUr
 import { fmp4Playlist, spawnFfmpeg, splitFmp4, TS_TO_FMP4_ARGS, VIRTUAL_RE, virtualMaster, type PlexFfmpeg } from './downloads.js';
 import { extractEmbedded, sidecarToVtt, TEXT_SUB_CODECS, VttCache } from './subtitles.js';
 import { BifLookup, trickplayDto } from './trickplay.js';
-import { KeyedMutex, plexHttpFromClient, resolutionFor, startTranscode, stopTranscode, waitForIndex, type PlexHttp, type TranscodePlatform } from './transcode.js';
+import { KeyedMutex, plexHttpFromClient, resolutionFor, rungHeight, startTranscode, stopTranscode, waitForIndex, type PlexHttp, type TranscodePlatform } from './transcode.js';
+import { BROWSER_CONTAINER, DIRECT_AUDIO, DIRECT_VIDEO, plexTranscodeReason, type PlexDecision, type ReasonFacts } from './reason.js';
 
 // ---------------------------------------------------------------- Plex shapes (lenient: numbers are sometimes strings)
 
@@ -60,6 +61,8 @@ interface SessionRec {
   directStream: boolean;
   started: boolean;
   stopped?: boolean;
+  /** player sessions that may be converted: what the transcode reason is derived from once Plex has decided */
+  why?: ReasonFacts;
 }
 
 const SESS_TTL = 24 * 3600;
@@ -70,9 +73,6 @@ const yes = (v: unknown) => v === true || v === 1 || v === '1' || v === 'true';
 const lc = (v: unknown) => String(v ?? '').toLowerCase();
 const ownerOf = (u: MediaUser) => `${u.id}|${u.jellyfin_user_id}`;
 const bytes = (b: Uint8Array) => new Uint8Array(b);
-const BROWSER_CONTAINER = /(^|,)(mp4|m4v|mov|webm)(,|$)/i;
-const DIRECT_VIDEO = new Set(['h264', 'vp9', 'av1']);
-const DIRECT_AUDIO = new Set(['aac', 'mp3', 'opus', 'flac']);
 
 /** ISO 639-2 B/T pairs so a saved 'ger' preference matches Plex' 'deu' (and the other way round). */
 const LANG_ALIASES: Record<string, string> = {
@@ -178,19 +178,30 @@ export class PlexPlayback {
     const height = num(r.media.height) ?? num(r.streams.find((s) => Number(s.streamType) === 1)?.height) ?? 0;
     const withinCap = !opts.maxHeight || (height > 0 && height <= opts.maxHeight);
     const video = r.streams.find((s) => Number(s.streamType) === 1);
+    const container = String(r.media.container ?? r.part.container ?? '');
+    const bitDepth = num(video?.bitDepth) ?? 8;
+    const videoOk = DIRECT_VIDEO.has(lc(r.media.videoCodec)) && bitDepth <= 8;
     const directOk = !cast && !opts.noDirect && audioIndex === undefined && withinCap && srcBps > 0 && srcBps <= opts.maxBitrate &&
-      BROWSER_CONTAINER.test(String(r.media.container ?? r.part.container ?? '')) &&
-      DIRECT_VIDEO.has(lc(r.media.videoCodec)) && (num(video?.bitDepth) ?? 8) <= 8 && DIRECT_AUDIO.has(lc(r.media.audioCodec));
+      BROWSER_CONTAINER.test(container) && videoOk && DIRECT_AUDIO.has(lc(r.media.audioCodec));
+    const playing = audioIndex !== undefined ? r.streams[audioIndex] : r.streams[(audioTracks.find((a) => a.isDefault) ?? audioTracks[0])?.index ?? -1];
+    const why: ReasonFacts | undefined = directOk ? undefined : {
+      container, videoCodec: lc(r.media.videoCodec || video?.codec), bitDepth, audioCodec: lc(playing?.codec || r.media.audioCodec),
+      srcBps, srcHeight: height, maxBitrate: opts.maxBitrate, maxHeight: opts.maxHeight, audioIndex, capReason: opts.capReason,
+    };
+    // The Web profile stream-copies compatible sources only without a bitrate limit: send one when the source exceeds the cap, its
+    // bitrate is unknown, the video has to be converted anyway, or for cast. A converted stream also gets the rung's height (and the
+    // role's height cap), so a 4K source comes out at the chosen quality instead of a size Plex picks itself.
+    const limit = cast || srcBps === 0 || srcBps > opts.maxBitrate || !videoOk;
+    const boxH = Math.min(limit ? rungHeight(opts.maxBitrate) : Infinity, opts.maxHeight || Infinity);
 
     const session = sessionFor(this.d.secret, itemId);
     const rec: SessionRec = {
       owner: ownerOf(user), itemId, rk: r.rk, part: r.partKey,
       audio: audioIndex !== undefined ? this.audioId(r.streams, audioIndex) : this.defaultAudio(r.streams),
       platform: cast ? 'Android' : 'Chrome',
-      // the Web profile stream-copies compatible sources only without a bitrate limit: send one only when the source exceeds the cap
-      maxKbps: cast || srcBps === 0 || srcBps > opts.maxBitrate ? Math.max(300, Math.round(opts.maxBitrate / 1000) - 192) : undefined,
-      res: opts.maxHeight && (!height || height > opts.maxHeight) ? resolutionFor(opts.maxHeight) : undefined,
-      directStream: true, started: false,
+      maxKbps: limit ? Math.max(300, Math.round(opts.maxBitrate / 1000) - 192) : undefined,
+      res: Number.isFinite(boxH) && (!height || height > boxH) ? resolutionFor(boxH) : undefined,
+      directStream: true, started: false, why,
     };
     await this.save(session, rec);
     return {
@@ -202,6 +213,8 @@ export class PlexPlayback {
       runtimeTicks: this.runtimeTicks(r),
       resumeTicks: opts.startTicks ?? 0,
       maxBitrate: opts.maxBitrate,
+      // first guess from the source; preparePlayback() refines it with Plex' stream decisions
+      ...(why ? { transcodeReason: plexTranscodeReason(why) } : {}),
       ...(audioIndex !== undefined ? { audioIndex } : {}),
       audioTracks,
       // also for cast: the cast route turns these /api URLs into signed /api/cast/subtitle URLs (capabilities.subtitleExtract)
@@ -215,7 +228,8 @@ export class PlexPlayback {
     if (!rec || rec.itemId !== info.itemId) throw new MediaError(404, 'preparePlayback: unknown play session');
     // the player plays directUrl first (it re-requests playback info when it falls back to HLS): no need to wait for the transcoder then;
     // the client's own index.m3u8 request launches it
-    await this.ensureStarted(info.playSessionId, rec, !info.directUrl);
+    const decided = await this.ensureStarted(info.playSessionId, rec, !info.directUrl);
+    if (!info.directUrl && rec.why) info.transcodeReason = plexTranscodeReason(rec.why, decided);
     return info;
   }
 
@@ -396,16 +410,18 @@ export class PlexPlayback {
    * Starts the transcode if needed. Plex launches the transcoder only once the session playlist is requested (segments 404 before),
    * so `wait` also fetches index.m3u8 until it lists segments.
    */
-  private async ensureStarted(session: string, rec: SessionRec, wait = true): Promise<void> {
+  private async ensureStarted(session: string, rec: SessionRec, wait = true): Promise<PlexDecision | undefined> {
+    let decided: PlexDecision | undefined;
     if (!rec.started) {
-      await startTranscode(this.d.http, this.lock, {
+      decided = (await startTranscode(this.d.http, this.lock, {
         ratingKey: rec.rk, session, platform: rec.platform, maxVideoBitrate: rec.maxKbps, videoResolution: rec.res, directStream: rec.directStream,
-      }, { partKey: rec.part, audioStreamId: rec.audio });
+      }, { partKey: rec.part, audioStreamId: rec.audio })).streams;
       rec.started = true;
       rec.stopped = false;
       await this.save(session, rec);
     }
     if (wait) await waitForIndex(this.d.http, session, this.waitOpts());
+    return decided;
   }
 
   /** One Plex TS segment; a stopped / expired session is restarted (Plex seeks to the requested segment). */

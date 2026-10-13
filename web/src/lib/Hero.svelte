@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { backdrop, HERO_WIDTHS, img, primeItem, srcset, logoUrl, type Item } from '#lib/api';
-  import { prefetchPlayer } from '#lib/player/prefetch';
+  import { playPrefetch } from '#lib/player/prefetch';
   import { prefetchModal } from '#lib/lazy';
   import Icon from '#lib/Icon.svelte';
   import { openModal } from '#lib/modal';
@@ -94,12 +94,12 @@
 </script>
 
 {#if portrait && $mobile}
-  <section class="mh" aria-label={$t('home.hero.label')}>
+  <section class="mh" data-play-scope aria-label={$t('home.hero.label')}>
     {#if item}
       {#if item.image || item.backdrop}<img class="blurbg" src={item.image ? img(item.id, 120) : backdrop(item.id, 320)} alt="" aria-hidden="true" />{/if}
       <div class="mshade"></div>
       <a class="pcard" href="/item/{item.id}" aria-label={$t('home.card.openPreview', { name: item.name })} aria-haspopup="dialog" on:click={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; e.preventDefault(); openPreview(item, e.currentTarget); }}>
-        {#if item.image || item.backdrop}<img class="pimg" src={item.image ? img(item.id, 520) : backdrop(item.id, 520)} srcset={item.image ? srcset('Primary', item.id, [320, 520, 780]) : srcset('Backdrop', item.id, [320, 520, 780])} sizes="(max-width: 450px) 80vw, 360px" alt="" fetchpriority="high" width="360" height="540" />{/if}
+        {#if item.image || item.backdrop}<img class="pimg" data-play-art src={item.image ? img(item.id, 520) : backdrop(item.id, 520)} srcset={item.image ? srcset('Primary', item.id, [320, 520, 780]) : srcset('Backdrop', item.id, [320, 520, 780])} sizes="(max-width: 450px) 80vw, 360px" alt="" fetchpriority="high" width="360" height="540" />{/if}
         <span class="pfade"></span>
         <span class="pinfo">
           {#if item.logo && !logoFailed}<img class="plogo" src={logoUrl(item.id)} alt={item.name} on:error={() => (logoFailed = true)} />{:else}<span class="ptitle">{item.name}</span>{/if}
@@ -107,7 +107,7 @@
         </span>
       </a>
       <div class="pbtns">
-        <a class="pplay" data-autofocus href={playHref || (item.type === 'Series' ? `/item/${item.id}` : `/watch/${item.id}`)}><Icon name="play" size={22} />{playText}</a>
+        <a class="pplay" data-autofocus href={playHref || (item.type === 'Series' ? `/item/${item.id}` : `/watch/${item.id}`)} use:playPrefetch><Icon name="play" size={22} />{playText}</a>
         <button type="button" class="plist" aria-pressed={inList} on:click={() => toggleList(listId, inList)}><Icon name={inList ? 'check' : 'plus'} size={22} />{$t('home.card.myList')}</button>
       </div>
     {:else}
@@ -116,9 +116,9 @@
     {/if}
   </section>
 {:else}
-<section class="hero" class:quiet bind:this={section} aria-label={$t('home.hero.label')}>
+<section class="hero" data-play-scope class:quiet bind:this={section} aria-label={$t('home.hero.label')}>
   {#if item}
-    {#if item.backdrop}<img class="bg" class:loaded src={backdrop(item.id, 1280)} srcset={srcset('Backdrop', item.id, HERO_WIDTHS)} sizes="100vw" alt="" fetchpriority="high" on:load={() => (loaded = true)} />{/if}
+    {#if item.backdrop}<img class="bg" data-play-art class:loaded src={backdrop(item.id, 1280)} srcset={srcset('Backdrop', item.id, HERO_WIDTHS)} sizes="100vw" alt="" fetchpriority="high" on:load={() => (loaded = true)} />{/if}
     <!-- svelte-ignore a11y_media_has_caption -->
     <video bind:this={hv} class="hv" class:on={playing} playsinline aria-hidden="true" tabindex="-1" on:ended={onEnded} on:volumechange={() => (vmuted = hv.muted)} on:playing={() => (vmuted = hv.muted)}></video>
     <div class="shade"></div>
@@ -140,7 +140,7 @@
         {#if item.overview}<p class="ov">{item.overview}</p>{/if}
       </div>
       <div class="btns">
-        <a class="btn pill" data-autofocus href={playHref || (item.type === 'Series' ? `/item/${item.id}` : `/watch/${item.id}`)} on:pointerenter={prefetchPlayer} on:focus={prefetchPlayer}><Icon name="play" size={26} />{playText}</a>
+        <a class="btn pill" data-autofocus href={playHref || (item.type === 'Series' ? `/item/${item.id}` : `/watch/${item.id}`)} use:playPrefetch><Icon name="play" size={26} />{playText}</a>
         {#if more}<a class="btn glass" href="/item/{item.id}" aria-haspopup="dialog" on:pointerenter={prefetchModal} on:focus={prefetchModal} on:click={(e) => { if (item) primeItem(item); openModal(e, `/item/${item!.id}`); }}><Icon name="info" size={26} />{$t('home.hero.moreInfo')}</a>{/if}
       </div>
     </div>

@@ -11,6 +11,7 @@
  */
 import { MediaError } from '../media/types.js';
 import { sessionPath, TRANSCODE } from './mediapaths.js';
+import { parseDecision, type PlexDecision } from './reason.js';
 
 /** Server-relative request to Plex with the admin token + X-Plex identification headers. Resolves for any HTTP status. */
 export interface PlexHttp {
@@ -63,7 +64,7 @@ export interface TranscodeParams {
   platform: TranscodePlatform;
   /** kbps; omitted = no limit (Web profile then stream-copies compatible sources) */
   maxVideoBitrate?: number;
-  /** WxH bounding box, only sent when the source exceeds a height cap */
+  /** WxH bounding box, only sent when the source exceeds the height cap or the bitrate rung's height (rungHeight) */
   videoResolution?: string;
   /** false forces re-encoding (preview clips, health check) */
   directStream: boolean;
@@ -83,13 +84,19 @@ export function transcodeQuery(p: TranscodeParams): URLSearchParams {
 /** 16:9 bounding box for a height cap */
 export const resolutionFor = (height: number) => `${Math.round((height * 16) / 9 / 2) * 2}x${height}`;
 
+/**
+ * Output height for a converted stream at this total bitrate (bit/s), same rungs as upstream's Jellyfin transcode URL: a 4K source
+ * converted at 8 Mbit/s comes out as 1080p, not as a 4K picture starved of bits or whatever size Plex picks on its own.
+ */
+export const rungHeight = (bps: number) => (bps >= 8e6 ? 1080 : bps >= 4e6 ? 720 : bps >= 1.5e6 ? 480 : 360);
+
 export interface AudioSelection { partKey: string; audioStreamId?: string }
 
 /**
  * PUT selection -> decision -> start.m3u8, serialized per ratingKey. Throws MediaError when Plex refuses (bad request, no
- * playable conversion). Returns the decision codes for logging.
+ * playable conversion). Returns the decision code and the per-stream decisions (copy / transcode, for PlaybackDto.transcodeReason).
  */
-export async function startTranscode(http: PlexHttp, lock: KeyedMutex, p: TranscodeParams, sel: AudioSelection): Promise<{ decision: number }> {
+export async function startTranscode(http: PlexHttp, lock: KeyedMutex, p: TranscodeParams, sel: AudioSelection): Promise<{ decision: number; streams: PlexDecision }> {
   const q = transcodeQuery(p);
   return lock.run(`rk:${p.ratingKey}`, async () => {
     if (sel.audioStreamId) {
@@ -105,7 +112,7 @@ export async function startTranscode(http: PlexHttp, lock: KeyedMutex, p: Transc
     const s = await http.fetch(`${TRANSCODE}/start.m3u8?${q}`, { clientId: p.session, platform: p.platform, headers: { accept: '*/*' } });
     if (!s.ok) throw new MediaError(502, `plex: start -> ${s.status}`);
     await s.arrayBuffer().catch(() => undefined); // the master only names session/<s>/base/index.m3u8
-    return { decision: code };
+    return { decision: code, streams: parseDecision(dj) };
   });
 }
 

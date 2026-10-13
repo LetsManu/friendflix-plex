@@ -23,6 +23,8 @@
   export let removable = false;
   /** phone layout: 16:9 cards with progress bar and ⓘ/⋯ bar instead of 2:3 posters (Weiterschauen, Nächste Folge) */
   export let landscape = false;
+  /** first visible row of the page: its images load eagerly with high priority (LCP) */
+  export let priority = false;
   let track: HTMLDivElement | undefined, section: HTMLElement | undefined;
   let canLeft = false, canRight = false, pages = 1, current = 0;
   // geometry cached by a ResizeObserver: the scroll handler only reads scrollLeft (in a rAF), never forces a layout
@@ -113,7 +115,7 @@
         {#if items === null}
           {#each Array(8) as _}<div class="slot"><div class="skeleton ph" class:poster={($mobile && !landscape) || ranked}></div></div>{/each}
         {:else}
-          {#each items as it, idx (it.id)}{#if idx < limit}<div class="slot" class:ranked role="listitem">{#if ranked}<span class="rank" aria-label={$t('home.row.rank', { n: idx + 1 })}>{idx + 1}</span>{/if}{#if $mobile}<PosterCard item={it} {landscape} {removable} on:remove />{:else}<Card item={it} {removable} poster={ranked} on:remove />{/if}</div>{/if}{/each}
+          {#each items as it, idx (it.id)}{#if idx < limit}<div class="slot" class:ranked role="listitem">{#if ranked}<span class="rank" aria-label={$t('home.row.rank', { n: idx + 1 })}>{idx + 1}</span>{/if}{#if $mobile}<PosterCard item={it} {landscape} {removable} {priority} on:remove />{:else}<Card item={it} {removable} poster={ranked} {priority} on:remove />{/if}</div>{/if}{/each}
         {/if}
       </div>
       <button class="arrow right" class:hide={!canRight} aria-label={$t('home.row.next')} on:click={() => go(1)}><Icon name="chevron-right" size={34} /></button>

@@ -132,6 +132,8 @@ export class PlexMediaServer implements MediaServer {
       segments: new Set<SegmentType>(this.flags.markers ? ['intro', 'outro'] : []),
       trickplay: this.flags.bif, upcoming: false, subtitleSearch: false, webhooks: false, changeFeed: true, planB: false, subtitleExtract: true,
       chapters: this.flags.chapters,
+      // POST /api/playback/info starts the Plex transcode (preparePlayback): no prefetch on hover / focus
+      playbackPrefetch: false,
     };
   }
 

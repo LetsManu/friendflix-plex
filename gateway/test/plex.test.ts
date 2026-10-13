@@ -109,6 +109,7 @@ describe('end to end through createGateway', () => {
   let port = 0;
   const seen: Array<{ url: string; headers: IncomingHttpHeaders }> = [];
   const itemChecks: string[] = [];
+  const authzBodies: Array<{ sid?: string; ip?: string }> = [];
   const visible = new Set([I, I2]);
   const listen = (s: Server) => new Promise<number>((r) => s.listen(0, '127.0.0.1', () => r((s.address() as AddressInfo).port)));
   const PLAYLIST = '#EXTM3U\n#EXT-X-TARGETDURATION:8\n#EXT-X-ALLOW-CACHE:NO\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:8, nodesc\n00000.ts\n#EXTINF:8, nodesc\n00001.ts\n#EXT-X-ENDLIST\n';
@@ -140,6 +141,7 @@ describe('end to end through createGateway', () => {
           itemChecks.push(j.itemId);
           return json({ allow: visible.has(j.itemId) });
         }
+        if (req.url === '/internal/authz') authzBodies.push(j);
         const base = { userId: 'u1', token: 'p-identity', deviceId: 'ff-u1', maxBitrate: 8_000_000, canDownload: j.sid !== 'nodownload-nodownload-1' };
         if (j.ct) return json(j.ct === CT ? { ...base, scope: { itemId: I, mediaSourceId: P, playSessionId: S1 } } : {}, j.ct === CT ? 200 : 401);
         if (j.dl) return json({ ...base, download: { kind: 'static', path: `/Videos/${I}/stream`, query: { static: 'true', MediaSourceId: P } } });
@@ -191,6 +193,25 @@ describe('end to end through createGateway', () => {
     await get(`/media/Items/${I}/Images/Primary?maxWidth=300&url=%2Flibrary%2Fparts%2F1&X-Plex-Token=LEAK`);
     expect(last().url).toBe('/photo/:/transcode?url=%2Flibrary%2Fmetadata%2F1%2Fthumb&width=300&height=1200&minSize=0&upscale=0');
     expect(seen.some((s) => s.url.includes('LEAK'))).toBe(false);
+  });
+
+  it('Block 20: the client address goes to /internal/authz as ip (X-Real-IP, else the last X-Forwarded-For entry, else a loopback peer)', async () => {
+    const ask = async (sid: string, headers: Record<string, string>) => {
+      expect((await get(`/media/Videos/${I}/hls/${S1}/00000.ts`, sid, headers)).status).toBe(200);
+      return authzBodies.filter((b) => b.sid === sid).at(-1);
+    };
+    expect(await ask('ipsid-ipsid-ipsid-ipsid-1', { 'x-real-ip': '203.0.113.9', 'x-forwarded-for': '192.168.1.5' })).toEqual({ sid: 'ipsid-ipsid-ipsid-ipsid-1', ip: '203.0.113.9' });
+    expect((await ask('ipsid-ipsid-ipsid-ipsid-2', { 'x-forwarded-for': '192.168.1.5, 198.51.100.7' }))?.ip).toBe('198.51.100.7');
+    expect((await ask('ipsid-ipsid-ipsid-ipsid-3', {}))?.ip).toBe('127.0.0.1'); // the test client is a loopback peer
+    expect(authzBodies.every((b) => typeof b.ip === 'string' && b.ip.length > 0)).toBe(true);
+  });
+
+  it('Block 20: no bitrate params are injected or relayed on HLS paths (the backend fixed them at transcode start)', async () => {
+    expect(up.requireBitrate).toBeUndefined();
+    await get(`/media/Videos/${I}/hls/${S1}/index.m3u8?maxVideoBitrate=200000&videoResolution=3840x2160&MaxStreamingBitrate=1&VideoBitrate=1&videoQuality=100`);
+    expect(last().url).toBe(`/video/:/transcode/universal/session/${S1}/base/index.m3u8`);
+    await get(`/media/Videos/${I}/hls/${S1}/00002.ts?maxVideoBitrate=200000`);
+    expect(last().url).toBe(`/video/:/transcode/universal/session/${S1}/base/00002.ts`);
   });
 
   it('chapter stills: signed media version -> Plex chapterImages via the photo transcoder; unsigned / foreign / hidden -> 403', async () => {
