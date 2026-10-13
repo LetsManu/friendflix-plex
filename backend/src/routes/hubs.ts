@@ -4,6 +4,7 @@ import { audit } from '../audit.js';
 import type { Ctx } from '../ctx.js';
 import { MediaError, type ItemDto } from '../media/types.js';
 import { onPolicyChange } from '../hooks.js';
+import { bumpHomeAll } from '../homegen.js';
 import { requireAdmin, requireUser } from '../session.js';
 import type { JfUser } from '../types.js';
 import { id32, wrap, type WrapOptions } from './_shared.js';
@@ -47,6 +48,7 @@ const hubBody = z.object({
   enabled: z.boolean().optional(),
 });
 
+/** Registers the hub routes; returns the viewer-side lookup GET /api/home reuses (same memo, same visibility rules). */
 export function hubRoutes(app: FastifyInstance, ctx: Ctx) {
   const pre = { preHandler: requireUser(ctx) };
   const admin = { preHandler: requireAdmin(ctx) };
@@ -92,11 +94,13 @@ export function hubRoutes(app: FastifyInstance, ctx: Ctx) {
   const uuid = z.string().uuid();
 
   // ---- viewer ----
-  app.get('/api/hubs', pre, wrap(async (req) => {
+  /** Data of GET /api/hubs (also part of GET /api/home). */
+  const viewerHubs = async (user: JfUser) => {
     const hubs = (await ctx.db.query<HubRow>(`select ${hubCols} from brand_hubs where enabled order by sort_order, created_at limit ${MAX_HUBS}`)).rows;
-    const ok = await Promise.all(hubs.map((h) => hasItems(req.jfUser!, h).catch(() => false)));
-    return { hubs: await Promise.all(hubs.filter((_, i) => ok[i]).map((h) => viewerHub(req.jfUser!, h))) };
-  }));
+    const ok = await Promise.all(hubs.map((h) => hasItems(user, h).catch(() => false)));
+    return { hubs: await Promise.all(hubs.filter((_, i) => ok[i]).map((h) => viewerHub(user, h))) };
+  };
+  app.get('/api/hubs', pre, wrap(async (req) => viewerHubs(req.jfUser!)));
 
   app.get('/api/hubs/:id', pre, wrap(async (req, reply) => {
     const id = uuid.safeParse((req.params as { id: string }).id);
@@ -212,6 +216,7 @@ export function hubRoutes(app: FastifyInstance, ctx: Ctx) {
        values ($1,$2,$3,$4,$5,$6,(select coalesce(max(sort_order), -1) + 1 from brand_hubs),$7) returning ${hubCols}`,
       [b.name, b.source, value, b.accent ?? null, img.id, img.kind, b.enabled ?? true])).rows[0]!;
     await audit(ctx, req.user!.id, 'hub.create', row.id, { name: row.name, source: row.source_kind });
+    await bumpHomeAll(ctx);
     return reply.code(201).send({ hub: adminHub(row) });
   }, guard));
 
@@ -222,6 +227,7 @@ export function hubRoutes(app: FastifyInstance, ctx: Ctx) {
     if (b.ids.some((i) => !known.has(i)) || new Set(b.ids).size !== b.ids.length) return reply.code(400).send({ error: 'bad_request' });
     await ctx.db.query('update brand_hubs h set sort_order = o.n from (select id, (ord - 1)::int n from unnest($1::uuid[]) with ordinality t(id, ord)) o where h.id = o.id', [b.ids]);
     await audit(ctx, req.user!.id, 'hub.order', undefined, { ids: b.ids });
+    await bumpHomeAll(ctx);
     return { ok: true };
   }, guard));
 
@@ -237,6 +243,7 @@ export function hubRoutes(app: FastifyInstance, ctx: Ctx) {
       `update brand_hubs set name=$2, source_kind=$3, source_value=$4, accent=$5, image_item_id=$6, image_kind=$7, enabled=$8 where id=$1 returning ${hubCols}`,
       [cur.id, b.name, b.source, value, b.accent ?? null, img.id, img.kind, b.enabled ?? cur.enabled])).rows[0]!;
     visible.clear();
+    await bumpHomeAll(ctx);
     await audit(ctx, req.user!.id, 'hub.update', row.id, { name: row.name, source: row.source_kind, enabled: row.enabled });
     return { hub: adminHub(row) };
   }, guard));
@@ -246,7 +253,10 @@ export function hubRoutes(app: FastifyInstance, ctx: Ctx) {
     const gone = id.success ? (await ctx.db.query('delete from brand_hubs where id = $1', [id.data])).rowCount : 0;
     if (!gone) return reply.code(404).send({ error: 'not_found' });
     visible.clear();
+    await bumpHomeAll(ctx);
     await audit(ctx, req.user!.id, 'hub.delete', id.success ? id.data : undefined);
     return { ok: true };
   });
+
+  return { viewerHubs };
 }

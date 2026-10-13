@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFile
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { blocksDirectStream, createGateway, matchDownloadPath, normalizeCastPath, normalizePath, sanitizePlaylist } from '../src/gateway.js';
+import { authClientIp, blocksDirectStream, createGateway, matchDownloadPath, normalizeCastPath, normalizePath, sanitizePlaylist } from '../src/gateway.js';
 
 const ID = 'a'.repeat(32);
 let jf: Server, be: Server, gw: Server;
@@ -12,6 +12,8 @@ let gwPort: number;
 const seen: Array<{ url: string; auth?: string; range?: string; acceptEncoding?: string; cookie?: string }> = [];
 const authzBodies: string[] = [];
 const authzCalls: Array<{ ct: string; client?: string }> = [];
+const sidCalls: Array<{ sid: string; ip?: string }> = [];
+const REMOTE_IP = '203.0.113.9';
 const MS = 'b'.repeat(32);
 const CT = 'A'.repeat(43); // valid cast token of the fake backend
 const CT_BAD = 'B'.repeat(43);
@@ -94,11 +96,12 @@ beforeAll(async () => {
         res.writeHead(200, { 'content-type': 'application/json' });
         return void res.end(JSON.stringify({ userId: j.sid === 'othersid' ? 'u2' : 'u1', token: 'JFTOKEN', deviceId: 'ff-u1', maxBitrate: 5_000_000, download: target }));
       }
-      const ok = ['goodsid', 'guestsid', 'nodlsid', 'legacysid'].includes(j.sid);
+      const ok = ['goodsid', 'guestsid', 'nodlsid', 'legacysid', 'remotesid'].includes(j.sid);
       if (!ok) return void res.writeHead(401).end();
+      sidCalls.push({ sid: j.sid, ip: j.ip });
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
-        userId: 'u1', token: 'JFTOKEN', deviceId: 'ff-u1', maxBitrate: 5_000_000,
+        userId: 'u1', token: 'JFTOKEN', deviceId: 'ff-u1', maxBitrate: j.sid === 'remotesid' && j.ip === REMOTE_IP ? 2_000_000 : 5_000_000, // remote callers get a lower cap
         ...(j.sid === 'legacysid' ? {} : { canDownload: j.sid === 'goodsid' }), // legacysid: answer of a backend that does not know the flag yet
         ...(j.sid === 'guestsid' ? { maxHeight: 720 } : {}),
       }));
@@ -126,6 +129,45 @@ const get = (path: string, headers: Record<string, string> = {}) =>
   fetch(`http://127.0.0.1:${gwPort}${path}`, { headers: { cookie: 'ff_sid=goodsid', ...headers } });
 
 const vectors = JSON.parse(readFileSync(new URL('../../test-vectors/media-paths.json', import.meta.url), 'utf8')) as { allow: string[]; deny: string[]; direct: string[] };
+describe('remote bitrate cap', () => {
+  const rget = (headers: Record<string, string>) => get(`/media/Videos/${ID}/master.m3u8?MaxStreamingBitrate=999999999&MediaSourceId=x`, { cookie: 'ff_sid=remotesid', ...headers });
+  it('sends the client ip with the authz call; the auth cache is per sid AND ip', async () => {
+    sidCalls.length = 0;
+    await (await rget({ 'x-real-ip': REMOTE_IP })).arrayBuffer();
+    await (await rget({ 'x-real-ip': '192.168.1.10' })).arrayBuffer();
+    await (await rget({ 'x-real-ip': REMOTE_IP })).arrayBuffer(); // cached
+    expect(sidCalls.map((c) => c.ip)).toEqual([REMOTE_IP, '192.168.1.10']);
+  });
+  it('derives the ip like clientKey (x-real-ip, else the LAST x-forwarded-for entry)', async () => {
+    sidCalls.length = 0;
+    await (await rget({ 'x-forwarded-for': '192.168.1.99, 198.51.100.7' })).arrayBuffer();
+    expect(sidCalls.at(-1)!.ip).toBe('198.51.100.7');
+  });
+  it('clamps the bitrate query param to the cap returned for that ip', async () => {
+    seen.length = 0;
+    await (await rget({ 'x-real-ip': REMOTE_IP })).arrayBuffer();
+    expect(seen.at(-1)!.url).toContain('MaxStreamingBitrate=2000000');
+    await (await rget({ 'x-real-ip': '192.168.1.10' })).arrayBuffer();
+    expect(seen.at(-1)!.url).toContain('MaxStreamingBitrate=5000000');
+  });
+});
+
+describe('authClientIp', () => {
+  it('uses x-real-ip, else the last x-forwarded-for entry', () => {
+    expect(authClientIp({ 'x-real-ip': '203.0.113.1', 'x-forwarded-for': '1.1.1.1, 2.2.2.2' }, '172.18.0.2')).toBe('203.0.113.1');
+    expect(authClientIp({ 'x-forwarded-for': '192.168.1.10, 203.0.113.9' }, '172.18.0.2')).toBe('203.0.113.9');
+  });
+  it('without a usable forwarding header only a loopback peer is passed on; others are unknown (remote)', () => {
+    expect(authClientIp({}, '127.0.0.1')).toBe('127.0.0.1');
+    expect(authClientIp({}, '::1')).toBe('::1');
+    expect(authClientIp({}, '::ffff:127.0.0.1')).toBe('::ffff:127.0.0.1');
+    expect(authClientIp({}, '172.18.0.2')).toBe('unknown');
+    expect(authClientIp({}, '192.168.1.5')).toBe('unknown');
+    expect(authClientIp({}, undefined)).toBe('unknown');
+    expect(authClientIp({ 'x-forwarded-for': ',' }, '172.18.0.2')).toBe('unknown');
+  });
+});
+
 describe('shared allowlist vectors', () => {
   it.each(vectors.direct)('direct stream %s: blocked for capped / non-download roles only', (p) => {
     expect(blocksDirectStream(p, { maxHeight: 1080, canDownload: true })).toBe(true);
@@ -172,6 +214,23 @@ describe('gateway', () => {
     expect(u.url).not.toContain('LEAK');
     expect(u.url).toContain('MaxStreamingBitrate=5000000');
     expect(u.url).toContain('MediaSourceId=x');
+  });
+  it('adds missing bitrate params at the cap on HLS paths; present higher values are clamped; direct streams are untouched', async () => {
+    seen.length = 0;
+    await (await get(`/media/Videos/${ID}/master.m3u8?MediaSourceId=x`)).arrayBuffer();
+    let q = new URL(seen[0]!.url, 'http://x').searchParams;
+    expect([q.get('MaxStreamingBitrate'), q.get('VideoBitrate')]).toEqual(['5000000', '5000000']);
+    seen.length = 0;
+    await (await get(`/media/Videos/${ID}/hls1/main/0.ts?maxstreamingbitrate=999999999&MediaSourceId=x`)).arrayBuffer();
+    q = new URL(seen[0]!.url, 'http://x').searchParams;
+    expect([q.get('maxstreamingbitrate'), q.get('MaxStreamingBitrate'), q.get('VideoBitrate')]).toEqual(['5000000', null, '5000000']); // no duplicate in another casing
+    seen.length = 0;
+    await (await get(`/media/Videos/${ID}/main.m3u8?VideoBitrate=1000000&MediaSourceId=x`)).arrayBuffer();
+    q = new URL(seen[0]!.url, 'http://x').searchParams;
+    expect([q.get('VideoBitrate'), q.get('MaxStreamingBitrate')]).toEqual(['1000000', '5000000']);
+    seen.length = 0;
+    await (await get(`/media/Videos/${ID}/stream?static=true`)).arrayBuffer();
+    expect(seen[0]!.url).not.toMatch(/bitrate/i);
   });
   it('clamps resolution params to the role cap on the cookie path, and leaves them alone without a cap', async () => {
     seen.length = 0;

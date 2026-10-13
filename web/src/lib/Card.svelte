@@ -21,6 +21,8 @@
   export let removable = false;
   /** portrait 2:3 poster instead of the 16:9 thumbnail (Top-10 rows) */
   export let poster = false;
+  /** eager + high priority image (first visible row of the home page) */
+  export let priority = false;
   const dispatch = createEventDispatcher<{
     remove: Item;
     /** "Merkliste" was toggled for this card (after the server accepted it) */
@@ -137,7 +139,7 @@
   <div class="media">
   <a class="thumb" {href} bind:this={thumbEl} aria-label={item.name + (sub ? ', ' + sub : '')}>
     {#if posterOnly}<img class="blur" loading="lazy" decoding="async" {src} srcset={srcs} {sizes} alt="" aria-hidden="true" />{/if}
-    {#if src}<img bind:this={imgEl} class:contain={posterOnly} class:spoil={isSpoiler(item, $prefs)} loading="lazy" decoding="async" {src} srcset={srcs} {sizes} alt="" width={posterSrc ? 200 : 320} height={posterSrc ? 300 : 180} />{/if}
+    {#if src}<img bind:this={imgEl} class:contain={posterOnly} class:spoil={isSpoiler(item, $prefs)} loading={priority ? 'eager' : 'lazy'} fetchpriority={priority ? 'high' : undefined} decoding="async" {src} srcset={srcs} {sizes} alt="" width={posterSrc ? 200 : 320} height={posterSrc ? 300 : 180} />{/if}
     {#if tag?.kind === 'leaving'}<span class="newep leave">{$t(tag.key, { n: tag.n })}</span>
     {:else if tag && (tag.label === 'new' || tag.label === 'newSeries')}<span class="brand"><Logo size={16} label="" /><span class="neu">{$t(tag.key)}</span></span>
     {:else if tag}<span class="newep">{$t(tag.key)}</span>{/if}

@@ -1,18 +1,12 @@
 <script lang="ts">
   // Block 17: featured themed lists ("Themenlisten") as home rows (owned by worker S1, mounted on the home page by D1).
   // Pinned by an admin, items already filtered to what this profile may see; a list without a visible title is not rendered.
-  import { onMount } from 'svelte';
-  import { getActiveProfile } from '#lib/api';
-  import { homeCache, swrLoad } from '#lib/home';
-  import { coverGradient, loadThemed, type ThemedList } from '#lib/lists';
+  import { coverGradient, type ThemedList } from '#lib/lists';
   import Row from '#lib/Row.svelte';
   import { t } from '#lib/i18n';
 
-  let lists: ThemedList[] = [];
-  onMount(() => {
-    // no spinner / skeleton: themed rows are optional, the home page must not jump when there are none
-    void swrLoad(homeCache, `${getActiveProfile()}|themed`, loadThemed, (v) => (lists = v), undefined, () => (lists = [])).catch(() => undefined);
-  });
+  /** no spinner / skeleton: themed rows are optional, the home page must not jump when there are none. The home page loads them (GET /api/home, or /api/lists/themed as fallback). */
+  export let lists: ThemedList[] = [];
 </script>
 
 {#each lists as l (l.id)}

@@ -2,7 +2,7 @@
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import { beforeNavigate } from '$app/navigation';
   import { api, backdrop, cachedDetail, img, primeDetail, primeItem, setCachedThumb, srcset, type Item, type ItemDetail } from '#lib/api';
-  import { prefetchPlayer } from '#lib/player/prefetch';
+  import { playPrefetch } from '#lib/player/prefetch';
   import { prefetchModal } from '#lib/lazy';
   import { listIds, toggleList, prefs } from '#lib/stores';
   import { t, tr } from '#lib/i18n';
@@ -169,12 +169,12 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
-  class="hp" class:ready use:portal bind:this={el} role="group" aria-label={$t('home.card.preview', { name: item.name })}
+  class="hp" data-play-scope class:ready use:portal bind:this={el} role="group" aria-label={$t('home.card.preview', { name: item.name })}
   style={box ? `left:${box.left}px;top:${box.top}px;width:${box.width}px;` : 'left:0;top:0;width:300px;'}
   on:mouseenter={() => (over = true)} on:mouseleave={() => (over = false)}
   on:focusin={() => (focused = true)} on:focusout={leaveFocus} on:keydown={tabKey}
 >
-  <div class="media" style={box ? `height:${box.mediaH}px` : ''}>
+  <div class="media" data-play-art style={box ? `height:${box.mediaH}px` : ''}>
     {#if posterOnly}<img class="blur" src={startSrc || src} alt="" aria-hidden="true" />{/if}
     {#if startSrc}<img class:contain={posterOnly} class:spoil={isSpoiler(item, $prefs)} src={startSrc} alt="" />{/if}
     {#if src}<img class="hi" class:on={hiLoaded || !startSrc} class:contain={posterOnly} class:spoil={isSpoiler(item, $prefs)} {src} srcset={srcs} sizes="{box?.width ?? 360}px" alt="" on:load={() => (hiLoaded = true)} />{/if}
@@ -187,7 +187,7 @@
   </div>
   <div class="info">
     <div class="acts">
-      <a class="round play" {href} on:pointerenter={prefetchPlayer} on:focus={prefetchPlayer} aria-label={$t('home.card.playName', { name: item.name })} title={$t('home.card.play')}><Icon name="play" size={18} /></a>
+      <a class="round play" {href} use:playPrefetch aria-label={$t('home.card.playName', { name: item.name })} title={$t('home.card.play')}><Icon name="play" size={18} /></a>
       <button type="button" class="round" aria-label={inList ? $t('home.card.removeFromList') : $t('home.card.addToListLong')} title={$t('home.card.myList')} on:click={toggleInList}><Icon name={inList ? 'check' : 'plus'} size={18} /></button>
       {#if item.type !== 'BoxSet'}<RatingButton itemId={listId} bind:value={thumb} on:change={onThumb} on:error={flash} />{/if}
       <span class="right">

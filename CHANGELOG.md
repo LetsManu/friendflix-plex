@@ -12,6 +12,14 @@ All notable changes. Nothing is released yet, so everything is listed under *Unr
 - **"FriendFlix for Plex" branding:** wordmark badge, document titles, PWA manifest, README and screenshots.
 - **Docs:** README and README.de in the upstream structure worded for Plex, readable architecture diagrams (light and dark) with Plex variants for how it fits together, containers and networks, trust boundaries, press play and the media server seam in [docs/architecture.md](docs/architecture.md), re-shot screenshots (fictional titles and generated artwork) in `docs/images/en` and `docs/images/de`.
 
+### Streaming
+- **Adaptive quality:** *Auto* picks the quality your connection can carry (the last estimate is remembered per device for 7 days), steps down after a stall or a network error and steps back up once the connection is steady. A chip in the player shows "Original" or "Converted · 720p"; tap it for the reason.
+- **Remote limit per role:** outside the home network each role has its own bitrate cap (defaults: friends and family 8, guests 4, admins 12 Mbit/s), set on the admin roles page. Home networks are listed in `HOME_NETWORKS`; the server and the gateway enforce the cap, so the browser cannot raise it. See docs/operations.md.
+- **Explicit transcode bitrates:** converted streams ask for video and audio bitrates that match the chosen quality, so the picture is the one the chip shows.
+- **Player controls:** on a PC, speed with <kbd>&lt;</kbd> and <kbd>&gt;</kbd>, the mouse wheel over the picture for volume, double-click for fullscreen. On phones larger touch targets, fewer buttons in the bar (speed and scenes under *More*), and menus close on Esc or an outside tap with focus back on the button.
+- **Faster home page:** the first screen loads in one request (`GET /api/home`) instead of about a dozen, and the first row's artwork loads first. Old endpoints stay as they were.
+- **Smooth transition into the player:** playback info is fetched early when you hover, focus or touch a play button. The clicked artwork grows into a poster of the title and the picture fades in on the first frame (a plain fade with reduced motion; TV is unchanged).
+
 ### Watching
 - **Cast & info** in the player (<kbd>I</kbd> for a peek, panel for details): cast with characters, guest stars, director, writers, studio, tags; a person opens their other titles. API `GET /api/items/:id/castinfo`.
 - **Scenes:** chapter marks on the seek bar, chapter name in the scrub tip and a "Scenes" panel with stills (`GET /api/items/:id/chapters`, optional server capability `chapters`).

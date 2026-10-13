@@ -4,6 +4,7 @@ import type { Ctx } from '../ctx.js';
 import type { ItemDto } from '../media/types.js';
 import { requireGrownUp } from '../kids.js';
 import { requireUser } from '../session.js';
+import { bumpHome } from '../homegen.js';
 import type { UserRow } from '../types.js';
 import { itemsByIds } from './discover.js';
 import { id32, wrap as sharedWrap } from './_shared.js';
@@ -58,6 +59,7 @@ export function socialRoutes(app: FastifyInstance, ctx: Ctx) {
       await ctx.db.query('delete from dropped where profile_id=$1 and item_id=$2', [pid, item.id]);
       await ctx.db.query('delete from watchlist where profile_id=$1 and item_id=$2', [pid, item.id]);
     }
+    await bumpHome(ctx, pid);
     return { status: want === 'none' ? derivedStatus(item) : want };
   }));
 

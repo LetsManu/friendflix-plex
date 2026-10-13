@@ -150,6 +150,32 @@ test.describe('admin people (desktop)', () => {
       await expect(card.getByText('Nicht gespeichert')).toHaveCount(0);
     });
 
+    test('remote bitrate limit: default option, values up to the role limit, reset to default, saves only that field', async ({ page, api }) => {
+      await page.goto('/admin/roles');
+      const card = page.getByRole('form', { name: 'Freund' });
+      const cap = card.getByRole('combobox', { name: 'Limit unterwegs' });
+      await expect(cap).toHaveValue(''); // role default (no override)
+      await expect(cap.getByRole('option', { name: 'Standard (8 Mbit/s)' })).toHaveCount(1);
+      await expect(cap.getByRole('option', { name: '40 Mbit/s' })).toHaveCount(1);
+      const fam = page.getByRole('form', { name: 'Familie' }).getByRole('combobox', { name: 'Limit unterwegs' });
+      await expect(fam).toHaveValue('12000000');
+      // the guest role tops out at 8 Mbit/s: higher caps would have no effect and are not offered
+      const guest = page.getByRole('form', { name: 'Gast' }).getByRole('combobox', { name: 'Limit unterwegs' });
+      await expect(guest.getByRole('option', { name: '8 Mbit/s' })).toHaveCount(1);
+      await expect(guest.getByRole('option', { name: '12 Mbit/s' })).toHaveCount(0);
+      await cap.selectOption('12000000');
+      await card.getByRole('button', { name: 'Speichern' }).click();
+      await expect(toasts(page).getByText('Rolle „Freund“ gespeichert.')).toBeVisible();
+      const put = api.log.find((l) => l.startsWith('PUT /api/admin/roles/friend'))!;
+      expect(put).toContain('"remoteMaxBitrate":12000000');
+      expect(put).not.toContain('requestsPerMonth');
+      // back to the default sends null
+      await cap.selectOption('');
+      await card.getByRole('button', { name: 'Speichern' }).click();
+      await expect.poll(() => api.log.filter((l) => l.startsWith('PUT /api/admin/roles/friend')).length).toBe(2);
+      expect(api.log.filter((l) => l.startsWith('PUT /api/admin/roles/friend'))[1]).toContain('"remoteMaxBitrate":null');
+    });
+
     test('download fields appear with the switch; save failure keeps the edit', async ({ page }) => {
       await page.route('**/api/admin/roles/guest', (r) => r.request().method() === 'PUT' ? r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"x"}' }) : r.fallback());
       const sent: string[] = [];

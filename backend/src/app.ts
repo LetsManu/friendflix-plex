@@ -32,6 +32,7 @@ import { socialRoutes } from './routes/social.js';
 import { reactionRoutes } from './routes/reactions.js';
 import { trendingRoutes } from './routes/trending.js';
 import { hubRoutes } from './routes/hubs.js';
+import { homeRoutes } from './routes/home.js';
 import { animeRoutes } from './routes/anime.js';
 
 export interface Extra {
@@ -148,7 +149,8 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   socialRoutes(app, ctx);
   reactionRoutes(app, ctx);
   trendingRoutes(app, ctx);
-  hubRoutes(app, ctx);
+  const hubs = hubRoutes(app, ctx);
+  homeRoutes(app, ctx, hubs);
   animeRoutes(app, ctx);
   for (const r of extra.register ?? []) await r(app, ctx);
   return app;

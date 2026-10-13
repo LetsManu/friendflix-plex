@@ -514,7 +514,7 @@ export class JellyfinService implements MediaServer {
     await this.mutate(user, () => this.compat(user, 'played' + on, [`/UserPlayedItems/${id}?userId=${uid}`, `/Users/${uid}/PlayedItems/${id}`], { method: on ? 'POST' : 'DELETE' }));
   }
 
-  async playbackInfo(user: JfUser, itemId: string, opts: { maxBitrate: number; maxHeight?: number | null; startTicks?: number; audioIndex?: number; audioLang?: string; cast?: boolean; noDirect?: boolean }): Promise<PlaybackDto> {
+  async playbackInfo(user: JfUser, itemId: string, opts: { maxBitrate: number; maxHeight?: number | null; startTicks?: number; audioIndex?: number; audioLang?: string; cast?: boolean; noDirect?: boolean; capReason?: 'remoteCap' | 'roleCap' | 'manual' | 'network' }): Promise<PlaybackDto> {
     const p = new URLSearchParams({ UserId: user.jellyfin_user_id, MaxStreamingBitrate: String(opts.maxBitrate), AutoOpenLiveStream: 'false' });
     if (opts.startTicks) p.set('StartTimeTicks', String(opts.startTicks));
     if (opts.audioIndex !== undefined) p.set('AudioStreamIndex', String(opts.audioIndex));
@@ -560,7 +560,7 @@ export class JellyfinService implements MediaServer {
       const want = streams.find((s) => s.Type === 'Audio' && s.Language === opts.audioLang);
       if (want && !want.IsDefault && typeof want.Index === 'number') audioIndex = want.Index;
     }
-    return toPlaybackDto({ itemId, info, deviceId: this.deviceId(user), maxBitrate: opts.maxBitrate, resumeTicks: opts.startTicks ?? 0, audioIndex, maxHeight: opts.maxHeight, cast: opts.cast, noDirect: opts.noDirect });
+    return toPlaybackDto({ itemId, info, deviceId: this.deviceId(user), maxBitrate: opts.maxBitrate, resumeTicks: opts.startTicks ?? 0, audioIndex, maxHeight: opts.maxHeight, cast: opts.cast, noDirect: opts.noDirect, capReason: opts.capReason });
   }
 
   /** PlaybackInfo with the "FriendFlix Download" profile: source details + (unless 'original') the fMP4 HLS master the preparer pulls. */

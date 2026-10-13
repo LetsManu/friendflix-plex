@@ -7,6 +7,7 @@ import { seerrHooks } from '../hooks.js';
 import { approvePoll, createPoll, InvalidOptions, pollTick, resolveRequestedPolls } from '../polls.js';
 import { m } from '../i18n.js';
 import { notify } from '../notify.js';
+import { bumpHome } from '../homegen.js';
 import { MediaError } from '../media/types.js';
 import { SeerrError } from '../seerr/client.js';
 import { requireGrownUp } from '../kids.js';
@@ -139,10 +140,12 @@ export function pollRoutes(app: FastifyInstance, ctx: Ctx) {
       [req.user!.id, itemId, item.name, b.stars, b.review || null],
     );
     bus.emitT('rating.created', { userId: req.user!.id });
+    await bumpHome(ctx, req.profile!.id);
     return { ok: true };
   });
   app.delete('/api/items/:id/rating', grown, async (req) => {
     await ctx.db.query('delete from ratings where user_id=$1 and item_id=$2', [req.user!.id, id32.parse((req.params as { id: string }).id)]);
+    await bumpHome(ctx, req.profile!.id);
     return { ok: true };
   });
 

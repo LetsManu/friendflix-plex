@@ -1,16 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { api, getActiveProfile } from '#lib/api';
-  import { homeCache, swrLoad } from '#lib/home';
   import { hubGlow, hubGradient, type Hub } from '#lib/hubs';
   import { t } from '#lib/i18n';
 
-  /** Brand hub tiles under the billboard (Block 15). Renders nothing while loading, on errors and when no hub is defined. */
-  let hubs: Hub[] = [];
+  /** Brand hub tiles under the billboard (Block 15). Renders nothing while loading, on errors and when no hub is defined. The home page loads them (GET /api/home, or /api/hubs as fallback). */
+  export let hubs: Hub[] = [];
   let failedImg = new Set<string>();
-  onMount(() => {
-    void swrLoad(homeCache, `${getActiveProfile()}|hubs`, () => api('/api/hubs').then((r) => ((r.hubs as Hub[] | undefined) ?? [])), (v) => (hubs = v), undefined, () => (hubs = [])).catch(() => undefined);
-  });
 </script>
 
 {#if hubs.length}

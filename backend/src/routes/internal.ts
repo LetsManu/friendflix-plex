@@ -8,7 +8,8 @@ import { setLive } from '../live.js';
 import { dispatchMediaEvent } from '../media/events.js';
 import { MediaError } from '../media/types.js';
 import { jfUserFor, resolveProfile } from '../profiles.js';
-import { effectiveRole } from '../roles.js';
+import { isHomeAddress } from '../netaddr.js';
+import { effectiveRole, remoteBitrateCap } from '../roles.js';
 import { loadSession } from '../session.js';
 import { upstreamUri } from '../mediapath.js';
 import { authzNginx } from '../metrics.js';
@@ -28,6 +29,8 @@ interface MediaAuth {
   token: string;
   deviceId: string;
   maxBitrate: number;
+  /** bit/s outside the home networks (applied per request from the caller's ip; never part of the answer) */
+  remoteMaxBitrate?: number;
   /** role resolution cap; the gateway clamps MaxHeight/MaxWidth/Height/Width query params to it */
   maxHeight?: number;
   /** role may download: without it (or with a height cap) the gateway refuses direct /stream requests */
@@ -44,6 +47,13 @@ export const forgetAuth = (sid: string) => {
   inflight.delete(sid); // a lookup still running for the old profile must neither be joined nor stored
   for (const k of [...itemMemo.keys()]) if (k.startsWith(`${sid}|`)) itemMemo.delete(k);
 };
+
+/** Answer for the gateway: remoteMaxBitrate is internal; for a remote caller it lowers maxBitrate. */
+function withoutRemoteCap(a: MediaAuth | null, remote = false): Omit<MediaAuth, 'remoteMaxBitrate'> | null {
+  if (!a) return null;
+  const { remoteMaxBitrate, ...rest } = a;
+  return remote && remoteMaxBitrate ? { ...rest, maxBitrate: Math.min(rest.maxBitrate, remoteMaxBitrate) } : rest;
+}
 
 /** /internal/authz/item answers per session + item (5 s; errors are never memoised). */
 const ITEM_MEMO_MS = 5_000;
@@ -67,7 +77,7 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
     const id = await sessionIdentity(sid);
     if (!id) return null;
     const { user, role, jfUser } = id;
-    return { userId: user.id, ...(await ctx.jf.mediaAuth(jfUser)), maxBitrate: role.maxBitrate, canDownload: role.download || ctx.cfg.DIRECT_PLAY_REQUIRES_DOWNLOAD !== 'true', ...(role.maxHeight ? { maxHeight: role.maxHeight } : {}) };
+    return { userId: user.id, ...(await ctx.jf.mediaAuth(jfUser)), maxBitrate: role.maxBitrate, remoteMaxBitrate: remoteBitrateCap(role), canDownload: role.download || ctx.cfg.DIRECT_PLAY_REQUIRES_DOWNLOAD !== 'true', ...(role.maxHeight ? { maxHeight: role.maxHeight } : {}) };
   }
 
   /** Errors (DB/Redis/Jellyfin down) propagate and are never memoised: the next request retries. */
@@ -95,7 +105,8 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/internal/authz', { config: { rateLimit: false } }, async (req, reply) => {
     if (!checkSecret(req, 'x-internal-secret', ctx.cfg.INTERNAL_SECRET)) return reply.code(403).send({ error: 'forbidden' });
     const body = z.union([
-      z.object({ sid: z.string().regex(/^[\w-]{20,80}$/) }).strict(),
+      // ip = address the gateway derived for the caller (same rule as `client`): outside HOME_NETWORKS the role's remote cap lowers maxBitrate
+      z.object({ sid: z.string().regex(/^[\w-]{20,80}$/), ip: z.string().min(1).max(64).optional() }).strict(),
       // client = address the gateway derived for the caller (X-Real-IP / last XFF): the first one to use a token pins it
       z.object({ ct: z.string().regex(CAST_TOKEN_RE), client: z.string().min(1).max(64) }).strict(),
       // offline download licence (gateway /media/d/<uuid>): same session checks as {sid}, plus the licence itself
@@ -104,7 +115,7 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
     if (!body.success) return reply.code(400).send({ error: 'bad_request' });
     if ('dl' in body.data) {
       // 401 = no valid session / device / profile, 404 = licence not usable by this session (unknown, other device, expired, revoked, role)
-      const a = await mediaAuth(body.data.sid);
+      const a = withoutRemoteCap(await mediaAuth(body.data.sid));
       if (!a) return reply.code(401).send({ error: 'unauthenticated' });
       const session = await loadSession(ctx, body.data.sid);
       const user = session ? await getUserById(ctx, session.userId) : undefined;
@@ -114,8 +125,12 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
       const download = await authorizeDownload(ctx, session, user, prof.id, body.data.dl.toLowerCase());
       return download ? { ...a, download } : reply.code(404).send({ error: 'not_found' });
     }
-    const a = 'ct' in body.data ? await resolveCast(ctx, body.data.ct, body.data.client) : await mediaAuth(body.data.sid);
-    return a ?? reply.code(401).send({ error: 'unauthenticated' });
+    if ('ct' in body.data) return (await resolveCast(ctx, body.data.ct, body.data.client)) ?? reply.code(401).send({ error: 'unauthenticated' });
+    const m = await mediaAuth(body.data.sid);
+    if (!m) return reply.code(401).send({ error: 'unauthenticated' });
+    // no ip (an older gateway, or one that cannot tell) is ambiguous = remote
+    const remote = body.data.ip === undefined || !isHomeAddress(body.data.ip, ctx.cfg.HOME_NETWORKS);
+    return withoutRemoteCap(m, remote);
   });
 
   /**

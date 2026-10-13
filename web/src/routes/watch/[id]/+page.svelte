@@ -12,6 +12,7 @@
   import { consumeAutoplay, noteAutoplay, noteInteraction, shouldAsk } from '#lib/stillwatching';
   import { barTitles } from '#lib/player/bar';
   import { advanceCountdown, cardVisible, COUNTDOWN_SECONDS, mayAutoplay, nextKind, ringOffset, secondsLeft } from '#lib/player/nextup';
+  import { entryFadeMs } from '#lib/player/transition';
 
   let video: HTMLVideoElement | null = null;
   let item: Item | null = null, nextEp: Item | null = null, similar: Item[] = [];
@@ -27,6 +28,11 @@
   $: visible = cardVisible({ kind, current: curTime, start: creditsAt, dismissed });
   $: if (visible && !entered) enterCard(); else if (!visible && entered) leaveCard();
   const RING = 2 * Math.PI * 20;
+  // no view transition running (no API, reduced motion): the page fades in instead of cutting; TV: no transition at all
+  const root = document.documentElement;
+  const fadeMs = entryFadeMs({ tv: root.classList.contains('tv'), reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, viewTransition: root.classList.contains('ff-vt-in') });
+  /** loading poster: item artwork as far as known (undefined = try backdrop, then primary image) */
+  $: poster = { id, backdrop: item && item.id === id ? item.backdrop : undefined, image: item && item.id === id ? item.image : undefined };
 
   // A function call keeps `id` the only dependency. (An inline async block that also reads `item` made Svelte re-run it
   // whenever `item` changed, i.e. an endless request loop and a title that never showed.)
@@ -96,9 +102,9 @@
 
 <svelte:window on:keydown={onKey} />
 <svelte:head><title>{$t('common.pageTitle', { page: item?.name ?? $t('player.pageTitle') })}</title></svelte:head>
-<div class="wrap">
+<div class="wrap" style:animation={fadeMs ? `ff-fade-in ${fadeMs}ms ease both` : null}>
   {#key id}
-    <Player itemId={id} title={label(item)} barTitle={bt.title} barSub={bt.sub} seriesId={item?.seriesId ?? ''} isMovie={item?.type === 'Movie'} seasonId={item?.seasonId ?? ''} on:episode={playEpisode} {startAt} {wantAudio} {wantSub} bind:video bind:sleepAfterEpisode bind:creditsAt hasNext={Boolean(nextEp)} on:next={() => nextEp && goto(nextHref())} on:timeupdate={onTime} on:ended={onEnded}>
+    <Player itemId={id} {poster} title={label(item)} barTitle={bt.title} barSub={bt.sub} seriesId={item?.seriesId ?? ''} isMovie={item?.type === 'Movie'} seasonId={item?.seasonId ?? ''} on:episode={playEpisode} {startAt} {wantAudio} {wantSub} bind:video bind:sleepAfterEpisode bind:creditsAt hasNext={Boolean(nextEp)} on:next={() => nextEp && goto(nextHref())} on:timeupdate={onTime} on:ended={onEnded}>
       <div slot="top" class="top">
         <button class="icon-btn" aria-label={$t('player.watch.back')} on:click={back}><Icon name="arrow-left" size={30} /></button>
         {#if item}<div class="ttl phone"><b>{item.seriesName ?? item.name}</b>{#if item.seriesName}<span>S{item.parentIndexNumber}:E{item.indexNumber} · {item.name}</span>{/if}</div>{/if}
@@ -135,7 +141,7 @@
 </div>
 
 <style>
-  .wrap { position: fixed; inset: 0; background: #000; z-index: 40; }
+  .wrap { position: fixed; inset: 0; background: var(--bg); z-index: 40; }
   .wrap :global(.stage) { height: 100%; }
   .top { padding: .8rem 1rem; display: flex; align-items: center; gap: .6rem; background: linear-gradient(rgba(0,0,0,.8), transparent); }
   .ttl { display: flex; flex-direction: column; line-height: 1.2; } .ttl span { color: var(--mut); font-size: .9rem; }

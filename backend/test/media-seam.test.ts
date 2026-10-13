@@ -6,6 +6,7 @@ import { loadConfig } from '../src/config.js';
 import { JellyfinError } from '../src/jellyfin/client.js';
 import { JellyfinService } from '../src/jellyfin/service.js';
 import { createMediaServer, MEDIA_SERVERS, mediaConfigProblems } from '../src/media/index.js';
+import { toPlaybackDto } from '../src/jellyfin/dto.js';
 import { MediaError, publicCapabilities, type MediaCapabilities } from '../src/media/types.js';
 import { MemoryKV } from '../src/kv.js';
 import { wrap } from '../src/routes/_shared.js';
@@ -161,5 +162,56 @@ describe('seam boundary', () => {
       .filter((f) => !f.startsWith('jellyfin/') && f !== 'media/index.ts')
       .filter((f) => /from '[./]*\/?jellyfin\//.test(readFileSync(join(root, f), 'utf8')));
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('transcodeReason on the playback DTO', () => {
+  const mk = (src: Record<string, unknown> = {}, extra: Partial<Parameters<typeof toPlaybackDto>[0]> = {}) => toPlaybackDto({
+    itemId: 'a'.repeat(32), deviceId: 'd', maxBitrate: 20_000_000, resumeTicks: 0,
+    info: { PlaySessionId: 'ps', MediaSources: [{ Id: 'ms', Container: 'mkv', SupportsDirectPlay: false, Bitrate: 2_000_000, MediaStreams: [{ Type: 'Video', Height: 720 }], ...src }] },
+    ...extra,
+  });
+  const tu = (reasons: string) => ({ TranscodingUrl: `/videos/x/master.m3u8?TranscodeReasons=${reasons}` });
+  it('maps Jellyfin TranscodeReasons', () => {
+    expect(mk(tu('ContainerNotSupported')).transcodeReason).toBe('container');
+    expect(mk(tu('AudioCodecNotSupported')).transcodeReason).toBe('audioCodec');
+    expect(mk(tu('AudioChannelsNotSupported')).transcodeReason).toBe('audioCodec');
+    expect(mk(tu('VideoCodecNotSupported,AudioCodecNotSupported')).transcodeReason).toBe('videoCodec');
+    expect(mk(tu('SubtitleCodecNotSupported')).transcodeReason).toBe('subtitles');
+    expect(mk(tu('VideoResolutionNotSupported')).transcodeReason).toBe('height');
+    expect(mk(tu('SomethingNew')).transcodeReason).toBe('other');
+  });
+  it('direct play has no reason', () => {
+    expect(mk({ Container: 'mp4', SupportsDirectPlay: true }).transcodeReason).toBeUndefined();
+  });
+  it('a codec reason beats the cap reason; a cap reason beats Jellyfin\'s bitrate reasons', () => {
+    expect(mk({ ...tu('ContainerNotSupported'), Bitrate: 9_000_000 }, { maxBitrate: 4_000_000, capReason: 'remoteCap' }).transcodeReason).toBe('container');
+    expect(mk({ ...tu('ContainerBitrateExceedsLimit'), Bitrate: 9_000_000 }, { maxBitrate: 4_000_000, capReason: 'roleCap' }).transcodeReason).toBe('roleCap');
+    expect(mk(tu('VideoBitrateNotSupported')).transcodeReason).toBe('network');
+    expect(mk({ Container: 'mp4', SupportsDirectPlay: true, Bitrate: 9_000_000 }, { maxBitrate: 4_000_000, capReason: 'manual' }).transcodeReason).toBe('manual');
+  });
+  it('an explicit audio track is audioTrack', () => {
+    expect(mk({ Container: 'mp4', SupportsDirectPlay: true }, { audioIndex: 2 }).transcodeReason).toBe('audioTrack');
+  });
+  it('a cap below the source outranks the audio track (a remote limit must not read as "audio track")', () => {
+    expect(mk({ Container: 'mp4', SupportsDirectPlay: true, Bitrate: 9_000_000 }, { audioIndex: 2, maxBitrate: 4_000_000, capReason: 'remoteCap' }).transcodeReason).toBe('remoteCap');
+    expect(mk({ Container: 'mp4', SupportsDirectPlay: true, Bitrate: 2_000_000 }, { audioIndex: 2, maxBitrate: 4_000_000, capReason: 'remoteCap' }).transcodeReason).toBe('audioTrack');
+  });
+});
+
+describe('explicit video/audio bitrate on the transcode URL', () => {
+  const q = (maxBitrate: number, maxHeight?: number) => new URL(toPlaybackDto({
+    itemId: 'a'.repeat(32), deviceId: 'd', maxBitrate, resumeTicks: 0, maxHeight,
+    info: { PlaySessionId: 'ps', MediaSources: [{ Id: 'ms', Container: 'mkv', Bitrate: 60_000_000, MediaStreams: [{ Type: 'Video', Height: 2160, Codec: 'hevc' }, { Type: 'Audio', Codec: 'truehd', Channels: 8, Bitrate: 6_000_000 }] }] },
+  }).hlsUrl, 'http://x').searchParams;
+  it('2160p HEVC + TrueHD 7.1 at 4 Mbit/s: video keeps the budget minus a 192 kbit/s stereo audio track', () => {
+    const p = q(4_000_000);
+    expect([p.get('VideoBitrate'), p.get('AudioBitrate'), p.get('AudioChannels'), p.get('MaxHeight'), p.get('MaxWidth')]).toEqual(['3808000', '192000', '2', '720', '1280']);
+  });
+  it('rung by cap, floor 300 kbit/s, never above the role height', () => {
+    expect([q(20_000_000).get('MaxHeight'), q(8_000_000).get('MaxHeight'), q(1_500_000).get('MaxHeight'), q(800_000).get('MaxHeight')]).toEqual(['1080', '1080', '480', '360']);
+    expect(q(800_000).get('VideoBitrate')).toBe('608000');
+    expect(q(400_000).get('VideoBitrate')).toBe('300000');
+    expect([q(20_000_000, 480).get('MaxHeight'), q(20_000_000, 480).get('MaxWidth')]).toEqual(['480', '854']);
   });
 });

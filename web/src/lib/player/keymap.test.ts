@@ -27,6 +27,12 @@ describe('resolveKey', () => {
     expect(r('Enter', { peekOpen: false })).toEqual({ type: 'toggle' });
     expect(r('i', { tv: true })).toBeNull(); // letters stay free on the TV
   });
+  it('< and > step the playback speed (desktop only)', () => {
+    expect(r('<')).toEqual({ type: 'speed', delta: -1 }); expect(r('>')).toEqual({ type: 'speed', delta: 1 });
+    expect(r(',', {}, { shiftKey: true })).toEqual({ type: 'speed', delta: -1 }); expect(r('.', {}, { shiftKey: true })).toEqual({ type: 'speed', delta: 1 });
+    expect(r(',')).toBeNull();
+    expect(r('<', { tv: true })).toBeNull(); expect(r('>', { tv: true })).toBeNull();
+  });
   it('digits seek to percent', () => { expect(r('0')).toEqual({ type: 'seekPct', pct: 0 }); expect(r('9')).toEqual({ type: 'seekPct', pct: 90 }); });
   it('s only skips while the skip button is visible', () => { expect(r('s')).toBeNull(); expect(r('S', { hasSkip: true })).toEqual({ type: 'skip' }); });
   it('n only with a next episode', () => { expect(r('n', { hasNext: false })).toBeNull(); expect(r('n')).toEqual({ type: 'next' }); });

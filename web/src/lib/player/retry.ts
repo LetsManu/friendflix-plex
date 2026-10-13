@@ -39,3 +39,14 @@ export function lowerQuality(ladder: number[], current: number, sourceBitrate: n
   const lower = ladder.filter((b) => b < cur).sort((a, b) => b - a)[0];
   return lower ?? null;
 }
+
+/** pause before the same rung is tried again while the step-down cooldown is running */
+export const COOLDOWN_RETRY_MS = 3000;
+
+/**
+ * What a network error does once the quality controller has answered (after the first failed retry):
+ * a lower rung, a pause on the same rung that does NOT spend the retry budget (cooldown), or give up (already at the lowest rung).
+ */
+export function networkStep(d: { do: 'none' } | { do: 'switch' } | { do: 'fail' }): 'switch' | 'wait' | 'giveup' {
+  return d.do === 'switch' ? 'switch' : d.do === 'fail' ? 'giveup' : 'wait';
+}

@@ -26,6 +26,16 @@ describe('hlsConfig', () => {
   it('starts at the resume point (or live edge = -1) and sets the buffer tuning', () => {
     expect(hlsConfig(0).startPosition).toBe(-1);
     expect(hlsConfig(1).startPosition).toBe(-1);
-    expect(hlsConfig(95)).toMatchObject({ startPosition: 95, startFragPrefetch: true, backBufferLength: 90, maxMaxBufferLength: 60, maxBufferLength: 30 });
+    expect(hlsConfig(95)).toMatchObject({ startPosition: 95, startFragPrefetch: true, backBufferLength: 90, maxMaxBufferLength: 120, maxBufferLength: 60 });
+  });
+  it('retries manifest and fragments more often than hls.js defaults, with growing delays', () => {
+    const c = hlsConfig(0) as Record<string, any>;
+    for (const k of ['manifestLoadPolicy', 'fragLoadPolicy'] as const) {
+      const d = c[k].default;
+      expect(d.maxLoadTimeMs).toBeGreaterThanOrEqual(60_000);
+      expect(d.errorRetry.maxNumRetry).toBeGreaterThanOrEqual(4);
+      expect(d.timeoutRetry.maxNumRetry).toBeGreaterThanOrEqual(4);
+      expect(d.errorRetry.backoff).toBe('exponential');
+    }
   });
 });

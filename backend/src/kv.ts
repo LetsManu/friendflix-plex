@@ -3,6 +3,8 @@ import { Redis } from 'ioredis';
 /** Minimal key-value store used for sessions, login state and live playback state. */
 export interface KV {
   get(key: string): Promise<string | null>;
+  /** Several keys in one round trip (null for missing ones). */
+  mget(keys: string[]): Promise<Array<string | null>>;
   set(key: string, value: string, ttlSeconds: number): Promise<void>;
   /** Overwrites only if the key still exists (refreshing a loaded session must not resurrect a revoked one). True if written. */
   replace(key: string, value: string, ttlSeconds: number): Promise<boolean>;
@@ -22,6 +24,9 @@ export class RedisKV implements KV {
   constructor(private readonly redis: Redis) {}
   get(key: string) {
     return this.redis.get(key);
+  }
+  mget(keys: string[]) {
+    return keys.length ? this.redis.mget(...keys) : Promise.resolve([]);
   }
   async set(key: string, value: string, ttl: number) {
     await this.redis.set(key, value, 'EX', ttl);
@@ -99,6 +104,9 @@ export class MemoryKV implements KV {
     const e = this.m.get(key);
     this.m.set(key, { v: String(n), exp: cur === null || !e ? Date.now() + ttl * 1000 : e.exp });
     return n;
+  }
+  async mget(keys: string[]) {
+    return keys.map((k) => this.live(k));
   }
   async keys(prefix: string) {
     return [...this.m.keys()].filter((k) => k.startsWith(prefix) && this.live(k) !== null);

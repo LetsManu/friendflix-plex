@@ -14,6 +14,8 @@
   /** Phone card: 2:3 poster (tap opens the preview sheet) or, with `landscape`, a 16:9 "Weiterschauen" card with ⓘ and ⋯ bar. */
   export let item: Item;
   export let landscape = false;
+  /** eager + high priority image (first visible row of the home page) */
+  export let priority = false;
   /** shows "Aus Weiterschauen entfernen" in the ⋯ sheet; emits `remove` */
   export let removable = false;
   const dispatch = createEventDispatcher<{ remove: Item }>();
@@ -54,7 +56,7 @@
 <article class="pc" class:landscape>
   <a class="thumb" href={landscape ? playPath(item) : itemPath(item)} aria-label={landscape ? $t('home.card.playName', { name: label }) : $t('home.card.openPreview', { name: label })} aria-haspopup={landscape ? undefined : 'dialog'} on:click={landscape ? undefined : open}>
     {#if src}
-      <img class:spoil={isSpoiler(item, $prefs)} loading="lazy" decoding="async" {src} srcset={srcs} sizes={landscape ? '45vw' : '32vw'} alt="" width={landscape ? 320 : 200} height={landscape ? 180 : 300} />
+      <img class:spoil={isSpoiler(item, $prefs)} loading={priority ? 'eager' : 'lazy'} fetchpriority={priority ? 'high' : undefined} decoding="async" {src} srcset={srcs} sizes={landscape ? '45vw' : '32vw'} alt="" width={landscape ? 320 : 200} height={landscape ? 180 : 300} />
     {:else}<span class="noimg">{item.name}</span>{/if}
     {#if tag}<span class="newep" class:leave={tag.kind === 'leaving'}>{$t(tag.key, { n: tag.kind === 'leaving' ? tag.n : 0 })}</span>{/if}
     {#if landscape}<span class="playi" aria-hidden="true"><Icon name="play" size={20} /></span>{/if}

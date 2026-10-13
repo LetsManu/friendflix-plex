@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { MEDIA_SERVERS } from './media/index.js';
+import { isValidCidr } from './netaddr.js';
 
 /** Reads VAR, or the file referenced by VAR_FILE (Docker secrets). */
 function withFileSecrets(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -99,6 +100,13 @@ const schema = z.object({
   DOWNLOAD_OFFLINE_GRACE_DAYS: z.coerce.number().positive().default(7),
   /** POST /api/downloads: license creations per hour and session (rate limit) */
   DOWNLOAD_CREATE_PER_HOUR: z.coerce.number().int().positive().default(20),
+  /** comma-separated CIDRs counted as the home network (no remote bitrate cap); unknown/ambiguous addresses count as remote */
+  HOME_NETWORKS: z.string().default('10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128,fc00::/7,fe80::/10').transform((v, ctx) => {
+    const list = v.split(',').map((c) => c.trim()).filter(Boolean);
+    const bad = list.filter((c) => !isValidCidr(c));
+    if (bad.length) ctx.addIssue({ code: 'custom', message: `HOME_NETWORKS: invalid CIDR ${bad.map((b) => `'${b}'`).join(', ')} (expected e.g. 192.168.0.0/16 or fd00::/8)` });
+    return list;
+  }),
   BACKGROUND_JOBS: z.enum(['true', 'false']).default('true'),
   /** gzip/brotli for JSON API responses >= 1 KB (off when a reverse proxy already compresses) */
   API_COMPRESSION: z.enum(['true', 'false']).default('true'),

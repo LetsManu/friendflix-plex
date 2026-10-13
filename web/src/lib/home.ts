@@ -64,3 +64,33 @@ export function firstNonEmptyTab<T extends string>(tabs: readonly T[], lists: Pa
 /** home page data (rows, billboard): kept for 5 minutes across client-side navigation */
 export const HOME_TTL = 5 * 60_000;
 export const homeCache: Swr<unknown> = createSwr<unknown>(HOME_TTL);
+
+/** Parts of GET /api/home (first screen of the home page in one request). */
+export const HOME_PARTS = ['hero', 'resume', 'nextup', 'leaving', 'recs', 'because', 'hubs', 'themed'] as const;
+export type HomePart = (typeof HOME_PARTS)[number];
+export interface HomeResponse<I = unknown> {
+  parts: {
+    hero: I | null;
+    resume: I[]; nextup: I[]; leaving: I[];
+    recs: { items: I[]; recIds: number[]; friends: I[] };
+    because: { because: { id: string; name: string; liked?: boolean } | null; items: I[]; more: Array<{ because: { id: string; name: string }; items: I[] }> };
+    hubs: unknown[]; themed: unknown[];
+  };
+  failed: string[];
+}
+
+/** Parts the page has to load the old way (per-row endpoints): the ones the server flagged and any part that is missing or malformed. */
+export function failedParts(r: HomeResponse | null | undefined): Set<HomePart> {
+  const out = new Set<HomePart>();
+  const p = (r?.parts ?? {}) as Record<string, unknown>;
+  const arr = (v: unknown) => Array.isArray(v);
+  const good: Record<HomePart, boolean> = {
+    hero: 'hero' in p,
+    resume: arr(p.resume), nextup: arr(p.nextup), leaving: arr(p.leaving),
+    recs: arr((p.recs as { items?: unknown } | null)?.items) && arr((p.recs as { friends?: unknown }).friends),
+    because: arr((p.because as { items?: unknown } | null)?.items) && arr((p.because as { more?: unknown }).more),
+    hubs: arr(p.hubs), themed: arr(p.themed),
+  };
+  for (const n of HOME_PARTS) if (!good[n] || r?.failed?.includes(n)) out.add(n);
+  return out;
+}

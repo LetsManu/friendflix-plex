@@ -118,6 +118,8 @@ export interface ImageTags {
   seriesPrimary?: string;
 }
 
+export type TranscodeReason = 'network' | 'remoteCap' | 'roleCap' | 'container' | 'videoCodec' | 'audioCodec' | 'audioTrack' | 'subtitles' | 'height' | 'manual' | 'other';
+
 export interface PlaybackDto {
   itemId: string;
   playSessionId: string;
@@ -128,8 +130,13 @@ export interface PlaybackDto {
   resumeTicks: number;
   /** bitrate cap used for this session (<= role limit) */
   maxBitrate: number;
-  /** role limit, upper bound for the quality menu */
+  /** effective ceiling for this request (role limit, lowered to the remote cap outside the home networks): upper bound for the quality menu */
   roleMaxBitrate?: number;
+  /**
+   * Why this session is transcoded; undefined for direct play. Codec/container/height/subtitle/audio-track reasons come from the server,
+   * 'remoteCap' / 'roleCap' / 'manual' / 'network' from the bitrate cap that applied (the client's choice is 'manual' or 'network' via reasonHint).
+   */
+  transcodeReason?: TranscodeReason;
   /** audio track baked into hlsUrl (explicit audioIndex or the matched audioLang); undefined = source default */
   audioIndex?: number;
   trickplay?: TrickplayDto;
@@ -271,7 +278,7 @@ export interface MediaRuntime {
   dispatch(e: MediaEvent): Promise<void>;
   log: { warn(o: unknown, msg?: string): void; info(o: unknown, msg?: string): void };
 }
-export interface PlaybackOptions { maxBitrate: number; maxHeight?: number | null; startTicks?: number; audioIndex?: number; audioLang?: string; cast?: boolean; noDirect?: boolean }
+export interface PlaybackOptions { maxBitrate: number; maxHeight?: number | null; startTicks?: number; audioIndex?: number; audioLang?: string; cast?: boolean; noDirect?: boolean; /** which cap is the lowest one, for PlaybackDto.transcodeReason */ capReason?: 'remoteCap' | 'roleCap' | 'manual' | 'network' }
 /** Server-side transcode of a short clip / probe (preview clips, playback health check): forced re-encode at these limits. */
 export interface ClipTranscode { audioIndex?: number; fmp4?: boolean; videoBitrate: number; audioBitrate: number; maxWidth: number; stereo?: boolean; maxBitrate?: number }
 

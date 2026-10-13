@@ -1,7 +1,7 @@
 <script lang="ts">
   import type Hls from 'hls.js';
   import { createEventDispatcher, onDestroy, onMount, tick as tickDom } from 'svelte';
-  import { api, ApiError, fmtClock, getActiveProfile, secToTicks } from '#lib/api';
+  import { api, ApiError, backdrop, fmtClock, getActiveProfile, HERO_WIDTHS, img, secToTicks, srcset } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
   import { get } from 'svelte/store';
   import { prefs, prefsLoaded, saveAudioFx } from '#lib/stores';
@@ -13,10 +13,16 @@
   import { isTypingTarget, nextSubtitle, resolveKey, SHORTCUTS, type KeyAction } from '#lib/player/keymap';
   import { BRIGHTNESS_MIN, brightnessPct, classifyMove, levelFromDrag, registerTap, scrubTarget, TAP_WINDOW, volumeSettable, zoneOf, type Axis, type TapState, type Zone } from '#lib/player/gestures';
   import { creditsStart } from '#lib/player/nextup';
-  import { decideRecovery, freshRecovery, kindOfMediaError, lowerQuality, MAX_NETWORK_TRIES, type ErrorKind } from '#lib/player/retry';
+  import { COOLDOWN_RETRY_MS, decideRecovery, freshRecovery, kindOfMediaError, lowerQuality, MAX_NETWORK_TRIES, networkStep, type ErrorKind } from '#lib/player/retry';
+  import { WheelAccumulator } from '#lib/player/wheel';
   import { parseVolume, stepVolume } from '#lib/player/volume';
   import { hlsConfig, loadHls } from '#lib/player/hls';
-  import { firstInfoBody, speedLabel, SPEEDS } from '#lib/player/bar';
+  import { AbrController, LADDER, autoBps, isOriginalBps, rungKey, type Decision } from '#lib/player/abr';
+  import { BandwidthEstimator, loadStoredEstimate, storeEstimate } from '#lib/player/bandwidth';
+  import QualityChip from '#lib/player/QualityChip.svelte';
+  import { speedLabel, SPEEDS } from '#lib/player/bar';
+  import { firstPlaybackRequest, playbackInfoBody, type InfoBody, type PlaybackDto } from '#lib/player/infobody';
+  import { holdPrefetch, takePrefetched } from '#lib/player/prefetch';
   import EpisodesPanel from '#lib/player/EpisodesPanel.svelte';
   import CastInfoPanel from '#lib/player/CastInfoPanel.svelte';
   import CastPeek from '#lib/player/CastPeek.svelte';
@@ -60,17 +66,15 @@
   export let startAt: number | undefined = undefined;
   /** second at which the end credits begin (outro segment or the last 25 s); Infinity while unknown. Read by the page for its "next episode" card. */
   export let creditsAt = Infinity;
+  /**
+   * Loading poster (watch page): the item's backdrop (else its primary image), dimmed, with the title and a thin progress bar
+   * from the first frame of the route until the video has its first frame; then it crossfades out (300 ms). backdrop/image
+   * false = the item has none; undefined = unknown yet (tried in that order). null = no poster (watch party).
+   */
+  export let poster: { id: string; backdrop?: boolean; image?: boolean } | null = null;
   const dispatch = createEventDispatcher();
 
-  interface Info {
-    playSessionId: string; mediaSourceId: string; directUrl?: string; hlsUrl: string; resumeTicks: number; maxBitrate: number;
-    roleMaxBitrate?: number;
-    trickplay?: { width: number; height: number; tileWidth: number; tileHeight: number; count: number; interval: number; url: string };
-    /** audio track the server baked into hlsUrl (audioLang matched a non-default track) */
-    audioIndex?: number;
-    audioTracks: Array<{ index: number; title: string; isDefault: boolean; language?: string }>;
-    subtitles: Array<{ index: number; title: string; url: string; language?: string; isDefault: boolean }>;
-  }
+  type Info = PlaybackDto;
   let info: Info | null = null, hls: Hls | null = null, error = '', mode = '', audioIndex: number | undefined, subIndex = -1;
   let segments: Array<{ type: string; start: number; end: number }> = [];
   let progressTimer: ReturnType<typeof setInterval>, started = false, stopped = false;
@@ -92,6 +96,26 @@
   let spin = false, spinT: ReturnType<typeof setTimeout>, reconnecting = 0, retryT: ReturnType<typeof setTimeout>, rec = freshRecovery(), lastPos = 0, posKnown = false, errPos = 0, errTitle = '', errNote = '';
   function setSpin(on: boolean) { clearTimeout(spinT); if (!on) { spin = false; return; } spinT = setTimeout(() => (spin = true), 500); }
   $: setSpin(waiting && !error && !casting && !reconnecting);
+  // ---- loading poster: shown until the first frame (loadeddata / playing), then a 300 ms crossfade; the control bar waits for it ----
+  let posterOn = Boolean(poster), posterOut = false, posterFail = 0, posterT: ReturnType<typeof setTimeout>;
+  $: posterKinds = poster ? ([poster.backdrop !== false && 'Backdrop', poster.image !== false && 'Primary'].filter(Boolean) as Array<'Backdrop' | 'Primary'>) : [];
+  $: posterKind = posterKinds[posterFail] ?? null;
+  function firstFrame() {
+    if (!posterOn || posterOut) return;
+    posterOut = true;
+    clearTimeout(posterT); posterT = setTimeout(() => (posterOn = false), 320);
+  }
+  $: if (casting) posterOn = false;
+  // ---- adaptive quality (quality 0 = Auto): bandwidth estimate -> rung; stalls and network errors step down, a good link steps up ----
+  const est = new BandwidthEstimator();
+  let abr: AbrController | null = null, reqHint: 'network' | 'manual' = 'network', switching = false, queuedPick: number | null = null, sessionPlaying = false, shownQ = 0, chipOpen = false, waitSince = 0, stallHandled = false, stallT: ReturnType<typeof setTimeout>, abrTimer: ReturnType<typeof setInterval>, bwTimer: ReturnType<typeof setInterval>, directSeen = 0;
+  const STALL_NOW_MS = 2100; // a wait this long counts as a stall at once (the controller steps down on > 2 s), not only when playback resumes
+  const rungLabel = (bps: number): string => rungKey(bps); // by threshold, like the server's rung height (a 20 Mbit/s transcode is 1080p)
+  const makeAbr = (start: number, pinned?: number) => new AbrController({ now: () => performance.now(), cap: info?.roleMaxBitrate ?? Infinity, start, pinned });
+  /** bit/s asked from the server: the pinned pick, the running controller's rung, or (first load) Auto's value for the remembered estimate (above 8 Mbit/s = original). */
+  const wantBps = () => (abr ? abr.current : quality || autoBps(loadStoredEstimate()));
+  const persistEstimate = () => { if (est.estimate !== null) storeEstimate(est.estimate); };
+  $: chipDirect = mode === 'direct';
   // ---- touch gestures ----
   let locked = false, lockHint = false, lockT: ReturnType<typeof setTimeout>, lockHold = false, coarse = false, volOk = true, brightness = 1;
   let hud: { icon: string; text: string; pct: number } | null = null, hudT: ReturnType<typeof setTimeout>;
@@ -117,7 +141,14 @@
       positionTicks: secToTicks(video?.currentTime ?? 0), isPaused: video?.paused ?? false, audioIndex, playMethod: mode === 'direct' ? 'DirectPlay' : 'Transcode',
     };
   let lastSent = 0;
-  const send = (kind: 'start' | 'progress' | 'stop', keepalive = false) => { lastSent = Date.now(); return report && info && api(`/api/playback/${kind}`, { method: 'POST', body: body(), keepalive }).catch(() => undefined); };
+  /** the latest stop report (also one sent earlier, e.g. at the end of the film): leaving the player holds prefetches on it */
+  let lastStop: unknown;
+  const send = (kind: 'start' | 'progress' | 'stop', keepalive = false) => {
+    lastSent = Date.now();
+    const r = report && info && api(`/api/playback/${kind}`, { method: 'POST', body: body(), keepalive }).catch(() => undefined);
+    if (kind === 'stop') lastStop = r;
+    return r;
+  };
 
   // ---- per-series audio / subtitle choice ("anime pack"): remembered per profile, applied before the global defaults ----
   let serPref: { audio: string | null; subtitle: string | null } = { audio: null, subtitle: null }, serPrefDone = false;
@@ -151,11 +182,18 @@
     // first start: the saved quality + audio language go into this same request (no second round trip)
     const first = !prefsApplied && !partyMode;
     if (first) await loadSerPref();
-    const fb = first ? firstInfoBody(get(prefs), wantAudio || serPref.audio || animeAudio(animeDefault)) : {};
-    if (fb.maxBitrate && !quality) quality = fb.maxBitrate;
-    const audioLang = fb.audioLang;
+    // the first body is built like the play buttons' prefetch builds it (lib/player/infobody.ts), so that answer can be reused
+    const fr = first ? firstPlaybackRequest(itemId, get(prefs), wantAudio || serPref.audio || animeAudio(animeDefault), startSec) : null;
+    if (fr?.quality && !quality) quality = fr.quality;
+    const audioLang = fr?.body.audioLang;
+    if (first) reqHint = quality ? 'manual' : 'network'; // a saved quality is a pick, otherwise the network chooses
+    const sentBps = wantBps();
+    const body: InfoBody = playbackInfoBody({ itemId, startSec, audioIndex, bps: sentBps, hint: reqHint, audioLang });
+    const ask = () => api<Info | null>('/api/playback/info', { method: 'POST', body });
+    // hovered/focused play button: its request is (usually) already answered; a failed prefetch is simply asked again
+    const pre = first ? takePrefetched(itemId, body) : null;
     try {
-      const got = await api<Info | null>('/api/playback/info', { method: 'POST', body: { itemId, startTicks: startSec !== undefined ? secToTicks(startSec) : undefined, audioIndex, maxBitrate: quality || undefined, audioLang } });
+      const got = await (pre ? pre.catch(ask) : ask());
       // an empty/foreign answer (204, proxy page ...) has no playback session: show the error instead of crashing on it
       if (!validInfo(got)) throw new ApiError(502, null);
       info = got;
@@ -169,6 +207,7 @@
     if (startSec === undefined) { lastPos = info.resumeTicks / 10_000_000; posKnown = true; } // a retry must not restart at 0 before playback ran
     if (info.audioIndex !== undefined) audioIndex = info.audioIndex;
     if (first && quality && info.roleMaxBitrate && quality >= info.roleMaxBitrate) quality = 0; // saved quality above the role limit = "Automatisch"
+    if (!abr) { abr = makeAbr(sentBps, quality || undefined); shownQ = quality; }
     // first start only: an older server ignores audioLang -> pick the track here (one extra request, as before)
     if (first) {
       prefsApplied = true;
@@ -182,6 +221,7 @@
   async function attach(startSec: number) {
     if (!video || !info) return;
     const my = ++attachSeq, cur = info;
+    sessionPlaying = false; resetStall(); // the first buffering of each stream is a start, not a stall
     hls?.destroy(); hls = null;
     const useDirect = info.directUrl && audioIndex === undefined && !rec.forcedHls && video.canPlayType('video/mp4');
     mode = useDirect ? 'direct' : 'hls';
@@ -200,6 +240,7 @@
       hls = new HC(hlsConfig(startSec));
       hls.loadSource(info.hlsUrl);
       hls.attachMedia(video);
+      hls.on(HC.Events.FRAG_LOADED, (_e, d) => { const st = d.frag.stats; est.add(st.loaded, st.loading.end - st.loading.start); });
       hls.on(HC.Events.ERROR, (_e, d) => {
         if (!d.fatal) return;
         recover(d.type === HC.ErrorTypes.NETWORK_ERROR ? 'network' : d.type === HC.ErrorTypes.MEDIA_ERROR ? 'media' : 'other');
@@ -229,6 +270,16 @@
   function recover(kind: ErrorKind, viaLoad = false) {
     if (casting) return;
     retryViaLoad = viaLoad;
+    // the first retry already failed: the line is the problem, not a hiccup -> a lower rung (none = cooldown or 360p: the usual retries go on and end in giveUp)
+    if (kind === 'network' && !viaLoad && abr && !switching && rec.networkTries >= 1) {
+      const nd = abr.onNetworkError(), step = networkStep(nd);
+      if (step === 'switch') { applyAbr(nd); return; }
+      if (step === 'giveup') { giveUp(); return; }
+      // cooldown: the same rung again after a pause; this does not use up the retry budget
+      const p = resumePos(); errPos = p; waiting = true; reconnecting = Math.max(1, reconnecting);
+      clearTimeout(retryT); retryT = setTimeout(() => retryNow(p), COOLDOWN_RETRY_MS);
+      return;
+    }
     const pos = resumePos();
     const d = decideRecovery(kind, rec, { isHls: Boolean(hls), canLowerQuality: lowerStep() !== null });
     if (d.do === 'retry') {
@@ -236,7 +287,7 @@
       clearTimeout(retryT); retryT = setTimeout(() => retryNow(pos), d.delay);
     } else if (d.do === 'recover-media') { rec.mediaRecovered = true; errPos = pos; hls?.recoverMediaError(); }
     else if (d.do === 'force-hls') { rec.forcedHls = true; errPos = pos; flash(tr('player.switchingTranscode'), 2500); wantAutoplay = !paused; load(pos); }
-    else if (d.do === 'lower-quality') { rec.loweredQuality = true; errPos = pos; const q = lowerStep(); if (q) { wantAutoplay = !paused; changeQuality(q); } else giveUp(); }
+    else if (d.do === 'lower-quality') { rec.loweredQuality = true; errPos = pos; const q = lowerStep(); if (q) { wantAutoplay = !paused; abr = makeAbr(q, quality ? q : undefined); void changeQuality(q, 'abr', 3000, tr('player.quality.stepDown', { q: rungLabel(q) })); } else giveUp(); }
     else giveUp();
   }
   function giveUp() { clearTimeout(retryT); reconnecting = 0; waiting = false; errTitle = tr('player.error.title'); error = errNote || tr('player.error.connection'); hls?.stopLoad(); }
@@ -255,8 +306,21 @@
     if (video.error.code === 1) return; // aborted by us
     recover(kind);
   }
+  /** waiting -> start timing; playing -> the stall is over. Seeks and the first buffering after a (re)start are no stalls. */
+  function onWaiting() {
+    waiting = true;
+    if (!video || casting || !started || stopped || !sessionPlaying || video.seeking || waitSince) return;
+    waitSince = performance.now(); stallHandled = false;
+    clearTimeout(stallT); stallT = setTimeout(() => { if (waitSince) { stallHandled = true; onStall(performance.now() - waitSince); } }, STALL_NOW_MS);
+  }
+  function resetStall() { clearTimeout(stallT); waitSince = 0; stallHandled = false; }
+  function onStall(ms: number) {
+    if (!abr || casting || switching || reconnecting || error) return;
+    applyAbr(abr.onStall(ms)); // 'fail' needs nothing here: a stall at the lowest rung just keeps buffering
+  }
   function onPlaying() {
-    waiting = false;
+    waiting = false; sessionPlaying = true; firstFrame();
+    if (waitSince) { const ms = performance.now() - waitSince, done = stallHandled; resetStall(); if (!done && ms > 0) onStall(ms); }
     if (reconnecting) { reconnecting = 0; flash(tr('player.reconnected'), 1500); }
   }
 
@@ -398,19 +462,41 @@
     seekTo(skip.end);
     if (key) announce(tr(key));
   }
-  const QUALITIES: Array<[string, number]> = [['1080p', 8_000_000], ['720p', 4_000_000], ['480p', 1_500_000], ['360p', 800_000]];
+  const QUALITIES: Array<[string, number]> = LADDER.filter((r) => Number.isFinite(r.bps)).map((r) => [r.key, r.bps]);
   $: qualityOptions = QUALITIES.filter(([, b]) => b < (info?.roleMaxBitrate ?? Infinity));
-  const qualityToast = (bps: number) => tr('player.quality.changed', { q: bps ? QUALITIES.find(([, b]) => b === bps)?.[0] ?? tr('player.quality.mbit', { n: Math.round(bps / 1e6) }) : tr('player.quality.auto') });
-  async function changeQuality(bps: number) {
+  const qualityToast = (bps: number) => bps ? tr('player.quality.pinned', { q: rungLabel(bps) }) : tr('player.quality.changed', { q: tr('player.quality.auto') });
+  /** the controller picked a new rung (stall, network error, step-up): reload the stream there and tell the viewer */
+  function applyAbr(d: Decision): boolean {
+    if (d.do !== 'switch') return false;
+    wantAutoplay = false;
+    void changeQuality(d.bps, 'abr', 3000, tr(d.reason === 'up' ? 'player.quality.stepUp' : 'player.quality.stepDown', { q: isOriginalBps(d.bps) ? tr('player.quality.chipOriginal') : rungLabel(d.bps) }));
+    return true;
+  }
+  /** 'manual' = the viewer's pick (0 = Auto; a rung is pinned: no step-up); 'abr' = the controller already moved to `bps` */
+  async function changeQuality(bps: number, how: 'manual' | 'abr' = 'manual', ms = 1100, msg = '') {
     menu = '';
-    if (bps === quality) return;
-    if (casting) { quality = bps; await recast(castPos); flash(qualityToast(bps)); return; }
+    if (how === 'manual' && bps === shownQ) return;
+    if (casting) { quality = bps; shownQ = bps; await recast(castPos); flash(qualityToast(bps)); return; }
+    if (switching) { if (how === 'manual') queuedPick = bps; return; } // a pick during a running switch is applied right after it
+    switching = true;
+    if (how === 'manual') {
+      quality = bps; reqHint = bps ? 'manual' : 'network';
+      abr = makeAbr(bps || autoBps(est.estimate ?? loadStoredEstimate()), bps || undefined);
+      rec.networkTries = 0; reconnecting = 0; clearTimeout(retryT); // a pick replaces a pending cooldown retry
+    } else {
+      reqHint = 'network'; rec.networkTries = 0; reconnecting = 0; clearTimeout(retryT);
+    }
+    shownQ = quality ? (abr?.current ?? quality) : 0;
+    resetStall();
     const pos = video?.currentTime ?? 0, wasPlaying = !(video?.paused ?? true);
-    await send('stop');
-    quality = bps;
-    await load(pos);
-    if (wasPlaying) video?.play().catch(() => undefined);
-    flash(qualityToast(bps));
+    try {
+      await send('stop');
+      await load(pos);
+      if (wasPlaying) video?.play().catch(() => undefined);
+      flash(msg || qualityToast(bps), ms);
+    } finally { switching = false; }
+    const next = queuedPick; queuedPick = null;
+    if (next !== null) void changeQuality(next);
   }
   function setSleep(min: number | 'end') {
     menu = '';
@@ -465,7 +551,7 @@
   $: marks = chapterMarks(chapters, duration);
   $: showScenes = usefulChapters(chapters, duration);
   const chapterAt = (sec: number) => { const i = chapterIndexAt(chapters, sec); return chapters.length > 1 && i >= 0 ? chapterLabel(chapters[i]!, i) : ''; };
-  function closeScenes() { menu = ''; void tickDom().then(() => scBtn?.focus()); }
+  function closeScenes() { menu = ''; void tickDom().then(() => (scBtn ?? moreBtn)?.focus()); }
 
   // ---- sound: "Klare Stimmen" / "Nachtmodus" (Web Audio on the local <video>; the profile's server pref `audioFx`, with a
   //      localStorage copy so the player starts with the right mode before /api/prefs answered) ----
@@ -528,7 +614,14 @@
     } catch { subMsg = tr('player.subs.downloadFailed'); }
     subBusy = false;
   }
-  function setRate(r: number) { if (!video) return; rate = r; video.playbackRate = r; menu = ''; flash(r === 1 ? tr('player.speed.normalToast') : tr('player.speed.rate', { r })); }
+  function setRate(r: number, keepMenu = false) { if (!video) return; rate = r; video.playbackRate = r; if (!keepMenu) menu = ''; flash(r === 1 ? tr('player.speed.normalToast') : tr('player.speed.rate', { r })); }
+  /** < / > : one step along the speed list, clamped at both ends (no wrap); not in a watch party (the drift correction owns the rate) */
+  function speedBy(delta: 1 | -1) {
+    if (partyMode || !video) return;
+    let i = SPEEDS.findIndex((r) => r === rate);
+    if (i < 0) i = SPEEDS.reduce((best, r, k) => (Math.abs(r - rate) < Math.abs(SPEEDS[best]! - rate) ? k : best), 0);
+    setRate(SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, i + delta))]!, true);
+  }
   // ---- Chromecast entry in the "Mehr" menu (the SDK loads lazily, Chromium only) ----
   function castClick() { menu = ''; if (!$castState.connected) void requestCastSession(); else if (casting) castStop(); else void startCast(); }
   $: castLabel = casting ? $t('player.cast.stopOn', { name: $castState.deviceName || 'Chromecast' }) : $castState.connected ? $t('player.cast.playOn', { name: $castState.deviceName || 'Chromecast' }) : $t('player.cast.castTo');
@@ -538,7 +631,7 @@
   let ICON = 36;
   function pickEpisode(e: CustomEvent<{ id: string }>) { menu = ''; dispatch('episode', e.detail); }
   /** "Folgen" panel closed (✕ or the playing episode): focus goes back to its trigger */
-  let epBtn: HTMLButtonElement | undefined;
+  let epBtn: HTMLButtonElement | undefined, moreBtn: HTMLButtonElement | undefined;
   function closeEpisodes() { menu = ''; void tickDom().then(() => epBtn?.focus()); }
   function setVolume(v: number) { if (casting) { volume = v; muted = v === 0; castSetVolume(v); return; } if (!video) return; volume = v; video.volume = v; video.muted = v === 0; muted = v === 0; try { localStorage.setItem('ff_vol', String(v)); } catch { /* ignore */ } }
   function volumeBy(delta: number) { const v = stepVolume(muted ? 0 : volume, delta); setVolume(v); flash(tr('player.volume.level', { n: Math.round(v * 100) }), 600); }
@@ -584,6 +677,7 @@
       case 'skip': if (skip && allowed()) doSkip(); break;
       case 'next': if (hasNext && allowed()) dispatch('next'); else flash(tr('player.noNext')); break;
       case 'help': help = !help; break;
+      case 'speed': speedBy(a.delta); break;
       case 'pip': if (pipOk && !casting) void pip(); break;
       case 'tvControls': focusControls(); break;
       case 'escape': menu = ''; subDlg = false; help = false; if (showXray) closeCastInfo(); peek = false; break;
@@ -611,11 +705,13 @@
   function onBackCapture(e: KeyboardEvent) {
     if (!(e.key === 'Escape' || (tvMode() && isBackKey(e)))) return;
     const opener = stage?.querySelector<HTMLElement>('.ctl [aria-expanded="true"]');
+    if (chipOpen) { e.preventDefault(); e.stopImmediatePropagation(); chipOpen = false; return; } // the quality bubble closes alone
     if (menu || subDlg || help) {
       e.preventDefault(); e.stopImmediatePropagation();
-      const panelBtn = menu === 'episodes' ? epBtn : menu === 'chapters' ? scBtn : undefined;
+      const panelBtn = menu === 'episodes' ? epBtn : menu === 'chapters' ? (scBtn ?? moreBtn) : undefined;
+      const hadMenu = menu !== '';
       menu = ''; subDlg = false; help = false;
-      if (tvMode() || panelBtn) tickDom().then(() => (panelBtn ?? opener)?.focus());
+      if (hadMenu || tvMode() || panelBtn) tickDom().then(() => (panelBtn ?? opener)?.focus()); // focus goes back to the button that opened it
     } else if (showXray && (xray || stage?.querySelector('.ci')?.contains(document.activeElement))) {
       e.preventDefault(); e.stopImmediatePropagation();
       const sheetBack = stage?.querySelector<HTMLButtonElement>('.ci [data-back]');
@@ -637,7 +733,9 @@
     if (native) e.stopPropagation();
   };
   $: if (help || error) tickDom().then(() => stage?.querySelector<HTMLElement>('.help [data-autofocus], .errbox [data-autofocus]')?.focus());
-  $: if (menu && typeof document !== 'undefined' && tvMode()) tickDom().then(() => stage?.querySelector<HTMLElement>('.menu .mi')?.focus());
+  $: if (menu && typeof document !== 'undefined' && tvMode()) tickDom().then(() => stage?.querySelector<HTMLElement>('.menu .mi.on, .menu .mi')?.focus());
+  // long lists scroll inside the menu: open each column at the current choice, not at the top
+  $: if (menu && typeof document !== 'undefined') tickDom().then(() => stage?.querySelectorAll<HTMLElement>('.menu .mi.on').forEach((el) => el.scrollIntoView?.({ block: 'nearest' })));
 
   // ---- mouse: click = play/pause (deferred to tell a double click = fullscreen); touch is handled by the pointer gestures below ----
   let lastTap = 0, lastTouch = 0;
@@ -648,6 +746,25 @@
     const now = Date.now();
     if (menu) { menu = ''; return; }
     if (now - lastTap < 280) { toggleFullscreen(); lastTap = 0; } else { lastTap = now; setTimeout(() => { if (lastTap === now) { togglePlay(); lastTap = 0; } }, 285); }
+  }
+  /** a click outside the open menu (and not on its opener, which toggles itself) closes it; focus returns to the opener. A click on the picture only closes. */
+  function onOutsideClick(e: MouseEvent) {
+    if (!menu || !stage) return;
+    const t = e.target as HTMLElement | null;
+    if (!t || t.closest('.menu, [aria-expanded="true"]')) return;
+    const opener = stage.querySelector<HTMLElement>('.ctl [aria-expanded="true"]');
+    const onPicture = stage.contains(t) && !t.closest(NO_GESTURE);
+    menu = '';
+    if (onPicture) { e.stopPropagation(); void tickDom().then(() => opener?.focus()); }
+  }
+  /** mouse wheel over the picture = volume (desktop; a menu open keeps its own scrolling) */
+  const wheelAcc = new WheelAccumulator();
+  function onWheel(e: WheelEvent) {
+    if (coarse || tvMode() || locked || menu || subDlg || help || !video || e.ctrlKey || !e.deltaY) return;
+    if (e.target !== video && e.target !== stage) return; // slot content (party chat), menus, dialogs keep their own scrolling
+    e.preventDefault(); wake();
+    const n = wheelAcc.add(e.deltaY, e.deltaMode, e.timeStamp || Date.now(), window.innerHeight);
+    if (n) volumeBy(-n * 0.05);
   }
   function toggleControls() { if (tick - lastActive < 3000 && !paused) lastActive = 0; else wake(); }
 
@@ -725,6 +842,19 @@
   const reportTick = () => { if (started && !stopped && !casting && Date.now() - lastSent >= 10_000) send('progress'); };
   const onPlay = () => { fxEngine?.resume(); if (fxActive(fx) && !fxEngine?.routed) void applyFx(true); paused = false; if (stopped) { stopped = false; started = false; } if (!started) { started = true; send('start'); } else send('progress'); };
 
+  /**
+   * Direct play has no fragments: the bandwidth sample is the file's own transfers from the Resource Timing buffer
+   * (bytes of the response body over the time from first to last byte; transfers the browser throttled by itself make it a lower bound).
+   */
+  function sampleDirect() {
+    if (mode !== 'direct' || !info?.directUrl) return;
+    for (const e of performance.getEntriesByName(new URL(info.directUrl, location.href).href, 'resource') as PerformanceResourceTiming[]) {
+      if (e.startTime <= directSeen) continue;
+      directSeen = Math.max(directSeen, e.startTime);
+      est.add(e.encodedBodySize || e.transferSize, e.responseEnd - e.responseStart);
+    }
+  }
+
   onMount(() => {
     if (video) volOk = volumeSettable(video); // iOS cannot set the volume: no volume swipe there
     coarse = matchMedia('(pointer: coarse)').matches;
@@ -739,6 +869,13 @@
     if ($serverCaps.segments.length) api(`/api/items/${itemId}/segments`).then((r) => (segments = (r.segments as typeof segments).map((x) => ({ ...x, type: String(x.type).toLowerCase() })).filter((x) => segmentShown($serverCaps, x.type)))).catch(() => undefined);
     progressTimer = setInterval(() => { if (started && !stopped) send('progress'); }, 10_000);
     pipOk = Boolean(document.pictureInPictureEnabled) && !video?.disablePictureInPicture;
+    // every 5 s: direct-play bandwidth sample + step-up check; every 30 s the estimate is remembered
+    abrTimer = setInterval(() => {
+      sampleDirect();
+      if (!abr || casting || switching || !started || stopped || paused || waiting || reconnecting || error) return;
+      applyAbr(abr.onTick({ estimate: est.estimate, bufferSec: Math.max(0, buffered - current) }));
+    }, 5000);
+    bwTimer = setInterval(persistEstimate, 30_000);
     activityTimer = setInterval(() => {
       tick = Date.now();
       if (casting && castInfo && !castBusy && castInfo.expiresAt - tick < 10 * 60_000) void recast(castPos); // renew the token before it expires
@@ -747,7 +884,7 @@
         else sleepLeft = fmtClock((sleepAt - tick) / 1000);
       }
     }, 500);
-    const bye = () => { if (!stopped) { stopped = true; send('stop', true); } if (casting) { castRevoke(castInfo); castStop(); } };
+    const bye = () => { persistEstimate(); if (!stopped) { stopped = true; send('stop', true); } if (casting) { castRevoke(castInfo); castStop(); } };
     // keep the resume position safe when the tab is hidden / the phone locks (Picture-in-Picture keeps playing: only a progress report, no stop)
     const vis = () => { if (document.visibilityState === 'hidden' && started && !stopped && !casting) send('progress', true); };
     const online = () => { if (reconnecting) retryNow(resumePos()); };
@@ -755,9 +892,16 @@
     window.addEventListener('online', online);
     document.addEventListener('visibilitychange', vis);
     video?.addEventListener('enterpictureinpicture', pipOn); video?.addEventListener('leavepictureinpicture', pipOff);
-    const fs = () => (fullscreen = Boolean(document.fullscreenElement));
+    const fs = () => {
+      fullscreen = Boolean(document.fullscreenElement);
+      // phones: fullscreen = landscape (refused on desktop / iOS / without a gesture: ignore)
+      if (!coarse || tvMode()) return;
+      const so = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+      try { if (fullscreen) void so.lock?.('landscape')?.catch(() => undefined); else so.unlock?.(); } catch { /* ignore */ }
+    };
     window.addEventListener('pagehide', bye);
     document.addEventListener('fullscreenchange', fs);
+    window.addEventListener('click', onOutsideClick, true);
     window.addEventListener('ff-remote', onRemote);
     const touched = () => { noteInteraction(); fxGesture(); };
     window.addEventListener('pointerdown', touched, true); window.addEventListener('keydown', touched, true); window.addEventListener('ff-remote', touched);
@@ -765,7 +909,7 @@
     window.addEventListener('pointerdown', unmuteOnGesture, true);
     return () => {
       window.removeEventListener('pointerdown', touched, true); window.removeEventListener('keydown', touched, true); window.removeEventListener('ff-remote', touched);
-      window.removeEventListener('pagehide', bye); document.removeEventListener('fullscreenchange', fs);
+      window.removeEventListener('pagehide', bye); document.removeEventListener('fullscreenchange', fs); window.removeEventListener('click', onOutsideClick, true);
       window.removeEventListener('online', online); document.removeEventListener('visibilitychange', vis);
       video?.removeEventListener('enterpictureinpicture', pipOn); video?.removeEventListener('leavepictureinpicture', pipOff);
       narrow.removeEventListener?.('change', setIcon);
@@ -773,9 +917,11 @@
     };
   });
   onDestroy(() => {
-    clearTimeout(peekT); fxEngine?.destroy();
+    clearTimeout(peekT); clearTimeout(posterT); fxEngine?.destroy();
+    persistEstimate(); clearInterval(abrTimer); clearInterval(bwTimer); clearTimeout(stallT);
     clearInterval(progressTimer); clearInterval(activityTimer); clearTimeout(toastTimer); clearTimeout(retryT); clearTimeout(spinT); clearTimeout(pendingTap); clearTimeout(hudT); clearTimeout(rippleT); clearTimeout(lockT); clearTimeout(unlockT); nowPlaying.set(null);
     if (started && !stopped) { stopped = true; send('stop'); }
+    holdPrefetch(Promise.resolve(lastStop)); // no cached info survives the player; the next prefetch waits for this stop (resume position)
     if (casting) { castRevoke(castInfo); castStop(); casting = false; } // leaving the page ends the cast session and revokes its token
     castOff?.();
     hls?.destroy();
@@ -783,19 +929,28 @@
 </script>
 
 <svelte:window on:keydown={onKey} on:keydown|capture={onBackCapture} />
-<div class="stage {subClasses($prefs.subtitleStyle)}" class:idle={!showUi} class:locked style="--inset:{inset}px" bind:this={stage} on:mousemove={() => { if (Date.now() - lastTouch > 800) wake(); }} on:click={onSurfaceClick} on:keydown={() => {}}
+<div class="stage {subClasses($prefs.subtitleStyle)}" class:idle={!showUi} class:locked class:pre={posterOn} style="--inset:{inset}px" bind:this={stage} on:mousemove={() => { if (Date.now() - lastTouch > 800) wake(); }} on:click={onSurfaceClick} on:wheel|nonpassive={onWheel} on:keydown={() => {}}
   on:pointerdown={gDown} on:pointermove={gMove} on:pointerup={gUp} on:pointercancel={gCancel} role="presentation">
   <!-- svelte-ignore a11y_media_has_caption -->
   <video bind:this={video} playsinline crossorigin="use-credentials" style:filter={brightness < 1 ? `brightness(${brightness})` : null}
     on:error={onVideoError}
-    on:play={onPlay} on:pause={() => { paused = true; if (!castBusy && !casting && !stopped) send('progress'); }} on:seeked={() => started && send('progress')}
+    on:play={onPlay} on:pause={() => { paused = true; resetStall(); if (!castBusy && !casting && !stopped) send('progress'); }} on:seeked={() => started && send('progress')}
     on:ended={() => { stopped = true; paused = true; send('stop'); }}
     on:timeupdate={() => { syncTime(); reportTick(); }} on:progress={syncTime} on:loadedmetadata={syncTime}
-    on:waiting={() => (waiting = true)} on:playing={onPlaying} on:canplay={() => { waiting = false; if (wantAutoplay) { wantAutoplay = false; playSafe(); } }}
+    on:waiting={onWaiting} on:seeking={resetStall} on:playing={onPlaying} on:loadeddata={firstFrame} on:canplay={() => { waiting = false; if (wantAutoplay) { wantAutoplay = false; playSafe(); } }}
     on:volumechange={() => { if (video) { muted = video.muted; } }}
     on:play on:pause on:seeked on:seeking on:waiting on:playing on:canplay on:timeupdate on:ended>
     {#if info}{#each info.subtitles as s}<track id="sub-{s.index}" kind="subtitles" src={s.url} srclang={s.language?.slice(0, 2) ?? 'xx'} label={s.title} />{/each}{/if}
   </video>
+  {#if posterOn && poster}
+    <!-- pointer-events: none -> clicks, double clicks, wheel and gestures reach the stage as over the video -->
+    <div class="poster ff-poster" class:out={posterOut} aria-hidden="true">
+      {#if posterKind === 'Backdrop'}<img src={backdrop(poster.id, 1280)} srcset={srcset('Backdrop', poster.id, HERO_WIDTHS)} sizes="100vw" alt="" fetchpriority="high" on:error={() => posterFail++} />
+      {:else if posterKind === 'Primary'}<img src={img(poster.id, 1280)} alt="" fetchpriority="high" on:error={() => posterFail++} />{/if}
+      <div class="pshade"></div>
+      <div class="pcap">{#if barTitle || title}<b>{barTitle || title}</b>{/if}{#if barSub}<span>{barSub}</span>{/if}<i class="pbar"><i></i></i></div>
+    </div>
+  {/if}
 
   <div class="sr" aria-live="polite" aria-atomic="true">{live}</div>
   {#if error}
@@ -807,7 +962,8 @@
     </div>
   {:else if reconnecting}
     <div class="center" role="status"><div class="reco ui"><div class="spin sm"></div><span>{$t('player.reconnecting')}</span><small>{$t('player.attempt', { n: reconnecting, max: MAX_NETWORK_TRIES })}</small></div></div>
-  {:else if spin && waiting && !casting}<div class="center" role="status" aria-label={$t('player.loading')}><div class="spin"></div></div>{/if}
+  {:else if spin && waiting && !casting && !posterOn}<div class="center" role="status" aria-label={$t('player.loading')}><div class="spin"></div></div>
+  {:else if posterOn && !posterOut && !casting}<div class="sr" role="status">{$t('player.loading')}</div>{/if}
   {#if casting}
     <div class="center castov" role="status"><div class="castbox"><Icon name="cast" size={56} /><b>{$t('player.cast.playingOn', { name: $castState.deviceName || 'Chromecast' })}</b><button class="btn light ui" on:click|stopPropagation={() => castStop()}>{$t('player.cast.stop')}</button></div></div>
   {/if}
@@ -858,7 +1014,7 @@
     </div>
   {/if}
 
-  <div class="ui ctl" data-nav class:hide={!showUi} on:click|stopPropagation on:keydown={ctlKey} role="toolbar" tabindex="-1" aria-label={$t('player.controls.toolbar')}>
+  <div class="ui ctl" data-nav class:hide={!showUi || (posterOn && !posterOut)} on:click|stopPropagation on:keydown={ctlKey} role="toolbar" tabindex="-1" aria-label={$t('player.controls.toolbar')}>
     <div class="timeline">
       <div class="track" bind:this={trackEl} class:locked={!canControl} role="slider" tabindex="0" aria-label={$t('player.positionLabel')} aria-valuemin="0" aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(shown)}
         aria-valuetext={$t('player.valueText', { a: fmtClock(shown), b: fmtClock(duration) })}
@@ -889,6 +1045,7 @@
           <input class="vslider" type="range" min="0" max="1" step="0.05" value={muted ? 0 : volume} aria-label={$t('player.volume.label')} on:input={(e) => setVolume(Number(e.currentTarget.value))} />
         </div>
         <span class="clock">{fmtClock(shown)} / {fmtClock(duration)}</span>
+        {#if info && mode && !casting}<QualityChip bind:open={chipOpen} direct={chipDirect} label={rungLabel(info.maxBitrate)} reason={info.transcodeReason ?? 'other'} />{/if}
       </div>
       <div class="mid" title={barSub ? `${barTitle} · ${barSub}` : barTitle}>{#if barTitle}<b>{barTitle}</b>{#if barSub}<span>{barSub}</span>{/if}{/if}</div>
       <div class="grp right">
@@ -902,7 +1059,7 @@
         {/if}
         {#if showScenes}
           <div class="mwrap">
-            <button class="ic" bind:this={scBtn} aria-label={$t('scenes.chapters.open')} title={$t('scenes.chapters.open')} aria-expanded={menu === 'chapters'} on:click={() => toggleMenu('chapters')}><Icon name="film" size={ICON} /></button>
+            {#if !coarse}<button class="ic" bind:this={scBtn} aria-label={$t('scenes.chapters.open')} title={$t('scenes.chapters.open')} aria-expanded={menu === 'chapters'} on:click={() => toggleMenu('chapters')}><Icon name="film" size={ICON} /></button>{/if}
             {#if menu === 'chapters'}<div class="menu bare"><ScenesPanel {chapters} current={shown} {duration} trickplay={info?.trickplay} on:seek={(e) => { seekTo(e.detail.time); closeScenes(); }} on:close={closeScenes} /></div>{/if}
           </div>
         {/if}
@@ -933,10 +1090,10 @@
         {/if}
         {#if !partyMode}
           <div class="mwrap">
-            <button class="ic" aria-label={$t('player.speed.aria', { r: speedLabel(rate, $t) })} title={$t('player.speed.short')} aria-expanded={menu === 'speed'} on:click={() => toggleMenu('speed')}><Icon name="gauge" size={ICON} />{#if rate !== 1}<span class="ratebadge" aria-hidden="true">{$t('player.speed.rate', { r: rate })}</span>{/if}</button>
+            {#if !coarse}<button class="ic" aria-label={$t('player.speed.aria', { r: speedLabel(rate, $t) })} title={$t('player.speed.short')} aria-expanded={menu === 'speed'} on:click={() => toggleMenu('speed')}><Icon name="gauge" size={ICON} />{#if rate !== 1}<span class="ratebadge" aria-hidden="true">{$t('player.speed.rate', { r: rate })}</span>{/if}</button>{/if}
             {#if menu === 'speed'}
               <div class="menu speed" data-nav data-scope role="dialog" aria-label={$t('player.speed.title')}>
-                <h3>{$t('player.speed.title')}</h3>
+                <h3>{#if coarse}<button class="back" aria-label={$t('player.controls.backToMore')} on:click={() => (menu = 'more')}>‹</button>{/if}{$t('player.speed.title')}</h3>
                 <div class="speeds" role="group" aria-label={$t('player.speed.short')}>
                   {#each SPEEDS as r}<button class="sp-opt" class:on={rate === r} aria-pressed={rate === r} on:click={() => setRate(r)}><span class="dot" aria-hidden="true"></span>{speedLabel(r, $t)}</button>{/each}
                 </div>
@@ -945,12 +1102,14 @@
           </div>
         {/if}
         <div class="mwrap">
-          <button class="ic" aria-label={$t('player.controls.more')} title={$t('player.controls.more')} aria-expanded={menu === 'more' || menu === 'scenes' || menu === 'settings'} on:click={() => (menu = menu === '' || (menu !== 'more' && menu !== 'scenes' && menu !== 'settings') ? 'more' : '')}>
+          <button class="ic" aria-label={$t('player.controls.more')} title={$t('player.controls.more')} bind:this={moreBtn} aria-expanded={menu === 'more' || menu === 'scenes' || menu === 'settings' || (coarse && (menu === 'speed' || menu === 'chapters'))} on:click={() => (menu = menu === '' || (menu !== 'more' && menu !== 'scenes' && menu !== 'settings' && !(coarse && (menu === 'speed' || menu === 'chapters'))) ? 'more' : '')}>
             <svg width={ICON} height={ICON} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
             {#if sleepAt}<span class="sleepdot" title={$t('player.sleep.left', { t: sleepLeft })}></span>{/if}
           </button>
           {#if menu === 'more'}
             <div class="menu more" data-nav data-scope role="dialog" aria-label={$t('player.controls.more')}>
+              {#if coarse && !partyMode}<button class="mi" on:click={() => (menu = 'speed')}><Icon name="gauge" size={20} />{$t('player.speed.title')}{#if rate !== 1}<span class="muted"> · {$t('player.speed.rate', { r: rate })}</span>{/if}<span class="chev" aria-hidden="true">›</span></button>{/if}
+              {#if coarse && showScenes}<button class="mi" on:click={() => (menu = 'chapters')}><Icon name="film" size={20} />{$t('scenes.chapters.open')}<span class="chev" aria-hidden="true">›</span></button>{/if}
               <button class="mi" on:click={() => (menu = 'scenes')}><Icon name="bookmark" size={20} />{$t('player.bookmark.menu')}<span class="chev" aria-hidden="true">›</span></button>
               <button class="mi" class:on={showXray} aria-pressed={showXray} on:click={() => { if (showXray) { menu = ''; closeCastInfo(); } else openCastInfo(tvMode()); }}><Icon name="users" size={20} />{$t('scenes.info.open')}</button>
               {#if !partyMode && ($castState.available || $castState.connected)}<button class="mi" class:on={casting} aria-pressed={casting} on:click={castClick}><Icon name="cast" size={20} />{castLabel}</button>{/if}
@@ -970,8 +1129,8 @@
           {:else if menu === 'settings'}
             <div class="menu tracks" data-nav data-scope role="dialog" aria-label={$t('player.controls.settings')}>
               <div><h3><button class="back" aria-label={$t('player.controls.backToMore')} on:click={() => (menu = 'more')}>‹</button>{$t('player.quality.title')}</h3>
-                <button class="mi" class:on={quality === 0} on:click={() => changeQuality(0)}>{#if quality === 0}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{$t('player.quality.auto')}</button>
-                {#each qualityOptions as [label, bps]}<button class="mi" class:on={quality === bps} on:click={() => changeQuality(bps)}>{#if quality === bps}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{label}</button>{/each}
+                <button class="mi" class:on={shownQ === 0} on:click={() => changeQuality(0)}>{#if shownQ === 0}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{$t('player.quality.auto')}</button>
+                {#each qualityOptions as [label, bps]}<button class="mi" class:on={shownQ === bps} on:click={() => changeQuality(bps)}>{#if shownQ === bps}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{label}</button>{/each}
               </div>
               {#if !partyMode}
                 <div><h3>{$t('player.sleep.title')}</h3>
@@ -993,6 +1152,24 @@
 <style>
   .stage { position: relative; width: 100%; background: #000; color: #fff; overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: none; -webkit-touch-callout: none; }
   .sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* loading poster: the stage takes the page colour while it shows (never a white or black flash), then fades to the video */
+  .stage { transition: background-color 300ms ease; }
+  .stage.pre { background: var(--bg); }
+  .poster { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: var(--bg); opacity: 1; transition: opacity 300ms ease; }
+  .poster.out { opacity: 0; }
+  .poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pshade { position: absolute; inset: 0; background: linear-gradient(rgba(0,0,0,.35), rgba(0,0,0,.55) 60%, rgba(0,0,0,.8)); }
+  .pcap { position: absolute; left: clamp(1rem, 4vw, 3.5rem); right: clamp(1rem, 4vw, 3.5rem); bottom: clamp(1.5rem, 8vh, 4.5rem); display: flex; flex-direction: column; gap: .35rem; max-width: 60ch; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+  .pcap b { font-size: clamp(1.3rem, 3vw, 2.2rem); line-height: 1.15; }
+  .pcap span { color: var(--mut); font-size: clamp(.95rem, 1.6vw, 1.15rem); }
+  .pbar { position: relative; display: block; height: 3px; width: min(320px, 70vw); margin-top: .7rem; border-radius: 2px; background: rgba(255,255,255,.22); overflow: hidden; }
+  .pbar i { position: absolute; inset: 0 auto 0 0; width: 35%; border-radius: 2px; background: #fff; animation: ff-pbar 1.2s ease-in-out infinite; }
+  @keyframes ff-pbar { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+  @media (prefers-reduced-motion: reduce) {
+    .poster { transition-duration: 120ms; }
+    .pbar i { animation: ff-pbar-calm 1.6s ease-in-out infinite alternate; transform: none; width: 100%; }
+    @keyframes ff-pbar-calm { from { opacity: .25; } to { opacity: .7; } }
+  }
   .stage :global(button:focus-visible), .stage :global(a:focus-visible), .stage :global([role=slider]:focus-visible) { outline: 3px solid #fff; outline-offset: 2px; }
   .stage.idle { cursor: none; }
   .stage :global(video) { display: block; width: 100%; height: 100%; max-height: 100%; object-fit: contain; background: #000; }
@@ -1114,6 +1291,12 @@
   .menu { position: absolute; right: 0; bottom: 64px; background: rgba(16,20,24,.97); border: 1px solid #323a43; border-radius: 6px; padding: .6rem .3rem; min-width: 190px; box-shadow: 0 12px 30px #000; z-index: 20; }
   .menu.tracks { display: flex; gap: 1rem; padding: .8rem; min-width: 360px; max-width: min(94vw, 720px); }
   .menu.tracks > div { flex: 1; min-width: 118px; }
+  /* long track lists (many audio / subtitle languages) never grow past the top of the window: the menu is capped to the
+     space above the control bar and each column scrolls on its own, its heading staying in view */
+  .menu:not(.bare) { max-height: calc(100dvh - var(--menu-gap, 10rem)); overflow-y: auto; overscroll-behavior: contain; }
+  .menu.tracks { overflow: hidden; }
+  .menu.tracks > div { max-height: calc(100dvh - var(--menu-gap, 10rem) - 1.6rem); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .menu.tracks h3 { position: sticky; top: 0; z-index: 1; background: rgba(16,20,24,.97); padding: .2rem 0; }
   .mi { white-space: nowrap; }
   .menu h3 { font-size: 1rem; margin: 0 .6rem .4rem; }
   .mi { display: flex; width: 100%; justify-content: flex-start; align-items: center; gap: .5rem; background: transparent; color: #d2d2d2; font-weight: 400; padding: .35rem .6rem; min-height: 44px; text-align: left; border-radius: 4px; }
@@ -1132,6 +1315,7 @@
     .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0; }
     .grp { gap: 0; }
     .menu.tracks { flex-direction: column; }
+    .menu.tracks > div { max-height: none; overflow: visible; }
     .ic { width: 44px; min-height: 44px; }
     .bigplay { width: 76px; height: 76px; }
     /* phones: panels sit above the control bar across the full width instead of hanging off a button */
@@ -1141,4 +1325,6 @@
     .lockbtn { bottom: auto; top: 5.5rem; } /* the two-row bar is taller on phones: keep the lock clear of the timeline */
     .speeds { flex-wrap: wrap; justify-content: center; } .speeds::before { display: none; } .sp-opt { min-width: 64px; }
   }
+  /* touch: every main-bar target is at least 48 px */
+  @media (pointer: coarse) { .ic { min-width: 48px; min-height: 48px; } }
 </style>

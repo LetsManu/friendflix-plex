@@ -189,7 +189,7 @@ describe('internal endpoints', () => {
   it('authz needs the internal secret and returns the token only for valid sessions', async () => {
     const sid = s.cookies.ff_sid;
     expect((await env.app.inject({ method: 'POST', url: '/internal/authz', payload: { sid } })).statusCode).toBe(403);
-    const ok = await env.app.inject({ method: 'POST', url: '/internal/authz', headers: { 'x-internal-secret': 'internal-secret-123456' }, payload: { sid } });
+    const ok = await env.app.inject({ method: 'POST', url: '/internal/authz', headers: { 'x-internal-secret': 'internal-secret-123456' }, payload: { sid, ip: '192.168.1.10' } });
     expect(ok.statusCode).toBe(200);
     expect(ok.json()).toMatchObject({ token: expect.stringMatching(/^tok-/), maxBitrate: 60_000_000 });
     const bad = await env.app.inject({ method: 'POST', url: '/internal/authz', headers: { 'x-internal-secret': 'internal-secret-123456' }, payload: { sid: 'x'.repeat(30) } });

@@ -584,6 +584,10 @@ export const MIGRATIONS: string[] = [
   alter table lists add column featured_pos int;
   create index lists_themed on lists(themed) where themed;
   `,
+  // 34: per-role bitrate cap for viewers outside the home networks (null = role default)
+  `
+  alter table role_settings add column remote_max_bitrate int check (remote_max_bitrate between 300000 and 200000000);
+  `,
 ];
 
 export async function migrate(pool: pg.Pool): Promise<void> {

@@ -4,7 +4,8 @@ import { CAST_MAX_BITRATE, CAST_MAX_HEIGHT, castEnabled, castSubtitlePath, castT
 import type { Ctx } from '../ctx.js';
 import { MediaError } from '../media/types.js';
 import { countLive } from '../live.js';
-import { effectiveRole } from '../roles.js';
+import { isHomeRequest } from '../netaddr.js';
+import { effectiveRole, remoteBitrateCap } from '../roles.js';
 import { requireUser } from '../session.js';
 import { id32 as itemId } from './_shared.js';
 
@@ -29,7 +30,10 @@ export function castRoutes(app: FastifyInstance, ctx: Ctx) {
     try {
       const item = await ctx.jf.item(req.jfUser!, b.itemId); // access check: the profile must be able to see the item
       const startTicks = b.startTicks ?? item.positionTicks;
-      const maxBitrate = Math.min(role.maxBitrate, CAST_MAX_BITRATE, b.maxBitrate ?? CAST_MAX_BITRATE);
+      // the cast device streams over the same uplink as the sender: outside the home networks the remote cap applies
+      const remote = !isHomeRequest(req, ctx.cfg.HOME_NETWORKS);
+      const ceiling = remote ? remoteBitrateCap(role) : role.maxBitrate;
+      const maxBitrate = Math.min(ceiling, CAST_MAX_BITRATE, b.maxBitrate ?? CAST_MAX_BITRATE);
       const maxHeight = Math.min(role.maxHeight ?? CAST_MAX_HEIGHT, CAST_MAX_HEIGHT);
       const opts = { maxBitrate, maxHeight, startTicks, audioIndex: b.audioIndex, cast: true };
       let info = await ctx.jf.playbackInfo(req.jfUser!, b.itemId, opts);
