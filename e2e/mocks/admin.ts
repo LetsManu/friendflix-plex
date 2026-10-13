@@ -42,7 +42,10 @@ export interface AdminState {
   summaryFails: boolean;
   /** removal dates ("Bald weg", /api/admin/leaving) */
   leaving: LeavingRow[];
+  /** optional TMDB/OMDb keys (/api/admin/sources); the real API never returns more than last4 */
+  sources: SourceRow[];
 }
+export interface SourceRow { name: 'tmdb' | 'omdb'; set: boolean; last4: string | null; from: 'db' | 'file' | null; invalid: boolean; usedToday?: number; budget?: number }
 export interface LeavingRow { itemId: string; name: string | null; type: string | null; year: number | null; leavesAt: string; days: number; note: string | null; setBy: string | null }
 /** local calendar day `offset` days from today (YYYY-MM-DD) */
 export const leaveDay = (offset: number): string => { const d = new Date(); d.setDate(d.getDate() + offset); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -106,6 +109,7 @@ export function adminState(): AdminState {
     seerrUp: true,
     summaryFails: false,
     leaving: [leavingRow('00000000000000000000000000000001', 1, 'Lizenz endet'), leavingRow('00000000000000000000000000000002', 5, null), leavingRow('00000000000000000000000000000003', 20, 'Rechte laufen aus')],
+    sources: [{ name: 'tmdb', set: false, last4: null, from: null, invalid: false }, { name: 'omdb', set: true, last4: 'k3y9', from: 'db', invalid: false, usedToday: 12, budget: 900 }],
   };
 }
 
@@ -321,6 +325,21 @@ export function adminRoute(st: AdminState, m: string, p: string, sp: URLSearchPa
     return J({ enabled: true, day: 5, hour: 18, source: 'admin', lastRun: { week: '2026-W40', sentAt: ago(100), count: 9 } });
   }
   if (p === '/api/admin/digest/test' && m === 'POST') return J({ sent: 1 });
+  if (p === '/api/admin/sources' && m === 'GET') return J({ sources: st.sources });
+  if ((mm = p.match(/^\/api\/admin\/sources\/(tmdb|omdb)(\/test)?$/))) {
+    const src = st.sources.find((x) => x.name === mm![1])!;
+    if (mm[2]) {
+      if (m !== 'POST') return null;
+      if (!body?.key && !src.set) return J({ ok: false, error: 'not_set' });
+      return J(body?.key?.includes('bad') || (!body?.key && src.invalid) ? { ok: false, error: 'invalid_key' } : { ok: true });
+    }
+    if (m === 'GET') return J(src);
+    if (src.from === 'file') return J({ error: 'from_file' }, 409);
+    if (m === 'PUT' && String(body.key).includes('boom')) return J({ error: 'server' }, 500);
+    if (m === 'PUT' && (String(body.key).length < 8 || /\s/.test(String(body.key)))) return J({ error: 'invalid' }, 400);
+    if (m === 'PUT') { Object.assign(src, { set: true, last4: String(body.key).slice(-4), from: 'db', invalid: false }); log('source.set', null, { name: src.name }); return J(src); }
+    if (m === 'DELETE') { Object.assign(src, { set: false, last4: null, from: null, invalid: false }); log('source.remove', null, { name: src.name }); return J(src); }
+  }
   if (p === '/api/admin/leaving' && m === 'GET') return J({ items: [...st.leaving].sort((a, b) => a.leavesAt.localeCompare(b.leavesAt)) });
   if ((mm = p.match(/^\/api\/admin\/leaving\/([0-9a-f]{32})$/))) {
     const id = mm[1]!;

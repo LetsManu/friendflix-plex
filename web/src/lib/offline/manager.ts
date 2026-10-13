@@ -10,6 +10,7 @@ import { checkSupport, deleteDownloadFiles, deleteOrphans, persist, storageEstim
 import { bumpMaxSeen, toMs } from './license';
 import { tr, type TKey } from '../i18n';
 import { fitsQuota, estimateBytes, pct, type QualityId } from './size';
+import { nextLocalState, pumpable } from './transition';
 import type { StartMsg, WorkerOut } from './fetch-worker';
 
 /** record as shown in the UI: persisted fields + volatile ones (never written to IndexedDB) */
@@ -115,10 +116,10 @@ function applyServer(l: ServerLicense) {
   if (l.expiresAt) v.expiresAt = toMs(l.expiresAt);
   if (l.validUntil) v.validUntil = toMs(l.validUntil);
   if (l.bytes && v.state !== 'done') v.bytesTotal = l.bytes;
-  if (v.state === 'queued' || v.state === 'preparing') {
-    if (ps === 'failed') { v.state = 'error'; v.msg = tr('account.downloads.msg.prepFailed'); }
-    else if (ps === 'preparing') { v.state = 'preparing'; v.prep = prepOf(l); }
-    else if (ps === 'queued') { v.state = 'queued'; v.prep = 0; }
+  const t = nextLocalState(v.state, l.prep);
+  if (t) {
+    v.state = t.state; v.prep = t.prep;
+    if (t.state === 'error') v.msg = tr('account.downloads.msg.prepFailed');
   }
 }
 
@@ -214,7 +215,7 @@ export async function requestDownload(req: DownloadRequest): Promise<DlView[]> {
 async function pump(): Promise<void> {
   if (running || !started) return;
   const now = Date.now();
-  const next = [...recs.values()].find((v) => mine(v) && v.state === 'queued' && srv.get(v.id)?.ready && (retryAt.get(v.id) ?? 0) <= now);
+  const next = [...recs.values()].find((v) => mine(v) && pumpable(v.state, !!srv.get(v.id)?.ready) && (retryAt.get(v.id) ?? 0) <= now);
   if (!next) return;
   const info = await storageEstimate();
   const need = (next.bytesTotal || estimateBytes(next.quality, next.runtimeTicks)) - next.bytesHave;

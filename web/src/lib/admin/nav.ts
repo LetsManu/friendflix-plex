@@ -25,6 +25,7 @@ export const GROUPS: NavGroup[] = [
   { id: 'operations', label: 'admin.nav.groups.operations', items: [
     { href: '/admin/playback', label: 'admin.tabs.playback', icon: 'play' },
     { href: '/admin/digest', label: 'admin.tabs.digest', icon: 'calendar' },
+    { href: '/admin/sources', label: 'admin.tabs.sources', icon: 'link' },
     { href: '/admin/status', label: 'admin.tabs.status', icon: 'activity' },
     { href: '/admin/audit', label: 'admin.tabs.audit', icon: 'shield' },
     { href: '/admin/update', label: 'admin.tabs.update', icon: 'refresh' },

@@ -20,6 +20,7 @@
   export let max: number | string | undefined = undefined;
   export let step: number | undefined = undefined;
   export let maxlength: number | undefined = undefined;
+  export let minlength: number | undefined = undefined;
   /** visually hidden label (still the accessible name) */
   export let hideLabel = false;
   /** input width, e.g. "8rem"; default fills the field */
@@ -37,7 +38,7 @@
   {#if $$slots.default}
     <slot {id} {describedby} {invalid} />
   {:else}
-    <input {id} {type} bind:value {required} {disabled} {placeholder} {min} {max} {step} {maxlength} {autocomplete} aria-describedby={describedby} aria-invalid={invalid} style={width ? `width:${width}` : undefined} on:change on:input on:blur on:keydown />
+    <input {id} {type} bind:value {required} {disabled} {placeholder} {min} {max} {step} {maxlength} {minlength} {autocomplete} aria-describedby={describedby} aria-invalid={invalid} style={width ? `width:${width}` : undefined} on:change on:input on:blur on:keydown />
   {/if}
   {#if hint}<span class="hint" id={hintId}>{hint}</span>{/if}
   {#if error}<span class="error" id={errId} role="alert">{error}</span>{/if}

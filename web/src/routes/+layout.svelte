@@ -487,9 +487,9 @@
     </header>
     {/if}
     <nav class="tabbar" aria-label={$t('shell.mobile.tabbar')}>
-      <a href="/" class:active={path === '/'} aria-current={path === '/' ? 'page' : undefined}><Icon name="home" size={22} /><span>{$t('shell.tabs.home')}</span></a>
-      <a href="/new" class:active={path.startsWith('/new')} aria-current={path.startsWith('/new') ? 'page' : undefined}><Icon name="star" size={22} /><span>{$t('shell.tabs.new')}</span></a>
-      <a href="/me" class:active={path.startsWith('/me')} aria-current={path.startsWith('/me') ? 'page' : undefined}><span class="face sm" aria-hidden="true" style={faceStyle}>{initial(who)}</span><span>{$t('shell.tabs.me')}</span></a>
+      <a href="/" class:active={path === '/'} aria-current={path === '/' ? 'page' : undefined}><span class="ico"><Icon name="home" size={22} /></span><span>{$t('shell.tabs.home')}</span></a>
+      <a href="/new" class:active={path.startsWith('/new')} aria-current={path.startsWith('/new') ? 'page' : undefined}><span class="ico"><Icon name="star" size={22} /></span><span>{$t('shell.tabs.new')}</span></a>
+      <a href="/me" class:active={path.startsWith('/me')} aria-current={path.startsWith('/me') ? 'page' : undefined}><span class="ico"><span class="face sm" aria-hidden="true" style={faceStyle}>{initial(who)}</span></span><span>{$t('shell.tabs.me')}</span></a>
     </nav>
     {#if catOpen && $mobile}
       <div class="cats" role="dialog" aria-modal="true" aria-label={$t('shell.cats.title')} use:dialogKeys={{ close: () => closeCats() }}>
@@ -637,7 +637,8 @@
   @media (max-width: 720px) {
     .tabbar { display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; background: rgba(12,12,12,.97); border-top: 1px solid #20262d; padding-bottom: env(safe-area-inset-bottom); }
     .tabbar a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .15rem; min-height: 56px; padding: 0 2px; font-size: .68rem; color: var(--mut); font-weight: 500; }
-    .tabbar span:not(.face) { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tabbar .ico { flex: none; width: 24px; height: 24px; display: grid; place-items: center; }
+    .tabbar span:not(.face):not(.ico) { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tabbar a.active { color: #fff; font-weight: 700; }
     .tabbar .face.sm { width: 24px; height: 24px; font-size: .72rem; border-radius: 4px; }
     .tabbar a.active .face.sm { box-shadow: 0 0 0 2px #fff; }

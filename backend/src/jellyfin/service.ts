@@ -8,10 +8,16 @@ import type { JfUser } from '../types.js';
 import { JellyfinClient, JellyfinError, mediaBrowserHeader, policyFromTemplate } from './client.js';
 import { jellyfinWebhookEvents } from './webhook.js';
 import { bestTraits, maxWidthFor, toDownloadSource, toItemDto, toMediaTraits, toPlaybackDto, toTrickplayDto, type DownloadQuality, type DownloadSourceDto } from './dto.js';
-import { toChapters, toCredits } from './dto.js'; // Block 17 P1
-import type { ChapterDto, ItemCreditsDto } from '../media/types.js'; // Block 17 P1
+import { toChapters, toCredits, toItemAbout, toProviderIds } from './dto.js'; // Block 17 P1, Block 21
+import { MediaError } from '../media/types.js';
+import type { ChapterDto, ItemAboutDto, ItemCreditsDto, MediaCollection } from '../media/types.js'; // Block 17 P1, Block 21
 
 const TOKEN_TTL = 6 * 3600;
+const BOXSET_INDEX_KEY = 'jf:boxsets:v1';
+const BOXSET_INDEX_TTL = 3600;
+/** a partial index (some box set calls failed) is kept shorter, so a passing outage heals sooner */
+const BOXSET_INDEX_PARTIAL_TTL = 600;
+const BOXSET_INDEX_PARALLEL = 8;
 /** item() memo: one detail page fires ~8 parallel requests that each load the same item (access check / data). */
 export const ITEM_MEMO_TTL_MS = 10_000;
 export const ITEM_MEMO_MAX = 2000;
@@ -718,6 +724,78 @@ export class JellyfinService implements MediaServer {
     const it = (r.Items ?? []).find((x) => nid(x.Id) === id);
     if (!it) throw new JellyfinError(404, 'Jellyfin: item not visible');
     return toCredits(it);
+  }
+
+  // ---- Block 21: detail page ("Über", collections) ----
+  /** Tagline, original title, countries, studios, tags, provider ids and ratings as the viewer sees the item; 404 when not visible. */
+  async itemAbout(user: JfUser, id: string): Promise<ItemAboutDto> {
+    const p = new URLSearchParams({ userId: user.jellyfin_user_id, ids: id, fields: 'ProviderIds,Taglines,Studios,Tags,ProductionLocations,OriginalTitle,Genres', enableImages: 'false' });
+    const r = await this.json<{ Items?: any[] }>(user, `/Items?${p}`);
+    const it = (r.Items ?? []).find((x) => nid(x.Id) === nid(id));
+    if (!it) throw new MediaError(404, 'Jellyfin: item not visible');
+    return toItemAbout(it);
+  }
+
+  private boxsetIndexBuild: Promise<Record<string, string[]>> | null = null;
+  /** Library-wide box set membership (admin key, independent of any viewer): box set id -> normalised child ids. kv-cached, single-flight. */
+  private boxsetIndex(): Promise<Record<string, string[]>> {
+    if (this.boxsetIndexBuild) return this.boxsetIndexBuild;
+    const build = (async () => {
+      const cached = await this.kv.get(BOXSET_INDEX_KEY).catch(() => null);
+      if (cached) { try { return JSON.parse(cached) as Record<string, string[]>; } catch { /* rebuild */ } }
+      const sets: string[] = [];
+      for (let start = 0; ; start += 200) {
+        const p = new URLSearchParams({ recursive: 'true', includeItemTypes: 'BoxSet', sortBy: 'SortName,Id', sortOrder: 'Ascending', startIndex: String(start), limit: '200', fields: '', enableImages: 'false', enableUserData: 'false' });
+        const r = await this.client.adminJson<{ Items?: Array<{ Id?: string }> }>(`/Items?${p}`);
+        const page = (r?.Items ?? []).flatMap((i) => (i?.Id ? [i.Id] : []));
+        sets.push(...page);
+        if (page.length < 200) break;
+      }
+      // bounded parallelism; a box set whose call fails is left out (the rest still counts and is cached)
+      const index: Record<string, string[]> = {};
+      for (let i = 0; i < sets.length; i += BOXSET_INDEX_PARALLEL) {
+        await Promise.all(sets.slice(i, i + BOXSET_INDEX_PARALLEL).map(async (b) => {
+          try {
+            const p = new URLSearchParams({ parentId: b, fields: '', enableImages: 'false', enableUserData: 'false' });
+            const r = await this.client.adminJson<{ Items?: Array<{ Id?: string }> }>(`/Items?${p}`);
+            index[b] = (r?.Items ?? []).flatMap((it) => (it?.Id ? [nid(it.Id)] : []));
+          } catch { /* skipped */ }
+        }));
+      }
+      const ordered = Object.fromEntries(sets.flatMap((b) => (index[b] ? [[b, index[b]] as const] : [])));
+      await this.kv.set(BOXSET_INDEX_KEY, JSON.stringify(ordered), Object.keys(ordered).length < sets.length ? BOXSET_INDEX_PARTIAL_TTL : BOXSET_INDEX_TTL).catch(() => undefined);
+      return ordered;
+    })();
+    this.boxsetIndexBuild = build;
+    const clear = () => { if (this.boxsetIndexBuild === build) this.boxsetIndexBuild = null; };
+    build.then(clear, clear);
+    return build;
+  }
+
+  /** Box sets containing the item; name and parts come from the viewer's own identity (role libraries, age cap, kids apply). */
+  async itemCollections(user: JfUser, id: string): Promise<MediaCollection[]> {
+    const want = nid(id);
+    const index = await this.boxsetIndex();
+    const out: MediaCollection[] = [];
+    for (const [boxId, children] of Object.entries(index)) {
+      if (!children.includes(want)) continue;
+      try {
+        const named = await this.json<{ Items?: any[] }>(user, `/Items?${new URLSearchParams({ userId: user.jellyfin_user_id, ids: boxId, enableImages: 'false', enableUserData: 'false' })}`);
+        const box = (named.Items ?? []).find((x) => nid(x.Id) === nid(boxId));
+        if (!box || typeof box.Name !== 'string') continue; // not visible to the viewer: neither the name nor the parts show up
+        const p = new URLSearchParams({ userId: user.jellyfin_user_id, parentId: boxId, fields: `${FIELDS},ProviderIds`, sortBy: 'PremiereDate,ProductionYear,SortName', sortOrder: 'Ascending' });
+        const r = await this.json<{ Items?: any[] }>(user, `/Items?${p}`);
+        const rawParts = (r.Items ?? []).filter((x) => x?.Id);
+        const key = (x: any) => [String(x.PremiereDate ?? '9999'), Number(x.ProductionYear ?? 9999), String(x.Name ?? '')] as const;
+        rawParts.sort((a, b) => { const [ad, ay, an] = key(a), [bd, by, bn] = key(b); return ad < bd ? -1 : ad > bd ? 1 : ay - by || an.localeCompare(bn); });
+        const parts = rawParts.map((x) => { const tmdb = toProviderIds(x.ProviderIds).tmdb; return { item: toItemDto(x), ...(tmdb ? { tmdbId: tmdb } : {}) }; });
+        if (parts.length) out.push({ id: boxId, name: box.Name, parts });
+      } catch (e) {
+        if (e instanceof MediaError) continue; // a non-ok answer skips that box set
+        throw e;
+      }
+    }
+    return out;
   }
 
   private makeAdmin(): MediaAdmin {

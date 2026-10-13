@@ -95,6 +95,32 @@ const tr: Translation<typeof de> = {
     audio: 'Ses: {list}',
     subs: 'Altyazı: {list}',
   },
+  /** Block 21: ratings line, Details tab (facts, links) */
+  about: {
+    tab: 'Ayrıntılar',
+    ratings: 'Puanlar',
+    aria: {
+      community: 'Kullanıcı puanı 10 üzerinden {n}',
+      critic: 'Eleştirmen puanı %{n}',
+      imdb: 'IMDb puanı 10 üzerinden {n}',
+      rt: 'Rotten Tomatoes puanı %{n}',
+      mc: 'Metacritic puanı 100 üzerinden {n}',
+      friends: 'Arkadaşlarının puanı: 5 yıldız üzerinden {n}',
+    },
+    critics: 'Eleştirmenler %{n}',
+    friends: 'Arkadaşlar {n} ★',
+    more: 'Devamını oku',
+    less: 'Daha az göster',
+    studios: 'Stüdyolar:',
+    tags: 'Etiketler:',
+    releaseDate: 'Çıkış tarihi:',
+    originalTitle: 'Orijinal adı:',
+    countries: 'Yapım ülkeleri:',
+    links: 'Bağlantılar',
+    newTab: '(yeni sekmede açılır)',
+    /** TMDB's required notice (plain text, no logo) */
+    tmdbNotice: 'Bu ürün TMDB API’sini kullanır ancak TMDB tarafından onaylanmış veya sertifikalandırılmış değildir.',
+  },
   info: {
     title: '<b>{name}</b> hakkında',
     director: 'Yönetmen:',
@@ -111,6 +137,15 @@ const tr: Translation<typeof de> = {
     episodeN: 'Bölüm {n}: ',
     spoiler: 'Açıklama gizlendi (spoiler koruması)',
     reveal: 'göster',
+    watched: 'İzlendi',
+  },
+  collection: {
+    title: '{n} bölümün {i}. kısmı · {name}',
+    titleAll: '{name} · {n} kısım',
+    next: '{n}. kısımla devam et',
+    missing: 'Kütüphanede yok',
+    request: 'İste',
+    requested: 'İstendi',
     watched: 'İzlendi',
   },
   more: {

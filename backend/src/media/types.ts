@@ -234,6 +234,17 @@ export interface CreditDto { id: string; name: string; role?: string; type: stri
 /** Credits plus the background facts an ItemDto does not carry. Episodes report their own credits (guest stars, director, writer). */
 export interface ItemCreditsDto { people: CreditDto[]; studios: string[]; tags: string[] }
 
+// ---- Block 21: detail page ("Über", collections) --------------------------------------------------------------------------------
+/** External ids as the server reports them (raw strings; whoever builds a link validates them first). */
+export interface ProviderIds { imdb?: string; tmdb?: string; tvdb?: string }
+/** Background facts of one item the viewer can see that an ItemDto does not carry. */
+export interface ItemAboutDto {
+  type: string; providerIds: ProviderIds; tagline?: string; originalTitle?: string; premiereDate?: string;
+  countries: string[]; studios: string[]; tags: string[]; communityRating?: number; criticRating?: number;
+}
+/** A collection (box set) the item belongs to. `parts` = only what the viewer can see, in release order (premiere date, year, name). */
+export interface MediaCollection { id: string; name: string; parts: Array<{ item: ItemDto; tmdbId?: string }> }
+
 /** Metadata FriendFlix classifies on (e.g. "is this an anime"): genres, tags, production countries. */
 export interface ItemTraits { genres: string[]; tags: string[]; countries: string[] }
 export interface PersonDto { id: string; name: string; overview?: string; birthYear?: number; image: boolean }
@@ -385,6 +396,12 @@ export interface MediaServer {
   chapters?(user: MediaUser, id: string): Promise<ChapterDto[]>;
   /** all credits (incl. guest stars) + studios + tags of an item the viewer can see ("Besetzung & Infos") */
   credits?(user: MediaUser, id: string): Promise<ItemCreditsDto>;
+
+  // ---- Block 21 (optional): detail page. Absent = no "Über" facts / no collection row (the page then shows what it has).
+  /** tagline, original title, countries, studios, tags, provider ids and ratings of an item the viewer can see; MediaError(404) when not visible */
+  itemAbout?(user: MediaUser, id: string): Promise<ItemAboutDto>;
+  /** collections containing the item, with the parts the viewer can see (hidden parts are omitted, never reported as missing); [] = none */
+  itemCollections?(user: MediaUser, id: string): Promise<MediaCollection[]>;
 
   // ---- user data
   forgetItems(serverUserId?: string): void;

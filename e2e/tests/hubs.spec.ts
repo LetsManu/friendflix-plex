@@ -72,10 +72,13 @@ test.describe('brand hubs (desktop)', () => {
 });
 
 test.describe('extras tab (desktop)', () => {
-  test('without extras there are no tabs', async ({ page }) => {
+  test('without extras the tabs are Details and Mehr davon', async ({ page }) => {
     await page.goto('/item/' + LOCKED_ID);
     await expect(page.getByRole('heading', { level: 1, name: 'Inkwell' })).toBeVisible();
-    await expect(page.getByRole('tablist')).toHaveCount(0);
+    // Block 21: the tabs are always on; a movie opens on Details
+    const tabs = page.getByRole('tablist', { name: 'Weitere Inhalte' });
+    await expect(tabs.getByRole('tab')).toHaveText(['Details', 'Mehr davon']);
+    await expect(tabs.getByRole('tab', { name: 'Details' })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('trailers and bonus material appear in their own tab and play through the player route', async ({ page }) => {
@@ -85,8 +88,8 @@ test.describe('extras tab (desktop)', () => {
     ] })));
     await page.goto('/item/' + LOCKED_ID);
     const tabs = page.getByRole('tablist', { name: 'Weitere Inhalte' });
-    await expect(tabs.getByRole('tab')).toHaveText(['Mehr davon', 'Extras']);
-    await expect(tabs.getByRole('tab', { name: 'Mehr davon' })).toHaveAttribute('aria-selected', 'true');
+    await expect(tabs.getByRole('tab')).toHaveText(['Details', 'Mehr davon', 'Extras']);
+    await expect(tabs.getByRole('tab', { name: 'Details' })).toHaveAttribute('aria-selected', 'true');
     await tabs.getByRole('tab', { name: 'Extras' }).click();
     const panel = page.getByRole('tabpanel', { name: 'Extras' });
     await expect(panel.getByRole('link')).toHaveCount(2);

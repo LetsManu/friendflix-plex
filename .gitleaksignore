@@ -11,3 +11,7 @@ d0523039359fd16b7618fb3406c74e09c96f7436:docs/integrations.md:generic-api-key:3
 c50a8c4e6ba697ac2e22bd3c16cd4bc8eacd5b1a:web/src/lib/badges.ts:generic-api-key:73
 # test placeholder (backend/test/helpers.ts INTERNAL_SECRET) on a line edited to add the client ip
 9a810eb9f50011bd635bc72cceeb8285b4c3aad6:backend/test/core.test.ts:generic-api-key:192
+# fake TMDB/OMDb test keys in the Block 21 data-source tests
+5c952a1ccca023236043eba3aafa99ed601f8b20:backend/test/about.test.ts:generic-api-key:11
+c0afee0e9f185ea0f700875b3093fe04fcb3f44c:backend/test/sources-keys.test.ts:generic-api-key:6
+c0afee0e9f185ea0f700875b3093fe04fcb3f44c:backend/test/sources-keys.test.ts:generic-api-key:84

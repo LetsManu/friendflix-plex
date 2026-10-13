@@ -85,6 +85,9 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      # optional external data sources (detail page); can also be saved in the admin UI
+      # TMDB_API_KEY: ${TMDB_API_KEY:-}
+      # OMDB_API_KEY: ${OMDB_API_KEY:-}
       TZ: ${TZ:-Europe/Vienna}
       DIGEST_DAY: ${DIGEST_DAY:-0}
       DIGEST_HOUR: ${DIGEST_HOUR:-18}

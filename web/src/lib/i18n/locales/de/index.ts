@@ -17,5 +17,6 @@ import adminContent from './adminContent';
 import scenes from './scenes';
 import fresh from './fresh';
 import mine from './mine';
+import diagnose from './diagnose';
 
-export default { common, shell, home, detail, player, account, social, admin, hubs, anime, together, kids, scenes, fresh, mine, ui, adminPeople, adminContent } as const;
+export default { common, shell, home, detail, player, account, social, admin, hubs, anime, together, kids, scenes, fresh, mine, diagnose, ui, adminPeople, adminContent } as const;

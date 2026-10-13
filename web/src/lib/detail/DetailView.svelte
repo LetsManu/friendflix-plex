@@ -1,17 +1,19 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
-  import { api, backdrop, cachedDetail, cachedItem, primeDetail, primeItem, srcset, HERO_WIDTHS, MODAL_WIDTHS, logoUrl, type Item, type ItemDetail } from '#lib/api';
+  import { api, backdrop, cachedDetail, cachedItem, getActiveProfile, primeDetail, primeItem, srcset, HERO_WIDTHS, MODAL_WIDTHS, logoUrl, type Item, type ItemDetail } from '#lib/api';
   import { castToTv, refreshTvOnline, tvOnline } from '#lib/remote';
   import { listIds, toggleList, prefs } from '#lib/stores';
   import { kidsMode } from '#lib/kids';
-  import { fmtNumber, t, tr } from '#lib/i18n';
+  import { t, tr } from '#lib/i18n';
   import { playPreview, previewFailed, previewOwner, stopPreview, toggleSound } from '#lib/preview';
   import { isSpoiler } from '#lib/spoiler';
   import { langLine } from '#lib/langs';
   import { lengthLabel, ratingBadge } from '#lib/hover';
   import { toThumb, type Thumb } from '#lib/rating';
-  import { byType, moodTags, remainingLabel, type Person } from '#lib/detail/format';
+  import { remainingLabel, type Person } from '#lib/detail/format';
+  import { defaultTab, detailTabs, loadAbout, refreshFriends, withFriends, type About, type DetailTab } from '#lib/detail/about';
+  import { focusFirst, usable } from '#lib/spatial';
   import { autoStartAllowed, AUTOSTART_COUNTDOWN_S, countdownLabel, interactionCancels, isTextEntry, previewDone } from '#lib/detail/autostart';
   import { playPrefetch } from '#lib/player/prefetch';
   import Icon from '#lib/Icon.svelte';
@@ -20,13 +22,14 @@
   import StatusPicker from '#lib/StatusPicker.svelte';
   import FriendsStrip from '#lib/FriendsStrip.svelte';
   import CastRow from '#lib/CastRow.svelte';
-  import Reactions from '#lib/Reactions.svelte';
   import LangPick from '#lib/LangPick.svelte';
   import RatingButton from '#lib/RatingButton.svelte';
   import MoreActions, { type MoreAction } from '#lib/MoreActions.svelte';
   import EpisodeList from '#lib/detail/EpisodeList.svelte';
+  import CollectionRow from '#lib/detail/CollectionRow.svelte';
   import MoreLikeThis from '#lib/detail/MoreLikeThis.svelte';
-  import InfoBlock from '#lib/detail/InfoBlock.svelte';
+  import DetailsTab from '#lib/detail/DetailsTab.svelte';
+  import RatingsLine from '#lib/detail/RatingsLine.svelte';
   import Extras from '#lib/detail/Extras.svelte';
   import TitleFacts from '#lib/detail/TitleFacts.svelte';
   import StoryCard from '#lib/detail/StoryCard.svelte';
@@ -46,10 +49,12 @@
   let thumb: Thumb = 0, extras: Array<Item & { kind?: 'trailer' | 'extra' }> = [], more: Item[] | null = null, people: Person[] = [];
   let friends: Array<{ id: string; name: string }> = [], recOpen = false, recTo = new Set<string>(), recNote = '', recMsg = '', recEl: HTMLDivElement;
   let seasons: Item[] = [], episodes: Item[] | null = null, season = '', next: Item | null = null;
-  let ratings: any[] = [], avg: number | null = null, stars = 0, review = '', followed = false;
+  let followed = false;
   let logoFailed = false, saveMsg = '', saveT: ReturnType<typeof setTimeout>, castMsg = '', castT: ReturnType<typeof setTimeout>;
   let lgA = '', lgS = '';
   let dl: DownloadButton | undefined, dlAvail = false, dlState = '';
+  /** Block 21 "about" data: undefined = loading (the ratings line keeps its height), null = none */
+  let about: About | null | undefined = undefined, aboutSeq = 0, aboutRaf = 0;
   // fresh label, removal date and quality chips (Block 17); admins get "Entfernungsdatum" in the ⋯ menu
   let facts: Facts | null = null, leavingDlg = false;
 
@@ -62,7 +67,9 @@
   async function load(want: string) {
     const my = ++loadSeq;
     stopHero(); cancelAuto(); autoCancelled = false; heroByUser = false;
-    failed = false; episodes = null; next = null; seasons = []; ratings = []; avg = null; stars = 0; review = ''; followed = false; season = ''; epKey = '';
+    failed = false; episodes = null; next = null; seasons = []; followed = false; season = ''; epKey = '';
+    about = undefined; synOpen = false;
+    aboutSeq++; aboutFor = ''; cancelAnimationFrame(aboutRaf); // a late answer for the previous title must not land on this one
     facts = null; leavingDlg = false;
     extras = []; more = null; people = []; logoFailed = false; heroLoaded = false; heroTried = ''; recOpen = false; castMsg = ''; saveMsg = ''; tab = '';
     savedLang(want);
@@ -78,7 +85,6 @@
     opt(loadFacts(want), (f) => (facts = f), my);
     opt(api(`/api/items/${want}/people`), (r) => (people = (r.people as Person[]) ?? []), my);
     opt(api(`/api/items/${want}/extras/all`), (r) => (extras = (r.items as typeof extras) ?? []), my);
-    if (!$kidsMode) opt(api(`/api/items/${want}/ratings`), (rr) => { ratings = rr.ratings; avg = rr.average; const mine = ratings.find((x) => x.mine); stars = mine?.stars ?? 0; review = mine?.review ?? ''; }, my);
     let seriesFired = false;
     const fireSeries = () => {
       if (seriesFired) return;
@@ -124,22 +130,83 @@
     try { const l = (await api(`/api/items/${it.id}/similar`)).items as Item[]; return l.length ? l : await genre(); } catch { try { return await genre(); } catch { return []; } }
   }
 
-  // ---- tabs: Episodes / Extras / More like this (only when there are extras; otherwise the sections simply follow each other) ----
-  type Tab = 'episodes' | 'extras' | 'more';
-  let tab: Tab | '' = '';
-  $: tabs = (item && extras.length ? [...(item.type === 'Series' ? ['episodes' as Tab] : []), ...(more === null || more.length ? ['more' as Tab] : []), 'extras' as Tab] : []) as Tab[];
-  $: tabbed = tabs.length > 1;
-  $: curTab = (tab && tabs.includes(tab) ? tab : tabs[0] ?? '') as Tab | '';
-  const showTab = (name: Tab, cur: Tab | '', on: boolean) => !on || cur === name;
-  const tabLabel = (n: Tab): string => n === 'episodes' ? $t('detail.episodes.title') : n === 'extras' ? $t('hubs.extras.tab') : $t('detail.more.title');
+  // ---- Block 21 "about" (ratings line, tagline, Details tab facts): after the first paint, cached per profile + title ----
+  let aboutFor = '';
+  $: if (item) scheduleAbout(item.id);
+  function scheduleAbout(itemId: string) {
+    if (aboutFor === itemId) return;
+    aboutFor = itemId;
+    const my = ++aboutSeq;
+    cancelAnimationFrame(aboutRaf);
+    // the frame with the hero and the title is painted first; the request goes out right after it
+    aboutRaf = requestAnimationFrame(() => setTimeout(() => {
+      if (my !== aboutSeq) return;
+      void loadAbout(itemId, getActiveProfile(), (a) => { if (my === aboutSeq) about = a; }).then(() => { if (my === aboutSeq && about === undefined) about = null; });
+    }));
+  }
+  /** the viewer saved a rating (Details tab): the friends' average in the ratings line follows at once */
+  function onRated(itemId: string, average: number | null) {
+    const my = aboutSeq;
+    if (about) about = withFriends(about, average);
+    void refreshFriends(itemId, getActiveProfile(), average, (a) => { if (my === aboutSeq) about = a; });
+  }
+  $: tagline = about?.tagline ?? '';
+  /**
+   * Ratings line + tagline block: keeps the placeholder's height while "about" loads, then eases to its real height
+   * (collapses when there is nothing to show, grows for a tagline) instead of jumping the synopsis below it.
+   */
+  function smoothHeight(node: HTMLElement) {
+    const inner = node.firstElementChild as HTMLElement | null;
+    if (!inner || typeof ResizeObserver === 'undefined') return {};
+    let first = true;
+    const ro = new ResizeObserver(() => {
+      node.style.height = inner.offsetHeight + 'px';
+      if (first) { first = false; requestAnimationFrame(() => node.classList.add('ready')); } // no animation for the first size
+    });
+    ro.observe(inner);
+    return { destroy: () => ro.disconnect() };
+  }
+
+  // ---- synopsis: clamped to 4 lines on phones, "Mehr" only when the text overflows ----
+  let synOpen = false, synClamped = false, synEl: HTMLParagraphElement | undefined;
+  $: if (synEl && phone && !synOpen) measureLater(overview);
+  /** after the text is rendered (`_text`: re-measure when it changes) */
+  function measureLater(_text: string) { void tick().then(() => { if (synEl && !synOpen) synClamped = synEl.scrollHeight > synEl.clientHeight + 1; }); }
+
+  // ---- tabs (always shown): Episodes (series) · Details · More like this · Extras (only with extras); panels stay mounted ----
+  let tab: DetailTab | '' = '';
+  $: tabs = item ? detailTabs(item.type, extras.length > 0) : [];
+  $: curTab = (tab && tabs.includes(tab) ? tab : item ? defaultTab(item.type) : '') as DetailTab | '';
+  const tabLabel = (n: DetailTab): string => n === 'episodes' ? $t('detail.episodes.title') : n === 'details' ? $t('detail.about.tab') : n === 'extras' ? $t('hubs.extras.tab') : $t('detail.more.title');
   function tabKeys(e: KeyboardEvent) {
-    const i = tabs.indexOf(curTab as Tab);
+    const i = tabs.indexOf(curTab as DetailTab);
     const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
     const j = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : d ? (i + d + tabs.length) % tabs.length : -1;
     if (j < 0) return;
     e.preventDefault();
     tab = tabs[j]!;
-    void tick().then(() => document.getElementById('dv-tab-' + tab)?.focus());
+    void tick().then(() => dvEl?.querySelector<HTMLElement>('#dv-tab-' + tab)?.focus());
+  }
+  /** TV: every tab is focusable and focusing one selects it (the D-pad moves the focus, not the arrow-key handler above) */
+  let tvOn = false;
+  function onTabFocus(n: DetailTab) { if (tvOn) tab = n; }
+  /** TV D-pad (spatial.ts "ff-nav"): Down from the tab bar enters the active panel, Up from its top row returns to the active tab */
+  function onNav(e: Event) {
+    const dir = (e as CustomEvent<{ dir: string }>).detail?.dir;
+    const el = e.target as HTMLElement | null;
+    if (!el || !dvEl || !curTab) return;
+    const panel = dvEl.querySelector<HTMLElement>('#dv-panel-' + curTab);
+    if (dir === 'down' && el.getAttribute('role') === 'tab' && el.closest('.tabs')) {
+      if (panel && focusFirst(panel)) e.preventDefault();
+    } else if (dir === 'up' && panel && el !== panel && panel.contains(el)) {
+      const top = el.getBoundingClientRect();
+      const mid = top.top + top.height / 2;
+      const above = [...panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .some((x) => x !== el && usable(x) && (() => { const r = x.getBoundingClientRect(); return r.top + r.height / 2 < mid - 1; })());
+      if (above) return;
+      const t = dvEl.querySelector<HTMLElement>('#dv-tab-' + curTab);
+      if (t) { e.preventDefault(); t.focus({ preventScroll: true }); t.scrollIntoView({ block: 'center', behavior: reduced() ? 'auto' : 'smooth' }); }
+    }
   }
 
   // ---- derived ----
@@ -152,11 +219,10 @@
   $: remaining = resumeFrom ? remainingLabel(resumeFrom.positionTicks, resumeFrom.runtimeTicks) : '';
   $: playLabel = $t(item ? (item.type === 'Series' ? (next ? (next.positionTicks ? 'detail.view.resume' : 'detail.view.continue') : 'detail.view.play') : item.positionTicks ? 'detail.view.resume' : 'detail.view.play') : 'detail.view.play');
   $: resumeLine = item?.type === 'Series' && next ? [$t('detail.view.episodeCode', { s: String(next.parentIndexNumber ?? '?'), e: String(next.indexNumber ?? '?') }), remaining].filter(Boolean).join(' · ') : remaining;
-  $: actors = byType(people, 'Actor', 'GuestStar');
-  $: castList = actors.length ? actors : people.filter((p) => p.type !== 'Director' && p.type !== 'Writer');
-  $: moods = item ? moodTags(item.genres) : [];
   $: len = item ? lengthLabel(item) : '';
   $: badge = item ? ratingBadge(item, Date.now()) : '';
+  /** the star rating moves to the ratings line; the meta line keeps it only when "about" has none (older server, failed request) */
+  $: metaBadge = badge.startsWith('★') && (about === undefined || about?.ratings.some((r) => r.key === 'community')) ? '' : badge;
   $: overview = item ? (isSpoiler(item, $prefs) ? $t('detail.view.spoiler') : (item.overview ?? '')) : '';
   $: langs = item ? langLine(item.langs) : '';
   $: heroOwner = item ? 'detail:' + item.id : '';
@@ -195,19 +261,7 @@
     catch (e: any) { recMsg = e?.body?.error === 'already_recommended' ? tr('detail.recommend.already') : tr('detail.recommend.failed'); }
   }
   function toggleTo(uid: string) { const n = new Set(recTo); if (n.has(uid)) n.delete(uid); else n.add(uid); recTo = n; }
-  async function rate() {
-    if (!item || !stars) return;
-    try {
-      await api(`/api/items/${item.id}/rating`, { method: 'PUT', body: { stars, review: review || undefined } });
-      const rr = await api(`/api/items/${item.id}/ratings`); ratings = rr.ratings; avg = rr.average;
-    } catch { failSave(); }
-  }
   const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function toInfo() {
-    const t = document.getElementById('dv-info');
-    t?.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
-    t?.querySelector<HTMLElement>('a')?.focus({ preventScroll: true });
-  }
 
   // ---- "⋯ Mehr": every secondary action in one menu (desktop popover / touch sheet) ----
   // kids profiles: no social or account actions (recommend, share, party, follow); the server answers 403 kids_profile anyway
@@ -300,13 +354,19 @@
     const sync = () => { phone = mqPhone.matches; touch = mqTouch.matches || mqPhone.matches; };
     sync();
     mqPhone.addEventListener?.('change', sync); mqTouch.addEventListener?.('change', sync);
-    return () => { mqPhone.removeEventListener?.('change', sync); mqTouch.removeEventListener?.('change', sync); };
+    // TV mode is switched on by the layout once /api/me answered: follow the class on <html>
+    const syncTv = () => { tvOn = tvMode(); };
+    syncTv();
+    const mo = typeof MutationObserver !== 'undefined' ? new MutationObserver(syncTv) : null;
+    mo?.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    dvEl?.addEventListener('ff-nav', onNav);
+    return () => { mqPhone.removeEventListener?.('change', sync); mqTouch.removeEventListener?.('change', sync); mo?.disconnect(); dvEl?.removeEventListener('ff-nav', onNav); };
   });
   onDestroy(() => {
     if (typeof window === 'undefined') return;
     document.removeEventListener('visibilitychange', onVisibility);
     io?.disconnect();
-    clearTimeout(saveT); clearTimeout(castT); stopHero(); cancelAuto();
+    clearTimeout(saveT); clearTimeout(castT); stopHero(); cancelAuto(); cancelAnimationFrame(aboutRaf); aboutSeq++;
   });
   const heroTitleTag = () => (variant === 'modal' ? 'h2' : 'h1');
 </script>
@@ -363,16 +423,20 @@
       <svelte:element this={heroTitleTag()} id={titleId} class:sr-only={item.logo && !logoFailed} class="ttl">{item.name}</svelte:element>
       {#if item.logo && !logoFailed}<img class="tlogo" src={logoUrl(item.id)} alt="" on:error={() => (logoFailed = true)} />{/if}
       <p class="meta">
-        {#if badge}<span class:match={badge.startsWith('★')} class:fresh={badge === $t('home.card.new')}>{badge}</span>{/if}
+        {#if metaBadge}<span class:match={metaBadge.startsWith('★')} class:fresh={metaBadge === $t('home.card.new')}>{metaBadge}</span>{/if}
         {#if item.year}<span>{item.year}</span>{/if}
         {#if item.rating}<span class="age" title={$t('detail.view.ageRating')}>{item.rating}</span>{/if}
         {#if len}<span>{len}</span>{/if}
       </p>
       <TitleFacts {facts} episode={item.type === 'Episode'} />
+      <div class="lead" use:smoothHeight><div class="lead-in"><RatingsLine {about} />{#if tagline}<p class="tagline">{tagline}</p>{/if}</div></div>
       <a class="btn pill play wide" data-autofocus href={playHref} use:playPrefetch><Icon name="play" size={24} />{playLabel}</a>
       {#if item.type !== 'Series'}<DownloadButton itemId={item.id} block />{:else if playTarget}<DownloadButton itemId={playTarget} seriesId={item.id} block />{/if}
       {#if resumeLine}<p class="resume">{resumeLine}</p>{/if}
-      <p class="ov">{overview || $t('detail.view.noOverview')}</p>
+      <div class="syn">
+        <p class="ov" class:clamp={!synOpen} id="dv-syn" bind:this={synEl}>{overview || $t('detail.view.noOverview')}</p>
+        {#if synClamped}<button type="button" class="lnk more-syn" aria-expanded={synOpen} aria-controls="dv-syn" on:click={() => (synOpen = !synOpen)}>{synOpen ? $t('detail.about.less') : $t('detail.about.more')}</button>{/if}
+      </div>
       {#if langs}<p class="muted small">{langs}</p>{/if}
       <div class="icons">
         <button type="button" class="lab" class:on={inList} aria-pressed={inList} on:click={toggleMine}><Icon name={inList ? 'check' : 'plus'} size={24} /><span>{$t('detail.view.myList')}</span></button>
@@ -391,92 +455,73 @@
 
   {#if item}
     <div class="body">
-      <!-- ================= info columns ================= -->
-      <div class="cols">
-        <div class="left">
-          {#if !phone}
-            <p class="meta">
-              {#if badge}<span class:match={badge.startsWith('★')} class:fresh={badge === $t('home.card.new')}>{badge}</span>{/if}
-              {#if item.year}<span>{item.year}</span>{/if}
-              {#if item.rating}<span class="age" title={$t('detail.view.ageRating')}>{item.rating}</span>{/if}
-              {#if len}<span>{len}</span>{/if}
-            </p>
-            <TitleFacts {facts} episode={item.type === 'Episode'} />
-            {#if langs}<p class="muted small">{langs}</p>{/if}
-            <p class="ov">{overview || $t('detail.view.noOverview')}</p>
-          {/if}
-          {#if social}<FriendsStrip id={item.id} />{/if}
-          {#if castMsg}<p class="muted" role="status">{castMsg}</p>{/if}
-          <div role="status">{#if saveMsg}<p class="err">{saveMsg}</p>{/if}</div>
-          {#if recOpen && social}
-            <div class="panel rec" role="group" aria-label={$t('detail.recommend.label')} bind:this={recEl}>
-              <b>{$t('detail.recommend.to', { name: item.name })}</b>
-              <div class="flex">{#each friends as f (f.id)}<label class="chk"><input type="checkbox" checked={recTo.has(f.id)} on:change={() => toggleTo(f.id)} />{f.name}</label>{:else}<span class="muted">{$t('detail.recommend.noUsers')}</span>{/each}</div>
-              <div class="flex"><input bind:value={recNote} maxlength="140" placeholder={$t('detail.recommend.note')} aria-label={$t('detail.recommend.noteLabel')} style="flex:1;min-width:200px" /><button type="button" disabled={!recTo.size} on:click={sendRec}>{$t('detail.recommend.send')}</button><button type="button" class="sec" on:click={() => (recOpen = false)}>{$t('detail.view.cancel')}</button></div>
-              {#if recMsg}<span class="muted" role="status">{recMsg}</span>{/if}
-            </div>
-          {/if}
-        </div>
-        <dl class="right">
-          {#if castList.length}
-            <div><dt>{$t('detail.view.cast')}</dt><dd>{#each castList.slice(0, 3) as p, n (p.id + n)}{#if n}{', '}{/if}<a href="/person/{p.id}">{p.name}</a>{/each}{#if castList.length > 3}{', '}<button type="button" class="lnk" on:click={toInfo}>{$t('detail.view.more')}</button>{/if}</dd></div>
-          {/if}
-          {#if item.genres?.length}<div><dt>{$t('detail.view.genres')}</dt><dd>{item.genres.join(', ')}</dd></div>{/if}
-          {#if moods.length}<div><dt>{$t('detail.view.moods')}</dt><dd>{moods.join(', ')}</dd></div>{/if}
-        </dl>
+      <!-- ================= info: meta, ratings, tagline, synopsis (phone: above, under the buttons), language, friends ================= -->
+      <div class="top">
+        {#if !phone}
+          <p class="meta">
+            {#if metaBadge}<span class:match={metaBadge.startsWith('★')} class:fresh={metaBadge === $t('home.card.new')}>{metaBadge}</span>{/if}
+            {#if item.year}<span>{item.year}</span>{/if}
+            {#if item.rating}<span class="age" title={$t('detail.view.ageRating')}>{item.rating}</span>{/if}
+            {#if len}<span>{len}</span>{/if}
+          </p>
+          <TitleFacts {facts} episode={item.type === 'Episode'} />
+          <div class="lead" use:smoothHeight><div class="lead-in"><RatingsLine {about} />{#if tagline}<p class="tagline">{tagline}</p>{/if}</div></div>
+          <p class="ov">{overview || $t('detail.view.noOverview')}</p>
+          {#if langs}<p class="muted small">{langs}</p>{/if}
+        {/if}
+        {#if social}<FriendsStrip id={item.id} />{/if}
+        {#if castMsg}<p class="muted" role="status">{castMsg}</p>{/if}
+        <div role="status">{#if saveMsg}<p class="err">{saveMsg}</p>{/if}</div>
+        {#if recOpen && social}
+          <div class="panel rec" role="group" aria-label={$t('detail.recommend.label')} bind:this={recEl}>
+            <b>{$t('detail.recommend.to', { name: item.name })}</b>
+            <div class="flex">{#each friends as f (f.id)}<label class="chk"><input type="checkbox" checked={recTo.has(f.id)} on:change={() => toggleTo(f.id)} />{f.name}</label>{:else}<span class="muted">{$t('detail.recommend.noUsers')}</span>{/each}</div>
+            <div class="flex"><input bind:value={recNote} maxlength="140" placeholder={$t('detail.recommend.note')} aria-label={$t('detail.recommend.noteLabel')} style="flex:1;min-width:200px" /><button type="button" disabled={!recTo.size} on:click={sendRec}>{$t('detail.recommend.send')}</button><button type="button" class="sec" on:click={() => (recOpen = false)}>{$t('detail.view.cancel')}</button></div>
+            {#if recMsg}<span class="muted" role="status">{recMsg}</span>{/if}
+          </div>
+        {/if}
       </div>
+
+      {#if about?.collection && item.type === 'Movie'}<CollectionRow collection={about.collection} canRequest={about.canRequest} {variant} />{/if}
 
       {#if item.type === 'Series'}<StoryCard seriesId={item.id} />{/if}
 
-      {#if tabbed}
-        <div class="tabs" role="tablist" aria-label={$t('hubs.extras.tabs')} tabindex="-1" on:keydown={tabKeys}>
-          {#each tabs as n (n)}
-            <button type="button" role="tab" id="dv-tab-{n}" class="tab" class:on={curTab === n} aria-selected={curTab === n} aria-controls="dv-panel-{n}" tabindex={curTab === n ? 0 : -1} on:click={() => (tab = n)}>{tabLabel(n)}</button>
-          {/each}
-        </div>
-      {/if}
+      <CastRow id={item.id} {people} />
+
+      <!-- ================= tabs (always shown); the panels stay mounted and switch with `hidden` ================= -->
+      <div class="tabs" role="tablist" aria-label={$t('hubs.extras.tabs')} tabindex="-1" on:keydown={tabKeys}>
+        {#each tabs as n (n)}
+          <button type="button" role="tab" id="dv-tab-{n}" class="tab" class:on={curTab === n} aria-selected={curTab === n} aria-controls="dv-panel-{n}" tabindex={curTab === n || tvOn ? 0 : -1}
+            on:click={() => (tab = n)} on:focus={() => onTabFocus(n)}>{tabLabel(n)}</button>
+        {/each}
+      </div>
 
       {#if item.type === 'Series'}
-        <div id="dv-panel-episodes" role={tabbed ? 'tabpanel' : undefined} aria-labelledby={tabbed ? 'dv-tab-episodes' : undefined} hidden={!showTab('episodes', curTab, tabbed)}>
+        <div class="tp" id="dv-panel-episodes" role="tabpanel" aria-labelledby="dv-tab-episodes" hidden={curTab !== 'episodes'}>
           <EpisodeList seriesId={item.id} {seasons} bind:season {episodes} {next} {qs} />
         </div>
       {/if}
 
-      {#if extras.length && showTab('extras', curTab, tabbed)}
-        <section class="extras" id="dv-panel-extras" role={tabbed ? 'tabpanel' : undefined} aria-labelledby={tabbed ? 'dv-tab-extras' : 'ex-h'}>
-          <h2 id="ex-h" class:sr-only={tabbed}>{$t('detail.view.extras')}</h2>
-          <Extras items={extras} {qs} />
-        </section>
-      {/if}
+      <div class="tp" id="dv-panel-details" role="tabpanel" aria-labelledby="dv-tab-details" hidden={curTab !== 'details'}>
+        <DetailsTab {item} {people} {facts} {about} download={item.type !== 'Series' && !phone} on:rated={(e) => item && onRated(item.id, e.detail.average)} />
+      </div>
 
-      <div id="dv-panel-more" role={tabbed ? 'tabpanel' : undefined} aria-labelledby={tabbed ? 'dv-tab-more' : undefined} hidden={!showTab('more', curTab, tabbed)}>
+      <div class="tp" id="dv-panel-more" role="tabpanel" aria-labelledby="dv-tab-more" hidden={curTab !== 'more'}>
         <MoreLikeThis items={more} {variant} />
       </div>
 
-      {#if social}
-      {#if item.type === 'Movie' || item.type === 'Episode'}<Reactions id={item.id} />{/if}
-
-      <section class="rate panel" aria-labelledby="rt-h">
-        <h2 id="rt-h">{$t('detail.ratings.title')} {#if avg}<span class="badge">{$t('detail.ratings.average', { avg: fmtNumber(avg, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}</span>{/if}</h2>
-        <div class="flex" role="group" aria-label={$t('detail.ratings.stars')}>
-          {#each [1, 2, 3, 4, 5] as n}<button type="button" class="icon-btn star" class:on={stars >= n} aria-pressed={stars >= n} aria-label={$t('detail.ratings.star', { n })} on:click={() => (stars = n)}><Icon name="star" size={24} fill={stars >= n} /></button>{/each}
-          <input placeholder={$t('detail.ratings.review')} maxlength="280" bind:value={review} aria-label={$t('detail.ratings.reviewLabel')} style="flex:1;min-width:200px" />
-          <button type="button" disabled={!stars} on:click={rate}>{$t('detail.ratings.save')}</button>
+      {#if extras.length}
+        <div class="tp extras" id="dv-panel-extras" role="tabpanel" aria-labelledby="dv-tab-extras" hidden={curTab !== 'extras'}>
+          <h2 class="sr-only">{$t('detail.view.extras')}</h2>
+          <Extras items={extras} {qs} />
         </div>
-        {#each ratings as r}<p><b>{r.name}</b> <span class="warn">{'★'.repeat(r.stars)}</span> <span class="muted">{r.review ?? ''}</span></p>{/each}
-      </section>
       {/if}
-
-      <CastRow id={item.id} {people} />
-      <InfoBlock {item} {people} {facts} />
+      <!-- the "⋯ Mehr" download entry: its own headless instance outside the tab panels, so the sheet opens from any tab -->
       {#if item.type !== 'Series'}<DownloadButton bind:this={dl} itemId={item.id} headless bind:available={dlAvail} bind:stateText={dlState} />{/if}
     </div>
   {:else if !failed}
     <div class="body" aria-hidden="true">
-      <div class="cols">
-        <div class="left"><div class="skeleton sl" style="width:55%"></div><div class="skeleton sl" style="width:100%;height:4.5rem"></div><div class="skeleton sl" style="width:80%"></div></div>
-        <div class="right"><div class="skeleton sl" style="width:90%"></div><div class="skeleton sl" style="width:70%"></div></div>
-      </div>
+        <div class="top"><div class="skeleton sl" style="width:55%"></div><div class="skeleton sl" style="width:40%"></div><div class="skeleton sl" style="width:100%;height:4.5rem"></div><div class="skeleton sl" style="width:80%"></div></div>
       <div class="skeleton sl" style="height:90px;margin-top:2rem"></div>
       <div class="skeleton sl" style="height:90px"></div>
     </div>
@@ -536,34 +581,30 @@
   /* ---- body ---- */
   .body { position: relative; z-index: 3; padding: 0 2.2rem 2.4rem; background: var(--dv-bg); }
   .vp .body { padding: 0 var(--pad-x) 5rem; max-width: 1400px; }
-  .cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 2rem; padding-top: .6rem; }
-  .left { min-width: 0; }
+  .top { min-width: 0; max-width: 900px; padding-top: .6rem; }
   .meta { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; color: #d2d2d2; margin: .4rem 0 .6rem; font-size: 1.05rem; }
   .match { color: var(--ok); font-weight: 700; }
   .fresh { color: var(--ok); font-weight: 700; }
   .age { border: 1px solid rgba(255, 255, 255, .45); border-radius: 6px; padding: 0 .45rem; font-size: .85rem; line-height: 1.5; }
   .small { font-size: .85rem; margin: -.2rem 0 .6rem; }
   .ov { margin: .8rem 0; line-height: 1.55; overflow-wrap: anywhere; }
+  .tagline { margin: .1rem 0 0; font-style: italic; color: #d2d2d2; line-height: 1.45; }
+  .lead { overflow: hidden; }
+  .lead-in { display: flow-root; }
+  .lead:global(.ready) { transition: height .3s var(--ease); }
   .rec { display: grid; gap: .8rem; margin-top: .8rem; }
   .chk { display: inline-flex; gap: .45rem; align-items: center; color: var(--fg); min-height: 44px; }
-  .right { margin: 0; display: grid; gap: .7rem; align-content: start; font-size: .9rem; padding-top: .5rem; }
-  .right dt { color: var(--mut); display: inline; margin-right: .35rem; }
-  .right dd { margin: 0; display: inline; }
-  .right dd a:hover, .right dd a:focus-visible { text-decoration: underline; }
   .lnk { background: none; border: 0; padding: 0 .1rem; min-height: 0; color: var(--fg); font: inherit; font-weight: 400; text-decoration: underline; cursor: pointer; display: inline; }
   .lnk:hover:not(:disabled) { background: none; }
   .sl { height: 1.1rem; margin: .8rem 0; }
 
-  .extras { margin-top: 2rem; }
-  .extras h2, .rate h2 { font-size: 1.4rem; }
-  .tabs { display: flex; gap: .4rem; margin-top: 2.2rem; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+  .extras { padding-top: 1.4rem; }
+  .tabs { display: flex; gap: .4rem; margin-top: 2.2rem; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; background: var(--dv-bg); }
   .tabs::-webkit-scrollbar { display: none; }
   .tab { background: transparent; color: var(--mut); border-radius: 0; border-bottom: 3px solid transparent; padding: .5rem 1rem; margin-bottom: -1px; white-space: nowrap; }
   .tab:hover:not(:disabled) { background: transparent; color: var(--fg); }
   .tab.on { color: var(--fg); border-bottom-color: var(--acc); }
-  .rate { margin-top: 2rem; }
-  .star.on { color: #f5c518; }
-  .dv :global(.reactions), .dv :global(.cast) { margin-top: 2rem; }
+  .dv :global(.cast) { margin-top: 2rem; }
 
   /* ---- phone: 16:9 media on top, everything else below it ---- */
   .phone .hero { height: auto; aspect-ratio: 16 / 9; }
@@ -577,6 +618,14 @@
   .pcap .play.wide { width: 100%; justify-content: center; min-height: 44px; font-size: 1.05rem; border-radius: 4px; }
   .pcap .resume { margin: 0; text-shadow: none; font-size: .9rem; color: var(--mut); }
   .pcap .ov { margin: .2rem 0 0; font-size: .95rem; line-height: 1.45; }
+  .pcap .tagline { margin: 0 0 .1rem; font-size: .95rem; }
+  .pcap :global(.rl) { margin: 0; }
+  .ov.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+  .more-syn { min-height: 44px; padding: 0 .2rem; font-weight: 600; text-decoration: none; }
+  /* phone: the tab bar sticks under the app bar (in the popup: at the top of its scroll box) */
+  .phone .tabs { position: sticky; top: var(--nav-h); z-index: 5; margin-left: -1rem; margin-right: -1rem; padding: 0 1rem; }
+  .phone.vm .tabs { top: 0; }
+  .phone .tab { min-height: 44px; }
   .pcap .small { margin: 0; }
   .icons { display: flex; justify-content: space-around; align-items: flex-start; gap: .4rem; margin: .4rem 0 .2rem; }
   .lab { display: flex; flex-direction: column; align-items: center; gap: .3rem; min-height: 44px; min-width: 64px; padding: .2rem .4rem; background: none; border: 0; color: #fff; border-radius: 6px; font-weight: 500; }
@@ -587,14 +636,10 @@
   .icons :global(.rb.lab .trig .ic) { height: 24px; }
   .icons :global(.ma.labelled) { min-width: 64px; }
 
-  @media (pointer: coarse) { .right dd a, .lnk { display: inline-flex; align-items: center; min-height: 44px; } }
-  @media (max-width: 899px) {
-    .cols { grid-template-columns: minmax(0, 1fr); gap: .6rem; }
-    .right { padding-top: 0; }
-  }
+  @media (pointer: coarse) { .lnk { display: inline-flex; align-items: center; min-height: 44px; } }
   @media (max-width: 640px) {
     .body { padding: 0 1rem 5rem; }
     .vp .body { padding: 0 1rem 5rem; }
   }
-  @media (prefers-reduced-motion: reduce) { .bg, .hv { transition: none; } .auto .pr { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .bg, .hv { transition: none; } .auto .pr { transition: none; } .lead:global(.ready) { transition: none; } }
 </style>
