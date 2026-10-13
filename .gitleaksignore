@@ -15,3 +15,5 @@ c50a8c4e6ba697ac2e22bd3c16cd4bc8eacd5b1a:web/src/lib/badges.ts:generic-api-key:7
 5c952a1ccca023236043eba3aafa99ed601f8b20:backend/test/about.test.ts:generic-api-key:11
 c0afee0e9f185ea0f700875b3093fe04fcb3f44c:backend/test/sources-keys.test.ts:generic-api-key:6
 c0afee0e9f185ea0f700875b3093fe04fcb3f44c:backend/test/sources-keys.test.ts:generic-api-key:84
+# fake TMDB/OMDb test keys in the Plex Block 21 tests (fork)
+d0ce3d77e095601f23f1b553703e325d70d0cec8:backend/test/plex/about.test.ts:generic-api-key:187
