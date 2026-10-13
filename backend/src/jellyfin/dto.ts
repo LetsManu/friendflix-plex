@@ -1,6 +1,6 @@
 /** Jellyfin JSON -> the server-neutral DTOs of ../media/types.ts (re-exported here for existing imports). */
 import { DOWNLOAD_PRESETS, maxWidthFor, type DownloadQuality, type DownloadSourceDto, type ImageTags, type ItemDto, type MediaTraits, type PlaybackDto, type TranscodeReason, type TrickplayDto } from '../media/types.js';
-import type { ChapterDto, ItemCreditsDto } from '../media/types.js'; // Block 17 P1
+import type { ChapterDto, ItemAboutDto, ItemCreditsDto, ProviderIds } from '../media/types.js'; // Block 17 P1
 
 export { DOWNLOAD_PRESETS, maxWidthFor };
 export type { DownloadQuality, DownloadSourceDto, ImageTags, ItemDto, PlaybackDto, TrickplayDto };
@@ -324,5 +324,38 @@ export function toCredits(raw: Record<string, any> | undefined): ItemCreditsDto 
       .map((p) => ({ id: p.Id, name: p.Name, ...(p.Role ? { role: String(p.Role) } : {}), type: String(p.Type ?? 'Actor'), image: Boolean(p.PrimaryImageTag) })),
     studios: (Array.isArray(raw?.Studios) ? raw!.Studios : []).map((s: any) => (typeof s === 'string' ? s : s?.Name)).filter((s: unknown): s is string => typeof s === 'string' && Boolean(s)).slice(0, 6),
     tags: (Array.isArray(raw?.Tags) ? raw!.Tags : []).filter((s: unknown): s is string => typeof s === 'string' && Boolean(s)).slice(0, 20),
+  };
+}
+
+// ---- Block 21: detail page ------------------------------------------------------------------------------------------------------
+/** Jellyfin ProviderIds (keys vary in case between versions) -> ProviderIds; empty values dropped. */
+export function toProviderIds(raw: unknown): ProviderIds {
+  const out: ProviderIds = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const key = k.toLowerCase();
+    if ((key === 'imdb' || key === 'tmdb' || key === 'tvdb') && typeof v === 'string' && v.trim() && !out[key]) out[key] = v.trim();
+  }
+  return out;
+}
+
+/** Jellyfin item (fields=ProviderIds,Taglines,Studios,Tags,ProductionLocations,OriginalTitle) -> ItemAboutDto. */
+export function toItemAbout(raw: Record<string, any>): ItemAboutDto {
+  const strs = (a: unknown) => (Array.isArray(a) ? a : []).filter((s: unknown): s is string => typeof s === 'string' && Boolean(s));
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const tagline = strs(raw?.Taglines)[0];
+  const original = typeof raw?.OriginalTitle === 'string' && raw.OriginalTitle ? raw.OriginalTitle : undefined;
+  const critic = num(raw?.CriticRating), community = num(raw?.CommunityRating);
+  return {
+    type: String(raw?.Type ?? ''),
+    providerIds: toProviderIds(raw?.ProviderIds),
+    ...(tagline ? { tagline } : {}),
+    ...(original ? { originalTitle: original } : {}),
+    ...(typeof raw?.PremiereDate === 'string' && raw.PremiereDate ? { premiereDate: raw.PremiereDate } : {}),
+    countries: strs(raw?.ProductionLocations),
+    studios: (Array.isArray(raw?.Studios) ? raw.Studios : []).map((s: any) => (typeof s === 'string' ? s : s?.Name)).filter((s: unknown): s is string => typeof s === 'string' && Boolean(s)).slice(0, 6),
+    tags: strs(raw?.Tags).slice(0, 20),
+    ...(community !== undefined ? { communityRating: community } : {}),
+    ...(critic !== undefined ? { criticRating: critic } : {}),
   };
 }

@@ -10,6 +10,8 @@
   export let people: Person[] = [];
   /** facts of the title (quality chips); optional */
   export let facts: Facts | null = null;
+  /** false: no cast line (the detail view shows the cast row above the tabs) */
+  export let cast = true;
 
   $: directors = byType(people, 'Director');
   $: writers = byType(people, 'Writer');
@@ -22,7 +24,7 @@
   <h2 id="info-h"><Rich key="detail.info.title" params={{ name: item.name }} /></h2>
   <dl>
     {#if directors.length}<div><dt>{$t('detail.info.director')}</dt><dd>{#each directors as p, n (p.id + n)}{#if n}{', '}{/if}<a href="/person/{p.id}">{p.name}</a>{/each}</dd></div>{/if}
-    {#if actors.length}<div><dt>{$t('detail.info.cast')}</dt><dd>{#each actors as p, n (p.id + n)}{#if n}{', '}{/if}<a href="/person/{p.id}">{p.name}</a>{/each}</dd></div>{/if}
+    {#if cast && actors.length}<div><dt>{$t('detail.info.cast')}</dt><dd>{#each actors as p, n (p.id + n)}{#if n}{', '}{/if}<a href="/person/{p.id}">{p.name}</a>{/each}</dd></div>{/if}
     {#if writers.length}<div><dt>{$t('detail.info.writer')}</dt><dd>{#each writers as p, n (p.id + n)}{#if n}{', '}{/if}<a href="/person/{p.id}">{p.name}</a>{/each}</dd></div>{/if}
     {#if item.genres.length}<div><dt>{$t('detail.info.genres')}</dt><dd>{item.genres.join(', ')}</dd></div>{/if}
     {#if moods.length}<div><dt>{$t('detail.info.moods')}</dt><dd>{moods.join(', ')}</dd></div>{/if}

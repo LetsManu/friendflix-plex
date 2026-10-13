@@ -60,6 +60,9 @@ const schema = z.object({
   /** Chromecast sender support (needs a PUBLIC_URL with a valid https certificate) */
   CAST_ENABLED: z.enum(['true', 'false']).default('true'),
   METRICS_TOKEN: opt,
+  /** optional external data sources for the detail page (an admin can also save the keys in the UI; a key from env/file wins) */
+  TMDB_API_KEY: opt,
+  OMDB_API_KEY: opt,
   AUTHENTIK_URL: opt,
   AUTHENTIK_API_TOKEN: opt,
   AUTHENTIK_ENROLL_FLOW: opt,

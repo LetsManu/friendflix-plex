@@ -25,6 +25,15 @@ Besides browsing and playback, newer features read more from the library; nothin
 - **Labels:** "Season finale" needs Jellyfin's series status (continuing / ended) and the episode dates.
 - **Skip intro / credits / preview:** media segments (Jellyfin >= 10.10, e.g. from the Intro Skipper plugin).
 
+## TMDB / OMDb (optional)
+Two optional keys add data to the detail page. Nothing breaks without them; the extra rows and links are simply left out.
+- **Where to get them:** a free TMDB account (Settings, API) gives the TMDB key; a free OMDb key comes from the OMDb site by email.
+- **What is fetched:** TMDB supplies keywords, the collection a film belongs to and the IMDb id; OMDb supplies the IMDb, Rotten Tomatoes and Metacritic scores. Together with ids from Jellyfin they also produce the links to TMDB, IMDb, TVDB and Trakt.
+- **Setting a key:** `TMDB_API_KEY` / `OMDB_API_KEY` in `.env`, or as a file with `TMDB_API_KEY_FILE` / `OMDB_API_KEY_FILE` (Docker secrets, see `compose.secrets.yaml`). Alternatively use *Admin, Data sources*, where the key is stored encrypted. A key from the environment or a file **wins** over one saved in the admin page; the page then shows it as read-only.
+- **Keys never leave the server.** The browser only learns whether a key is set, where it comes from and its last four characters. Requests to TMDB and OMDb are made by the backend only.
+- **Cache and limits:** successful answers are cached for 7 days, failed ones for 1 hour; each call has a 3 second limit, so a slow service cannot hold the page up. OMDb is limited to 900 calls per day (the free tier allows 1000); the admin page shows today's use. When a service answers 401 the key counts as invalid and that source is paused for 1 hour; saving a new key lifts the pause at once.
+- **Terms of use:** you use your own keys, so the terms of TMDB and OMDb apply to you. This product uses the TMDB API but is not endorsed or certified by TMDB. TMDB, OMDb, IMDb, Rotten Tomatoes and Metacritic are trademarks of their respective owners; check the current terms before using the data beyond a private installation.
+
 ## Seerr
 - Users imported from Jellyfin get default permissions. Leave "auto-approve" **off** if the admin should approve every wish.
 - **How FriendFlix accounts appear in Seerr.** Wishes are always made in the account's name (`userId` in `POST /request`, sent with the admin API key); profiles share their account's Seerr user. The mapping is stored in `users.seerr_user_id`. The media server decides how the Seerr user is found (`capabilities.requestUsers`, backend only):

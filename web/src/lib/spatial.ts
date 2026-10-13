@@ -24,7 +24,7 @@ export function isBackKey(e: KeyboardEvent): boolean {
   return BACK_KEYS.has(e.key);
 }
 
-function usable(el: HTMLElement): boolean {
+export function usable(el: HTMLElement): boolean {
   if (el.matches('.skip') || el.closest('[inert], [hidden], [data-nav-skip]')) return false;
   const r = el.getBoundingClientRect();
   if (r.width < 2 || r.height < 2) return false;
@@ -76,6 +76,8 @@ export function move(dir: Dir, retried = false): boolean {
   const active = cur instanceof HTMLElement && cur !== document.body && cur !== document.documentElement ? cur : null;
   const scope = scopeOf(active);
   if (!active || !scope.contains(active) || !usable(active)) return focusFirst(document.querySelector('main') ?? scope);
+  // a widget can take over one step (e.g. the detail tabs: Down enters the active panel); it cancels the event to say so
+  if (!active.dispatchEvent(new CustomEvent('ff-nav', { detail: { dir }, bubbles: true, cancelable: true }))) return true;
   const from = active.getBoundingClientRect();
   let best: HTMLElement | null = null, bestScore = Infinity;
   for (const el of scope.querySelectorAll<HTMLElement>(FOCUSABLE)) {

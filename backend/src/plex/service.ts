@@ -14,10 +14,11 @@ import { randomBytes } from 'node:crypto';
 import type { Db } from '../db.js';
 import type { KV } from '../kv.js';
 import type {
-  ChapterDto, ClipTranscode, DownloadQuality, DownloadSourceDto, ExternalSession, IdentityPolicy, ItemCreditsDto, ItemDto, ItemMediaTraits, ItemQuery, ItemStreams, ItemTraits, MediaAdmin,
-  MediaCapabilities, MediaCredentials, MediaRuntime, MediaServer, MediaTraits, MediaUser, PersonDto, PlaybackDto, PlaybackOptions, PlaybackReport, Segment, SegmentType,
+  ChapterDto, ClipTranscode, DownloadQuality, DownloadSourceDto, ExternalSession, IdentityPolicy, ItemAboutDto, ItemCreditsDto, ItemDto, ItemMediaTraits, ItemQuery, ItemStreams, ItemTraits, MediaAdmin,
+  MediaCapabilities, MediaCollection, MediaCredentials, MediaRuntime, MediaServer, MediaTraits, MediaUser, PersonDto, PlaybackDto, PlaybackOptions, PlaybackReport, Segment, SegmentType,
   SubtitleHit, TrackList, TrickplayDto,
 } from '../media/types.js';
+import { tmdbGuids, tmdbIdOf, toPlexAbout, type AboutRow } from './about.js';
 import { loadPolicy, paramList, refreshAges, resolveAccess, visibleSql, type Access, type Param } from './access.js';
 import { PlexError, type PlexClient } from './client.js';
 import { chapterDtos, plexTraits, type MirrorChapter } from './depth.js';
@@ -827,6 +828,57 @@ export class PlexMediaServer implements MediaServer {
     return { people, studios: names('studio', 6), tags: names('label', 20) };
   }
 
+  // ---------------------------------------------------------------- Block 21: detail page ("Über", collections)
+
+  /**
+   * Tagline, original title, premiere date, countries, studios, labels (as tags), provider ids (Guid entries and legacy agent guids)
+   * and ratings of a visible item, from the mirror; 404 (before any other lookup) when the viewer may not see it.
+   */
+  async itemAbout(user: MediaUser, id: string): Promise<ItemAboutDto> {
+    const rk = await this.mustSee(user, id);
+    const [row] = await this.q<AboutRow>(
+      `select type, guids, tagline, original_title, to_char(originally_available, 'YYYY-MM-DD') originally_available, studio, audience_rating, critic_rating,
+         rating_image, audience_rating_image from plex_items where rating_key = $1`, [rk]);
+    if (!row) throw new PlexError(404, 'Plex: item not found');
+    const tags = await this.q<{ kind: string; tag: string }>(
+      `select kind, tag from plex_tags where rating_key = $1 and kind in ('country', 'studio', 'label') order by kind, pos`, [rk]);
+    return toPlexAbout(row, tags);
+  }
+
+  /**
+   * Plex collections containing the item, as the viewer sees them: only collections in the viewer's libraries with at least one
+   * visible member (access.ts), parts = the members the viewer may see (libraries, age cap, kids), in release order (premiere date,
+   * year, title). Hidden members are simply not there (never reported as missing). [] for an item the viewer cannot see.
+   */
+  async itemCollections(user: MediaUser, id: string): Promise<MediaCollection[]> {
+    const rk = await this.visibleKey(user, id);
+    if (!rk) return [];
+    const acc = await this.access(user);
+    const { params, p } = paramList();
+    const sets = await this.q<{ rating_key: string; title: string }>(
+      `select c.rating_key, c.title from plex_collection_items ci join plex_items c on c.rating_key = ci.collection_key
+       where ci.item_key = ${p(rk)} and c.type = 'collection' and ${visibleSql(acc, 'c', p)}
+       order by lower(coalesce(c.title_sort, c.title)), c.rating_key limit 20`, params);
+    const out: MediaCollection[] = [];
+    for (const c of sets) {
+      const { items } = await this.rows(user, (q) => ({
+        where: [`i.type <> 'collection'`, `i.rating_key in (select item_key from plex_collection_items where collection_key = ${q(c.rating_key)})`],
+        order: 'i.originally_available asc nulls last, i.year asc nulls last, lower(i.title), i.rating_key',
+        limit: 200,
+      }));
+      if (!items.length) continue;
+      const keys = items.map((i) => plexKey(i.id)).filter((k): k is string => k !== null);
+      const guids = new Map((await this.q<{ rating_key: string; guids: string[] | null }>(
+        'select rating_key, guids from plex_items where rating_key = any($1::bigint[])', [keys])).map((r) => [String(r.rating_key), r.guids]));
+      const parts = items.map((item) => {
+        const tmdb = tmdbIdOf(guids.get(plexKey(item.id) ?? ''));
+        return { item, ...(tmdb !== undefined ? { tmdbId: String(tmdb) } : {}) };
+      });
+      out.push({ id: encodePlexId('item', c.rating_key), name: c.title, parts });
+    }
+    return out;
+  }
+
   // ---------------------------------------------------------------- user data
 
   async setFavorite(user: MediaUser, id: string, on: boolean): Promise<void> {
@@ -897,8 +949,8 @@ export class PlexMediaServer implements MediaServer {
   async findByTmdb(tmdbId: number, mediaType: string): Promise<{ id: string; name: string } | null> {
     if (!Number.isInteger(tmdbId) || tmdbId <= 0) return null;
     const r = await this.q<{ rating_key: string; title: string }>(
-      `select rating_key, title from plex_items where type = $1 and guids @> array[$2]::text[] order by rating_key limit 1`,
-      [mediaType === 'tv' ? 'show' : 'movie', `tmdb://${tmdbId}`]);
+      `select rating_key, title from plex_items where type = $1 and guids && $2::text[] order by rating_key limit 1`,
+      [mediaType === 'tv' ? 'show' : 'movie', tmdbGuids(tmdbId)]);
     return r[0] ? { id: encodePlexId('item', r[0].rating_key), name: r[0].title } : null;
   }
 

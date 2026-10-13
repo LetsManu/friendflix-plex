@@ -31,6 +31,12 @@ Startet einen Wegwerf-Postgres ohne Port-Mapping, spielt den neuesten Dump ein u
 - **APP_ENC_KEY sichern!** (Passwort-Manager, getrennt vom Dump). Ohne ihn sind die gespeicherten Jellyfin-Passwörter der Nutzer unlesbar.
 - Nicht im Dump: Jellyfin-/Seerr-/Authentik-Daten (eigene Backups dieser Dienste; Authentik: [de/authentik.md §2.6](de/authentik.md#26-backups-und-updates)).
 
+## TMDB-/OMDb-Schlüssel wechseln
+Die optionalen Schlüssel für die Detailseite lassen sich ohne Neustart tauschen:
+- **Über das Portal:** *Admin → Datenquellen*, neuen Schlüssel eintragen, *Testen*, *Speichern*. Die Sperre nach einem abgelehnten Schlüssel (401, 1 Stunde) und die zwischengespeicherten Fehlantworten fallen sofort weg.
+- **Über die Secret-Datei** (`TMDB_API_KEY_FILE` / `OMDB_API_KEY_FILE`): Datei ändern und das Backend neu starten: `docker compose restart backend` (mit denselben `-f`-Dateien wie beim Start, z. B. `docker compose -f compose.prod.yaml -f compose.secrets.yaml restart backend`). `up -d` erstellt den Container nicht neu, wenn sich nur der Inhalt der Datei geändert hat. Beim Start erkennt das Backend den geänderten Schlüssel und hebt die Sperre und die zwischengespeicherten Fehlantworten sofort auf; ein erfolgreicher *Testen*-Klick tut das ebenfalls. Ein Schlüssel aus Datei oder Umgebung hat Vorrang vor einem im Portal gespeicherten; die Admin-Seite zeigt ihn dann nur an. Zum Wechsel auf die Portal-Eingabe die Variable entfernen.
+- Der im Portal gespeicherte Schlüssel ist mit `APP_ENC_KEY` verschlüsselt. Geht `APP_ENC_KEY` verloren, meldet die Seite den Schlüssel als ungültig; dann einfach neu eintragen.
+
 ## Host-Firewall (zusätzlich zum fehlenden Port-Mapping)
 Jellyfin/Seerr haben keine `ports:` und hängen nur im internen Netz. Falls sie auf dem Host zusätzlich laufen (nicht gebündelt):
 ```bash

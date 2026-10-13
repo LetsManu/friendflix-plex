@@ -78,6 +78,7 @@ Intro und Abspann überspringen (wo Plex Marker hat, siehe [Grenzen](#plex-und-j
 
 - **Marken-Hubs** – breite Kacheln, die der Admin aus deinen eigenen Plex-Sammlungen, -Genres oder -Tags baut – Studio-Hubs hängen davon ab, was Plex liefert (etwa „Anime“ oder „Dokus“) – führen auf eine eigene Seite mit *Neu*, *Beliebt*, *Filme*, *Serien* und A–Z.
 - **Themenlisten** – jede Liste kann zur redaktionellen Seite mit Titel, Farbe und Emoji werden; der Admin heftet einige als Reihen auf die Startseite aller an („Filmabend am Freitag“, „Gemütlicher Herbst“).
+- **Eine ausführlichere Detailseite** – Bewertungen in einer Zeile (Community, Kritik, Freunde; mit optionalem OMDb-Schlüssel auch IMDb, Rotten Tomatoes und Metacritic), eine Sammlungsreihe mit „Teil 2 von 3“ und Gesehen-Häkchen sowie ein Tab *Details* mit Fakten und Links zu TMDB, IMDb, TVDB und Trakt. Auf dem Handy bleiben die Tabs beim Scrollen in Reichweite.
 - **Weil du … gesehen hast** – mehrere Reihen, jede zu einem anderen zuletzt gesehenen Titel, verteilt zwischen den übrigen Reihen.
 - **Suche und Stöbern** finden Personen, Genres, Titel und Folgen; filtern geht nach Jahrzehnt, Bewertung, Sprache und **Bildqualität** (4K, HDR, Dolby Vision, Atmos). „Heute Abend“ schlägt drei Titel nach Stimmung und Zeit vor.
 - **Simulcast** (verlinkt im Kalender) zeigt die gerade laufenden Serien nach Wochentag und Season, mit Filter „Nur Anime“ (mit Plex auf Basis der Plex-Sendedaten; eingeschränkt, noch nicht geprüft).
@@ -247,6 +248,7 @@ Vorlage: [.env.example](.env.example). Jede Variable kann mit der Endung `_FILE`
 | `APP_ENC_KEY` | – (Pflicht) | 32 Byte base64; verschlüsselt gespeicherte Zugangsdaten. **Getrennt sichern.** |
 | `INTERNAL_SECRET`, `WEBHOOK_SECRET` | – (Pflicht, ≥ 16 Zeichen) | Backend ↔ Gateway; Webhooks von Medienserver/Wunsch-Dienst |
 | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | – (Pflicht) | Authentik-OIDC-Provider |
+| `TMDB_API_KEY`, `OMDB_API_KEY` (oder `…_FILE`) | leer | Optionale Zusatzdaten für die Detailseite (Links, Bewertungen); oder unter *Admin → Datenquellen* setzen. Siehe [docs/integrations.md](docs/integrations.md#tmdb--omdb-optional) |
 | `MEDIA_SERVER` | im Original `jellyfin`; hier `plex` | `plex` wählt das Plex-Backend (ein Medienserver pro Instanz) |
 | `PLEX_URL` | – (Pflicht bei `plex`) | URL deines Plex-Servers aus Sicht von Backend und Gateway, z. B. `http://192.168.1.10:32400` oder `http://host.docker.internal:32400` |
 | `PLEX_TOKEN` oder `PLEX_TOKEN_FILE` | – (Pflicht bei `plex`) | Plex-Token (am besten eines eigenen Plex-Kontos). Nur Backend und Gateway nutzen es; geht nie an Browser |
@@ -409,4 +411,4 @@ Copyright © 2026 Manuel Weißböck. Alle Rechte vorbehalten – siehe [LICENSE]
 
 ### Markenhinweis
 
-Netflix, Disney+, Prime Video, Crunchyroll, Plex, Jellyfin und andere Namen sind Marken ihrer jeweiligen Inhaber. FriendFlix for Plex ist ein unabhängiges Open-Source-Projekt und steht in keiner Verbindung zu diesen Unternehmen, wird von ihnen weder gesponsert noch unterstützt. „for Plex“ beschreibt nur die Kompatibilität; das Projekt verwendet kein Plex-Logo und ist kein offizielles Plex-Produkt.
+Netflix, Disney+, Prime Video, Crunchyroll, Plex, Jellyfin, TMDB, OMDb, IMDb, Rotten Tomatoes, Metacritic, TVDB, Trakt und weitere genannte Namen sind Marken ihrer jeweiligen Inhaber. FriendFlix for Plex ist ein unabhängiges Open-Source-Projekt und steht in keiner Verbindung zu diesen Unternehmen, wird von ihnen weder gesponsert noch unterstützt. „for Plex“ beschreibt nur die Kompatibilität; das Projekt verwendet kein Plex-Logo und ist kein offizielles Plex-Produkt. This product uses the TMDB API but is not endorsed or certified by TMDB.

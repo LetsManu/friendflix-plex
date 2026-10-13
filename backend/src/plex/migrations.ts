@@ -13,6 +13,8 @@ import type pg from 'pg';
  * - plex_userdata: played / resume / favourites per identity (never written to Plex).
  * - plex_sync_state: small key/value state of the sync job.
  * plex_items.chapters (3): chapter marks of a video (start ms, name, chapter image media id + index when PMS made thumbnails).
+ * plex_items.tagline / rating_image / audience_rating_image (4): Block 21 detail page (tagline, which score `rating` and
+ * `audienceRating` are, e.g. Rotten Tomatoes critics vs. audience).
  */
 export const PLEX_MIGRATIONS: string[] = [
   // 1: mirror, identities, policies, user data
@@ -138,6 +140,14 @@ export const PLEX_MIGRATIONS: string[] = [
   `
   alter table plex_items add column chapters jsonb;
   update plex_items set detail_at = null where type in ('movie', 'episode') and detail_at is not null;
+  `,
+  // 4: Block 21 detail page - tagline and the rating sources; movies and shows refetch their details once to fill them (legacy agent
+  // guids such as com.plexapp.agents.imdb://tt… are kept from the next listing on)
+  `
+  alter table plex_items add column tagline text;
+  alter table plex_items add column rating_image text;
+  alter table plex_items add column audience_rating_image text;
+  update plex_items set detail_at = null where type in ('movie', 'show') and detail_at is not null;
   `,
 ];
 

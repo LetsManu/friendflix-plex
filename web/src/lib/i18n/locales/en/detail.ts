@@ -95,6 +95,32 @@ const en: Translation<typeof de> = {
     audio: 'Audio: {list}',
     subs: 'Subtitles: {list}',
   },
+  /** Block 21: ratings line, Details tab (facts, links) */
+  about: {
+    tab: 'Details',
+    ratings: 'Ratings',
+    aria: {
+      community: 'User rating {n} out of 10',
+      critic: 'Critics score {n} %',
+      imdb: 'IMDb rating {n} out of 10',
+      rt: 'Rotten Tomatoes score {n} %',
+      mc: 'Metacritic score {n} out of 100',
+      friends: 'Your friends’ rating: {n} out of 5 stars',
+    },
+    critics: 'Critics {n} %',
+    friends: 'Friends {n} ★',
+    more: 'Read more',
+    less: 'Show less',
+    studios: 'Studios:',
+    tags: 'Tags:',
+    releaseDate: 'Release date:',
+    originalTitle: 'Original title:',
+    countries: 'Countries:',
+    links: 'Links',
+    newTab: '(opens in a new tab)',
+    /** TMDB's required notice (plain text, no logo) */
+    tmdbNotice: 'This product uses the TMDB API but is not endorsed or certified by TMDB.',
+  },
   info: {
     title: 'About <b>{name}</b>',
     director: 'Director:',
@@ -111,6 +137,15 @@ const en: Translation<typeof de> = {
     episodeN: 'Episode {n}: ',
     spoiler: 'Description hidden (spoiler protection)',
     reveal: 'show',
+    watched: 'Watched',
+  },
+  collection: {
+    title: 'Part {i} of {n} · {name}',
+    titleAll: '{name} · {n} parts',
+    next: 'Continue with part {n}',
+    missing: 'Not in the library',
+    request: 'Request',
+    requested: 'Requested',
     watched: 'Watched',
   },
   more: {

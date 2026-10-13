@@ -21,7 +21,7 @@ export const cfg: Config = {
   APP_ENC_KEY: ENC_KEY, INTERNAL_SECRET: 'internal-secret-123456', WEBHOOK_SECRET: 'webhook-secret-123456', ADMIN_GROUP: 'friendflix-admins',
   OIDC_ISSUER: 'https://auth.example.com/', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's',
   MEDIA_SERVER: 'jellyfin', JELLYFIN_URL: 'http://jellyfin:8096', JELLYFIN_ADMIN_API_KEY: 'adminkey', SEERR_URL: 'http://seerr:5055', SEERR_API_KEY: 'seerrkey',
-  NTFY_URL: undefined, DISCORD_WEBHOOK_URL: undefined, METRICS_TOKEN: undefined, AUTHENTIK_URL: undefined, AUTHENTIK_API_TOKEN: undefined,
+  NTFY_URL: undefined, DISCORD_WEBHOOK_URL: undefined, METRICS_TOKEN: undefined, TMDB_API_KEY: undefined, OMDB_API_KEY: undefined, AUTHENTIK_URL: undefined, AUTHENTIK_API_TOKEN: undefined,
   AUTHENTIK_ENROLL_FLOW: undefined, ROLE_TEMPLATES: undefined, OIDC_ALLOW_INSECURE: 'false', BACKGROUND_JOBS: 'false',
   PREVIEW_DIR: '/tmp/ff-test-previews', PREVIEW_WARM: 'false',
   DOWNLOADS_ENABLED: 'true', DIRECT_PLAY_REQUIRES_DOWNLOAD: 'false', DOWNLOAD_DIR: '/tmp/ff-test-downloads', DOWNLOAD_CACHE_MAX_GB: 50, DOWNLOAD_MIN_FREE_GB: 0, DOWNLOAD_PREP_CONCURRENCY: 1, DOWNLOAD_PAUSE_STREAMS: 2, DOWNLOAD_FILE_TTL_HOURS: 48, DOWNLOAD_OFFLINE_GRACE_DAYS: 7, DOWNLOAD_CREATE_PER_HOUR: 10_000,

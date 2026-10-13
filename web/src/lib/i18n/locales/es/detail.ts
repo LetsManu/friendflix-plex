@@ -95,6 +95,32 @@ const es: Translation<typeof de> = {
     audio: 'Audio: {list}',
     subs: 'Subtítulos: {list}',
   },
+  /** Block 21: ratings line, Details tab (facts, links) */
+  about: {
+    tab: 'Detalles',
+    ratings: 'Valoraciones',
+    aria: {
+      community: 'Valoración de usuarios {n} de 10',
+      critic: 'Valoración de la crítica {n} %',
+      imdb: 'Valoración IMDb {n} de 10',
+      rt: 'Puntuación Rotten Tomatoes {n} %',
+      mc: 'Puntuación Metacritic {n} de 100',
+      friends: 'Valoración de tus amigos: {n} de 5 estrellas',
+    },
+    critics: 'Crítica {n} %',
+    friends: 'Amigos {n} ★',
+    more: 'Leer más',
+    less: 'Mostrar menos',
+    studios: 'Estudios:',
+    tags: 'Etiquetas:',
+    releaseDate: 'Fecha de estreno:',
+    originalTitle: 'Título original:',
+    countries: 'Países de producción:',
+    links: 'Enlaces',
+    newTab: '(se abre en una pestaña nueva)',
+    /** TMDB's required notice (plain text, no logo) */
+    tmdbNotice: 'Este producto utiliza la API de TMDB, pero no está respaldado ni certificado por TMDB.',
+  },
   info: {
     title: 'Información sobre <b>{name}</b>',
     director: 'Dirección:',
@@ -111,6 +137,15 @@ const es: Translation<typeof de> = {
     episodeN: 'Episodio {n}: ',
     spoiler: 'Descripción oculta (protección contra spoilers)',
     reveal: 'mostrar',
+    watched: 'Visto',
+  },
+  collection: {
+    title: 'Parte {i} de {n} · {name}',
+    titleAll: '{name} · {n} partes',
+    next: 'Continuar con la parte {n}',
+    missing: 'No está en la biblioteca',
+    request: 'Pedir',
+    requested: 'Pedido',
     watched: 'Visto',
   },
   more: {

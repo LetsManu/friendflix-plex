@@ -100,6 +100,32 @@ export default {
     audio: 'Ton: {list}',
     subs: 'Untertitel: {list}',
   },
+  /** Block 21: ratings line, Details tab (facts, links) */
+  about: {
+    tab: 'Details',
+    ratings: 'Bewertungen',
+    aria: {
+      community: 'Nutzerwertung {n} von 10',
+      critic: 'Kritikerwertung {n} %',
+      imdb: 'IMDb-Wertung {n} von 10',
+      rt: 'Rotten-Tomatoes-Wertung {n} %',
+      mc: 'Metacritic-Wertung {n} von 100',
+      friends: 'Wertung deiner Freunde: {n} von 5 Sternen',
+    },
+    critics: 'Kritiker {n} %',
+    friends: 'Freunde {n} ★',
+    more: 'Mehr lesen',
+    less: 'Weniger anzeigen',
+    studios: 'Studios:',
+    tags: 'Schlagwörter:',
+    releaseDate: 'Erscheinungsdatum:',
+    originalTitle: 'Originaltitel:',
+    countries: 'Produktionsländer:',
+    links: 'Links',
+    newTab: '(öffnet in neuem Tab)',
+    /** TMDB's required notice (plain text, no logo) */
+    tmdbNotice: 'Dieses Produkt nutzt die TMDB-API, ist aber weder von TMDB unterstützt noch zertifiziert.',
+  },
   info: {
     title: 'Infos zu <b>{name}</b>',
     director: 'Regie:',
@@ -116,6 +142,15 @@ export default {
     episodeN: 'Folge {n}: ',
     spoiler: 'Beschreibung ausgeblendet (Spoilerschutz)',
     reveal: 'anzeigen',
+    watched: 'Gesehen',
+  },
+  collection: {
+    title: 'Teil {i} von {n} · {name}',
+    titleAll: '{name} · {n} Teile',
+    next: 'Weiter mit Teil {n}',
+    missing: 'Nicht in der Bibliothek',
+    request: 'Anfragen',
+    requested: 'Angefragt',
     watched: 'Gesehen',
   },
   more: {

@@ -1,0 +1,11 @@
+import type de from '../de/diagnose';
+import type { Translation } from '../../types';
+
+const dict: Translation<typeof de> = {
+  title: 'Diagnóstico de pantalla',
+  hint: 'Mediciones del área de visualización de este dispositivo (ventana, zonas seguras, barra de pestañas). Haz una captura o copia los valores.',
+  copy: 'Copiar valores',
+  copied: 'Copiado.',
+  copyFailed: 'No se pudo copiar, selecciona el texto.',
+};
+export default dict;

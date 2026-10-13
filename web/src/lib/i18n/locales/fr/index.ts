@@ -19,6 +19,7 @@ import adminContent from './adminContent';
 import scenes from './scenes';
 import fresh from './fresh';
 import mine from './mine';
+import diagnose from './diagnose';
 
-const dict: Translation<typeof de> = { common, shell, home, detail, player, account, social, admin, hubs, anime, together, kids, scenes, fresh, mine, ui, adminPeople, adminContent };
+const dict: Translation<typeof de> = { common, shell, home, detail, player, account, social, admin, hubs, anime, together, kids, scenes, fresh, mine, diagnose, ui, adminPeople, adminContent };
 export default dict;
