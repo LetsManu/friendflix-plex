@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting! **Security problems do not belong here** – please follow [SECURITY.md](https://github.com/LetsManu/friendflix/blob/main/SECURITY.md).
+        Thanks for reporting! **Security problems do not belong here** – please follow [SECURITY.md](https://github.com/LetsManu/friendflix-plex/blob/main/SECURITY.md).
         Never paste passwords, tokens or `/media/c/…` addresses.
   - type: textarea
     id: what

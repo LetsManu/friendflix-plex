@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from '../fixtures.js';
 
 const { version, codename } = JSON.parse(readFileSync(new URL('../../version.json', import.meta.url), 'utf8')) as { version: string; codename: string };
+// fork branding: the footer names the app "FriendFlix for Plex" (common.appName = {brand})
+const BRAND = 'FriendFlix for Plex';
 const short = version.split('.').slice(0, 2).join('.');
 const LINES: Record<string, string> = { Arancini: 'Frittierte Reisbällchen mit Käseherz' };
 
@@ -9,7 +11,7 @@ test.describe('version + codename easter egg (desktop)', () => {
   test('footer shows the version; hint from the 4th click; 7 clicks open the card; Esc closes and focus returns', async ({ page }) => {
     await page.goto('/');
     const footer = page.getByRole('contentinfo');
-    const ver = footer.getByRole('button', { name: `FriendFlix ${version} · ${codename}` });
+    const ver = footer.getByRole('button', { name: `${BRAND} ${version} · ${codename}` });
     await expect(ver).toBeVisible();
     for (let i = 1; i <= 3; i++) await ver.click();
     await expect(footer.getByText(/Noch \d…/)).toHaveCount(0);
@@ -36,7 +38,7 @@ test.describe('version + codename easter egg (desktop)', () => {
 
   test('TV remote: 7× OK on the focused version, Back closes', async ({ page }) => {
     await page.goto('/');
-    const ver = page.getByRole('contentinfo').getByRole('button', { name: `FriendFlix ${version} · ${codename}` });
+    const ver = page.getByRole('contentinfo').getByRole('button', { name: `${BRAND} ${version} · ${codename}` });
     await ver.focus();
     for (let i = 0; i < 7; i++) await page.keyboard.press('Enter');
     const card = page.getByRole('dialog', { name: `${short} ${codename}` });
@@ -51,7 +53,7 @@ test.describe('version + codename easter egg (desktop)', () => {
     test.use({ reducedMotion: 'no-preference' });
     test('popcorn rain falls over the card and a click closes it', async ({ page }) => {
       await page.goto('/');
-      const ver = page.getByRole('contentinfo').getByRole('button', { name: `FriendFlix ${version} · ${codename}` });
+      const ver = page.getByRole('contentinfo').getByRole('button', { name: `${BRAND} ${version} · ${codename}` });
       for (let i = 0; i < 7; i++) await ver.click();
       const rain = page.locator('[data-egg-rain]');
       await expect(rain).toHaveCount(1);

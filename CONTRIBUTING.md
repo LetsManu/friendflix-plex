@@ -4,7 +4,7 @@ Thanks for helping! Bug reports, ideas and pull requests are welcome.
 
 ## Reporting bugs and asking for features
 
-- **Bugs and ideas:** open a [GitHub issue](https://github.com/LetsManu/friendflix/issues/new/choose) (bug report or feature request template). For bugs, say what you did, what you expected and what happened, plus the
+- **Bugs and ideas:** open a [GitHub issue](https://github.com/LetsManu/friendflix-plex/issues/new/choose) (bug report or feature request template). For bugs, say what you did, what you expected and what happened, plus the
   version (Admin → Version, or `version.json`) and browser/device. For player or casting problems, attach the log from
   the **Diagnose** page (it never contains addresses or tokens).
 - **Security problems:** never in a public issue – see [SECURITY.md](SECURITY.md).
