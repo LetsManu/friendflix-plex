@@ -36,6 +36,10 @@ export interface CoreRow {
   parent_thumb: string | null;
   grandparent_thumb: string | null;
   guids: string[];
+  /** Block 21 (detail page): tagline and the sources of `rating` / `audienceRating` (e.g. rottentomatoes://image.rating.ripe) */
+  tagline: string | null;
+  rating_image: string | null;
+  audience_rating_image: string | null;
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : typeof v === 'number' ? String(v) : null);
@@ -65,12 +69,27 @@ const epoch = (v: unknown): string | null => {
   return n !== null && n > 0 ? new Date(n * 1000).toISOString() : null;
 };
 
-/** `Guid: [{id:"tmdb://123"}]` (+ the item's own `guid` when it is an agent guid). */
-function guidsOf(m: Record<string, any>): string[] {
+/** Legacy (pre-2020) metadata agents put the external id into the item's own guid: `com.plexapp.agents.imdb://tt0133093?lang=en`. */
+const LEGACY_AGENT = /^(com\.plexapp\.agents\.(?:imdb|themoviedb|thetvdb):\/\/[\w./-]{1,200})(?:\?[^#\s]*)?$/i;
+
+/** `Guid: [{id:"tmdb://123"}]` (+ the item's own `guid` when it is a legacy agent guid, query string dropped). */
+export function guidsOf(m: Record<string, any>): string[] {
   const out = new Set<string>();
   for (const g of Array.isArray(m.Guid) ? m.Guid : []) if (typeof g?.id === 'string' && /^[a-z]+:\/\/[\w./-]{1,200}$/i.test(g.id)) out.add(g.id.toLowerCase());
+  const legacy = typeof m.guid === 'string' ? LEGACY_AGENT.exec(m.guid) : null;
+  if (legacy) out.add(legacy[1]!.toLowerCase());
   return [...out];
 }
+
+/** short free text (tagline) or a rating source image name (`rottentomatoes://image.rating.ripe`, `imdb://image.rating`) */
+const shortText = (v: unknown, max: number): string | null => {
+  const s = typeof v === 'string' ? v.trim() : '';
+  return s ? s.slice(0, max) : null;
+};
+const ratingImage = (v: unknown): string | null => {
+  const s = typeof v === 'string' ? v.trim().toLowerCase() : '';
+  return /^[a-z]+:\/\/[\w.-]{1,80}$/.test(s) ? s : null;
+};
 
 /** One `Metadata` entry -> core row; null for types the mirror ignores or entries without a ratingKey. */
 export function coreRow(m: Record<string, any>, sectionId: number): CoreRow | null {
@@ -106,6 +125,9 @@ export function coreRow(m: Record<string, any>, sectionId: number): CoreRow | nu
     parent_thumb: relPath(m.parentThumb),
     grandparent_thumb: relPath(m.grandparentThumb),
     guids: guidsOf(m),
+    tagline: shortText(m.tagline, 500),
+    rating_image: ratingImage(m.ratingImage),
+    audience_rating_image: ratingImage(m.audienceRatingImage),
   };
 }
 
@@ -115,7 +137,10 @@ const CORE_COLS: Array<[keyof CoreRow, string]> = [
   ['audience_rating', 'real'], ['critic_rating', 'real'], ['studio', 'text'], ['duration_ms', 'bigint'], ['idx', 'int'], ['parent_idx', 'int'],
   ['leaf_count', 'int'], ['child_count', 'int'], ['added_at', 'timestamptz'], ['plex_updated_at', 'bigint'], ['thumb', 'text'], ['art', 'text'],
   ['parent_thumb', 'text'], ['grandparent_thumb', 'text'], ['guids', 'text[]'],
+  ['tagline', 'text'], ['rating_image', 'text'], ['audience_rating_image', 'text'],
 ];
+/** Block 21 columns a listing may leave out while the detail fetch has them: a missing value never clears a stored one. */
+const KEEP_WHEN_MISSING = new Set(['tagline', 'rating_image', 'audience_rating_image']);
 
 /**
  * Bulk upsert of core rows (one statement). Unchanged rows are not rewritten. guids from a listing only replace stored ones
@@ -142,10 +167,12 @@ export async function upsertCore(db: Db, rows: CoreRow[]): Promise<void> {
   const set = [
     ...cols.filter((c) => c !== 'rating_key').map((c) => (c === 'guids'
       ? `guids = case when cardinality(excluded.guids) > 0 then excluded.guids else plex_items.guids end`
-      : `${c} = excluded.${c}`)),
+      : KEEP_WHEN_MISSING.has(c) ? `${c} = coalesce(excluded.${c}, plex_items.${c})` : `${c} = excluded.${c}`)),
     ...['age_req', 'age_opt'].map((c) => `${c} = case when plex_items.content_rating is distinct from excluded.content_rating then null else plex_items.${c} end`),
   ].join(', ');
-  const changed = cols.filter((c) => c !== 'rating_key' && c !== 'guids').map((c) => `plex_items.${c} is distinct from excluded.${c}`).join(' or ');
+  const changed = cols.filter((c) => c !== 'rating_key' && c !== 'guids')
+    .map((c) => (KEEP_WHEN_MISSING.has(c) ? `(excluded.${c} is not null and plex_items.${c} is distinct from excluded.${c})` : `plex_items.${c} is distinct from excluded.${c}`))
+    .join(' or ');
   await db.query(
     `insert into plex_items(${cols.join(', ')})
      select ${cols.join(', ')} from jsonb_to_recordset($1::jsonb) as x(${def})

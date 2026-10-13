@@ -141,6 +141,16 @@ export class PlexFake {
     part.Stream = [...(video ? [{ id: 9000, streamType: 1, codec: 'hevc', ...video }] : []), ...audio.map((a, i) => ({ id: 9001 + i, streamType: 2, codec: 'eac3', ...a })), ...others];
   }
 
+  /** a collection (section 1 by default) with the given members, in this order (Plex's own collection order) */
+  addCollection(title: string, members: string[], sectionId = 1): string {
+    const rk = String(this.nextKey++);
+    const base = clone(fixture('collections_list').MediaContainer.Metadata[0]);
+    this.items.set(rk, { ...base, ratingKey: rk, key: `/library/collections/${rk}/children`, guid: `collection://c-${rk}`, title, librarySectionID: sectionId,
+      childCount: members.length, thumb: `/library/collections/${rk}/composite/1791800022?width=400&height=600`, addedAt: 1791800022, updatedAt: 1791800022 });
+    this.members.set(rk, [...members]);
+    return rk;
+  }
+
   addSection(title: string, type: 'movie' | 'show'): number {
     const id = Math.max(...this.sections.map((s) => Number(s.key))) + 1;
     this.sections.push({ ...clone(this.sections[0]!), key: String(id), type, title, uuid: `uuid-${id}` });

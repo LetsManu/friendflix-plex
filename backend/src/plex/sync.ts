@@ -10,6 +10,7 @@
  */
 import type { Db } from '../db.js';
 import type { MediaEvent, MediaRuntime } from '../media/types.js';
+import { tmdbIdOf } from './about.js';
 import { refreshAges } from './access.js';
 import type { PlexClient } from './client.js';
 import { encodePlexId } from './ids.js';
@@ -252,8 +253,8 @@ export class PlexSync {
         if (x.type === 'episode') {
           events.push({ type: 'itemAdded', itemId: id, itemType: 'Episode', ...(x.grandparent_key ? { seriesId: encodePlexId('item', x.grandparent_key) } : {}), ...(x.parent_idx !== null ? { season: x.parent_idx } : {}), ...(x.idx !== null ? { episode: x.idx } : {}) });
         } else {
-          const tmdb = (x.guids ?? []).map((g) => /^tmdb:\/\/(\d+)$/.exec(g)?.[1]).find(Boolean);
-          events.push({ type: 'itemAdded', itemId: id, itemType: x.type === 'movie' ? 'Movie' : 'Series', ...(tmdb ? { tmdbId: Number(tmdb) } : {}) });
+          const tmdb = tmdbIdOf(x.guids);
+          events.push({ type: 'itemAdded', itemId: id, itemType: x.type === 'movie' ? 'Movie' : 'Series', ...(tmdb !== undefined ? { tmdbId: tmdb } : {}) });
         }
       }
     }
