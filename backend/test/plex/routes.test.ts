@@ -37,7 +37,7 @@ describe('Plex behind the FriendFlix routes', () => {
   it('/api/me reports the Plex server kind and its honest capabilities', async () => {
     const s = await env.login();
     const me = (await call(s, 'GET', '/api/me')).json();
-    expect(me.server).toEqual({ kind: 'plex', capabilities: { segments: [], trickplay: true, upcoming: false, subtitleSearch: false, webhooks: false, changeFeed: true, planB: false, subtitleExtract: true, chapters: false } });
+    expect(me.server).toEqual({ kind: 'plex', capabilities: { segments: [], trickplay: true, upcoming: false, subtitleSearch: false, webhooks: false, changeFeed: true, planB: false, subtitleExtract: true, chapters: false, playbackPrefetch: false } });
     // provisioning created a synthetic identity with the role policy (admin: all libraries, no cap)
     const jf = (await env.pool.query('select jellyfin_user_id j from users')).rows[0].j as string;
     expect(jf).toMatch(/^[0-9a-f]{32}$/);

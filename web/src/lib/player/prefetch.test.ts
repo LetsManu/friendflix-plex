@@ -16,13 +16,14 @@ const { HOLD_TIMEOUT_MS, holdPrefetch, playPrefetch, prefetchPlayback, takePrefe
 const { firstPlaybackRequest, playbackInfoBody, bodyKey } = await import('./infobody');
 const { entryFadeMs, playTransition } = await import('./transition');
 const { prefs, DEFAULT_PREFS } = await import('#lib/stores');
+const { serverCaps, capsFrom } = await import('#lib/capabilities');
 
 /** the body the player sends on its first request (no saved quality, no stored estimate -> 4 Mbit/s, network) */
 const playerBody = (itemId: string) => firstPlaybackRequest(itemId, DEFAULT_PREFS).body;
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
-  api.mockReset(); _resetPrefetch(); profile = 'p1'; prefs.set({ ...DEFAULT_PREFS });
+  api.mockReset(); _resetPrefetch(); profile = 'p1'; prefs.set({ ...DEFAULT_PREFS }); serverCaps.set(capsFrom(undefined));
   store.clear();
 });
 afterEach(() => vi.useRealTimers());
@@ -33,6 +34,17 @@ describe('prefetchPlayback / takePrefetched', () => {
     prefetchPlayback('m1');
     expect(api).toHaveBeenCalledTimes(1);
     expect(api).toHaveBeenCalledWith('/api/playback/info', { method: 'POST', body: { itemId: 'm1', maxBitrate: 4_000_000, reasonHint: 'network' } });
+  });
+
+  it('never prefetches when the server starts its transcode in playback info (playbackPrefetch=false, Plex)', () => {
+    api.mockResolvedValue({ playSessionId: 'x' });
+    serverCaps.set(capsFrom({ playbackPrefetch: false }));
+    prefetchPlayback('m1');
+    expect(api).not.toHaveBeenCalled();
+    expect(takePrefetched('m1', playerBody('m1'))).toBeNull();
+    serverCaps.set(capsFrom({}));
+    prefetchPlayback('m1');
+    expect(api).toHaveBeenCalledTimes(1); // absent = allowed (Jellyfin, older backends)
   });
 
   it('takePrefetched returns the promise once', async () => {

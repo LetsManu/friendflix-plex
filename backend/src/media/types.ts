@@ -51,6 +51,12 @@ export interface MediaCapabilities {
    */
   chapters?: boolean;
   /**
+   * Block 20: POST /api/playback/info is cheap and starts nothing, so the web may ask for it early (hover / focus of a play button).
+   * false: the call starts the server's transcode (Plex: preparePlayback() runs decision + start), so a prefetch would start a stream
+   * on every hover and take a stream slot; the web then only warms the player code. Optional; absent = true.
+   */
+  playbackPrefetch?: boolean;
+  /**
    * How FriendFlix accounts become Seerr users for wishes (backend only, not sent to the web). 'jellyfin-import': find the
    * account's Jellyfin user in Seerr (import it via /user/import-from-jellyfin). 'local' (also when absent): a local Seerr user
    * per account, found by the stored id or by email, else created with the REQUEST permission (seerr/service.ts).
@@ -62,7 +68,7 @@ export interface MediaCapabilities {
 export const publicCapabilities = (c: MediaCapabilities) => ({
   segments: SEGMENT_TYPES.filter((s) => c.segments.has(s)),
   trickplay: c.trickplay, upcoming: c.upcoming, subtitleSearch: c.subtitleSearch, webhooks: c.webhooks, changeFeed: c.changeFeed, planB: c.planB,
-  subtitleExtract: c.subtitleExtract, chapters: c.chapters ?? false,
+  subtitleExtract: c.subtitleExtract, chapters: c.chapters ?? false, playbackPrefetch: c.playbackPrefetch ?? true,
 });
 
 // ---------------------------------------------------------------- DTOs

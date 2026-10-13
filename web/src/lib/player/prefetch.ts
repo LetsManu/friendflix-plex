@@ -1,6 +1,7 @@
 import { preloadCode } from '$app/navigation';
 import { get } from 'svelte/store';
 import { api, getActiveProfile } from '#lib/api';
+import { serverCaps } from '#lib/capabilities';
 import { prefs } from '#lib/stores';
 import { loadHls } from './hls';
 import { bodyKey, firstPlaybackRequest, type PlaybackDto } from './infobody';
@@ -52,9 +53,11 @@ export function holdPrefetch(p: Promise<unknown>): void {
  * remembered bandwidth, reason hint, preferred audio). The route has no side effects (no stream slot, no live session,
  * no transcode: that starts with the stream URL), so an unused prefetch costs one Jellyfin PlaybackInfo. At most one
  * item is kept: a new one replaces the old entry. Errors (429 max_streams, network) drop the entry; the player then asks itself.
+ * Servers whose playback info starts the transcode (capability playbackPrefetch=false, e.g. Plex) are never prefetched: every
+ * hover would start a stream and take a stream slot.
  */
 export function prefetchPlayback(itemId: string, o: { audio?: string; startSec?: number } = {}): void {
-  if (typeof window === 'undefined' || !itemId) return;
+  if (typeof window === 'undefined' || !itemId || !get(serverCaps).playbackPrefetch) return;
   if (hold) { const h = hold; void h.then(() => { if (!hold) prefetchPlayback(itemId, o); }); return; } // never before the stop settled
   const { body } = firstPlaybackRequest(itemId, get(prefs), o.audio ?? '', o.startSec);
   const key = bodyKey(body), profile = getActiveProfile(), now = Date.now();

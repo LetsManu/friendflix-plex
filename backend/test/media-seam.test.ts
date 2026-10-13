@@ -93,7 +93,7 @@ describe('capabilities exposure', () => {
   beforeAll(async () => { env = await makeEnv(); });
   afterAll(() => env.close());
 
-  const ALL = { segments: ['intro', 'outro', 'recap', 'preview'], trickplay: true, upcoming: true, subtitleSearch: true, webhooks: true, changeFeed: false, planB: true, subtitleExtract: false, chapters: true };
+  const ALL = { segments: ['intro', 'outro', 'recap', 'preview'], trickplay: true, upcoming: true, subtitleSearch: true, webhooks: true, changeFeed: false, planB: true, subtitleExtract: false, chapters: true, playbackPrefetch: true };
 
   it('Jellyfin reports everything supported in /api/me and /api/server', async () => {
     const s = await env.login();
@@ -108,7 +108,7 @@ describe('capabilities exposure', () => {
   });
   it('whatever the implementation reports is what the client gets (sets become ordered arrays)', async () => {
     const caps: MediaCapabilities = { segments: new Set(['outro', 'intro']), trickplay: true, upcoming: false, subtitleSearch: false, webhooks: false, changeFeed: true, planB: false, subtitleExtract: true, chapters: false };
-    expect(publicCapabilities(caps)).toEqual({ segments: ['intro', 'outro'], trickplay: true, upcoming: false, subtitleSearch: false, webhooks: false, changeFeed: true, planB: false, subtitleExtract: true, chapters: false });
+    expect(publicCapabilities(caps)).toEqual({ segments: ['intro', 'outro'], trickplay: true, upcoming: false, subtitleSearch: false, webhooks: false, changeFeed: true, planB: false, subtitleExtract: true, chapters: false, playbackPrefetch: true });
     const prev = env.ctx.jf.capabilities;
     (env.ctx.jf as { capabilities: MediaCapabilities }).capabilities = caps;
     try {
@@ -121,7 +121,7 @@ describe('capabilities exposure', () => {
   it('an implementation that predates `chapters` (optional flag) reports it as unsupported, and the chapters route says so', async () => {
     const { chapters: _c, ...old }: MediaCapabilities = { segments: new Set(), trickplay: false, upcoming: false, subtitleSearch: false, webhooks: false, changeFeed: false, planB: false, subtitleExtract: false, chapters: true };
     const legacy: MediaCapabilities = old; // compiles without the field
-    expect(publicCapabilities(legacy)).toMatchObject({ chapters: false });
+    expect(publicCapabilities(legacy)).toMatchObject({ chapters: false, playbackPrefetch: true }); // Block 20: absent = prefetch allowed
     const prev = env.ctx.jf.capabilities;
     (env.ctx.jf as { capabilities: MediaCapabilities }).capabilities = { ...prev, chapters: undefined };
     try {
