@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/status-in%20development%20%7C%20preview-orange" alt="Status: in development / preview">
   <img src="https://img.shields.io/badge/self--hosted-Docker-2496ED" alt="Self-hosted with Docker">
   <img src="https://img.shields.io/badge/languages-7-ff4f6d" alt="7 languages">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License: AGPL-3.0"></a>
 </p>
 
 <p align="center"><img src="docs/images/en/hero.jpg" alt="FriendFlix home page with a large billboard and rows of titles" width="900"></p>
@@ -118,7 +119,7 @@ An app-like layout with a bottom tab bar, a preview sheet when you tap a poster,
   </tr>
 </table>
 
-**On the big screen:** TV mode for smart-TV browsers, sticks and consoles – big type, arrow-key navigation, pairing with a code or QR code, and your **phone as the remote**. Chromecast from Chrome, Edge and Android; **AirPlay** from Safari on iPhone, iPad and Mac to Apple TV and AirPlay 2 TVs (e.g. LG webOS 2019+).
+**On the big screen:** TV mode for smart-TV browsers, sticks and consoles – big type, arrow-key navigation, pairing with a code or QR code, and your **phone as the remote**. Chromecast from Chrome, Edge and Android; **AirPlay** from Safari on iPhone, iPad and Mac to Apple TV and AirPlay 2 TVs (e.g. LG webOS 2019+). Casting keeps running while you browse: a **bar at the bottom** controls the TV, Play buttons send new titles straight to it and the next episode starts on the TV when autoplay is allowed (otherwise the bar offers it).
 
 **Downloads for the train and the plane:** download movies and episodes (or the next few episodes of a show in one go) and watch them offline in the browser. Progress syncs back the next time you are online. Per-device licences with expiry; works in Chrome, Edge, Firefox, Safari 17+ and as a home-screen app on iOS 17+.
 
@@ -133,6 +134,8 @@ An app-like layout with a bottom tab bar, a preview sheet when you tap a poster,
 A tidy admin area with a sidebar (People, Content, Operations) and an **overview** that shows system health, what is waiting for you – approve or decline a wish or a new device right there –, recent activity in plain sentences, counts and storage. Everything gives feedback: no pop-up boxes, risky actions ask first, small ones offer **Undo**. On the phone the same area is a simple list with big touch targets.
 
 Also in the admin area: invitations and roles, **brand hubs**, featured and themed lists, **leaving-soon** dates, hover-preview clips, the nightly playback check, the weekly digest, an audit log and one-click updates.
+
+**Admin care:** a status page with traffic lights for every service, disk space, running streams (direct or converted, and why) and recent errors, plus a slim warning banner when something needs you; a **library care** page that finds missing artwork, language gaps, duplicates and problem files; and a **usage** page with watch time, streams and devices per account (aggregates only, no titles).
 
 <table>
   <tr>
@@ -217,7 +220,7 @@ git clone https://github.com/LetsManu/friendflix-plex.git && cd friendflix-plex
 cp .env.example .env
 openssl rand -base64 32    # -> APP_ENC_KEY
 openssl rand -hex 24       # -> INTERNAL_SECRET, WEBHOOK_SECRET, METRICS_TOKEN (one value each)
-$EDITOR .env               # PUBLIC_URL, passwords, OIDC_*, PLEX_URL, PLEX_TOKEN, SEERR_*
+$EDITOR .env               # PUBLIC_URL, passwords, OIDC_*, PLEX_URL, PLEX_TOKEN, REQUESTS_*
 docker login ghcr.io -u <user>                                 # only if the packages are private (PAT with read:packages)
 docker compose -f compose.prod.yaml -f compose.plex.yaml config --quiet   # validate
 docker compose -f compose.prod.yaml -f compose.plex.yaml up -d    # compose.plex.yaml only connects to your existing Plex server
@@ -234,7 +237,7 @@ Then:
 5. **Web push (optional):** `node scripts/gen-vapid.mjs`, put both keys into `.env`, restart.
 6. **First login** with a member of the Authentik group `friendflix-admins`: you become the portal admin, choose the instance language, and invite your friends under *Admin → Invitations*.
 
-The gateway must reach `PLEX_URL`; use the local address of your Plex server (details in [docs/plex.md](docs/plex.md)). If the request service already runs in its own stack: `docker network connect friendflix_media <container>`, remove its public ports and set `SEERR_URL`.
+The gateway must reach `PLEX_URL`; use the local address of your Plex server (details in [docs/plex.md](docs/plex.md)). If the request service already runs in its own stack: `docker network connect friendflix_media <container>`, remove its public ports and set `REQUESTS_URL`.
 
 ### Configuration
 
@@ -252,7 +255,7 @@ Template: [.env.example](.env.example). Every variable can also be read from a f
 | `PLEX_URL` | – (required with `plex`) | URL of your Plex server as seen by backend and gateway, e.g. `http://192.168.1.10:32400` or `http://host.docker.internal:32400` |
 | `PLEX_TOKEN` or `PLEX_TOKEN_FILE` | – (required with `plex`) | Plex token (a dedicated Plex account is recommended). Only backend and gateway use it; never sent to browsers |
 | `JELLYFIN_URL`, `JELLYFIN_ADMIN_API_KEY` | – (upstream / `MEDIA_SERVER=jellyfin` only) | Not used with Plex; leave empty |
-| `SEERR_URL`, `SEERR_API_KEY` | – (required as upstream) | Internal request service URL and API key |
+| `REQUESTS_URL`, `REQUESTS_API_KEY` | – (required as upstream) | Internal URL (bundled: `http://requests:5055`) and API key of the request service (older variable names still work, with a deprecation warning) |
 | `ADMIN_GROUP` | `friendflix-admins` | Authentik group whose members become portal admins |
 | `BIND_ADDR` | `127.0.0.1` | Host address the three ports are published on – never a public interface |
 | `WEB_PORT`, `BACKEND_PORT`, `GATEWAY_PORT` | `3080`, `3081`, `3082` | Host ports for the reverse proxy |
@@ -274,6 +277,9 @@ Template: [.env.example](.env.example). Every variable can also be read from a f
 | `PLAYBACK_CHECK_HOUR` | `4` | Nightly playback check with admin alert; `-1` = off |
 | `BACKGROUND_JOBS` | `true` | Download preparation/cleanup, language and picture-quality index, leaving-soon reminders, Plex library sync (keep `true` on the single backend) |
 | `API_COMPRESSION` | `true` | gzip/brotli for JSON responses ≥ 1 KB; `false` if the proxy already compresses `/api` |
+| `GATEWAY_URL` | `http://gateway:4000` | Internal gateway address for the admin status page (only `/health` is called) |
+| `HEALTH_DISK_WARN_PCT`, `HEALTH_DISK_CRIT_PCT` | `85`, `95` | Disk usage (percent) at which the status page and the banner turn amber / red (warn must be below crit, else both fall back to the defaults with a startup warning) |
+| `HEALTH_DB_WARN_GB` | `10` | Database size (GB) above which the status page warns |
 | `METRICS_TOKEN` | empty | Bearer token for `/metrics` |
 | `PORTAINER_WEBHOOK_URL` or `PORTAINER_URL` + `PORTAINER_API_KEY` + `PORTAINER_STACK_ID` | empty | One-click updates from *Admin → Update* (`PORTAINER_ENDPOINT_ID` default `1`) |
 | `UPDATE_REPO`, `GITHUB_TOKEN` | `LetsManu/friendflix`, empty | Version check; the token only raises the GitHub rate limit |
@@ -348,7 +354,7 @@ flowchart TB
 - **Backups:** the opt-in `backup` sidecar runs `pg_dump` daily at `BACKUP_HOUR`, verifies each dump with `pg_restore --list`, keeps `BACKUP_KEEP_DAYS` days and turns `unhealthy` if a run fails. Restore steps and a monthly restore test (`scripts/restore-test.sh`) are in [docs/operations.md](docs/operations.md). Keep `APP_ENC_KEY` in a password manager, separate from the dumps.
 - **Updates:** *Admin → Update* shows the installed version and the newest release with its notes (plus the commits on main) and redeploys the stack through Portainer (webhook or API). Manually: `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`. Database migrations run on start.
 - **Monitoring:** `/health` (liveness) and `/health/ready` (Redis, Postgres, media server) on `127.0.0.1:3081`; Prometheus metrics on `:3081/metrics` and `:3082/metrics` (Bearer `METRICS_TOKEN`). Icinga and Prometheus examples and an optional Prometheus + Grafana stack with a provisioned dashboard (`compose.monitoring.yaml`, internal network, no default password): [docs/monitoring.md](docs/monitoring.md).
-- **Supply chain:** images are scanned (Trivy), signed with cosign (keyless) and published with SBOM and provenance attestations; verify them before you deploy – [docs/operations.md](docs/operations.md).
+- **Supply chain:** images are scanned (Trivy), signed with cosign (keyless) and published with SBOM and provenance attestations; verify them before you deploy – [docs/operations.md](docs/operations.md). Builds are reproducible: rebuild any release from source and get the same image digest – [docs/reproducible-builds.md](docs/reproducible-builds.md).
 - **Performance:** every API response carries a `Server-Timing` header (`jf` = media server, `db` = Postgres, `kv` = Redis, `app` = total), the gateway adds `authz` and `upstream`; see them in the browser DevTools under *Network → Timing*. Requests ≥ 500 ms are logged as `slow request`. Browser errors are reported to the backend log and counted in `friendflix_client_errors_total`.
 
 ### Versions & releases
@@ -410,9 +416,7 @@ npm run e2e                                     # Playwright: builds the web app
 
 ### Contributing
 
-Contributions are welcome – see [CONTRIBUTING.md](CONTRIBUTING.md) for the requirements (code standard, tests, all 7 languages) and [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
-
-### License
+Contributions are welcome – see [CONTRIBUTING.md](CONTRIBUTING.md) for the requirements (code standard, tests, all 7 languages) and [SECURITY.md](SECURITY.md) for reporting vulnerabilities. Please follow the [Code of Conduct](CODE_OF_CONDUCT.md); plans for the next months are in the [ROADMAP](ROADMAP.md); how the security design works is described in [docs/security.md](docs/security.md).
 
 Copyright © 2026 Manuel Weißböck.
 

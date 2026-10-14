@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Area "home": home page, rows, billboard, cards, hover pop-out, phone preview sheet, Neu & demnächst, browse, library,
  * collections, search. German is the typed source (see docs/i18n.md).

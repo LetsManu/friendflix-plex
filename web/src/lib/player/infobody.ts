@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The body of POST /api/playback/info, built in ONE place for the player and for the prefetch on the play buttons
  * (lib/player/prefetch.ts): the prefetched answer is only reused when both bodies are identical.

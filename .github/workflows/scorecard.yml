@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # OpenSSF Scorecard: supply-chain health checks (branch protection, pinned actions, token permissions, ...).
 # Results: code scanning (category "scorecard") + public badge on scorecard.dev (publish_results, needs a public repo).
 # publish_results restricts this job: no workflow-level env/defaults, no write permissions at workflow level and only

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Spanish dictionary (lazy-loaded chunk). One file per area; missing keys fall back to German. */
 import type de from '../de/index';
 import type { Translation } from '../../types';

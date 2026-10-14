@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Locator, type Page } from '@playwright/test';
 
 /** Row section by its accessible name (e.g. "Weiterschauen"). */

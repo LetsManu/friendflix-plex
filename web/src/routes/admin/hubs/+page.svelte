@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin → Marken: brand tiles under the home billboard. Cards with a live tile preview, up/down reorder (keyboard), form on top. */
   import { onMount, tick } from 'svelte';

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 export interface HistoryLike { id: string; seriesId?: string }
 
 /** Splits the history into what stays and what an optimistic removal takes away. */

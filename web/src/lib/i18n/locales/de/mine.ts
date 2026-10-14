@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Block 17 area 'mine' (German source): calm mode, themed lists. */
 export default {
   /** web app manifest (routes/manifest.webmanifest) */

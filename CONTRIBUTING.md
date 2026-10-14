@@ -1,6 +1,6 @@
 # Contributing to FriendFlix
 
-Thanks for helping! Bug reports, ideas and pull requests are welcome.
+Thanks for helping! Bug reports, ideas and pull requests are welcome. Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Reporting bugs and asking for features
 
@@ -27,6 +27,16 @@ Thanks for helping! Bug reports, ideas and pull requests are welcome.
 **Tests**
 - New behaviour comes with tests; bug fixes come with a test that fails without the fix.
 - Unit tests: Vitest (`npm test`). End-to-end: Playwright (`npm run e2e`) for user-visible flows.
+- Coverage: `npm run coverage` (Vitest, V8 provider; CI shows a per-package and overall table in the job summary).
+  Each package's `vitest.config.ts` sets minimum **statement** and **branch** coverage (currently backend 90 / 82,
+  gateway 93 / 90, web 94 / 89 %); `npm run coverage` and CI fail below them. The floor is 90 % statements and 80 %
+  branches (OpenSSF Best Practices, gold). Raise a threshold when coverage goes up; never lower it to make a change pass.
+- What the coverage numbers measure: every TypeScript module under `backend/src`, `gateway/src` and `web/src` counts,
+  also modules no test imports. Svelte components (`*.svelte`) are not part of the web number: Playwright (`e2e/`)
+  covers them end to end. Excluded are only tests, type declarations, generated files and the test doubles of browser
+  APIs in `web/src/test-utils/`. Web unit tests run in Node; browser APIs (IndexedDB, OPFS, Cache Storage, WebSocket,
+  Web Audio, the Cast SDK) are replaced by small doubles inside the tests.
+- Backend tests need PostgreSQL (CI: a service on port 5433); set `TEST_DATABASE_URL` to use another database.
 
 **Texts and languages**
 - Every user-facing string goes through i18n and is added in **all 7 languages** ([docs/i18n.md](docs/i18n.md)).
@@ -37,6 +47,9 @@ Thanks for helping! Bug reports, ideas and pull requests are welcome.
 - Never commit secrets, tokens or real passwords (CI runs gitleaks). Test fixtures use obviously fake values.
 - Media server credentials must never reach the browser; new media paths go through the gateway's authorization.
 - New dependencies need a reason in the PR; prefer none. They must be under a license compatible with AGPL-3.0.
+
+**File headers**
+- Every source file starts with an SPDX header (`SPDX-FileCopyrightText` + `SPDX-License-Identifier: AGPL-3.0-or-later`). `npm run spdx:fix` adds it to new files; CI runs `npm run spdx:check`.
 
 **Commits and docs**
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:` …).

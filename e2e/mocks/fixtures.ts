@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Typed fixtures for the mocked Friendflix API (shapes follow web/src/lib/api.ts and the backend DTOs). */
 
 export interface MockItem {

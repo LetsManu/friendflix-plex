@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { ItemDto } from './media/types.js';
 
 /** Percent watched, from ticks when possible, else Jellyfin's PlayedPercentage. */

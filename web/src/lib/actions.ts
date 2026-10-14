@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Svelte action: focuses (and selects) the element when it appears. */
 export function autofocus(node: HTMLElement) {
   queueMicrotask(() => { node.focus(); if (node instanceof HTMLInputElement) node.select(); });

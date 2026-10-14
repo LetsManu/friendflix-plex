@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Request validation for the /media path, used by the nginx auth_request endpoint (Plan B).
  * Mirrors gateway/src/gateway.ts; both are tested against test-vectors/media-paths.json.

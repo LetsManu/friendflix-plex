@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # CI flow: test + secrets scan + image build/scan, then (push only) publish.
 # Images are built exactly ONCE, in the `docker` job:
 #   pull_request     build with load:true (no push, forks cannot write packages) and scan the local image.
@@ -12,12 +14,19 @@
 # workflow_dispatch: release.yml starts CI for the new vX.Y.Z tag (its own pushes use GITHUB_TOKEN and trigger nothing);
 # a dispatch behaves like a push of that ref, but only main and v* tags are ever published.
 # Images carry APP_VERSION / APP_CODENAME from version.json next to GIT_SHA.
+# Reproducible builds (docs/reproducible-builds.md): SOURCE_DATE_EPOCH = commit time, rewrite-timestamp=true, pinned
+# BuildKit (BUILDKIT_IMAGE), BUILD_TIME and the `created` label derived from the commit time; the published candidate is
+# built without cache import. The `reproducible` job rebuilds every image from scratch and requires the same digest.
 name: CI
 on:
   push: { branches: [main], tags: ["v*"] }
   pull_request:
   workflow_dispatch:
 permissions: { contents: read }
+env:
+  # BuildKit that builds every image, here and in scripts/reproduce-image.sh (which reads this line): the same commit only
+  # yields the same bytes with the same BuildKit. Pinned by digest; Dependabot does not see it, bump tag + digest by hand.
+  BUILDKIT_IMAGE: moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -36,8 +45,36 @@ jobs:
         with: { node-version: "${{ matrix.node }}", cache: npm }
       - run: npm ci
       - run: npm run lint
+      - run: npm run spdx:check
       - run: npm run typecheck
+      # newest Node: tests run once, with coverage (fails below the thresholds in each vitest.config.ts); other entries run plain tests
       - run: npm test
+        if: matrix.node != 26
+      - name: Tests with coverage
+        if: matrix.node == 26
+        run: npm run coverage && npm run test:scripts
+      - name: Coverage summary
+        if: matrix.node == 26
+        run: |
+          {
+            echo "## Test coverage"
+            echo "| Package | Statements | Branches | Functions | Lines |"
+            echo "|---|---|---|---|---|"
+            for pkg in backend gateway web; do
+              jq -r --arg p "$pkg" '.total | "| \($p) | \(.statements.pct)% | \(.branches.pct)% | \(.functions.pct)% | \(.lines.pct)% |"' "$pkg/coverage/coverage-summary.json"
+            done
+            # overall: covered / total summed over the three packages
+            jq -s -r 'def pct(k): (([.[].total[k].covered] | add) * 10000 / ([.[].total[k].total] | add) | floor) / 100; "| **overall** | \(pct("statements"))% | \(pct("branches"))% | \(pct("functions"))% | \(pct("lines"))% |"' backend/coverage/coverage-summary.json gateway/coverage/coverage-summary.json web/coverage/coverage-summary.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: matrix.node == 26
+        with:
+          name: coverage
+          path: |
+            backend/coverage/
+            gateway/coverage/
+            web/coverage/
+          retention-days: 14
       - name: Dependency audit (prod, high+)
         if: matrix.node == 22
         run: npm audit --omit=dev --audit-level=high
@@ -133,18 +170,24 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+        with:
+          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
       - name: Image name (GHCR needs lowercase)
         id: img
         run: repo="${GITHUB_REPOSITORY#*/}"; echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${repo,,}-${SERVICE}" >> "$GITHUB_OUTPUT"   # friendflix-<svc>; forks get <repo>-<svc>
-      - name: Release version (version.json) and build time
+      # SOURCE_DATE_EPOCH = commit time: image/history timestamps, rewrite-timestamp, BUILD_TIME and the `created` label
+      # all derive from it, never from the clock, so a rebuild of the commit reproduces them
+      - name: Release version (version.json) and build time (commit time)
         id: ver
-        env:
-          HEAD_TS: ${{ github.event.head_commit.timestamp }}
         run: |
           set -euo pipefail
-          echo "version=$(jq -er .version version.json)" >> "$GITHUB_OUTPUT"
-          echo "codename=$(jq -er .codename version.json)" >> "$GITHUB_OUTPUT"
-          echo "build_time=${HEAD_TS:-$(git log -1 --format=%cI)}" >> "$GITHUB_OUTPUT"   # dispatch / tag pushes carry no head_commit
+          sde=$(git log -1 --format=%ct)
+          {
+            echo "version=$(jq -er .version version.json)"
+            echo "codename=$(jq -er .codename version.json)"
+            echo "sde=$sde"
+            echo "build_time=$(date -u -d "@$sde" +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
       # ---- pull_request: build locally, scan, discard ----
       - name: Build (PR / other dispatch, not pushed)
         if: env.PUBLISHABLE != 'true'
@@ -155,6 +198,7 @@ jobs:
           load: true
           tags: friendflix-${{ matrix.service }}:ci
           build-args: |
+            SOURCE_DATE_EPOCH=${{ steps.ver.outputs.sde }}
             GIT_SHA=${{ github.sha }}
             APP_VERSION=${{ steps.ver.outputs.version }}
             APP_CODENAME=${{ steps.ver.outputs.codename }}
@@ -179,6 +223,9 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ steps.img.outputs.name }}
+          # default would be the clock; the commit time keeps the label (part of the image config) reproducible
+          labels: |
+            org.opencontainers.image.created=${{ steps.ver.outputs.build_time }}
       - name: Build and push candidate
         id: build
         if: env.PUBLISHABLE == 'true'
@@ -186,17 +233,23 @@ jobs:
         with:
           context: .
           file: ${{ matrix.service }}/Dockerfile
-          push: true
-          tags: ${{ steps.img.outputs.name }}:ci-${{ github.sha }}
+          platforms: linux/amd64
+          # push = image exporter; rewrite-timestamp clamps every file mtime to SOURCE_DATE_EPOCH (reproducible layers)
+          outputs: type=image,name=${{ steps.img.outputs.name }}:ci-${{ github.sha }},push=true,oci-mediatypes=true,compression=gzip,rewrite-timestamp=true
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            SOURCE_DATE_EPOCH=${{ steps.ver.outputs.sde }}
             GIT_SHA=${{ github.sha }}
             BUILD_TIME=${{ steps.ver.outputs.build_time }}
             APP_VERSION=${{ steps.ver.outputs.version }}
             APP_CODENAME=${{ steps.ver.outputs.codename }}
-          cache-from: type=gha,scope=${{ matrix.service }}
+          # No cache import for what gets published: rewrite-timestamp only clamps mtimes NEWER than SOURCE_DATE_EPOCH, so
+          # a layer reused from an older commit's cache keeps that build's (older) mtimes and the image would differ from
+          # a clean rebuild. The fresh layers are still exported as cache for PR builds.
+          no-cache: true
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-          # SPDX SBOM + full SLSA provenance stored next to the image (index digest); publish.yml re-uses the SBOM
+          # SPDX SBOM + full SLSA provenance stored next to the image (index digest); publish.yml re-uses the SBOM.
+          # They are separate manifests in the index (with build times); the linux/amd64 image manifest is what reproduces.
           sbom: true
           provenance: mode=max
       # report first (never fails) so code scanning also gets the findings of a run that the gate below fails
@@ -234,10 +287,56 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           skip-setup-trivy: true
+  # Reproducible builds (OpenSSF build_reproducible, docs/reproducible-builds.md): each image is rebuilt from scratch by
+  # scripts/reproduce-image.sh (fresh docker-container builder with BUILDKIT_IMAGE, --no-cache, context = git archive,
+  # SOURCE_DATE_EPOCH = commit time, rewrite-timestamp, no SBOM/provenance) and its image manifest digest must match:
+  #   push / publishable dispatch  the ci-<sha> candidate the docker job pushed (other runner, minutes earlier; its labels
+  #                                and build-arg ENVs are copied, see the script) - proves the published bytes reproduce
+  #   pull_request / other         a second rebuild in another fresh builder (two clean builds, compared)
+  # Runs on PRs too (per service in parallel, only after `docker` passed) so a change that breaks reproducibility is caught
+  # before merge, and publish waits for it. Attestations are not compared: they are separate manifests carrying build times.
+  # Not scheduled: a later rebuild differs as soon as Alpine ships a newer apk package (see the Dockerfiles).
+  reproducible:
+    needs: docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: { contents: read, packages: read }
+    strategy:
+      fail-fast: false
+      matrix: { service: [backend, gateway, web] }
+    env:
+      SERVICE: ${{ matrix.service }}
+      PUBLISHABLE: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { persist-credentials: false }
+      - name: Log in to GHCR
+        if: env.PUBLISHABLE == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - name: Rebuild and compare with the pushed candidate
+        if: env.PUBLISHABLE == 'true'
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY#*/}"; img="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${repo,,}-${SERVICE}:ci-${GITHUB_SHA}"
+          digest=$(scripts/reproduce-image.sh "$SERVICE" --compare "$img")
+          echo "### $SERVICE reproduced: \`$digest\` (= $img, linux/amd64)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build twice from scratch and compare
+        if: env.PUBLISHABLE != 'true'
+        run: |
+          set -euo pipefail
+          a=$(scripts/reproduce-image.sh "$SERVICE" --out "$RUNNER_TEMP/a.tar")
+          b=$(scripts/reproduce-image.sh "$SERVICE" --out "$RUNNER_TEMP/b.tar")
+          if [ "$a" != "$b" ]; then
+            echo "::error title=Not reproducible::$SERVICE: two clean builds of $GITHUB_SHA differ ($a vs $b)"
+            scripts/reproduce-image.sh --diff "$RUNNER_TEMP/a.tar" "$RUNNER_TEMP/b.tar"
+            exit 1
+          fi
+          echo "### $SERVICE reproducible: two clean builds -> \`$a\`" >> "$GITHUB_STEP_SUMMARY"
   # images are only published after every check above passed (main -> latest + sha, v* tags -> semver)
   # signing/attesting (id-token, attestations) happens only here, i.e. only on push events
   publish:
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
-    needs: [test, e2e, dast, secrets, docker]
+    needs: [test, e2e, dast, secrets, docker, reproducible]
     permissions: { contents: read, packages: write, id-token: write, attestations: write }
     uses: ./.github/workflows/publish.yml

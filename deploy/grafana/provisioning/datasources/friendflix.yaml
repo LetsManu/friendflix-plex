@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Provisioned by compose.monitoring.yaml. uid is fixed so dashboards and alert rules can reference it.
 apiVersion: 1
 datasources:

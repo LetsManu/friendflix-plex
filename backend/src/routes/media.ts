@@ -1,7 +1,10 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
-import { MediaError, type ItemDto } from '../media/types.js';
+import { MediaError, type ItemDto, type TranscodeReason } from '../media/types.js';
+import { methodOf } from '../playstats.js';
 import { clearLive, countLive, getLive, listLive, setLive } from '../live.js';
 import { isHomeRequest } from '../netaddr.js';
 import { effectiveRole, remoteBitrateCap } from '../roles.js';
@@ -76,7 +79,7 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
     const desc = q.desc === 'true';
     const { audio, subs, start: _s, limit: _l, ...rest } = q;
     const jfUser = req.jfUser!;
-    const key = `langitems:${jfUser.jellyfin_user_id}:${createHash('sha1').update(JSON.stringify(Object.entries({ ...rest, audio, subs }).sort())).digest('hex')}`;
+    const key = `langitems:${jfUser.jellyfin_user_id}:${createHash('sha256').update(JSON.stringify(Object.entries({ ...rest, audio, subs }).sort())).digest('hex')}`;
     const hit = await ctx.kv.get(key).catch(() => null);
     if (hit) {
       try {
@@ -294,6 +297,9 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
     }
     info.resumeTicks = resume;
     info.trickplay = meta?.trickplay(info.mediaSourceId);
+    // Block 22: remember the server's transcode reason for this play session; the stream is counted on "Playing" only
+    // (the web prefetches info, Block 20), so a prefetch alone never counts
+    await ctx.kv.set(`pbinfo:${req.user!.id}:${info.playSessionId}`, JSON.stringify({ reason: info.transcodeReason ?? null }), 6 * 3600).catch(() => undefined);
     return info;
   }));
 
@@ -320,6 +326,14 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
       }
       const prev = live.updatedAt;
       live = { ...live, positionTicks: ticks, isPaused: b.isPaused, updatedAt: Date.now() };
+      if (kind === 'Playing' || (kind !== 'Playing/Stopped' && !live.playMethod)) {
+        // Block 22: play method (client) + the reason the server gave at /info time, device and server identity for the admin view
+        const raw = await ctx.kv.get(`pbinfo:${user.id}:${b.playSessionId}`).catch(() => null);
+        let reason: TranscodeReason | undefined;
+        try { reason = (raw ? (JSON.parse(raw) as { reason: TranscodeReason | null }).reason : null) ?? undefined; } catch { reason = undefined; }
+        const playMethod = methodOf(b.playMethod, reason);
+        live = { ...live, playMethod, ...(playMethod === 'transcode' && reason ? { transcodeReason: reason } : {}), deviceId: req.session?.deviceId, serverUserId: req.jfUser?.jellyfin_user_id };
+      }
       await ctx.jf.report(req.jfUser!, {
         event: kind === 'Playing' ? 'start' : kind === 'Playing/Stopped' ? 'stop' : 'progress',
         itemId: b.itemId, mediaSourceId: b.mediaSourceId, playSessionId: b.playSessionId, positionTicks: ticks, paused: b.isPaused,

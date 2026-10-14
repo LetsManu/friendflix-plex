@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Profile gate ("Wer ist heute dabei?") and the early-render hint of the app shell.
  *

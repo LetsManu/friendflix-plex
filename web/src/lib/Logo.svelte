@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { BRAND_NAME } from '#lib/brand';
   /** FriendFlix mark (coral tile, "F" whose middle bar is a play button). `wordmark` adds the lettering next to it. */

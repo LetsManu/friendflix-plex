@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Block 15 area 'kids' (German source): kids profiles, kids home, kids search, onboarding (/welcome). */
 export default {
   badge: 'Kids',

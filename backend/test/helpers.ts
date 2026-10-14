@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import pg from 'pg';
 import { buildApp, type Extra } from '../src/app.js';
 import type { Config } from '../src/config.js';
@@ -20,7 +22,7 @@ export const cfg: Config = {
   PORT: 3000, PUBLIC_URL: 'https://portal.example.com', DATABASE_URL: TEST_DB, REDIS_URL: 'redis://x', SESSION_TTL_SECONDS: 600, SESSION_IDLE_SECONDS: 300,
   APP_ENC_KEY: ENC_KEY, INTERNAL_SECRET: 'internal-secret-123456', WEBHOOK_SECRET: 'webhook-secret-123456', ADMIN_GROUP: 'friendflix-admins',
   OIDC_ISSUER: 'https://auth.example.com/', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's',
-  MEDIA_SERVER: 'jellyfin', JELLYFIN_URL: 'http://jellyfin:8096', JELLYFIN_ADMIN_API_KEY: 'adminkey', SEERR_URL: 'http://seerr:5055', SEERR_API_KEY: 'seerrkey',
+  MEDIA_SERVER: 'jellyfin', JELLYFIN_URL: 'http://jellyfin:8096', JELLYFIN_ADMIN_API_KEY: 'adminkey', REQUESTS_URL: 'http://requests:5055', REQUESTS_API_KEY: 'seerrkey',
   NTFY_URL: undefined, DISCORD_WEBHOOK_URL: undefined, METRICS_TOKEN: undefined, TMDB_API_KEY: undefined, OMDB_API_KEY: undefined, AUTHENTIK_URL: undefined, AUTHENTIK_API_TOKEN: undefined,
   AUTHENTIK_ENROLL_FLOW: undefined, ROLE_TEMPLATES: undefined, OIDC_ALLOW_INSECURE: 'false', BACKGROUND_JOBS: 'false',
   PREVIEW_DIR: '/tmp/ff-test-previews', PREVIEW_WARM: 'false',
@@ -28,6 +30,7 @@ export const cfg: Config = {
   PLAYBACK_CHECK_HOUR: 4, NTFY_BASE_URL: undefined, VAPID_PUBLIC_KEY: undefined, VAPID_PRIVATE_KEY: undefined, VAPID_SUBJECT: undefined, DIGEST_DAY: 0, DIGEST_HOUR: 18,
   CAST_ENABLED: 'true', GIT_SHA: 'dev', BUILD_TIME: undefined, APP_VERSION: undefined, APP_CODENAME: undefined, UPDATE_REPO: 'LetsManu/friendflix', GITHUB_TOKEN: undefined, PORTAINER_WEBHOOK_URL: undefined, PORTAINER_URL: undefined,
   PORTAINER_API_KEY: undefined, PORTAINER_STACK_ID: undefined, PORTAINER_ENDPOINT_ID: 1, API_COMPRESSION: 'true', HOME_NETWORKS: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8', '::1/128', 'fc00::/7', 'fe80::/10'],
+  GATEWAY_URL: 'http://gateway:4000', HEALTH_DISK_WARN_PCT: 85, HEALTH_DISK_CRIT_PCT: 95, HEALTH_DB_WARN_GB: 10,
 };
 
 export type Handler = (url: URL, init: RequestInit, body: any) => { status?: number; json?: unknown; raw?: string | Uint8Array } | undefined;
@@ -98,7 +101,7 @@ export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extr
     cfg, kv, db: pool, encKey, fetchImpl: fetch,
     roles: DEFAULT_ROLES,
     jf: new JellyfinService(client, kv, encKey),
-    seerr: new SeerrClient(cfg.SEERR_URL, cfg.SEERR_API_KEY, fakeHttp(extra.seerr ?? {}, seerrCalls)),
+    seerr: new SeerrClient(cfg.REQUESTS_URL, cfg.REQUESTS_API_KEY, fakeHttp(extra.seerr ?? {}, seerrCalls)),
     oidc: {
       start: async () => ({ url: 'https://idp/authorize', state: 's' + Math.random().toString(36).slice(2), nonce: 'n', codeVerifier: 'v' }),
       finish: async () => ({ authTime: Math.floor(Date.now() / 1000), ...claims.current }), // a fresh IdP login unless a test sets authTime

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/admin';
 import type { Translation } from '../../types';
 
@@ -7,6 +9,8 @@ const tr: Translation<typeof de> = {
   tabs: {
     users: 'Kullanıcılar', status: 'Durum', previews: 'Önizlemeler', playback: 'Oynatma denetimi', digest: 'Haftalık özet', sources: 'Veri kaynakları', invites: 'Davetler',
     requests: 'İstekler', polls: 'Oylamalar', lists: 'Listeler', roles: 'Roller', devices: 'Cihazlar', audit: 'Denetim günlüğü', update: 'Güncelleme',
+    hygiene: 'Kitaplık bakımı',
+    usage: 'Kullanım',
   },
   roleNames: { friend: 'Arkadaş', family: 'Aile', guest: 'Misafir', admin: 'Yönetici' },
   kind: { movie: 'Film', series: 'Dizi' },
@@ -371,6 +375,37 @@ const tr: Translation<typeof de> = {
     leaving: { set: '{actor} bir kaldırılma tarihi belirledi', clear: '{actor} bir kaldırılma tarihini kaldırdı' },
     subtitle: {
       download: '{actor} altyazı indirdi',
+    },
+  },
+  banner: {
+    label: 'Yöneticiler için uyarılar',
+    more: { one: '+{n} tane daha', other: '+{n} tane daha' },
+    less: 'Daha az göster',
+    view: 'Görüntüle',
+    dismiss: 'Gizle',
+    dismissOne: '“{text}” gizle',
+    generic: 'Bir şey ilgini bekliyor',
+    name: { downloads: 'İndirme alanı', previews: 'Önizleme alanı', database: 'Veritabanı' },
+    svc: {
+      slow: '{name} yavaş yanıt veriyor',
+      down: '{name} erişilemiyor',
+      issuer_mismatch: '{name}: sağlayıcı ayarla eşleşmiyor',
+      invalid_key: '{name} anahtarı geçersiz',
+      paused: '{name} duraklatıldı (anahtar reddedildi)',
+      budget: '{name}: günlük sınırın %{pct} kadarı kullanıldı',
+      failed_titles: { one: 'Oynatma testinde {n} başlık başarısız', other: 'Oynatma testinde {n} başlık başarısız' },
+      empty_media: 'Medya sunucusu boş video döndürüyor – Jellyfin’i yeniden başlat; işe yaramazsa donanım hızlandırmayı kontrol et',
+    },
+    disk: {
+      full: '{name} neredeyse dolu (%{pct})',
+      low_free: '{name}: az boş alan',
+      cap: 'İndirme sınırına neredeyse ulaşıldı (%{pct})',
+      large: 'Veritabanı büyüdü',
+    },
+    errors: {
+      server_errors: { one: '15 dakikada {n} sunucu hatası', other: '15 dakikada {n} sunucu hatası' },
+      client_errors: { one: '15 dakikada {n} tarayıcı hatası', other: '15 dakikada {n} tarayıcı hatası' },
+      failed_playbacks: { one: '{n} oynatma başarısız', other: '{n} oynatma başarısız' },
     },
   },
 };

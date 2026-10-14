@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { langIndexTick, normLang } from '../src/langindex.js';
 import { makeEnv, type TestEnv } from './helpers.js';

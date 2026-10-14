@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * FriendFlix i18n: a small store on top of Intl (no dependency). Documentation: docs/i18n.md.
  *

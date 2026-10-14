@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Upstream, UpstreamCredentials } from './types.js';
 
 const ID = '[0-9a-fA-F]{32}';

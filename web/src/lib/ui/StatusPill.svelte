@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts" module>
   export type Tone = 'ok' | 'warn' | 'err' | 'info' | 'muted';
   /** default icon per tone (never colour alone: every pill has an icon and a text) */

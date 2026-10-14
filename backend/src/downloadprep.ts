@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFile, mkdir, readdir, rename, rm, stat, statfs, truncate, writeFile } from 'node:fs/promises';
@@ -80,6 +82,8 @@ const resolveUri = (base: string, uri: string): string => {
   return u.pathname + u.search;
 };
 const lines = (p: string) => p.split(/\r?\n/).map((l) => l.trim());
+/** job error when Jellyfin delivers a 0-byte init / media segment (the admin pages show a "restart Jellyfin" hint for it) */
+export const EMPTY_SEGMENT = 'empty segment from media server';
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 300);
 
 const cfgNum = (v: unknown, d: number) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -206,12 +210,17 @@ class Preparer {
     return res;
   }
 
-  /** Segment with a few retries: Jellyfin answers 5xx while a restarted transcode spins up. */
+  /**
+   * Segment with a few retries: Jellyfin answers 5xx while a restarted transcode spins up. A 0-byte segment (a hung hardware encoder
+   * answers 200 with an empty body) is retried too and then fails with EMPTY_SEGMENT, before ffmpeg ever sees the file.
+   */
   private async fetchBytes(user: JfUser, path: string): Promise<Buffer> {
     let last: unknown;
     for (let n = 0; n < 4; n++) {
       try {
-        return Buffer.from(await (await this.fetchOk(user, path)).arrayBuffer());
+        const body = Buffer.from(await (await this.fetchOk(user, path)).arrayBuffer());
+        if (!body.length) throw new Error(EMPTY_SEGMENT);
+        return body;
       } catch (e) {
         last = e;
         await this.sleep(this.retryMs * (n + 1));

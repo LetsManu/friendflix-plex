@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Cuts a FriendFlix release (used by .github/workflows/release.yml, runnable locally with --dry-run):
  *   1. bumps version.json (SemVer; a new MAJOR also takes the next codename from codenames.json, A–Z cinema snacks)

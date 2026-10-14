@@ -1,5 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { loadConfig } from '../src/config.js';
+import { deprecatedEnvNames, loadConfig } from '../src/config.js';
 import { decrypt, encrypt } from '../src/crypto.js';
 import { mediaBrowserHeader } from '../src/jellyfin/client.js';
 import { pollJellyfinSessions } from '../src/routes/internal.js';
@@ -219,16 +221,54 @@ describe('config file secrets', () => {
   it('reads VAR_FILE only for known settings', async () => {
     const { writeFileSync } = await import('node:fs');
     writeFileSync('/tmp/ff-secret-test', 'from-file\n');
-    const base = { PUBLIC_URL: 'https://p.example.com', DATABASE_URL: 'x', REDIS_URL: 'x', APP_ENC_KEY: 'k'.repeat(44), INTERNAL_SECRET: 'i'.repeat(20), OIDC_ISSUER: 'https://a.example.com', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET_FILE: '/tmp/ff-secret-test', JELLYFIN_URL: 'http://j', JELLYFIN_ADMIN_API_KEY: 'k', SEERR_URL: 'http://s', SEERR_API_KEY: 'k', WEBHOOK_SECRET: 'w'.repeat(20) };
+    const base = { PUBLIC_URL: 'https://p.example.com', DATABASE_URL: 'x', REDIS_URL: 'x', APP_ENC_KEY: 'k'.repeat(44), INTERNAL_SECRET: 'i'.repeat(20), OIDC_ISSUER: 'https://a.example.com', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET_FILE: '/tmp/ff-secret-test', JELLYFIN_URL: 'http://j', JELLYFIN_ADMIN_API_KEY: 'k', REQUESTS_URL: 'http://s', REQUESTS_API_KEY: 'k', WEBHOOK_SECRET: 'w'.repeat(20) };
     const c = loadConfig({ ...base, PIP_CONFIG_FILE: '/does/not/exist' });
     expect(c.OIDC_CLIENT_SECRET).toBe('from-file');
   });
   it('an empty value or empty secret file counts as unset (push disabled with an empty vapid_private_key file)', async () => {
     const { writeFileSync } = await import('node:fs');
     writeFileSync('/tmp/ff-secret-empty', '\n');
-    const base = { PUBLIC_URL: 'https://p.example.com', DATABASE_URL: 'x', REDIS_URL: 'x', APP_ENC_KEY: 'k'.repeat(44), INTERNAL_SECRET: 'i'.repeat(20), OIDC_ISSUER: 'https://a.example.com', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's', JELLYFIN_URL: 'http://j', JELLYFIN_ADMIN_API_KEY: 'k', SEERR_URL: 'http://s', SEERR_API_KEY: 'k', WEBHOOK_SECRET: 'w'.repeat(20) };
+    const base = { PUBLIC_URL: 'https://p.example.com', DATABASE_URL: 'x', REDIS_URL: 'x', APP_ENC_KEY: 'k'.repeat(44), INTERNAL_SECRET: 'i'.repeat(20), OIDC_ISSUER: 'https://a.example.com', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's', JELLYFIN_URL: 'http://j', JELLYFIN_ADMIN_API_KEY: 'k', REQUESTS_URL: 'http://s', REQUESTS_API_KEY: 'k', WEBHOOK_SECRET: 'w'.repeat(20) };
     const c = loadConfig({ ...base, VAPID_PUBLIC_KEY: 'pub', VAPID_PRIVATE_KEY: '', VAPID_PRIVATE_KEY_FILE: '/tmp/ff-secret-empty', PIP_CONFIG_FILE: '/does/not/exist' });
     expect(c.VAPID_PRIVATE_KEY).toBeUndefined();
     expect(loadConfig({ ...base, VAPID_PRIVATE_KEY: '', PIP_CONFIG_FILE: '/does/not/exist' }).VAPID_PRIVATE_KEY).toBeUndefined();
+  });
+});
+
+describe('renamed request service settings', () => {
+  const base = { PUBLIC_URL: 'https://p.example.com', DATABASE_URL: 'x', REDIS_URL: 'x', APP_ENC_KEY: 'k'.repeat(44), INTERNAL_SECRET: 'i'.repeat(20), OIDC_ISSUER: 'https://a.example.com', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's', JELLYFIN_URL: 'http://j', JELLYFIN_ADMIN_API_KEY: 'k', WEBHOOK_SECRET: 'w'.repeat(20) };
+  it('reads REQUESTS_URL / REQUESTS_API_KEY without any warning', () => {
+    const env = { ...base, REQUESTS_URL: 'http://requests:5055', REQUESTS_API_KEY: 'new' };
+    const c = loadConfig(env);
+    expect([c.REQUESTS_URL, c.REQUESTS_API_KEY]).toEqual(['http://requests:5055', 'new']);
+    expect(deprecatedEnvNames(env)).toEqual([]);
+  });
+  it('falls back to the old SEERR_* names and reports them as deprecated (names only)', () => {
+    const env = { ...base, SEERR_URL: 'http://seerr:5055', SEERR_API_KEY: 'old-secret' };
+    const c = loadConfig(env);
+    expect([c.REQUESTS_URL, c.REQUESTS_API_KEY]).toEqual(['http://seerr:5055', 'old-secret']);
+    const msgs = deprecatedEnvNames(env);
+    expect(msgs).toEqual(['SEERR_URL is deprecated, use REQUESTS_URL', 'SEERR_API_KEY is deprecated, use REQUESTS_API_KEY']);
+    expect(msgs.join(' ')).not.toContain('old-secret');
+  });
+  it('the new name wins when both are set (also over the old _FILE variant)', async () => {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync('/tmp/ff-secret-old-requests', 'old-file\n');
+    const c = loadConfig({ ...base, REQUESTS_URL: 'http://requests:5055', SEERR_URL: 'http://seerr:5055', REQUESTS_API_KEY: 'new', SEERR_API_KEY: 'old', SEERR_API_KEY_FILE: '/tmp/ff-secret-old-requests' });
+    expect([c.REQUESTS_URL, c.REQUESTS_API_KEY]).toEqual(['http://requests:5055', 'new']);
+  });
+  it('reads REQUESTS_API_KEY_FILE, and the old SEERR_API_KEY_FILE as fallback', async () => {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync('/tmp/ff-secret-new-requests', 'new-file\n');
+    writeFileSync('/tmp/ff-secret-old-requests', 'old-file\n');
+    expect(loadConfig({ ...base, REQUESTS_URL: 'http://requests:5055', REQUESTS_API_KEY_FILE: '/tmp/ff-secret-new-requests', SEERR_API_KEY: 'old' }).REQUESTS_API_KEY).toBe('new-file');
+    const old = { ...base, REQUESTS_URL: 'http://requests:5055', SEERR_API_KEY_FILE: '/tmp/ff-secret-old-requests' };
+    expect(loadConfig(old).REQUESTS_API_KEY).toBe('old-file');
+    expect(deprecatedEnvNames(old)).toEqual(['SEERR_API_KEY_FILE is deprecated, use REQUESTS_API_KEY_FILE']);
+  });
+  it('an empty new value (compose passes "") does not hide the old name', () => {
+    const c = loadConfig({ ...base, REQUESTS_URL: 'http://seerr:5055', REQUESTS_API_KEY: '', SEERR_API_KEY: 'old' });
+    expect(c.REQUESTS_API_KEY).toBe('old');
+    expect(() => loadConfig({ ...base, REQUESTS_URL: 'http://requests:5055' })).toThrow();
   });
 });

@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin → Wochenrückblick: weekly summary for every account (weekday, hour, on/off) + a test send. */
   import { onMount } from 'svelte';

@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin → Datenquellen: optional TMDB/OMDb keys. The API only ever returns last4; a typed key lives in the input until saved, then it is cleared. */
   import { onMount } from 'svelte';

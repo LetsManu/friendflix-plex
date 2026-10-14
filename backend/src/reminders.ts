@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Ctx } from './ctx.js';
 import { m } from './i18n.js';
 import { notify } from './notify.js';

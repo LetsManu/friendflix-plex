@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { createEventDispatcher, tick } from 'svelte';
   import { api, backdrop, img, srcset, type Item } from '#lib/api';
@@ -9,6 +11,7 @@
   import { dialogKeys } from '#lib/actions';
   import { openPreview } from '#lib/previewSheet';
   import { itemPath, playPath } from '#lib/mobile';
+  import { playOrCast } from '#lib/cast/playOrCast';
   import { t, tr } from '#lib/i18n';
 
   /** Phone card: 2:3 poster (tap opens the preview sheet) or, with `landscape`, a 16:9 "Weiterschauen" card with ⓘ and ⋯ bar. */
@@ -45,6 +48,7 @@
   // ---- ⋯ actions (landscape cards) ----
   let acts = false, actsEl: HTMLDivElement, moreBtn: HTMLButtonElement, note = '';
   const portal = (node: HTMLElement) => { document.body.appendChild(node); return { destroy() { node.remove(); } }; };
+  $: watchable = item.type !== 'Series' && item.type !== 'BoxSet';
   async function openActs() { acts = true; await tick(); actsEl?.querySelector<HTMLElement>('a[href],button')?.focus(); }
   function closeActs(refocus = true) { acts = false; if (refocus) moreBtn?.focus(); }
   async function toggleFav() {
@@ -54,7 +58,7 @@
 </script>
 
 <article class="pc" class:landscape>
-  <a class="thumb" href={landscape ? playPath(item) : itemPath(item)} aria-label={landscape ? $t('home.card.playName', { name: label }) : $t('home.card.openPreview', { name: label })} aria-haspopup={landscape ? undefined : 'dialog'} on:click={landscape ? undefined : open}>
+  <a class="thumb" href={landscape ? playPath(item) : itemPath(item)} aria-label={landscape ? $t('home.card.playName', { name: label }) : $t('home.card.openPreview', { name: label })} aria-haspopup={landscape ? undefined : 'dialog'} on:click={landscape ? (e) => { if (watchable) playOrCast(e, item); } : open}>
     {#if src}
       <img class:spoil={isSpoiler(item, $prefs)} loading={priority ? 'eager' : 'lazy'} fetchpriority={priority ? 'high' : undefined} decoding="async" {src} srcset={srcs} sizes={landscape ? '45vw' : '32vw'} alt="" width={landscape ? 320 : 200} height={landscape ? 180 : 300} />
     {:else}<span class="noimg">{item.name}</span>{/if}
@@ -76,7 +80,7 @@
   <div class="scrim" use:portal on:click={() => closeActs()} role="presentation"></div>
   <div class="sheet" tabindex="-1" use:portal use:dialogKeys={{ close: () => closeActs() }} bind:this={actsEl} role="dialog" aria-modal="true" aria-label={$t('home.card.actionsFor', { name: item.name })}>
     <p class="st">{item.name}</p>
-    <a class="act" href={playPath(item)} on:click={() => closeActs(false)}><Icon name="play" size={20} />{$t('home.card.play')}</a>
+    <a class="act" href={playPath(item)} on:click={(e) => { if (watchable) playOrCast(e, item); closeActs(false); }}><Icon name="play" size={20} />{$t('home.card.play')}</a>
     <a class="act" href={itemPath(item)} on:click={() => closeActs(false)}><Icon name="info" size={20} />{$t('home.card.detailsMore')}</a>
     <button type="button" class="act" on:click={async () => { const ok = await toggleList(item.seriesId ?? item.id, inList); if (!ok) note = tr('home.card.saveFailed'); else closeActs(); }}><Icon name={inList ? 'check' : 'plus'} size={20} />{inList ? $t('home.card.removeFromList') : $t('home.card.addToList')}</button>
     <button type="button" class="act" aria-pressed={fav} on:click={() => { void toggleFav(); closeActs(); }}><Icon name="heart" size={20} fill={fav} />{fav ? $t('home.card.favRemove') : $t('home.card.favAdd')}</button>

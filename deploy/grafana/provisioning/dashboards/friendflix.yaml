@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Loads deploy/grafana/friendflix.json (mounted read-only at /etc/grafana/dashboards). Changes made in the UI cannot be
 # saved over it; export the JSON and commit it instead.
 apiVersion: 1

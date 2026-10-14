@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { BRAND_NAME } from './brand.js';
 import webpush from 'web-push';
 import type { Ctx } from './ctx.js';

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test } from '../fixtures.js';
 import { boxInViewport, openPopout, row } from '../helpers.js';
 
@@ -58,5 +60,24 @@ test.describe('quick-view modal (desktop)', () => {
     await expect(modal).toBeHidden();
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole('navigation', { name: 'Hauptnavigation' })).not.toHaveAttribute('inert', /.*/);
+  });
+
+  test('a click on the pop-out picture opens the detail popup; its buttons keep their own action', async ({ page, api }) => {
+    await page.goto('/');
+    const card = row(page, 'Weil du „Inkwell“ gesehen hast').locator('article.card').nth(1);
+    let hp = await openPopout(page, card);
+    // a button inside the pop-out still does its own thing and does not open the popup
+    await hp.getByRole('button', { name: 'Zur Merkliste hinzufügen' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(api.log.some((l) => l.includes('/watchlist'))).toBe(true);
+
+    await page.mouse.move(2, 2);
+    await expect(page.locator('.hp')).toHaveCount(0);
+    hp = await openPopout(page, card);
+    await hp.locator('.media').click({ position: { x: 40, y: 30 } });
+    const modal = page.getByRole('dialog', { name: /The Dawn Keeper/ });
+    await expect(modal).toBeVisible();
+    await expect(page).toHaveURL(/\/item\//);
+    await expect(page.locator('.hp')).toHaveCount(0);
   });
 });

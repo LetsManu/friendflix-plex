@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Block 21: the "Über" tab of the detail page — media server facts plus optional TMDB / OMDb data, merged into one neutral DTO. */
 import type { Ctx } from './ctx.js';
 import { MediaError, type ItemAboutDto, type ItemDto, type MediaCollection, type ProviderIds } from './media/types.js';

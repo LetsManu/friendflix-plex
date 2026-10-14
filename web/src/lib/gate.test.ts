@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canRenderEarly, clearHint, clearReloadFlag, earlyProfile, gateHref, hintOf, kidsAllowed, kidsRedirect, markPicked, needsProfileGate, needsWelcome, parseHint, readActive, readHint, readPicked, readReloading, safeNext, welcomeHref, writeHint } from './gate';
 

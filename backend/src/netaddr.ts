@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { isIP } from 'node:net';
 
 /** Parses IPv4 / IPv6 (incl. IPv4-mapped ::ffff:a.b.c.d and a zone id) into 16 bytes (IPv4 as ::ffff:a.b.c.d); null = not an address. */

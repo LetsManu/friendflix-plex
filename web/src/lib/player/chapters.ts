@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { tr } from '#lib/i18n';
 /** Chapters ("Szenen") of the playing video: seek bar marks, hover names and the scenes panel. Pure helpers, no DOM. */
 

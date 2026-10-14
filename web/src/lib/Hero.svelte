@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { backdrop, HERO_WIDTHS, img, primeItem, srcset, logoUrl, type Item } from '#lib/api';

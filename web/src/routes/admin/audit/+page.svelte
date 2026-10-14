@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin: audit log – server paging, filters (who, area, date range, search), entries as sentences with expandable key/value details. */
   import { onMount } from 'svelte';

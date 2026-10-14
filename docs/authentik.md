@@ -6,7 +6,7 @@
 
 FriendFlix has no passwords of its own. Every sign-in goes through **Authentik** (OpenID Connect, authorization code flow with PKCE), and Authentik enforces multi-factor authentication. This guide covers installing Authentik and every Authentik object FriendFlix needs, with the exact values the backend expects.
 
-The full FriendFlix installation (Jellyfin, Seerr, `.env`, Nginx Proxy Manager, first login) is in the [setup guide](setup.md).
+The full FriendFlix installation (Jellyfin, request service, `.env`, Nginx Proxy Manager, first login) is in the [setup guide](setup.md).
 
 > Menu paths follow the Authentik admin interface of the 2025.12 – 2026.x releases (`compose.authentik.yaml` pins `2026.8.3`). Older releases use slightly different labels. Everything marked *(unverified)* could not be checked against code or the official documentation.
 

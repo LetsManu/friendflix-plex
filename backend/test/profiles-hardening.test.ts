@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, describe, expect, it } from 'vitest';
 import { freshAuth, RESET_PIN_MAX_AGE } from '../src/oidc.js';
 import { ownerProfile } from '../src/profiles.js';

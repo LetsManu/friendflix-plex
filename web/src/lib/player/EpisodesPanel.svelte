@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts" module>
   import type { Item } from '#lib/api';
   /** seasons / episodes stay cached while the player hops from episode to episode */

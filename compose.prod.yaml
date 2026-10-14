@@ -1,10 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # FriendFlix portal stack - PRODUCTION variant: pulls the prebuilt images from ghcr.io (no build on the server).
 # Images come from .github/workflows/publish.yml. Private packages: docker login ghcr.io -u <user> (PAT with read:packages).
 # Pin a version with FF_TAG=<sha|x.y.z> in .env, other owner with FF_REGISTRY=ghcr.io/<owner>.
 # FriendFlix portal stack.
 # - NPM runs OUTSIDE Docker (or in its own stack) and reaches the portal through three ports that are bound to
 #   127.0.0.1 only (BIND_ADDR): web, backend (API/auth/WebSocket) and gateway (/media). Nothing else is published.
-# - Jellyfin/Seerr have NO ports and are only reachable via the internal `media` network.
+# - Jellyfin and the request service have NO ports and are only reachable via the internal `media` network.
 # - `db` network is internal (no egress, no host access).
 # NPM proxy host -> 127.0.0.1:${WEB_PORT}; locations /api,/auth,/ws -> :${BACKEND_PORT}, /media -> :${GATEWAY_PORT}
 # (ready-made config: deploy/npm/portal.advanced.conf).
@@ -18,7 +20,7 @@ networks:
     internal: true
   media:
     internal: true
-  egress: {} # outbound internet for Jellyfin/Seerr metadata only; nothing is published
+  egress: {} # outbound internet for Jellyfin/request service metadata only; nothing is published
 
 services:
   postgres:
@@ -77,7 +79,10 @@ services:
       JELLYFIN_URL: ${JELLYFIN_URL:-} # required when MEDIA_SERVER=jellyfin (the backend refuses to start without it)
       JELLYFIN_ADMIN_API_KEY: ${JELLYFIN_ADMIN_API_KEY:-} # required when MEDIA_SERVER=jellyfin
       OIDC_ALLOW_INSECURE: ${OIDC_ALLOW_INSECURE:-false}
-      SEERR_URL: ${SEERR_URL:?}
+      # request service; the two old-name lines below only keep older .env files working (they log a deprecation warning)
+      REQUESTS_URL: ${REQUESTS_URL:-${SEERR_URL:-${REQUESTS_URL:?set in .env}}}
+      REQUESTS_API_KEY: ${REQUESTS_API_KEY:-}
+      SEERR_URL: ${SEERR_URL:-}
       SEERR_API_KEY: ${SEERR_API_KEY:-}
       NTFY_URL: ${NTFY_URL:-}
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
@@ -108,6 +113,11 @@ services:
       BACKGROUND_JOBS: ${BACKGROUND_JOBS:-true}
       # gzip/brotli for JSON API responses >= 1 KB; false when the reverse proxy already compresses
       API_COMPRESSION: ${API_COMPRESSION:-true}
+      # admin health page: gateway address (only /health is called) and disk / database warning levels
+      GATEWAY_URL: ${GATEWAY_URL:-http://gateway:4000}
+      HEALTH_DISK_WARN_PCT: ${HEALTH_DISK_WARN_PCT:-85}
+      HEALTH_DISK_CRIT_PCT: ${HEALTH_DISK_CRIT_PCT:-95}
+      HEALTH_DB_WARN_GB: ${HEALTH_DB_WARN_GB:-10}
       CAST_ENABLED: ${CAST_ENABLED:-true}
       DOWNLOADS_ENABLED: ${DOWNLOADS_ENABLED:-true}
       DIRECT_PLAY_REQUIRES_DOWNLOAD: ${DIRECT_PLAY_REQUIRES_DOWNLOAD:-false}
@@ -236,12 +246,16 @@ services:
       - ${MEDIA_PATH:-./media}:/media:ro
     networks: [media, egress] # no ports, no NPM host (Plan B: see compose.planb.yaml)
 
-  seerr:
+  # request service (upstream image)
+  requests:
     profiles: [bundled]
     image: ghcr.io/seerr-team/seerr:latest
     restart: unless-stopped
-    volumes: [seerr-config:/app/config]
-    networks: [media, egress]
+    volumes: [requests-config:/app/config]
+    networks:
+      # previous service name kept as a network alias, so existing URLs and webhooks keep working
+      media: { aliases: [seerr] }
+      egress: {}
 
 volumes:
   pgdata:
@@ -249,4 +263,6 @@ volumes:
   downloads:
   jellyfin-config:
   jellyfin-cache:
-  seerr-config:
+  requests-config:
+    # existing volume name, kept so upgrades keep the request service's data
+    name: ${COMPOSE_PROJECT_NAME:-friendflix}_seerr-config

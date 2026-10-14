@@ -1,9 +1,13 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Area "admin": every admin page. German is the typed source. */
 export default {
   title: 'Admin',
   tabs: {
     users: 'Nutzer', status: 'Status', previews: 'Vorschauen', playback: 'Wiedergabe-Check', digest: 'Wochenrückblick', sources: 'Datenquellen', invites: 'Einladungen',
     requests: 'Wünsche', polls: 'Abstimmungen', lists: 'Listen', roles: 'Rollen', devices: 'Geräte', audit: 'Audit-Log', update: 'Update',
+    hygiene: 'Bibliothekspflege',
+    usage: 'Nutzung',
   },
   /** role names by key (unknown roles show the server label) */
   roleNames: { friend: 'Freund', family: 'Familie', guest: 'Gast', admin: 'Admin' },
@@ -291,5 +295,37 @@ export default {
     preview: { clear: '{actor} hat einen Vorschau-Clip gelöscht', regenerate: '{actor} hat einen Vorschau-Clip neu erzeugen lassen' },
     leaving: { set: '{actor} hat ein Entfernungsdatum gesetzt', clear: '{actor} hat ein Entfernungsdatum entfernt' },
     subtitle: { download: '{actor} hat Untertitel heruntergeladen' },
+  },
+  /** Block 22: warning banner for admins (one sentence per issue) */
+  banner: {
+    label: 'Hinweise für Admins',
+    more: { one: '+{n} weitere', other: '+{n} weitere' },
+    less: 'Weniger anzeigen',
+    view: 'Ansehen',
+    dismiss: 'Ausblenden',
+    dismissOne: '„{text}“ ausblenden',
+    generic: 'Etwas braucht deine Aufmerksamkeit',
+    name: { downloads: 'Download-Speicher', previews: 'Vorschau-Speicher', database: 'Datenbank' },
+    svc: {
+      slow: '{name} antwortet langsam',
+      down: '{name} nicht erreichbar',
+      issuer_mismatch: '{name}: Anbieter passt nicht zur Einstellung',
+      invalid_key: '{name}-Schlüssel ungültig',
+      paused: '{name} pausiert (Schlüssel abgelehnt)',
+      budget: '{name}: Tageslimit zu {pct} % genutzt',
+      failed_titles: { one: '{n} Titel im Wiedergabe-Check fehlgeschlagen', other: '{n} Titel im Wiedergabe-Check fehlgeschlagen' },
+      empty_media: 'Medienserver liefert leere Videostücke – Jellyfin neu starten; hilft das nicht, Hardware-Beschleunigung prüfen',
+    },
+    disk: {
+      full: '{name} fast voll ({pct} %)',
+      low_free: '{name}: wenig freier Platz',
+      cap: 'Download-Grenze fast erreicht ({pct} %)',
+      large: 'Die Datenbank ist groß geworden',
+    },
+    errors: {
+      server_errors: { one: '{n} Serverfehler in 15 Minuten', other: '{n} Serverfehler in 15 Minuten' },
+      client_errors: { one: '{n} Browserfehler in 15 Minuten', other: '{n} Browserfehler in 15 Minuten' },
+      failed_playbacks: { one: '{n} Wiedergabe fehlgeschlagen', other: '{n} Wiedergaben fehlgeschlagen' },
+    },
   },
 } as const;

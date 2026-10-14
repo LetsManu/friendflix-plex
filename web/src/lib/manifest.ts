@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { DEFAULT_LOCALE, isLocale, loadLocale, pickLocale, trIn, type Locale } from '#lib/i18n';
 import { BRAND_SHORT } from '#lib/brand'; // fork: short home-screen label
 

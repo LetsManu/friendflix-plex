@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { portalStatus } from '../src/seerr/client.js';
 import { cfg, makeEnv, type TestEnv } from './helpers.js';
@@ -88,7 +90,9 @@ describe('seerr integration', () => {
     const ok = await env.app.inject({ method: 'POST', url: '/internal/webhook/seerr', headers: { authorization: cfg.WEBHOOK_SECRET }, payload });
     expect(ok.statusCode).toBe(200);
     expect(sent.map((s) => s.url).sort()).toEqual(['https://discord.example.com/hook', 'https://ntfy.example.com/ff']);
-    await env.app.inject({ method: 'POST', url: '/internal/webhook/seerr', headers: { 'x-webhook-secret': cfg.WEBHOOK_SECRET }, payload });
+    // the documented path /internal/webhook/requests runs the same handler (old path above keeps working)
+    expect((await env.app.inject({ method: 'POST', url: '/internal/webhook/requests', payload })).statusCode).toBe(403);
+    expect((await env.app.inject({ method: 'POST', url: '/internal/webhook/requests', headers: { 'x-webhook-secret': cfg.WEBHOOK_SECRET }, payload })).statusCode).toBe(200);
     expect(sent).toHaveLength(2); // dedupe: no duplicate external pushes
     const n = (await call('GET', '/api/notifications')).json().notifications;
     expect(n.some((x: any) => x.kind === 'available' && x.title.includes('Dunmoor'))).toBe(true);

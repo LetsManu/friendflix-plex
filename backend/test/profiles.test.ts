@@ -1,7 +1,9 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, describe, expect, it } from 'vitest';
 import { hashPin, verifyPin } from '../src/crypto.js';
 import { MemoryKV } from '../src/kv.js';
-import { reapplyRole } from '../src/users.js';
+import { reapplyPoliciesOnce, reapplyRole } from '../src/users.js';
 import { cfg, makeEnv, type Handler, type TestEnv } from './helpers.js';
 
 type Sess = { cookies: Record<string, string>; csrf: string };
@@ -247,6 +249,28 @@ describe('profiles', () => {
     const hit = policies().find((c) => c.path === `/Users/${kidJf}/Policy`);
     expect(hit!.body).toMatchObject({ IsHidden: true, IsDisabled: false });
     expect(policies()).toHaveLength(2);
+  });
+
+  it('reapplyPoliciesOnce runs once per flag; a failed Jellyfin call clears the flag so the next start retries', async () => {
+    await mk();
+    const flag = async (k: string) => (await env.pool.query('select 1 from app_flags where key=$1', [k])).rowCount;
+    env.jfCalls.length = 0;
+    await reapplyPoliciesOnce(env.ctx, 'test_once');
+    const n = policies().length;
+    expect(n).toBeGreaterThan(0);
+    await reapplyPoliciesOnce(env.ctx, 'test_once'); // flag set: nothing pushed again
+    expect(policies()).toHaveLength(n);
+    expect(await flag('test_once')).toBe(1);
+
+    const apply = env.ctx.jf.admin.applyPolicy;
+    env.ctx.jf.admin.applyPolicy = async () => { throw new Error('jellyfin down'); };
+    await reapplyPoliciesOnce(env.ctx, 'test_retry');
+    expect(await flag('test_retry')).toBe(0);
+    env.ctx.jf.admin.applyPolicy = apply;
+    env.jfCalls.length = 0;
+    await reapplyPoliciesOnce(env.ctx, 'test_retry');
+    expect(policies()).toHaveLength(n);
+    expect(await flag('test_retry')).toBe(1);
   });
 
   it('delete removes the Jellyfin user, the row and per-profile data; owner cannot be deleted', async () => {

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { TKey } from '#lib/i18n';
 
 /** Link groups of the account menu: used by the desktop dropdown and the /me page. Labels are i18n keys (render with $t). */

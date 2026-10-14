@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Block 17 D1: server-computed card badges (fresh label, "Nur noch N Tage"), facts of one title (quality chips, leaving date) and
  * the "Story so far" card. Cards ask for their badge by id; asks of one frame are sent as ONE request (POST /api/discover/badges) and

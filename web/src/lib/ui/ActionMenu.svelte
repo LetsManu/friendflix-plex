@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /**
    * Row/overflow menu ("⋯") for secondary and destructive actions. Built on MoreActions (popover on desktop, bottom

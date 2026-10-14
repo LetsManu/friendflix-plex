@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/admin';
 import type { Translation } from '../../types';
 
@@ -7,6 +9,8 @@ const it: Translation<typeof de> = {
   tabs: {
     users: 'Utenti', status: 'Stato', previews: 'Anteprime', playback: 'Test di riproduzione', digest: 'Riepilogo settimanale', sources: 'Fonti di dati', invites: 'Inviti',
     requests: 'Richieste', polls: 'Votazioni', lists: 'Liste', roles: 'Ruoli', devices: 'Dispositivi', audit: 'Registro di audit', update: 'Aggiornamento',
+    hygiene: 'Cura della libreria',
+    usage: 'Utilizzo',
   },
   roleNames: { friend: 'Amico', family: 'Famiglia', guest: 'Ospite', admin: 'Admin' },
   kind: { movie: 'Film', series: 'Serie TV' },
@@ -380,6 +384,37 @@ const it: Translation<typeof de> = {
     leaving: { set: '{actor} ha impostato una data di rimozione', clear: '{actor} ha tolto una data di rimozione' },
     subtitle: {
       download: '{actor} ha scaricato i sottotitoli',
+    },
+  },
+  banner: {
+    label: 'Avvisi per gli admin',
+    more: { one: '+{n} altro', many: '+{n} altri', other: '+{n} altri' },
+    less: 'Mostra meno',
+    view: 'Vedi',
+    dismiss: 'Nascondi',
+    dismissOne: 'Nascondi «{text}»',
+    generic: 'Qualcosa richiede la tua attenzione',
+    name: { downloads: 'Spazio dei download', previews: 'Spazio delle anteprime', database: 'Database' },
+    svc: {
+      slow: '{name} risponde lentamente',
+      down: '{name} non raggiungibile',
+      issuer_mismatch: '{name}: il fornitore non corrisponde all’impostazione',
+      invalid_key: '{name}: chiave non valida',
+      paused: '{name} in pausa (chiave rifiutata)',
+      budget: '{name}: {pct} % del limite giornaliero usato',
+      failed_titles: { one: '{n} titolo non riuscito nel test di riproduzione', many: '{n} titoli non riusciti nel test di riproduzione', other: '{n} titoli non riusciti nel test di riproduzione' },
+      empty_media: 'Il media server restituisce video vuoti – riavvia Jellyfin; se non basta, controlla l’accelerazione hardware',
+    },
+    disk: {
+      full: '{name} quasi pieno ({pct} %)',
+      low_free: '{name}: poco spazio libero',
+      cap: 'Limite download quasi raggiunto ({pct} %)',
+      large: 'Il database è diventato grande',
+    },
+    errors: {
+      server_errors: { one: '{n} errore del server in 15 minuti', many: '{n} errori del server in 15 minuti', other: '{n} errori del server in 15 minuti' },
+      client_errors: { one: '{n} errore del browser in 15 minuti', many: '{n} errori del browser in 15 minuti', other: '{n} errori del browser in 15 minuti' },
+      failed_playbacks: { one: '{n} riproduzione non riuscita', many: '{n} riproduzioni non riuscite', other: '{n} riproduzioni non riuscite' },
     },
   },
 };

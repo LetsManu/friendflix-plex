@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Area "player": player controls, watch page, episodes panel, phone remote, Chromecast, TV pairing. German is the typed source. */
 export default {
   /** browser tab title of the watch page while the title is unknown */
@@ -127,6 +129,22 @@ export default {
     chooseHint: 'Jetzt den Fernseher in der Liste auswählen.',
     needsTranscode: 'AirPlay braucht Transcoding – mit deiner Rolle nicht erlaubt.',
     tvHint: 'Kein AirPlay oder Chromecast am Fernseher? Öffne {url} im Browser des Fernsehers und kopple dein Handy als Fernbedienung.',
+  },
+  /** the bar while a title plays on a TV (cast engine) */
+  castBar: {
+    region: 'Jetzt auf dem Fernseher',
+    failed: '„{title}“ kann auf {device} nicht abgespielt werden.',
+    airplayDevice: 'AirPlay-Gerät',
+    reconnect: 'Verbindung verloren – tippen, um am Fernseher fortzusetzen',
+    on: 'auf {device}',
+    stop: 'Wiedergabe auf {device} beenden',
+    stopQuestion: 'Wiedergabe auf {device} beenden?',
+    next: 'Als Nächstes: {label}',
+    nextIn: 'in {n} s',
+    playHere: 'Hier abspielen',
+    playingOn: 'Läuft auf {device}',
+    open: 'Fernbedienung öffnen',
+    progress: 'Fortschritt',
   },
   mode: {
     label: 'Wiedergabe: {mode}',

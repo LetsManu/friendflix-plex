@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Helpers of the People admin pages (users, roles, devices, invites, audit): device kinds, audit details, date filters. */
 import { fmtList, fmtNumber, hasKey, tr, trDynamic } from '#lib/i18n';
 

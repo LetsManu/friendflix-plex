@@ -13,7 +13,7 @@ import { PlexFake, PLEX_TOKEN, PLEX_URL } from '../plexfake.js';
 
 const BASE = {
   PUBLIC_URL: 'https://p.example.com', DATABASE_URL: 'postgres://x@localhost/none', REDIS_URL: 'x', APP_ENC_KEY: 'k'.repeat(44), INTERNAL_SECRET: 'i'.repeat(20),
-  OIDC_ISSUER: 'https://a.example.com', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's', SEERR_URL: 'http://s', SEERR_API_KEY: 'k', WEBHOOK_SECRET: 'w'.repeat(20),
+  OIDC_ISSUER: 'https://a.example.com', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's', REQUESTS_URL: 'http://s', REQUESTS_API_KEY: 'k', WEBHOOK_SECRET: 'w'.repeat(20),
 };
 
 describe('MEDIA_SERVER=plex config', () => {

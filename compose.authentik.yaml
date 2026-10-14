@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Authentik (SSO/OIDC for FriendFlix) as its own stack. Redis is gone since 2025.10: PostgreSQL does caching and tasks.
 # Required variables: AUTHENTIK_PG_PASSWORD (openssl rand -hex 24) and AUTHENTIK_SECRET_KEY (openssl rand -hex 40).
 # Optional: AUTHENTIK_TAG (pinned release, compare https://docs.goauthentik.io/ ), AUTHENTIK_PORT (default 9000; use 9100 if Portainer uses 9000),

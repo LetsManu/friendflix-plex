@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Going into the player (Block 20, spec §4): the clicked artwork morphs into the player poster (View Transitions API,
  * shared name `ff-play-art`), else a 200 ms fade; reduced motion = instant cut plus a 120 ms fade; TV = no transition.

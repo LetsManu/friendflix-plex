@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * AirPlay stream probe (diagnosis): what does the TV get? After a token request the controller fetches the token's master playlist
  * (and the first variant playlist) the way the receiver does (no cookies) and logs a SANITIZED summary to the AirPlay event log.

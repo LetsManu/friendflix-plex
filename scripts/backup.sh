@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Postgres backup (custom format, restorable with pg_restore). Run daily from cron:
 #   0 3 * * * cd /opt/friendflix && ./scripts/backup.sh >> backups/backup.log 2>&1
 # Docker mode (default): pg_dump inside the `postgres` compose service.

@@ -1,7 +1,44 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { MEDIA_SERVERS } from './media/index.js';
 import { isValidCidr } from './netaddr.js';
+
+/**
+ * Renamed settings: new name -> old name. The old name (and its _FILE variant) still works, but only while the new
+ * name is unset in both forms; using it logs a deprecation warning at startup (see deprecatedEnvNames).
+ */
+const RENAMED_ENV: Record<string, string> = {
+  REQUESTS_URL: 'SEERR_URL',
+  REQUESTS_API_KEY: 'SEERR_API_KEY',
+};
+
+/** Copies old setting names onto their new names when the new name is not set (neither VAR nor VAR_FILE). */
+function withRenamedEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out = { ...env };
+  for (const [now, old] of Object.entries(RENAMED_ENV)) {
+    if (env[now] || env[`${now}_FILE`]) continue; // the new name wins
+    if (env[old]) out[now] = env[old];
+    if (env[`${old}_FILE`]) out[`${now}_FILE`] = env[`${old}_FILE`];
+  }
+  return out;
+}
+
+/**
+ * Old setting names that are still set, as "OLD is deprecated, use NEW" messages (names only, never values).
+ * Compose passes the old name through next to the new one (which falls back to the old value), so an old name is
+ * reported whenever it is set.
+ */
+export function deprecatedEnvNames(env: NodeJS.ProcessEnv = process.env): string[] {
+  const out: string[] = [];
+  for (const [now, old] of Object.entries(RENAMED_ENV)) {
+    for (const suffix of ['', '_FILE']) {
+      if (env[`${old}${suffix}`]) out.push(`${old}${suffix} is deprecated, use ${now}${suffix}`);
+    }
+  }
+  return out;
+}
 
 /** Reads VAR, or the file referenced by VAR_FILE (Docker secrets). */
 function withFileSecrets(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -29,7 +66,7 @@ const schema = z.object({
   APP_ENC_KEY: z.string().min(43),
   /** Shared secret between backend and gateway (never reaches browsers). */
   INTERNAL_SECRET: z.string().min(16),
-  /** Shared secret for Jellyfin/Seerr webhooks. */
+  /** Shared secret for Jellyfin/request service webhooks. */
   WEBHOOK_SECRET: z.string().min(16),
   ADMIN_GROUP: z.string().default('friendflix-admins'),
   OIDC_ISSUER: z.string().url(),
@@ -43,8 +80,9 @@ const schema = z.object({
   /** required when MEDIA_SERVER=plex: base URL of the existing Plex Media Server and its admin token (backend + gateway only) */
   PLEX_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
   PLEX_TOKEN: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
-  SEERR_URL: z.string().url(),
-  SEERR_API_KEY: z.string().min(1),
+  /** the request service (old names SEERR_URL / SEERR_API_KEY still work, see RENAMED_ENV) */
+  REQUESTS_URL: z.string().url(),
+  REQUESTS_API_KEY: z.string().min(1),
   NTFY_URL: opt, // e.g. https://ntfy.example.com/friendflix
   DISCORD_WEBHOOK_URL: opt,
   /** personal push (ntfy topics per user): base URL of the ntfy server; default = origin of NTFY_URL */
@@ -116,6 +154,13 @@ const schema = z.object({
   BACKGROUND_JOBS: z.enum(['true', 'false']).default('true'),
   /** gzip/brotli for JSON API responses >= 1 KB (off when a reverse proxy already compresses) */
   API_COMPRESSION: z.enum(['true', 'false']).default('true'),
+  /** Block 22 admin health: the gateway's internal address (only GET /health is called, no token) */
+  GATEWAY_URL: z.string().url().default('http://gateway:4000'),
+  /** disk usage levels on the admin health page: warn / critical at this percentage used */
+  HEALTH_DISK_WARN_PCT: z.coerce.number().int().min(50).max(99).default(85),
+  HEALTH_DISK_CRIT_PCT: z.coerce.number().int().min(51).max(100).default(95),
+  /** database size (GB) above which the admin health page warns */
+  HEALTH_DB_WARN_GB: z.coerce.number().positive().default(10),
 });
 
 /** Settings each media server kind needs (another kind adds its own entry). */
@@ -133,5 +178,11 @@ const checked = schema.superRefine((c, ctx) => {
 export type Config = z.infer<typeof schema>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  return checked.parse(withFileSecrets(env));
+  const c = checked.parse(withFileSecrets(withRenamedEnv(env)));
+  // yellow must come before red: a warn level at or above the critical one would never show, so both fall back to the defaults
+  if (c.HEALTH_DISK_WARN_PCT >= c.HEALTH_DISK_CRIT_PCT) {
+    console.warn(`HEALTH_DISK_WARN_PCT (${c.HEALTH_DISK_WARN_PCT}) must be below HEALTH_DISK_CRIT_PCT (${c.HEALTH_DISK_CRIT_PCT}); using 85 / 95`);
+    return { ...c, HEALTH_DISK_WARN_PCT: 85, HEALTH_DISK_CRIT_PCT: 95 };
+  }
+  return c;
 }

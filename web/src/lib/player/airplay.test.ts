@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CastInfo } from '#lib/cast';
 import { airPlaySupported, ARM_MS, AUTO_MAX, AUTO_WINDOW_MS, AVAILABILITY_EVENT, createAirPlay, SETTLE_MS, WIRELESS_EVENT, WIRELESS_OFF_GRACE_MS, type AirPlayDeps, type AirPlayState } from './airplay';
@@ -14,6 +16,7 @@ class FakeVideo extends EventTarget {
   protected srcChanged() { /* nothing */ }
   attrs = new Map<string, string>([['crossorigin', 'use-credentials']]);
   webkitCurrentPlaybackTargetIsWireless = false;
+  remote?: { state?: 'connecting' | 'connected' | 'disconnected' };
   webkitShowPlaybackTargetPicker = vi.fn();
   play = vi.fn(async () => { this.paused = false; });
   setAttribute(n: string, v: string) { this.attrs.set(n, v); }
@@ -949,5 +952,95 @@ describe('variant fallback (MEDIA_ERR_SRC_NOT_SUPPORTED on the master)', () => {
     b.c.videoError(2);
     expect(readAirLog().find((e) => e.ev === 'video-error')?.note).toBe('code 2 w=undefined');
     void v;
+  });
+});
+
+describe('AirPlay controller: shared with the cast engine', () => {
+  it('rebind: later callbacks go to the new deps, the old ones are never called again', async () => {
+    fake();
+    const { v, c, deps: deps1 } = setup();
+    v.currentTime = 100; v.paused = false;
+    await airplayOn(v, c);
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    const deps2 = { request: vi.fn(async () => CI2), revoke: vi.fn(), detach: vi.fn(), started: vi.fn(), restore: vi.fn(), fail: vi.fn(), change: vi.fn() } satisfies AirPlayDeps;
+    c.rebind(deps2);
+    expect(c.state.active).toBe(true);
+    expect(c.info).toBe(CI);
+    v.wireless(false);
+    await vi.advanceTimersByTimeAsync(WIRELESS_OFF_GRACE_MS + 10);
+    expect(deps1.restore).not.toHaveBeenCalled();
+    expect(deps1.revoke).not.toHaveBeenCalled();
+    expect(deps2.revoke).toHaveBeenCalledWith(CI);
+    expect(deps2.restore).toHaveBeenCalledTimes(1);
+    expect(deps2.change).toHaveBeenCalled();
+    expect(readAirLog().some((e) => e.ev === 'rebind')).toBe(true);
+  });
+
+  it('rebind: no old callback after the rebind, also for change / request', async () => {
+    const { v, c, deps: deps1 } = setup();
+    await airplayOn(v, c);
+    const calls = vi.mocked(deps1.change).mock.calls.length;
+    const deps2 = { request: vi.fn(async () => CI2), revoke: vi.fn(), detach: vi.fn(), started: vi.fn(), restore: vi.fn(), fail: vi.fn(), change: vi.fn() } satisfies AirPlayDeps;
+    c.rebind(deps2);
+    await c.refresh();
+    expect(deps1.request).toHaveBeenCalledTimes(1);
+    expect(deps2.request).toHaveBeenCalledTimes(1);
+    expect(deps1.change).toHaveBeenCalledTimes(calls);
+    expect(deps2.started).toHaveBeenCalledWith(CI2);
+  });
+
+  it('switchItem: new token at pos, old token revoked, element plays the new URL', async () => {
+    const { v, c, deps } = setup();
+    await airplayOn(v, c); // paused: refresh would keep it paused, a switch always plays
+    expect(v.play).not.toHaveBeenCalled();
+    vi.mocked(deps.request).mockResolvedValueOnce(CI2);
+    await c.switchItem(0);
+    expect(deps.request).toHaveBeenLastCalledWith(0);
+    expect(deps.revoke).toHaveBeenCalledWith(CI);
+    expect(v.src).toBe(CI2.contentUrl);
+    expect(v.play).toHaveBeenCalled();
+    expect(c.info).toBe(CI2);
+    expect(c.state).toMatchObject({ active: true, busy: false, error: false });
+  });
+
+  it('switchItem is a no-op unless active', async () => {
+    const { v, c, deps } = setup();
+    await c.switchItem(5);
+    expect(deps.request).not.toHaveBeenCalled();
+    c.pick();
+    await flush(); // ready, not active
+    await c.switchItem(5);
+    expect(deps.request).toHaveBeenCalledTimes(1);
+    v.wireless(true);
+    await flush();
+    c.destroy();
+    await c.switchItem(5);
+    expect(deps.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('switchItem is a no-op while a token is in flight', async () => {
+    const { v, c, deps } = setup();
+    await airplayOn(v, c);
+    let resolve!: (ci: CastInfo) => void;
+    vi.mocked(deps.request).mockImplementationOnce(() => new Promise<CastInfo>((r) => (resolve = r)));
+    const first = c.refresh();
+    await flush();
+    await c.switchItem(3);
+    expect(deps.request).toHaveBeenCalledTimes(2);
+    resolve(CI2);
+    await first;
+  });
+
+  it('grace end keeps the session while video.remote.state is connected', async () => {
+    fake();
+    const { v, c, deps } = setup();
+    await airplayOn(v, c);
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    v.remote = { state: 'connected' };
+    v.wireless(false);
+    await vi.advanceTimersByTimeAsync(WIRELESS_OFF_GRACE_MS + 10);
+    expect(c.state.active).toBe(true);
+    expect(deps.restore).not.toHaveBeenCalled();
+    expect(readAirLog().some((e) => e.note?.includes('remote playback connected'))).toBe(true);
   });
 });

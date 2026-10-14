@@ -1,6 +1,6 @@
 # Streaming product research – discovery upgrade
 
-Stand: Oktober 2026. Ziel: Muster etablierter Streaming-, Tracking- und Social-Produkte finden, die für FriendFlix (selbst gehostet, Jellyfin + Seerr, kleiner Freundeskreis) echten Nutzen bringen – ohne Marken, Texte, Bilder oder proprietäre Oberflächen zu übernehmen.
+Stand: Oktober 2026. Ziel: Muster etablierter Streaming-, Tracking- und Social-Produkte finden, die für FriendFlix (selbst gehostet, Jellyfin + Wunsch-Dienst, kleiner Freundeskreis) echten Nutzen bringen – ohne Marken, Texte, Bilder oder proprietäre Oberflächen zu übernehmen.
 
 Methodik: öffentliche Hilfeseiten, Produkt-Blogs und Fachartikel (Quellen unten), plus ein Audit der eigenen Codebasis (Frontend, Backend, Qualität/CI). Was nicht direkt in einer Quelle bestätigt werden konnte, ist als „unbestätigt“ markiert.
 

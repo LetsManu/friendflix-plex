@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** German source dictionary: bundled with the app, typed source of every key. One file per area (docs/i18n.md). */
 import common from './common';
 import shell from './shell';

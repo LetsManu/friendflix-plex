@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # FriendFlix – Authentik setup for portal invitations with account creation.
 #
 # Import (Authentik admin UI): Flows and Stages → Flows → Import → "File upload" → this file → Import.

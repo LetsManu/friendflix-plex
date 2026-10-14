@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Pure offline-licence logic (no browser APIs, unit-tested). Used by the download manager and the offline player.
 // Honest limits: there is no DRM; expiry/revocation is enforced by the app, on the next online check-in.
 

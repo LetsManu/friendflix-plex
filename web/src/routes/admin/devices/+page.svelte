@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin: devices – waiting devices first with approve / decline (undo), approved ones can be revoked (confirm). */
   import { onMount } from 'svelte';

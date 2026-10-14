@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { jellyfinUpstream } from './jellyfin.js';
 import { plexUpstream } from './plex.js';
 import type { Upstream } from './types.js';

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/adminPeople';
 import type { Translation } from '../../types';
 
@@ -160,6 +162,38 @@ const dict: Translation<typeof de> = {
       authentik: 'Authentik', by: 'Aprobado', sessions: 'Sesiones terminadas', language: 'Idioma', count: 'Cantidad', name: 'Título', leavesAt: 'Se va el',
     },
     values: { yes: 'Sí', no: 'No', unlimited: 'Ilimitado', ok: 'Correcto', failed: 'Fallido', off: 'Desactivado', skipped: 'Omitido', admin: 'Admin', self: 'Él mismo' },
+  },
+  usage: {
+    period: 'Periodo',
+    periods: { d7: 'Últimos 7 días', d30: 'Últimos 30 días', d90: 'Últimos 90 días' },
+    privacy: 'Agregado, sin títulos: cuánto se ve, no qué.',
+    since: 'Datos desde el {date}',
+    col: { name: 'Cuenta', lastSeen: 'Última vez', time: 'Tiempo visto', titles: 'Títulos', streams: 'Reproducciones', transcodes: 'Transcodificaciones', devices: 'Dispositivos', now: 'Ahora' },
+    split: 'Películas {movies} · Series {series}',
+    tcShare: '{pct} % · {reason}',
+    tcPct: '{pct} %',
+    devicesUsed: '{used}/{total}',
+    live: { one: '{n} reproducción en curso', many: '{n} reproducciones en curso', other: '{n} reproducciones en curso' },
+    locked: 'Bloqueada',
+    never: 'Nunca',
+    details: 'Detalles',
+    detailsFor: 'Detalles de {name}',
+    detailTitle: '{name} · {period}',
+    perDay: 'Tiempo visto por día',
+    bars: 'Tiempo visto por día: {total} en total, como máximo {max} el {date}',
+    barsEmpty: 'Tiempo visto por día: nada reproducido en este periodo',
+    devicesTitle: 'Dispositivos en el periodo',
+    deviceUnknown: 'Dispositivo desconocido',
+    app: 'App',
+    deviceStreams: { one: '{n} reproducción', many: '{n} reproducciones', other: '{n} reproducciones' },
+    deviceTc: { one: '{n} transcodificada', many: '{n} transcodificadas', other: '{n} transcodificadas' },
+    noDevices: 'Ningún dispositivo en este periodo.',
+    reasonsTitle: 'Motivos de transcodificación',
+    reasonsNone: 'Ninguna transcodificación.',
+    empty: 'Aún no hay cuentas.',
+    loadFailed: 'No se pudo cargar el uso.',
+    detailFailed: 'No se pudieron cargar los detalles.',
+    close: 'Cerrar',
   },
 };
 export default dict;

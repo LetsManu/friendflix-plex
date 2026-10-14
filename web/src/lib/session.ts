@@ -1,12 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { api } from '#lib/api';
 import { disablePush } from '#lib/push';
 import { getAllDownloads } from '#lib/offline/db';
 import { clearHint } from '#lib/gate';
 import { tr } from '#lib/i18n';
 import { confirm } from '#lib/ui/confirm';
+import { castEngine, castSession } from '#lib/cast/engine';
+import { get } from 'svelte/store';
+
+/** Ends a running cast (stop report, token revoked, TV session closed) so no stream keeps running under the old identity; best effort, never blocks the caller. */
+export async function endCast() {
+  if (get(castSession)) await castEngine.stop().catch(() => undefined);
+}
 
 /** Signs out: offers to wipe offline downloads, drops this device's push subscription, ends the session and leaves the app. */
 export async function logout(tv: boolean | undefined) {
+  await endCast();
   let hasDl = false;
   try { hasDl = (await getAllDownloads()).length > 0; } catch { /* no IndexedDB */ }
   if (hasDl && await confirm({ title: tr('account.logout.downloadsTitle'), body: tr('account.logout.downloadsBody'), danger: true, confirmLabel: tr('account.logout.deleteDownloads'), cancelLabel: tr('account.logout.keepDownloads') })) await (await import('#lib/offline/manager')).removeAll().catch(() => undefined);

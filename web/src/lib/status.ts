@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 export type Status = 'none' | 'planned' | 'watching' | 'watched' | 'dropped';
 
 /** Watch status after "Merkliste" was toggled for the same item (adding plans it, removing un-plans it). */

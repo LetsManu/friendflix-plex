@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { hubGlow, hubGradient, type Hub } from '#lib/hubs';
   import { t } from '#lib/i18n';

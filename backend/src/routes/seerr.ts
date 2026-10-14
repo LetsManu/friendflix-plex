@@ -1,4 +1,6 @@
-import type { FastifyInstance } from 'fastify';
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Readable } from 'node:stream';
 import { z } from 'zod';
 import { audit } from '../audit.js';
@@ -157,8 +159,9 @@ export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
     }));
   }
 
-  // ---- Seerr webhook (internal URL, shared secret in Authorization header or x-webhook-secret) ----
-  app.post('/internal/webhook/seerr', async (req, reply) => {
+  // ---- request service webhook (internal URL, shared secret in Authorization header or x-webhook-secret) ----
+  // /internal/webhook/requests is the documented path; the old /internal/webhook/seerr keeps working for existing setups
+  const requestWebhook = async (req: FastifyRequest, reply: FastifyReply) => {
     const ok = checkSecret(req, 'x-webhook-secret', ctx.cfg.WEBHOOK_SECRET) || checkSecret(req, 'authorization', ctx.cfg.WEBHOOK_SECRET);
     if (!ok) return reply.code(403).send({ error: 'forbidden' });
     const b = z.object({
@@ -192,7 +195,9 @@ export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
       for (const r of rows) await notify(ctx, { userId: r.user_id, kind: type.toLowerCase(), title: m(type === 'MEDIA_DECLINED' ? 'request.declinedShort' : 'request.approvedShort', { title: r.title }), link: '/requests', dedupe: `${type}-${r.seerr_request_id}` });
     }
     return { ok: true };
-  });
+  };
+  app.post('/internal/webhook/requests', requestWebhook);
+  app.post('/internal/webhook/seerr', requestWebhook);
 
   // ---- notifications (in-app) ----
   app.get('/api/notifications', npre, async (req) => {

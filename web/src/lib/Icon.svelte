@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Small own SVG icon set (stroke icons, 24x24). Decorative unless `label` is given. */
   export let name: string;

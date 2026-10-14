@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import { api, ApiError, img, type Item } from '#lib/api';

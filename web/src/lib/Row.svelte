@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts" module>
   /** horizontal scroll position per row (title + link), kept across client-side navigation (back to home keeps the rows where they were) */
   const scrollMemo = new Map<string, number>();

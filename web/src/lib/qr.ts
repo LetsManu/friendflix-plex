@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import qrcode from 'qrcode-generator';
 
 /** QR code as one SVG path (dark modules as unit squares), rendered by the page itself, so no markup is injected. */

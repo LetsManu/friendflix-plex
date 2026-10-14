@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { decrypt, encrypt } from '../crypto.js';
 import type { KV } from '../kv.js';
 import type {
@@ -9,8 +11,10 @@ import { JellyfinClient, JellyfinError, mediaBrowserHeader, policyFromTemplate }
 import { jellyfinWebhookEvents } from './webhook.js';
 import { bestTraits, maxWidthFor, toDownloadSource, toItemDto, toMediaTraits, toPlaybackDto, toTrickplayDto, type DownloadQuality, type DownloadSourceDto } from './dto.js';
 import { toChapters, toCredits, toItemAbout, toProviderIds } from './dto.js'; // Block 17 P1, Block 21
+import { toHygieneFacts, toServerSession } from './dto.js'; // Block 22
 import { MediaError } from '../media/types.js';
 import type { ChapterDto, ItemAboutDto, ItemCreditsDto, MediaCollection } from '../media/types.js'; // Block 17 P1, Block 21
+import type { HygieneFacts, ServerSession } from '../media/types.js'; // Block 22
 
 const TOKEN_TTL = 6 * 3600;
 const BOXSET_INDEX_KEY = 'jf:boxsets:v1';
@@ -667,6 +671,26 @@ export class JellyfinService implements MediaServer {
     });
   }
 
+  // ---- Block 22: admin care (library hygiene, metadata refresh) ----
+  /** One page of hygiene facts of the whole library (admin key), stable order; `savedSince` -> minDateLastSaved (incremental scans). */
+  async libraryHygiene(type: 'Movie' | 'Series' | 'Episode', page: { start: number; limit: number; savedSince?: string }): Promise<HygieneFacts[]> {
+    const p = new URLSearchParams({
+      recursive: 'true', includeItemTypes: type, fields: 'Overview,ProviderIds,MediaSources,ProductionYear,PremiereDate,SeriesId',
+      enableUserData: 'false', enableImageTypes: 'Primary,Backdrop', imageTypeLimit: '1', sortBy: 'SortName,Id', sortOrder: 'Ascending',
+      startIndex: String(page.start), limit: String(page.limit), enableTotalRecordCount: 'false',
+    });
+    if (page.savedSince) p.set('minDateLastSaved', page.savedSince);
+    const r = await this.client.adminJson<{ Items?: any[] }>(`/Items?${p}`);
+    return (r?.Items ?? []).filter((i) => i?.Id).map((i) => toHygieneFacts(i, type));
+  }
+
+  /** Full metadata + image refresh of one item (admin key), keeping what is there; MediaError(404) for an unknown id. */
+  async refreshMetadata(id: string): Promise<void> {
+    const p = new URLSearchParams({ metadataRefreshMode: 'FullRefresh', imageRefreshMode: 'FullRefresh', replaceAllMetadata: 'false', replaceAllImages: 'false' });
+    const res = await this.client.adminFetch(`/Items/${encodeURIComponent(id)}/Refresh?${p}`, { method: 'POST' });
+    if (!res.ok) throw new JellyfinError(res.status === 404 ? 404 : 502, `Jellyfin refresh -> ${res.status}`);
+  }
+
   // ---- Block 17 D1: media traits (quality chips, 4K / HDR filter) ----
   /** Best video / audio of a title as the viewer sees it; a series reports its best (first few) episodes. null = not visible / no video. */
   async mediaTraits(user: JfUser, id: string): Promise<MediaTraits | null> {
@@ -826,10 +850,19 @@ export class JellyfinService implements MediaServer {
       /** sessions of other apps: FriendFlix' own devices ("ff-<id>") are tracked by the portal itself */
       externalSessions: async (): Promise<ExternalSession[]> => (await client.sessions())
         .filter((s) => s.NowPlayingItem && !String(s.DeviceId ?? '').startsWith('ff-'))
-        .map((s) => ({
-          sessionId: String(s.Id), serverUserId: String(s.UserId), positionTicks: s.PlayState?.PositionTicks ?? 0, isPaused: Boolean(s.PlayState?.IsPaused),
-          item: { id: s.NowPlayingItem.Id, name: s.NowPlayingItem.Name, seriesName: s.NowPlayingItem.SeriesName, type: s.NowPlayingItem.Type, runtimeTicks: s.NowPlayingItem.RunTimeTicks },
-        })),
+        .map((s) => {
+          const d = toServerSession(s); // Block 22: client, play method, reasons (whitelisted fields only)
+          return {
+            sessionId: String(s.Id), serverUserId: String(s.UserId), positionTicks: s.PlayState?.PositionTicks ?? 0, isPaused: Boolean(s.PlayState?.IsPaused),
+            item: { id: s.NowPlayingItem.Id, name: s.NowPlayingItem.Name, seriesName: s.NowPlayingItem.SeriesName, type: s.NowPlayingItem.Type, runtimeTicks: s.NowPlayingItem.RunTimeTicks },
+            ...(d ? { client: d.client, playMethod: d.playMethod, reasons: d.reasons } : {}),
+          };
+        }),
+      /** Block 22: every playing session (FriendFlix devices included) with play method, reasons, codecs and hardware flag */
+      transcodeSessions: async (): Promise<ServerSession[]> => (await client.allSessions()).flatMap((s) => {
+        const d = toServerSession(s);
+        return d ? [d] : [];
+      }),
     };
   }
 }

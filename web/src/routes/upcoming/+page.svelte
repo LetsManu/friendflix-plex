@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import UpcomingRow from '#lib/UpcomingRow.svelte';
   import { t } from '#lib/i18n';

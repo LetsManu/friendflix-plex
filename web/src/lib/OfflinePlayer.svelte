@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
   import { getDownload, getMeta, putDownload, queueProgress, type DownloadRecord } from '#lib/offline/db';

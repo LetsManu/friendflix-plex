@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Pure decision logic + storage helpers for the FriendFlix brand intro (see Intro.svelte, sonic.ts). */
 
 export interface IntroSettings {

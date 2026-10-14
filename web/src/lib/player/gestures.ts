@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Pure maths of the touch gestures (the component feeds pointer coordinates in and applies the results). */
 export type Zone = 'left' | 'center' | 'right';
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/adminPeople';
 import type { Translation } from '../../types';
 
@@ -160,6 +162,38 @@ const dict: Translation<typeof de> = {
       authentik: 'Authentik', by: 'Zatwierdzone', sessions: 'Zakończone sesje', language: 'Język', count: 'Liczba', name: 'Tytuł', leavesAt: 'Zniknie',
     },
     values: { yes: 'Tak', no: 'Nie', unlimited: 'Bez limitu', ok: 'OK', failed: 'Nie powiodło się', off: 'Wyłączone', skipped: 'Pominięto', admin: 'Admin', self: 'Samodzielnie' },
+  },
+  usage: {
+    period: 'Okres',
+    periods: { d7: 'Ostatnie 7 dni', d30: 'Ostatnie 30 dni', d90: 'Ostatnie 90 dni' },
+    privacy: 'Zbiorczo, bez tytułów: ile się ogląda, a nie co.',
+    since: 'Dane od {date}',
+    col: { name: 'Konto', lastSeen: 'Ostatnio widziane', time: 'Czas oglądania', titles: 'Tytuły', streams: 'Odtworzenia', transcodes: 'Konwersje', devices: 'Urządzenia', now: 'Teraz' },
+    split: 'Filmy {movies} · Seriale {series}',
+    tcShare: '{pct} % · {reason}',
+    tcPct: '{pct} %',
+    devicesUsed: '{used}/{total}',
+    live: { one: '{n} odtworzenie trwa', few: '{n} odtworzenia trwają', many: '{n} odtworzeń trwa', other: '{n} odtworzenia trwa' },
+    locked: 'Zablokowane',
+    never: 'Nigdy',
+    details: 'Szczegóły',
+    detailsFor: 'Szczegóły: {name}',
+    detailTitle: '{name} · {period}',
+    perDay: 'Czas oglądania dziennie',
+    bars: 'Czas oglądania dziennie: łącznie {total}, najwięcej {max} dnia {date}',
+    barsEmpty: 'Czas oglądania dziennie: brak odtworzeń w tym okresie',
+    devicesTitle: 'Urządzenia w tym okresie',
+    deviceUnknown: 'Nieznane urządzenie',
+    app: 'Aplikacja',
+    deviceStreams: { one: '{n} odtworzenie', few: '{n} odtworzenia', many: '{n} odtworzeń', other: '{n} odtworzenia' },
+    deviceTc: { one: '{n} konwertowane', few: '{n} konwertowane', many: '{n} konwertowanych', other: '{n} konwertowanego' },
+    noDevices: 'Brak urządzeń w tym okresie.',
+    reasonsTitle: 'Powody konwersji',
+    reasonsNone: 'Brak konwersji.',
+    empty: 'Jeszcze nie ma kont.',
+    loadFailed: 'Nie udało się wczytać danych o korzystaniu.',
+    detailFailed: 'Nie udało się wczytać szczegółów.',
+    close: 'Zamknij',
   },
 };
 export default dict;

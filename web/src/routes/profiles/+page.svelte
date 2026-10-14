@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <svelte:head><title>{$t('common.pageTitle', { page: $t('account.profiles.pageTitle') })}</title></svelte:head>
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -15,6 +17,7 @@
   import { cachedCalm } from '#lib/stores';
   import { t, tr, type TKey } from '#lib/i18n';
   import { confirm } from '#lib/ui/confirm';
+  import { endCast } from '#lib/session';
   const colorKey = (key: string) => `account.profiles.colors.${key}` as TKey;
 
   /** unlock 'owner': leaving the active kids profile towards this profile needs the owner profile's PIN (it has none of its own) */
@@ -81,6 +84,7 @@
     if (pin === undefined && (p.hasPin || p.unlock === 'owner')) { pinFor = p; pinOwner = !p.hasPin; pinErr = ''; return; }
     pinBusy = true; pinErr = '';
     try {
+      if (p.id !== activeId) await endCast(); // the old profile's stream must not keep running under the new one
       await api(`/api/profiles/${p.id}/select`, { method: 'POST', body: pin === undefined ? {} : { pin } });
       await setMeta('lastProfileId', p.id).catch(() => undefined); // offline hub: downloads of the last active profile
       markPicked(p.id); // the profile question ("Wer ist heute dabei?") was answered for this browser session
@@ -261,7 +265,7 @@
   .lock { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.65); border-radius: 99px; width: 28px; height: 28px; display: grid; place-items: center; }
   .edit { position: absolute; inset: 0; border-radius: 24%; background: rgba(0,0,0,.55); display: grid; place-items: center; font-size: .95rem; font-weight: 600; }
   .sk { width: 140px; height: 140px; }
-  .ov { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.88); display: grid; place-items: center; padding: max(1rem, var(--safe-top)) 1rem max(1rem, var(--safe-bottom)); overflow-y: auto; }
+  .ov { position: fixed; inset: 0; z-index: 90; /* above the cast bar (81) */ background: rgba(0,0,0,.88); display: grid; place-items: center; padding: max(1rem, var(--safe-top)) 1rem max(1rem, var(--safe-bottom)); overflow-y: auto; }
   .box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1.6rem; display: flex; flex-direction: column; align-items: center; max-width: 100%; }
   .ed { width: min(440px, 100%); align-items: stretch; gap: .8rem; text-align: left; }
   .ed h2 { margin: 0; text-align: center; }

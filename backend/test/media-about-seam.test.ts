@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { encrypt } from '../src/crypto.js';
 import { MediaError } from '../src/media/types.js';

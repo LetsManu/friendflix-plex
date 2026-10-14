@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { decrypt, encrypt, keyFromBase64 } from '../src/crypto.js';
 import { FILE_FP_KEY, getSourceKey, INVALID_KEY, PAUSE_KEY, syncFileKeys } from '../src/sources/keys.js';

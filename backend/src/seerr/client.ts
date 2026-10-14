@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 export class SeerrError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -47,7 +49,7 @@ export class SeerrClient {
       headers: { 'X-Api-Key': this.apiKey, 'content-type': 'application/json', ...(init.headers as Record<string, string> | undefined) },
       signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) throw new SeerrError(res.status, `Seerr ${init.method ?? 'GET'} ${path.split('?')[0]} -> ${res.status}`);
+    if (!res.ok) throw new SeerrError(res.status, `request service ${init.method ?? 'GET'} ${path.split('?')[0]} -> ${res.status}`);
     const t = await res.text();
     return (t ? JSON.parse(t) : undefined) as T;
   }

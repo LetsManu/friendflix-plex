@@ -1,6 +1,9 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Jellyfin JSON -> the server-neutral DTOs of ../media/types.ts (re-exported here for existing imports). */
 import { DOWNLOAD_PRESETS, maxWidthFor, type DownloadQuality, type DownloadSourceDto, type ImageTags, type ItemDto, type MediaTraits, type PlaybackDto, type TranscodeReason, type TrickplayDto } from '../media/types.js';
 import type { ChapterDto, ItemAboutDto, ItemCreditsDto, ProviderIds } from '../media/types.js'; // Block 17 P1
+import type { HygieneFacts, HygieneSource, HygieneStream, ServerSession } from '../media/types.js'; // Block 22
 
 export { DOWNLOAD_PRESETS, maxWidthFor };
 export type { DownloadQuality, DownloadSourceDto, ImageTags, ItemDto, PlaybackDto, TrickplayDto };
@@ -361,4 +364,90 @@ export function toItemAbout(raw: Record<string, any>): ItemAboutDto {
     ...(community !== undefined ? { communityRating: community } : {}),
     ...(critic !== undefined ? { criticRating: critic } : {}),
   };
+}
+
+// ---- Block 22: admin care ------------------------------------------------------------------------------------------------------
+/** Jellyfin TranscodeReasons (enum names) -> neutral reasons, deduplicated; bitrate limits read as 'network', unknown as 'other'. */
+export function mapTranscodeReasons(raw: string[]): TranscodeReason[] {
+  const out: TranscodeReason[] = [];
+  for (const r of raw) {
+    const m = REASON_MAP[r.trim()];
+    const v: TranscodeReason = m === 'bitrate' ? 'network' : (m ?? 'other');
+    if (r.trim() && !out.includes(v)) out.push(v);
+  }
+  return out;
+}
+
+const str = (v: unknown, max = 120) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+const dropUndef = <T extends Record<string, unknown>>(o: T): T => {
+  for (const k of Object.keys(o)) if (o[k] === undefined) delete o[k];
+  return o;
+};
+const PLAY_METHODS = ['DirectPlay', 'DirectStream', 'Transcode'] as const;
+
+/**
+ * Jellyfin /Sessions entry -> ServerSession, or null when it plays nothing. Only whitelisted fields are read: the session's access
+ * token, TranscodingInfo URLs and item paths never reach the DTO.
+ */
+export function toServerSession(raw: Record<string, any>): ServerSession | null {
+  const np = raw?.NowPlayingItem;
+  if (!np?.Id) return null;
+  const ps = raw.PlayState ?? {};
+  const ti = raw.TranscodingInfo;
+  const method = PLAY_METHODS.find((m) => m === ps.PlayMethod) ?? (ti ? (ti.IsVideoDirect && ti.IsAudioDirect ? 'DirectStream' : 'Transcode') : 'DirectPlay');
+  const reasonsRaw: string[] = Array.isArray(ti?.TranscodeReasons) ? ti.TranscodeReasons.map(String) : typeof ti?.TranscodeReasons === 'string' ? ti.TranscodeReasons.split(',') : [];
+  const hw = str(ti?.HardwareAccelerationType, 40);
+  const runtime = num(np.RunTimeTicks), pos = num(ps.PositionTicks);
+  return dropUndef({
+    sessionId: String(raw.Id), serverUserId: String(raw.UserId ?? ''),
+    deviceId: str(raw.DeviceId, 200), client: str(raw.Client, 80), deviceName: str(raw.DeviceName, 80),
+    item: dropUndef({ id: String(np.Id).replace(/-/g, '').toLowerCase(), name: String(np.Name ?? ''), seriesName: str(np.SeriesName, 300), type: str(np.Type, 40) }),
+    playSessionId: str(ps.PlaySessionId ?? raw.PlaySessionId, 100),
+    playMethod: method,
+    reasons: method === 'Transcode' ? mapTranscodeReasons(reasonsRaw) : [],
+    videoCodec: str(ti?.VideoCodec, 40)?.toLowerCase(), audioCodec: str(ti?.AudioCodec, 40)?.toLowerCase(),
+    hardware: ti ? Boolean(hw && hw.toLowerCase() !== 'none') : undefined,
+    bitrate: num(ti?.Bitrate),
+    // playback position (not the transcode's CompletionPercentage, which says how far ahead the encoder is)
+    progressPct: runtime && pos !== undefined ? Math.min(100, Math.round((pos / runtime) * 100)) : undefined,
+    paused: Boolean(ps.IsPaused),
+  });
+}
+
+function hygieneStream(s: Record<string, any>, kind: 'video' | 'audio' | 'subtitle'): HygieneStream {
+  const base = { codec: str(s.Codec, 40)?.toLowerCase(), lang: str(s.Language, 20)?.toLowerCase() };
+  if (kind === 'video') {
+    const range = str(s.VideoRange, 20);
+    return dropUndef({ ...base, lang: undefined, bitDepth: num(s.BitDepth), height: num(s.Height), hdr: range ? !['SDR', 'Unknown'].includes(range) : undefined });
+  }
+  if (kind === 'audio') return dropUndef({ ...base, channels: num(s.Channels) });
+  return dropUndef({ ...base, forced: Boolean(s.IsForced), text: Boolean(s.IsTextSubtitleStream) });
+}
+
+function hygieneSource(src: Record<string, any>): HygieneSource {
+  const streams: any[] = Array.isArray(src?.MediaStreams) ? src.MediaStreams : [];
+  const of = (t: string, k: 'video' | 'audio' | 'subtitle') => streams.filter((s) => s?.Type === t).map((s) => hygieneStream(s, k));
+  return dropUndef({
+    container: str(src?.Container, 40)?.toLowerCase(), bitrate: num(src?.Bitrate), sizeBytes: num(src?.Size), runtimeTicks: num(src?.RunTimeTicks),
+    video: of('Video', 'video'), audio: of('Audio', 'audio'), subtitles: of('Subtitle', 'subtitle'),
+  });
+}
+
+/** Jellyfin item (fields=Overview,ProviderIds,MediaSources,ProductionYear,PremiereDate,SeriesId) -> HygieneFacts. Path / Protocol / URLs are never read. */
+export function toHygieneFacts(raw: Record<string, any>, type: HygieneFacts['type']): HygieneFacts {
+  const premiere = typeof raw.PremiereDate === 'string' ? Number(raw.PremiereDate.slice(0, 4)) : NaN;
+  const year = num(raw.ProductionYear) ?? (Number.isFinite(premiere) && premiere > 0 ? premiere : undefined);
+  return dropUndef({
+    id: String(raw.Id).replace(/-/g, '').toLowerCase(), type, name: String(raw.Name ?? ''),
+    seriesId: raw.SeriesId ? String(raw.SeriesId).replace(/-/g, '').toLowerCase() : undefined, seriesName: str(raw.SeriesName, 300),
+    season: num(raw.ParentIndexNumber), episode: num(raw.IndexNumber), year,
+    overview: typeof raw.Overview === 'string' && raw.Overview.trim().length > 0,
+    poster: Boolean(raw.ImageTags?.Primary),
+    backdrop: Array.isArray(raw.BackdropImageTags) && raw.BackdropImageTags.length > 0,
+    providerIds: toProviderIds(raw.ProviderIds),
+    runtimeTicks: num(raw.RunTimeTicks),
+    virtual: raw.LocationType === 'Virtual',
+    sources: Array.isArray(raw.MediaSources) ? raw.MediaSources.map(hygieneSource) : [],
+  });
 }

@@ -1,12 +1,15 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Browser error reporting: window 'error' / 'unhandledrejection' listeners and the SvelteKit handleError hook feed one
  * Reporter that filters noise, dedupes and rate-limits per page load before posting to /api/client-errors.
  * The filter / dedupe logic is DOM-free so it can be unit tested; only `installTelemetry` touches window.
  */
 
-export type ReportKind = 'error' | 'unhandledrejection' | 'resource';
-export interface RawReport { message: string; stack?: string; kind: ReportKind; filename?: string }
-export interface Payload { message: string; stack?: string; url: string; userAgent: string; kind: ReportKind; release?: string }
+export type ReportKind = 'error' | 'unhandledrejection' | 'resource' | 'playback';
+/** `playback` (Block 22): a fatal player error with the title's id and a short error code */
+export interface RawReport { message: string; stack?: string; kind: ReportKind; filename?: string; itemId?: string; code?: string }
+export interface Payload { message: string; stack?: string; url: string; userAgent: string; kind: ReportKind; release?: string; itemId?: string; code?: string }
 
 export const ENDPOINT = '/api/client-errors';
 export const DEDUPE_MS = 60_000;
@@ -61,7 +64,7 @@ export class Reporter {
   report(r: RawReport): boolean {
     if (this.sent >= this.max || shouldIgnore(r)) return false;
     const t = this.now();
-    const key = `${r.kind}\n${r.message}`;
+    const key = `${r.kind}\n${r.message}\n${r.itemId ?? ''}`;
     const last = this.seen.get(key);
     if (last !== undefined && t - last < this.dedupeMs) return false;
     for (const [k, at] of this.seen) if (t - at >= this.dedupeMs) this.seen.delete(k); // keep the map small
@@ -88,6 +91,8 @@ export function toPayload(r: RawReport, env: Pick<Env, 'url' | 'userAgent' | 're
     userAgent: env.userAgent.slice(0, 300),
     kind: r.kind,
     release: env.release ? env.release.slice(0, 40) : undefined,
+    ...(r.itemId ? { itemId: r.itemId } : {}),
+    ...(r.code ? { code: r.code } : {}),
   };
 }
 
@@ -145,6 +150,16 @@ export function installTelemetry(opts: { release?: string; target?: Target; env?
 /** For SvelteKit's handleError (errors thrown while loading / rendering never reach window.onerror). */
 export function reportError(error: unknown, kind: ReportKind = 'error'): void {
   active?.report({ kind, ...describeError(error) });
+}
+
+/**
+ * A playback that ended in an error (Block 22): counted for the admin's health page, grouped by title. Same dedupe and
+ * per-page limit as other reports. The code is cut to what the server accepts; an id that is not a media server id is dropped.
+ */
+export function reportPlayback(itemId: string, code: string): boolean {
+  const c = code.replace(/[^\w.:-]+/g, '_').slice(0, 60) || 'unknown';
+  const id = /^[0-9a-f]{32}$/.test(itemId) ? itemId : undefined;
+  return active?.report({ kind: 'playback', message: `playback ${c}`, itemId: id, code: c }) ?? false;
 }
 
 /** Test helper: forget the installed reporter. */

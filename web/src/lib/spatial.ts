@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * D-pad navigation for TV browsers: the arrow keys move the focus to the nearest focusable element in that
  * direction (geometric search, no hand-written focus maps), "Back" keys are recognised across TV platforms.

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/adminPeople';
 import type { Translation } from '../../types';
 
@@ -160,6 +162,38 @@ const dict: Translation<typeof de> = {
       authentik: 'Authentik', by: 'Approved', sessions: 'Sessions ended', language: 'Language', count: 'Count', name: 'Title', leavesAt: 'Leaves on',
     },
     values: { yes: 'Yes', no: 'No', unlimited: 'Unlimited', ok: 'OK', failed: 'Failed', off: 'Off', skipped: 'Skipped', admin: 'Admin', self: 'Self' },
+  },
+  usage: {
+    period: 'Period',
+    periods: { d7: 'Last 7 days', d30: 'Last 30 days', d90: 'Last 90 days' },
+    privacy: 'Aggregated, without titles: how much is watched, not what.',
+    since: 'Data since {date}',
+    col: { name: 'Account', lastSeen: 'Last seen', time: 'Watch time', titles: 'Titles', streams: 'Streams', transcodes: 'Transcodes', devices: 'Devices', now: 'Now' },
+    split: 'Movies {movies} · Series {series}',
+    tcShare: '{pct} % · {reason}',
+    tcPct: '{pct} %',
+    devicesUsed: '{used}/{total}',
+    live: { one: '{n} stream playing', other: '{n} streams playing' },
+    locked: 'Locked',
+    never: 'Never',
+    details: 'Details',
+    detailsFor: 'Details for {name}',
+    detailTitle: '{name} · {period}',
+    perDay: 'Watch time per day',
+    bars: 'Watch time per day: {total} in total, most {max} on {date}',
+    barsEmpty: 'Watch time per day: nothing played in this period',
+    devicesTitle: 'Devices in this period',
+    deviceUnknown: 'Unknown device',
+    app: 'App',
+    deviceStreams: { one: '{n} stream', other: '{n} streams' },
+    deviceTc: { one: '{n} transcoded', other: '{n} transcoded' },
+    noDevices: 'No devices in this period.',
+    reasonsTitle: 'Reasons for transcoding',
+    reasonsNone: 'No transcodes.',
+    empty: 'No accounts yet.',
+    loadFailed: 'Usage could not be loaded.',
+    detailFailed: 'The details could not be loaded.',
+    close: 'Close',
   },
 };
 export default dict;

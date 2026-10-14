@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Proves that the newest backup is restorable: restores it into a throw-away Postgres and sanity-checks it.
 # Docker mode (default): temporary postgres:17-alpine container without published ports.
 # Local mode: RESTORE_ADMIN_URL=postgres://postgres@localhost:5432/postgres (creates + drops ff_restore_test)

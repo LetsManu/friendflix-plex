@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Ctx } from '../ctx.js';
 import { CACHE_PREFIX, getSourceKey, INVALID_KEY, OMDB_COUNT_KEY, OMDB_DAILY_BUDGET, PAUSE_KEY, type SourceName } from './keys.js';
 

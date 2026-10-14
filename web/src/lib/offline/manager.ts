@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Download manager: store + queue + worker control + licence check-in + progress sync.
 // Runs in the page (tab must stay open: no Background Fetch yet). Everything is a no-op where OPFS is unsupported.
 import { writable, get } from 'svelte/store';

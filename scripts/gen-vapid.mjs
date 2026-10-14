@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Prints a fresh VAPID key pair for Web Push as .env lines. Needs no dependencies (also: `npx web-push generate-vapid-keys`).
 import { Buffer } from 'node:buffer';
 import { createECDH } from 'node:crypto';

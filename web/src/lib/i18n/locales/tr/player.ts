@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/player';
 import type { Translation } from '../../types';
 
@@ -125,6 +127,22 @@ const tr: Translation<typeof de> = {
     chooseHint: 'Şimdi listeden televizyonu seç.',
     needsTranscode: 'AirPlay için dönüştürme gerekiyor – rolün buna izin vermiyor.',
     tvHint: 'Televizyonda AirPlay veya Chromecast yok mu? TV tarayıcısında {url} adresini aç ve telefonunu kumanda olarak eşleştir.',
+  },
+  /** the bar while a title plays on a TV (cast engine) */
+  castBar: {
+    region: 'Şu an televizyonda',
+    failed: '“{title}” {device} üzerinde oynatılamıyor.',
+    airplayDevice: 'AirPlay cihazı',
+    reconnect: 'Bağlantı kesildi – televizyonda devam etmek için dokunun',
+    on: '{device} üzerinde',
+    stop: '{device} üzerindeki oynatmayı durdur',
+    stopQuestion: '{device} üzerindeki oynatma durdurulsun mu?',
+    next: 'Sıradaki: {label}',
+    nextIn: '{n} sn içinde',
+    playHere: 'Burada oynat',
+    playingOn: '{device} üzerinde oynatılıyor',
+    open: 'Uzaktan kumandayı aç',
+    progress: 'İlerleme',
   },
   mode: {
     label: 'Oynatma: {mode}',

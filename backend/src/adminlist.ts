@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Query helpers of the admin list endpoints (users, devices, invites, audit): search, filter, sort and paging, all parameterised. */
 import { z } from 'zod';
 

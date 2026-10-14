@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { TKey } from '#lib/i18n';
 /** Pure keyboard map of the player: key event + context in, abstract action out (the component executes it). */
 export type KeyAction =

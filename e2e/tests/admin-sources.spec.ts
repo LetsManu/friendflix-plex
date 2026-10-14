@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test } from '../fixtures.js';
 
 // Admin → Datenquellen (/admin/sources): optional TMDB/OMDb keys; only last4 is ever shown.

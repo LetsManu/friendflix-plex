@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts" generics="T">
   /**
    * Data table (docs/ui-kit.md): columns config, sort, text filter, paging (client or server), sticky header,

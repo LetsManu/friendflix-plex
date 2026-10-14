@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { tr, type TKey } from '#lib/i18n';
 
 /** Three-step rating: -1 "Naja", 1 "Gut", 2 "Geliebt", 0 = no rating. */

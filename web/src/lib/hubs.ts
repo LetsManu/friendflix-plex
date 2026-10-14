@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Block 15: brand hub shapes shared by the home tiles, the hub page and the admin page. */
 export interface Hub {
   id: string;

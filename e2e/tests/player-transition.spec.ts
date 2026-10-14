@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Page, Route } from '@playwright/test';
 import { episodes, MOVIE } from '../mocks/fixtures.js';
 import { mockPlayer } from '../mocks/scenes.js';

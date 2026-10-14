@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { z } from 'zod';
 import { MediaError } from '../media/types.js';
 import { SeerrError } from '../seerr/client.js';

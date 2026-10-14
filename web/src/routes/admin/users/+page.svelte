@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin: users – server-side search/sort/paging, role select (optimistic, rollback), lock/unlock (confirm + undo), sign out everywhere (confirm). */
   import { onMount } from 'svelte';

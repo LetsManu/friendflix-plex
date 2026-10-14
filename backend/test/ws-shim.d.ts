@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Minimal typing for the `ws` client used in tests (no @types/ws installed).
 declare module 'ws' {
   export default class WebSocket {

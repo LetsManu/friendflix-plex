@@ -148,7 +148,7 @@ curl -s -H "X-Plex-Token: $PLEX_TOKEN" -H "Accept: application/json" "$PLEX_URL/
 # .env (template: the "FriendFlix for Plex" block in .env.example)
 PLEX_URL=http://192.168.1.10:32400     # how backend + gateway reach Plex
 PLEX_TOKEN=...                         # or PLEX_TOKEN=  plus  PLEX_TOKEN_FILE=/run/secrets/plex_token
-SEERR_URL=http://seerr:5055            # also required by compose.prod.yaml (see "Wishes" in the parity table)
+REQUESTS_URL=http://requests:5055      # also required by compose.prod.yaml (see "Wishes" in the parity table)
 
 docker compose -f compose.prod.yaml -f compose.plex.yaml config --quiet   # validates the merged configuration
 docker compose -f compose.prod.yaml -f compose.plex.yaml up -d

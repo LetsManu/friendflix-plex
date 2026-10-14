@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /// <reference lib="webworker" />
 // Dedicated module worker: downloads /media/d/<id> into OPFS with Range resume. One download at a time.
 // Protocol (main -> worker): {cmd:'start', id, url, have, etag, total, extras:[{url,name}]} | {cmd:'pause'}

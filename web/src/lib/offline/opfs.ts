@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Origin Private File System layout: ff-dl/<downloadId>/{video.mp4, sub-<lang>.vtt, poster.jpg, backdrop.jpg}
 // Writes happen in fetch-worker.ts via createSyncAccessHandle; this module covers detection, reads, deletion and quota.
 import { tr } from '#lib/i18n';

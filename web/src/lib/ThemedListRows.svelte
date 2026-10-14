@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   // Block 17: featured themed lists ("Themenlisten") as home rows (owned by worker S1, mounted on the home page by D1).
   // Pinned by an admin, items already filtered to what this profile may see; a list without a visible title is not rendered.

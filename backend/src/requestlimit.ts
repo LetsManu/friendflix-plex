@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Ctx } from './ctx.js';
 
 /** Default monthly Seerr wishes per role; null = unlimited. Unknown roles (ROLE_TEMPLATES extras) get DEFAULT_LIMIT. */

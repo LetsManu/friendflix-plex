@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Ctx } from './ctx.js';
 import { requireUser } from './session.js';

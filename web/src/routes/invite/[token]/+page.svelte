@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { fmtDateTime, publicLocale, setLocale, t } from '#lib/i18n';
   import Logo from '#lib/Logo.svelte';

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Promise-based confirmation dialog (replaces window.confirm). One <ConfirmHost/> in the root layout renders it.
  *

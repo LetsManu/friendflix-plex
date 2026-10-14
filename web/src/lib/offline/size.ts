@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Size helpers (pure, unit-tested). Server estimates (estBytes) win; these are fallbacks and formatting.
 
 import { fmtNumber } from '#lib/i18n';

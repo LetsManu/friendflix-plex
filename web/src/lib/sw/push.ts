@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { BRAND_NAME } from '../brand';
 /** Web Push handlers for the service worker. Kept free of the webworker lib so it type-checks next to the DOM lib. */
 interface PushClient { url: string; focus(): Promise<unknown>; navigate?(url: string): Promise<unknown>; postMessage(m: unknown): void }

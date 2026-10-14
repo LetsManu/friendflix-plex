@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Block 17 D1 "Discovery": fresh labels ("Neue Folge", "Neue Staffel", "Staffelfinale", "Neue Serie", "Neu"), the "leaving soon"
  * dates admins set (badge, home row, notifications) and the quality index behind the browse filter 4K / HDR.
@@ -5,6 +7,7 @@
  * is always a ctx.jf call with the viewer's own identity, never a cached answer for somebody else).
  */
 import type { Ctx } from './ctx.js';
+import { recordError } from './errorlog.js';
 import { m } from './i18n.js';
 import { MediaError, type ItemDto } from './media/types.js';
 import { notify } from './notify.js';
@@ -341,6 +344,7 @@ export async function qualityIndexTick(ctx: Pick<Ctx, 'db' | 'kv' | 'jf'>, opts:
     await ctx.kv.set(QKEY, String(Date.now()), 7 * 86400).catch(() => undefined);
   } catch (e) {
     console.warn('quality index failed', (e as Error).message);
+    void recordError(ctx, { source: 'job', code: 'quality-index' });
   } finally {
     qBusy = false;
   }

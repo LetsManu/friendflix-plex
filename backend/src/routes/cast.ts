@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { CAST_MAX_BITRATE, CAST_MAX_HEIGHT, castEnabled, castSubtitlePath, castTtlSeconds, createCast, resolveCastSubtitle, revokeCast } from '../cast.js';

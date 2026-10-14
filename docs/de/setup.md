@@ -14,7 +14,7 @@ Platzhalter in der ganzen Anleitung: `portal.example.com` (FriendFlix), `auth.ex
 2. [Voraussetzungen](#2-voraussetzungen)
 3. [Authentik](#3-authentik)
 4. [Jellyfin](#4-jellyfin)
-5. [Seerr](#5-seerr)
+5. [Wunsch-Dienst](#5-wunsch-dienst)
 6. [Die `.env`-Datei](#6-die-env-datei)
 7. [Stack starten](#7-stack-starten)
 8. [Nginx Proxy Manager: Proxy Host für das Portal](#8-nginx-proxy-manager-proxy-host-für-das-portal)
@@ -33,7 +33,7 @@ flowchart LR
   npm -->|"auth.example.com"| ak["Authentik :9000"]
   ff -.->|"OIDC + Einladungs-API (über die öffentliche URL)"| npm
   ff -->|"internes Netz media"| jf["Jellyfin"]
-  ff -->|"internes Netz media"| se["Seerr"]
+  ff -->|"internes Netz media"| se["Wunsch-Dienst"]
 ```
 
 Das Gesamtbild aus Containern, Netzen und Ports steht in [architecture.md](../architecture.md#containers-and-networks) (englisch).
@@ -45,7 +45,7 @@ Die Reihenfolge zählt, weil jeder Schritt einen Wert für den nächsten liefert
 | 2. DNS, Docker, NPM | Hostnamen mit TLS |
 | 3. Authentik | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `ADMIN_GROUP`, optional `AUTHENTIK_URL`/`AUTHENTIK_API_TOKEN`/`AUTHENTIK_ENROLL_FLOW` |
 | 4. Jellyfin | `JELLYFIN_URL`, `JELLYFIN_ADMIN_API_KEY` |
-| 5. Seerr | `SEERR_URL`, `SEERR_API_KEY` |
+| 5. Wunsch-Dienst | `REQUESTS_URL`, `REQUESTS_API_KEY` |
 | 6. `.env` | alle Secrets |
 | 7.–8. Stack + NPM | das laufende Portal |
 | 9.–10. erste Anmeldung, Einladungen | Admin-Konto, Freunde |
@@ -104,7 +104,7 @@ docker compose -f compose.prod.yaml restart backend gateway
 `JELLYFIN_URL=http://<jellyfin-containername>:8096`. Ein `docker network connect` überlebt das Neuerstellen des Jellyfin-Containers nicht; dauerhaft wird es, wenn du `friendflix_media` in Jellyfins eigener Compose-Datei als Netz mit `external: true` einträgst. Sobald FriendFlix läuft, Jellyfins öffentliches Port-Mapping und einen eventuellen öffentlichen Proxy Host entfernen (oder zumindest per Firewall sperren, siehe [operations.md](../operations.md#host-firewall-zusätzlich-zum-fehlenden-port-mapping)).
 Läuft Jellyfin nativ auf dem Host (nicht in Docker), erreicht das Backend kein `localhost`; Jellyfin in einen Container packen oder über die Bridge-IP des Hosts anbinden *(von den mitgelieferten Compose-Dateien nicht abgedeckt)*.
 
-**B) Mitgeliefertes Jellyfin** (`--profile bundled`): Die Container `jellyfin` und `seerr` starten im Stack, ganz ohne Ports. Compose prüft alle Pflichtvariablen, auch wenn nur einzelne Dienste starten; daher zuerst die `.env` anlegen ([Schritt 6](#6-die-env-datei)) und in `JELLYFIN_ADMIN_API_KEY` und `SEERR_API_KEY` einen Platzhalter wie `pending` eintragen. Für die einmaligen Einrichtungsassistenten beide Dienste vorübergehend auf Loopback veröffentlichen, mit einer lokalen Override-Datei (nicht committen):
+**B) Mitgeliefertes Jellyfin** (`--profile bundled`): Die Container `jellyfin` und `requests` (der Wunsch-Dienst) starten im Stack, ganz ohne Ports. Compose prüft alle Pflichtvariablen, auch wenn nur einzelne Dienste starten; daher zuerst die `.env` anlegen ([Schritt 6](#6-die-env-datei)) und in `JELLYFIN_ADMIN_API_KEY` und `REQUESTS_API_KEY` einen Platzhalter wie `pending` eintragen. Für die einmaligen Einrichtungsassistenten beide Dienste vorübergehend auf Loopback veröffentlichen, mit einer lokalen Override-Datei (nicht committen):
 
 ```yaml
 # compose.setup.yaml - VORÜBERGEHEND, nach den Assistenten wieder entfernen
@@ -112,13 +112,13 @@ services:
   jellyfin:
     ports: ["127.0.0.1:8096:8096"]
     networks: [media, egress, front]
-  seerr:
+  requests:
     ports: ["127.0.0.1:5055:5055"]
     networks: [media, egress, front]
 ```
 
 ```bash
-MEDIA_PATH=/mnt/data/media docker compose -f compose.prod.yaml -f compose.setup.yaml --profile bundled up -d jellyfin seerr
+MEDIA_PATH=/mnt/data/media docker compose -f compose.prod.yaml -f compose.setup.yaml --profile bundled up -d jellyfin requests
 ssh -L 8096:127.0.0.1:8096 -L 5055:127.0.0.1:5055 du@server     # vom eigenen PC; dann http://localhost:8096 öffnen
 ```
 
@@ -131,12 +131,14 @@ ssh -L 8096:127.0.0.1:8096 -L 5055:127.0.0.1:5055 du@server     # vom eigenen PC
 3. Optional: das Webhook-Plugin für sofortige „läuft gerade“- und „neu in der Bibliothek“-Ereignisse, siehe [integrations.md](../integrations.md#jellyfin-webhook-plugin-optional-polling-sessions-every-10-s-is-the-fallback).
 4. Hardware-Transkodierung wie für deine Hardware üblich (Intel QSV/VAAPI: Hinweis zu „VPP Tone mapping“ in der README beachten).
 
-## 5. Seerr
+## 5. Wunsch-Dienst
 
-1. Seerr öffnen (bestehende Instanz oder `http://localhost:5055` über den Tunnel oben) und den Assistenten mit **Jellyfin** als Medienserver abschließen: URL `http://jellyfin:8096` (mitgeliefert) bzw. dein Containername, dazu ein Jellyfin-Admin-Login. Bibliotheken synchronisieren, ggf. Radarr/Sonarr hinzufügen.
-2. *Settings → General* → **API Key** kopieren → `SEERR_API_KEY`. `SEERR_URL=http://seerr:5055` (mitgeliefert) bzw. `http://<seerr-container>:5055` nach `docker network connect friendflix_media <seerr-container>`.
+Wünsche laufen über einen Wunsch-Dienst: den mitgelieferten Container `requests` (Upstream-Projekt: siehe seine `image:`-Zeile in [`compose.prod.yaml`](../../compose.prod.yaml)) oder eine kompatible Instanz, die du schon betreibst.
+
+1. Den Wunsch-Dienst öffnen (bestehende Instanz oder `http://localhost:5055` über den Tunnel oben) und den Assistenten mit **Jellyfin** als Medienserver abschließen: URL `http://jellyfin:8096` (mitgeliefert) bzw. dein Containername, dazu ein Jellyfin-Admin-Login. Bibliotheken synchronisieren, ggf. Radarr/Sonarr hinzufügen.
+2. *Settings → General* → **API Key** kopieren → `REQUESTS_API_KEY`. `REQUESTS_URL=http://requests:5055` (mitgeliefert) bzw. `http://<containername>:5055` nach `docker network connect friendflix_media <containername>`.
 3. *Settings → Users*: den automatischen Jellyfin-Nutzerimport ausschalten (FriendFlix-Profile sind versteckte Jellyfin-Nutzer und tauchten sonst auf). Auto-Approve aus lassen, wenn du jeden Wunsch freigeben willst.
-4. Webhook für „Wunsch freigegeben/verfügbar“: siehe [integrations.md](../integrations.md#seerr).
+4. Webhook für „Wunsch freigegeben/verfügbar“: siehe [integrations.md](../integrations.md#request-service).
 
 ## 6. Die `.env`-Datei
 
@@ -156,14 +158,14 @@ Jedes Secret einzeln erzeugen, keinen Wert für zwei Variablen verwenden. Für d
 | `REDIS_PASSWORD` | ja | `openssl rand -hex 24` |
 | `APP_ENC_KEY` | ja | `openssl rand -base64 32` (44 Zeichen). Verschlüsselt die gespeicherten Jellyfin-Zugangsdaten. **Im Passwort-Manager ablegen**; ohne ihn ist eine wiederhergestellte Datenbank wertlos. |
 | `INTERNAL_SECRET` | ja | `openssl rand -hex 24` (mind. 16 Zeichen); Backend ↔ Gateway |
-| `WEBHOOK_SECRET` | ja | `openssl rand -hex 24`; Jellyfin-/Seerr-Webhooks |
+| `WEBHOOK_SECRET` | ja | `openssl rand -hex 24`; Webhooks von Jellyfin und Wunsch-Dienst |
 | `OIDC_ISSUER` | ja | `https://auth.example.com/application/o/friendflix/` **mit Schrägstrich am Ende** |
 | `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | ja | aus dem Authentik-Provider |
 | `ADMIN_GROUP` | – | `friendflix-admins` (Standard); Name der Authentik-Gruppe, Groß-/Kleinschreibung zählt |
 | `JELLYFIN_URL` | ja | `http://jellyfin:8096` (interner Name, nie die öffentliche URL) |
 | `JELLYFIN_ADMIN_API_KEY` | ja | aus Schritt 4 |
-| `SEERR_URL` | ja | `http://seerr:5055` |
-| `SEERR_API_KEY` | ja | aus Schritt 5 |
+| `REQUESTS_URL` | ja | `http://requests:5055` |
+| `REQUESTS_API_KEY` | ja | aus Schritt 5 |
 | `AUTHENTIK_URL`, `AUTHENTIK_API_TOKEN`, `AUTHENTIK_ENROLL_FLOW` | empfohlen | `https://auth.example.com`, der Token-Schlüssel, `friendflix-enrollment`; alle drei oder keine ([authentik.md §9](authentik.md#9-werte-für-die-friendflix-env)) |
 | `SESSION_TTL_SECONDS`, `SESSION_IDLE_SECONDS` | – | `28800` (8 h absolut), `7200` (2 h Leerlauf) |
 | `TZ` | – | z. B. `Europe/Vienna`; Zeitpläne (Wochenrückblick, Wiedergabe-Check, Backups) |
@@ -182,15 +184,15 @@ sed -i "s|^APP_ENC_KEY=.*|APP_ENC_KEY=$(openssl rand -base64 32)|" .env
 grep -E '^(POSTGRES_PASSWORD|REDIS_PASSWORD|APP_ENC_KEY|INTERNAL_SECRET|WEBHOOK_SECRET)=' .env | cut -c1-24   # Kontrolle, ohne ganze Secrets auszugeben
 ```
 
-Danach die URLs und die Schlüssel aus Authentik, Jellyfin und Seerr von Hand eintragen.
+Danach die URLs und die Schlüssel aus Authentik, Jellyfin und dem Wunsch-Dienst von Hand eintragen.
 
-**Docker-Secrets statt `.env`** (optional): [`compose.secrets.yaml`](../../compose.secrets.yaml) liest `APP_ENC_KEY`, `INTERNAL_SECRET`, `WEBHOOK_SECRET`, `OIDC_CLIENT_SECRET`, `JELLYFIN_ADMIN_API_KEY`, `SEERR_API_KEY` und `VAPID_PRIVATE_KEY` aus Dateien in `secrets/` (alle müssen existieren; ohne Push `touch secrets/vapid_private_key`). Start mit `docker compose -f compose.prod.yaml -f compose.secrets.yaml up -d`.
+**Docker-Secrets statt `.env`** (optional): [`compose.secrets.yaml`](../../compose.secrets.yaml) liest `APP_ENC_KEY`, `INTERNAL_SECRET`, `WEBHOOK_SECRET`, `OIDC_CLIENT_SECRET`, `JELLYFIN_ADMIN_API_KEY`, `REQUESTS_API_KEY` (Datei `secrets/requests_api_key`) und `VAPID_PRIVATE_KEY` aus Dateien in `secrets/` (alle müssen existieren; ohne Push `touch secrets/vapid_private_key`). Start mit `docker compose -f compose.prod.yaml -f compose.secrets.yaml up -d`.
 
 ## 7. Stack starten
 
 ```bash
 docker login ghcr.io -u <github-nutzer>                 # nur bei privaten Paketen (PAT mit read:packages)
-docker compose -f compose.prod.yaml up -d               # mit --profile bundled für das mitgelieferte Jellyfin + Seerr
+docker compose -f compose.prod.yaml up -d               # mit --profile bundled für das mitgelieferte Jellyfin + den Wunsch-Dienst
 docker compose -f compose.prod.yaml ps                  # postgres/redis healthy, backend/gateway/web laufen
 docker compose -f compose.prod.yaml logs -f backend     # Migrationen, dann "Server listening"
 curl -s http://127.0.0.1:3081/health/ready              # Postgres, Redis und Jellyfin erreichbar

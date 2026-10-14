@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /**
    * Admin → Bald weg: titles with a removal date ("Nur noch N Tage"). Setting a date deletes nothing on the media server.

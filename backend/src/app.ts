@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -7,6 +9,7 @@ import type { Ctx } from './ctx.js';
 import { compressJson } from './compress.js';
 import { newTimingStore, serverTimingHeader, timedDb, timedKv, timingStorage, timingSummary, type TimingStore } from './timing.js';
 import { metricsPlugin } from './metrics.js';
+import { recordError } from './errorlog.js';
 import { adminRoutes, inviteRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { castRoutes } from './routes/cast.js';
@@ -36,6 +39,9 @@ import { homeRoutes } from './routes/home.js';
 import { animeRoutes } from './routes/anime.js';
 import { sourceRoutes } from './routes/sources.js';
 import { aboutRoutes } from './routes/about.js';
+import { healthRoutes } from './routes/health.js';
+import { hygieneRoutes } from './routes/hygiene.js';
+import { usageRoutes } from './routes/usage.js';
 import { syncFileKeys } from './sources/keys.js';
 import { testSourceKey } from './sources/omdb.js';
 import { appVersion } from './version.js';
@@ -97,6 +103,11 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
       if (sum.totalMs >= SLOW_REQUEST_MS) req.log.info({ url: req.routeOptions.url ?? req.url.split('?')[0], method: req.method, status: reply.statusCode, ...sum }, 'slow request');
     }
     return ctx.cfg.API_COMPRESSION === 'false' ? payload : compressJson(req, reply, payload);
+  });
+  // Block 22 error log: server errors by route pattern only (never req.url: ids and query strings must not form keys)
+  app.addHook('onResponse', (req, reply, done) => {
+    if (reply.statusCode >= 500) void recordError(ctx, { source: 'server', code: `${req.method} ${req.routeOptions.url ?? 'unmatched'} ${reply.statusCode}` });
+    done();
   });
   await app.register(cookie);
   await app.register(rateLimit, { global: true, max: 600, timeWindow: '1 minute' });
@@ -161,6 +172,9 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   await syncFileKeys(ctx).catch(() => undefined); // a replaced TMDB/OMDb secret file lifts the old key's 1 h pause at once
   sourceRoutes(app, ctx, testSourceKey);
   aboutRoutes(app, ctx);
+  healthRoutes(app, ctx);
+  hygieneRoutes(app, ctx);
+  usageRoutes(app, ctx);
   for (const r of extra.register ?? []) await r(app, ctx);
   return app;
 }

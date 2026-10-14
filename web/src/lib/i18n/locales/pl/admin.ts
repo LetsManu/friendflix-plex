@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/admin';
 import type { Translation } from '../../types';
 
@@ -7,6 +9,8 @@ const pl: Translation<typeof de> = {
   tabs: {
     users: 'Użytkownicy', status: 'Status', previews: 'Podglądy', playback: 'Test odtwarzania', digest: 'Podsumowanie tygodnia', sources: 'Źródła danych', invites: 'Zaproszenia',
     requests: 'Życzenia', polls: 'Głosowania', lists: 'Listy', roles: 'Role', devices: 'Urządzenia', audit: 'Dziennik audytu', update: 'Aktualizacja',
+    hygiene: 'Porządek w bibliotece',
+    usage: 'Korzystanie',
   },
   roleNames: { friend: 'Znajomy', family: 'Rodzina', guest: 'Gość', admin: 'Admin' },
   kind: { movie: 'Film', series: 'Serial' },
@@ -409,6 +413,37 @@ const pl: Translation<typeof de> = {
     leaving: { set: '{actor} ustawił(a) datę usunięcia', clear: '{actor} usunął(-ęła) datę usunięcia' },
     subtitle: {
       download: '{actor} pobrał(a) napisy',
+    },
+  },
+  banner: {
+    label: 'Uwagi dla administratorów',
+    more: { one: '+{n} kolejna', few: '+{n} kolejne', many: '+{n} kolejnych', other: '+{n} kolejnej' },
+    less: 'Pokaż mniej',
+    view: 'Zobacz',
+    dismiss: 'Ukryj',
+    dismissOne: 'Ukryj „{text}”',
+    generic: 'Coś wymaga twojej uwagi',
+    name: { downloads: 'Miejsce na pobrane', previews: 'Miejsce na podglądy', database: 'Baza danych' },
+    svc: {
+      slow: '{name} odpowiada wolno',
+      down: '{name}: brak połączenia',
+      issuer_mismatch: '{name}: dostawca nie zgadza się z ustawieniem',
+      invalid_key: '{name}: nieprawidłowy klucz',
+      paused: '{name} wstrzymane (klucz odrzucony)',
+      budget: '{name}: wykorzystano {pct} % dziennego limitu',
+      failed_titles: { one: '{n} tytuł z błędem w teście odtwarzania', few: '{n} tytuły z błędem w teście odtwarzania', many: '{n} tytułów z błędem w teście odtwarzania', other: '{n} tytułu z błędem w teście odtwarzania' },
+      empty_media: 'Serwer multimediów zwraca pusty obraz – uruchom ponownie Jellyfin; jeśli to nie pomoże, sprawdź akcelerację sprzętową',
+    },
+    disk: {
+      full: '{name} prawie pełne ({pct} %)',
+      low_free: '{name}: mało wolnego miejsca',
+      cap: 'Limit pobrań prawie osiągnięty ({pct} %)',
+      large: 'Baza danych bardzo się rozrosła',
+    },
+    errors: {
+      server_errors: { one: '{n} błąd serwera w 15 minut', few: '{n} błędy serwera w 15 minut', many: '{n} błędów serwera w 15 minut', other: '{n} błędu serwera w 15 minut' },
+      client_errors: { one: '{n} błąd przeglądarki w 15 minut', few: '{n} błędy przeglądarki w 15 minut', many: '{n} błędów przeglądarki w 15 minut', other: '{n} błędu przeglądarki w 15 minut' },
+      failed_playbacks: { one: '{n} nieudane odtworzenie', few: '{n} nieudane odtworzenia', many: '{n} nieudanych odtworzeń', other: '{n} nieudanego odtworzenia' },
     },
   },
 };

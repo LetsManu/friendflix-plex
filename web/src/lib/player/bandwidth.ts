@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Throughput estimate for the adaptive quality: an EWMA over the bytes/time of each finished media fetch.
  *

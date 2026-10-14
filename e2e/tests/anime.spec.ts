@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { episodes, items, ME, SERIES } from '../mocks/fixtures.js';
 import { expect, test } from '../fixtures.js';
 import { noHorizontalOverflow } from '../helpers.js';

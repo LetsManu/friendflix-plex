@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Renders lib/ui/confirm.ts as a modal alertdialog. Mounted once in the root layout. */
   import { onMount, tick } from 'svelte';

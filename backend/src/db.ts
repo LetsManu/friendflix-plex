@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import pg from 'pg';
 
 export type Db = Pick<pg.Pool, 'query'>;
@@ -587,6 +589,54 @@ export const MIGRATIONS: string[] = [
   // 34: per-role bitrate cap for viewers outside the home networks (null = role default)
   `
   alter table role_settings add column remote_max_bitrate int check (remote_max_bitrate between 300000 and 200000000);
+  `,
+  // 35: Block 22 admin care: streams/transcodes per user, day and device; library hygiene facts + ignored issues; dismissed
+  // health banner issues per admin (until the issue's level or reason changes)
+  `
+  create table play_daily (
+    user_id uuid not null references users(id) on delete cascade,
+    day date not null,
+    device_id text not null default '',
+    streams int not null default 0,
+    transcodes int not null default 0,
+    reasons jsonb not null default '{}',
+    primary key (user_id, day, device_id)
+  );
+  create index play_daily_day on play_daily(day);
+  create table hygiene_items (
+    item_id text primary key,
+    type text not null check (type in ('Movie','Series','Episode')),
+    name text not null,
+    series_id text,
+    series_name text,
+    year int,
+    facts jsonb not null,
+    issues text[] not null default '{}',
+    ids_key text,
+    title_key text,
+    episode_key text,
+    scanned_at timestamptz not null default now()
+  );
+  create index hygiene_items_issues on hygiene_items using gin(issues);
+  create index hygiene_items_type on hygiene_items(type);
+  create index hygiene_items_series on hygiene_items(series_id) where series_id is not null;
+  create index hygiene_items_ids on hygiene_items(ids_key) where ids_key is not null;
+  create index hygiene_items_title on hygiene_items(title_key) where title_key is not null;
+  create index hygiene_items_episode on hygiene_items(episode_key) where episode_key is not null;
+  create table hygiene_ignored (
+    item_id text not null,
+    code text not null,
+    by_user uuid references users(id) on delete set null,
+    at timestamptz not null default now(),
+    primary key (item_id, code)
+  );
+  create table health_dismissals (
+    user_id uuid not null references users(id) on delete cascade,
+    issue_id text not null,
+    fp text not null,
+    at timestamptz not null default now(),
+    primary key (user_id, issue_id)
+  );
   `,
 ];
 

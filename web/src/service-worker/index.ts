@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /// <reference types="@sveltejs/kit" />
 /// <reference lib="webworker" />
 import { immutable, assets, prerendered } from '$app/manifest';

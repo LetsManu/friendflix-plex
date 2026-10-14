@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Rebases a fragmented MP4 to start at 0: Jellyfin keeps the source timestamps in the fragments (a clip cut at 1492 s
  * starts at 1492 s), which gives browsers an empty timeline and breaks `loop`. For every track the first

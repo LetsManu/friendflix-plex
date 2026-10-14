@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import { pageStore } from '#lib/page';
@@ -13,6 +15,8 @@
   import { barTitles } from '#lib/player/bar';
   import { advanceCountdown, cardVisible, COUNTDOWN_SECONDS, mayAutoplay, nextKind, ringOffset, secondsLeft } from '#lib/player/nextup';
   import { entryFadeMs } from '#lib/player/transition';
+  import { castEngine, castSession } from '#lib/cast/engine';
+  import { nextSecondsLeft } from '#lib/cast/bar';
 
   let video: HTMLVideoElement | null = null;
   let item: Item | null = null, nextEp: Item | null = null, similar: Item[] = [];
@@ -25,8 +29,32 @@
   $: langQ = [wantAudio && `audio=${encodeURIComponent(wantAudio)}`, wantSub && `sub=${encodeURIComponent(wantSub)}`].filter(Boolean).join('&');
   $: startAt = (() => { const t = Number($page.url.searchParams.get('t')); return Number.isFinite(t) && t > 0 && t < 86_400 ? Math.floor(t) : undefined; })();
   $: kind = nextKind(item?.type, Boolean(nextEp));
-  $: visible = cardVisible({ kind, current: curTime, start: creditsAt, dismissed });
+  /** the title plays on a TV (the cast engine owns it and shows its own "next" in the bar): no card, no countdown here */
+  let remote = false;
+  $: visible = !remote && cardVisible({ kind, current: curTime, start: creditsAt, dismissed });
   $: if (visible && !entered) enterCard(); else if (!visible && entered) leaveCard();
+
+  // ---- while the TV plays (remote): the engine's end-of-episode flow drives the card, and the page follows the TV ----
+  $: tvNext = remote && $castSession?.state === 'ended' ? $castSession.next ?? null : null;
+  /** the next episode whose card was closed ("Abbrechen": the engine's countdown stopped) */
+  let tvClosed = '';
+  let tvNow = Date.now(), tvTick: ReturnType<typeof setInterval> | undefined;
+  $: tvCounting = tvNext?.startsAt != null;
+  $: if (tvCounting && !tvTick) { tvNow = Date.now(); tvTick = setInterval(() => (tvNow = Date.now()), 250); } else if (!tvCounting && tvTick) { clearInterval(tvTick); tvTick = undefined; }
+  $: tvSecs = tvNext ? nextSecondsLeft(tvNext.startsAt, tvNow) : null;
+  $: tvElapsed = tvNext?.startsAt != null ? COUNTDOWN_SECONDS * 1000 - (tvNext.startsAt - tvNow) : 0;
+  function tvClose() { if (!tvNext) return; tvClosed = tvNext.itemId; castEngine.cancelNext(); }
+  /** the TV went on to another title (next episode): the page shows that one; its Player attaches (no new token) */
+  let tvItem: string | undefined, followedTv = false;
+  $: onTvItem($castSession?.itemId);
+  function onTvItem(itemId: string | undefined) {
+    const changed = itemId !== tvItem;
+    tvItem = itemId;
+    // only a change on the TV counts: a title opened here is sent to the TV by its own Player (then the ids match)
+    if (!changed || !itemId || !remote || itemId === id) return;
+    followedTv = true;
+    void goto(`/watch/${itemId}`, { replace: true });
+  }
   const RING = 2 * Math.PI * 20;
   // no view transition running (no API, reduced motion): the page fades in instead of cutting; TV: no transition at all
   const root = document.documentElement;
@@ -38,7 +66,7 @@
   // whenever `item` changed, i.e. an endless request loop and a title that never showed.)
   async function loadItem(wanted: string) {
     item = cachedItem(wanted) ?? null; // title right away when a card/detail view had it
-    nextEp = null; similar = []; stopCountdown(); dismissed = false; entered = false; askStill = false; curTime = 0; creditsAt = Infinity;
+    nextEp = null; similar = []; stopCountdown(); remote = false; dismissed = false; entered = false; askStill = false; curTime = 0; creditsAt = Infinity;
     // item and "next episode" in parallel (/next answers null for films)
     const nx = api(`/api/items/${wanted}/next`).then((r) => r.item as Item | null).catch(() => null);
     try {
@@ -82,7 +110,9 @@
   /** "Abspann ansehen": hide the card, keep watching, no autoplay countdown */
   function watchCredits() { dismissed = true; stopCountdown(); askStill = false; }
   // each opened episode counts as viewer interaction, except one started by the autoplay countdown (the component is reused across episodes)
-  $: if (id) { if (!consumeAutoplay()) noteInteraction(); }
+  // (following the TV is no interaction either: a tap on the card or bar already counted, an autoplay must not)
+  $: if (id) opened();
+  function opened() { if (followedTv) followedTv = false; else if (!consumeAutoplay()) noteInteraction(); }
   function stillGo() { noteInteraction(); askStill = false; goto(nextHref()); }
   function go() { stopCountdown(); goto(nextHref()); }
   function onTime() { if (video) curTime = video.currentTime; }
@@ -97,7 +127,7 @@
   $: bt = barTitles(item, $t);
   const playEpisode = (e: CustomEvent<{ id: string }>) => goto(`/watch/${e.detail.id}${langQ ? '?' + langQ : ''}`);
   const label = (i: Item | null) => (i ? (i.seriesName ? `${i.seriesName} · S${i.parentIndexNumber}:E${i.indexNumber} ${i.name}` : i.name) : '');
-  onDestroy(stopCountdown);
+  onDestroy(() => { stopCountdown(); clearInterval(tvTick); });
   // the player fills the whole screen: whatever the system draws over (status bar, home indicator) sits on black, not on the page colour
   onMount(() => { root.classList.add('ff-watch'); return () => root.classList.remove('ff-watch'); });
 </script>
@@ -106,12 +136,27 @@
 <svelte:head><title>{$t('common.pageTitle', { page: item?.name ?? $t('player.pageTitle') })}</title></svelte:head>
 <div class="wrap" style:animation={fadeMs ? `ff-fade-in ${fadeMs}ms ease both` : null}>
   {#key id}
-    <Player itemId={id} {poster} title={label(item)} barTitle={bt.title} barSub={bt.sub} seriesId={item?.seriesId ?? ''} isMovie={item?.type === 'Movie'} seasonId={item?.seasonId ?? ''} on:episode={playEpisode} {startAt} {wantAudio} {wantSub} bind:video bind:sleepAfterEpisode bind:creditsAt hasNext={Boolean(nextEp)} on:next={() => nextEp && goto(nextHref())} on:timeupdate={onTime} on:ended={onEnded}>
+    <Player itemId={id} {poster} title={label(item)} barTitle={bt.title} barSub={bt.sub} seriesId={item?.seriesId ?? ''} isMovie={item?.type === 'Movie'} seasonId={item?.seasonId ?? ''} on:episode={playEpisode} {startAt} {wantAudio} {wantSub} bind:video bind:sleepAfterEpisode bind:creditsAt bind:remote hasNext={Boolean(nextEp)} on:next={() => nextEp && goto(nextHref())} on:timeupdate={onTime} on:ended={onEnded}>
       <div slot="top" class="top">
         <button class="icon-btn" aria-label={$t('player.watch.back')} on:click={back}><Icon name="arrow-left" size={30} /></button>
         {#if item}<div class="ttl phone"><b>{item.seriesName ?? item.name}</b>{#if item.seriesName}<span>S{item.parentIndexNumber}:E{item.indexNumber} · {item.name}</span>{/if}</div>{/if}
       </div>
-      {#if visible && askStill && nextEp}
+      {#if tvNext && tvClosed !== tvNext.itemId}
+        <div class="next ui" data-nav role="dialog" aria-label={$t('player.watch.next')}>
+          <div class="nrow">
+            <div class="nthumb">
+              {#if nextEp?.id === tvNext.itemId && nextEp.image}<img src={img(nextEp.id, 320)} alt="" loading="lazy" />{:else}<span class="nph"><Icon name="film" size={28} /></span>{/if}
+              {#if tvSecs !== null}
+                <svg class="ring" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" class="bg" /><circle cx="24" cy="24" r="20" class="fg" stroke-dasharray={RING} stroke-dashoffset={ringOffset(tvElapsed, RING)} transform="rotate(-90 24 24)" /></svg>
+                <b class="rn" aria-hidden="true">{tvSecs}</b>
+              {/if}
+            </div>
+            <div class="nt"><span class="muted">{$t('player.watch.next')}{#if tvSecs !== null}{$t('player.watch.inSeconds', { n: tvSecs })}{/if}</span><b>{tvNext.label}</b></div>
+          </div>
+          <div class="flex"><button class="btn light go" on:click={() => void castEngine.next()}><Icon name="play" size={20} />{$t('player.watch.next')}</button><button class="sec" on:click={tvClose}>{$t('common.cancel')}</button></div>
+          <span class="sr" role="status">{tvSecs !== null ? $t('player.watch.startsIn', { n: tvSecs }) : ''}</span>
+        </div>
+      {:else if visible && askStill && nextEp}
         <div class="next still ui" data-nav role="dialog" aria-label={$t('player.watch.stillTitle')}>
           <div class="nt"><b>{$t('player.watch.stillTitle')}</b><span class="muted">{$t('player.watch.stillText', { ep: `S${nextEp.parentIndexNumber}:E${nextEp.indexNumber} · ${nextEp.name}` })}</span></div>
           <div class="flex"><button class="btn light go" on:click={stillGo}><Icon name="play" size={20} />{$t('player.watch.keepWatching')}</button><button class="sec" on:click={back}>{$t('player.watch.back')}</button></div>

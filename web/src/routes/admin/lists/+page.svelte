@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin → Listen: which member lists are shown on everybody's home page (at most 5). Server paging + search. */
   import { onMount } from 'svelte';

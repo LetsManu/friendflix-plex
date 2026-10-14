@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACTION_DURATION, MAX_VISIBLE, close, dismissAll, pause, resume, runToastAction, toast, toasts } from './toast';

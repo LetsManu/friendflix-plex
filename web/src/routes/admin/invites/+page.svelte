@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin: invitations – create form (role, expiry, note), one-time link with copy + QR, list with status, revoke (confirm). */
   import { onMount } from 'svelte';

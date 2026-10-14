@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { audit } from '../audit.js';
@@ -7,6 +9,9 @@ import { revokeSessions } from '../devices.js';
 import { adminOverview, revokeLicense } from '../downloads.js';
 import { createInvite, deleteAuthentikInvitation } from '../invites.js';
 import { checkState, startPlaybackCheck } from '../healthcheck.js';
+import { ERROR_SOURCES, listErrors } from '../errorlog.js';
+import { freshSnapshot } from '../health.js';
+import { activeStreams } from '../playstats.js';
 import { clipPath, libraryItems, previews, serviceUser } from '../previews.js';
 import { stat } from 'node:fs/promises';
 import { defaultLimit } from '../requestlimit.js';
@@ -39,6 +44,13 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
     };
   });
 
+  // Block 22: aggregated error log (server 5xx + job failures from Redis, client + playback reports from process memory)
+  const errorsQuery = z.object({ source: z.enum(ERROR_SOURCES).optional(), hours: z.coerce.number().int().min(1).max(168).default(24) });
+  app.get('/api/admin/errors', admin, async (req) => {
+    const q = errorsQuery.parse(req.query);
+    return listErrors(ctx, { source: q.source, since: new Date(Date.now() - q.hours * 3600_000) });
+  });
+
   // one cheap call for the admin shell (pending badges) and the overview: counts only, every source optional
   app.get('/api/admin/summary', admin, async () => {
     const { listLive } = await import('../live.js');
@@ -53,7 +65,11 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
       one<{ bytes: string }>("select coalesce(sum(bytes),0)::text bytes from download_jobs where status='ready'"),
       ctx.db.query<{ finished_at: Date; results: Array<{ ok: boolean }> }>('select finished_at, results from playback_checks order by id desc limit 1').then((r) => r.rows[0] ?? null),
       ctx.seerr.requestCount().catch(() => null), // Seerr down or not configured: the UI shows "not reachable"
-      ctx.jf.admin.ping().catch(() => false),
+      // Block 22: a fresh health snapshot already knows whether the media server answers (saves a ping per shell load)
+      freshSnapshot(ctx).then((snap) => {
+        const media = snap?.services.find((x) => x.id === 'media');
+        return media ? media.level === 'ok' || media.level === 'warn' : ctx.jf.admin.ping();
+      }).catch(() => false),
       listLive(ctx).then((l) => l.length).catch(() => 0),
     ]);
     const total = Number(users.total), locked = Number(users.locked);
@@ -162,6 +178,8 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
       })),
     };
   });
+  // Block 22: active streams with play method / reason / codecs (+ other apps) and the failed playbacks of the last 24 h
+  app.get('/api/admin/streams', admin, async () => activeStreams(ctx));
   app.post('/api/admin/live/stop', admin, async (req, reply) => {
     const b = z.object({ userId: uuid, playSessionId: z.string().min(1).max(200) }).parse(req.body);
     const { getLive, clearLive } = await import('../live.js');
