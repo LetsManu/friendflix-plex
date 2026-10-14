@@ -638,6 +638,32 @@ export const MIGRATIONS: string[] = [
     primary key (user_id, issue_id)
   );
   `,
+  // 36: player start-time measurements (playtiming.ts): anonymous on purpose (no user / profile / item / address), kept 14 days
+  `
+  create table playback_timings (
+    id bigserial primary key,
+    created_at timestamptz not null default now(),
+    home boolean not null,
+    device text not null check (device in ('phone','pc','tv')),
+    mode text check (mode in ('direct','hls')),
+    quality_switch boolean not null default false,
+    bitrate int,
+    target_duration real,
+    info_ms int,
+    manifest_ms int,
+    first_frag_ms int,
+    first_frag_bytes int,
+    first_frag_dl_ms int,
+    first_frame_ms int,
+    seeks int not null default 0,
+    seek_median_ms int,
+    seek_max_ms int,
+    stalls int not null default 0,
+    stall_ms int not null default 0,
+    effective_type text
+  );
+  create index playback_timings_created on playback_timings(created_at);
+  `,
 ];
 
 export async function migrate(pool: pg.Pool): Promise<void> {

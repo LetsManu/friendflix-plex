@@ -117,3 +117,7 @@ sw.addEventListener('fetch', (event) => {
 // push handlers
 import { installPush } from '#lib/sw/push';
 installPush(sw);
+
+// Background Fetch downloads (Chromium): store the finished file, chain the next one
+import { installBgFetch } from '#lib/sw/bgfetch';
+installBgFetch(sw);

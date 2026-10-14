@@ -17,7 +17,7 @@ export const SUPPORT_HINT: Readonly<Record<Unsupported, string>> = {
   get tv() { return tr('account.downloads.support.tv'); },
 };
 
-const isIos = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const isIos = (): boolean => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isStandalone = () => (navigator as any).standalone === true || matchMedia('(display-mode: standalone)').matches;
 
 /**

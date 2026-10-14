@@ -196,6 +196,8 @@ const fr: Translation<typeof de> = {
       error: 'Erreur',
       expired: 'Expiré',
     },
+    iosKeepOpen: 'Sur iPhone, garde l’app ouverte pendant le téléchargement – iOS met les téléchargements en pause en arrière-plan.',
+    bgDone: '« {title} » est téléchargé',
     msg: {
       signIn: 'Connectez-vous pour continuer',
       busy: 'Serveur surchargé, nouvelle tentative à suivre',
@@ -206,6 +208,7 @@ const fr: Translation<typeof de> = {
       noSpace: 'Espace de stockage insuffisant sur cet appareil.',
       prepFailed: 'Échec de la préparation sur le serveur.',
       size: 'La taille ne correspond pas ({have} sur {total})',
+      background: 'En pause – reprend dès que FriendFlix est ouvert',
     },
     support: {
       insecure: 'Les téléchargements nécessitent une connexion sécurisée (HTTPS).',

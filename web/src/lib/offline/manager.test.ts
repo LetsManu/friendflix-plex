@@ -23,8 +23,29 @@ vi.mock('./opfs', () => ({
   deleteDownloadFiles: async (id: string) => {
     if (opfs.deleteFails > 0) { opfs.deleteFails--; throw new Error('locked'); }
     opfs.deleted.push(id);
+    bg.log.push(`delete ${id}`);
   },
   deleteOrphans: async (keep: string[]) => { opfs.orphansKept.push(keep); },
+}));
+
+// Background Fetch (./bgfetch): off unless a test turns it on
+const bg = vi.hoisted(() => ({
+  supported: false,
+  result: 'started' as 'started' | 'running' | 'failed',
+  starts: [] as Array<{ id: string; url: string; opts: { title: string; total: number; icon?: string } }>,
+  watching: new Map<string, (n: number) => void>(),
+  watchOk: true,
+  log: [] as string[],
+  msg: null as null | ((id: string) => void),
+  gate: null as null | Promise<void>,
+  onAbort: null as null | ((id: string) => string),
+}));
+vi.mock('./bgfetch', () => ({
+  bgSupported: async () => { if (bg.gate) await bg.gate; return bg.supported; },
+  startBg: async (id: string, url: string, opts: { title: string; total: number; icon?: string }) => { bg.starts.push({ id, url, opts }); return bg.result; },
+  watchBg: async (id: string, cb: (n: number) => void) => { if (!bg.watchOk) return false; bg.watching.set(id, cb); return true; },
+  abortBg: async (id: string) => { bg.log.push(`abort ${id}${bg.onAbort ? ` ${bg.onAbort(id)}` : ''}`); },
+  onBgMessage: (cb: (id: string) => void) => { bg.msg = cb; },
 }));
 
 class FakeWorker {
@@ -80,6 +101,7 @@ beforeEach(async () => {
   opfs.deleteFails = 0;
   opfs.orphansKept = [];
   FakeWorker.all = [];
+  Object.assign(bg, { supported: false, result: 'started', starts: [], watching: new Map(), watchOk: true, log: [], msg: null, gate: null, onAbort: null });
   server = { list: [], listStatus: 200, check: { valid: [], revoked: [] }, progressStatus: 200, meStatus: 200 };
   calls = [];
   online = true;
@@ -290,6 +312,288 @@ describe('worker errors', () => {
     await request(lic('b'));
     worker().say({ type: 'progress', id: 'zzz', have: 1, total: 1, etag: '' });
     expect(worker().terminated).toBe(true);
+  });
+});
+
+describe('app in the background (no Background Fetch)', () => {
+  const hide = () => { (document as any).visibilityState = 'hidden'; docListeners.get('visibilitychange')!(); };
+  const show = () => { (document as any).visibilityState = 'visible'; docListeners.get('visibilitychange')!(); };
+  beforeEach(() => { (navigator as any).userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)'; });
+
+  it('desktop browsers keep downloading in a hidden tab', async () => {
+    (navigator as any).userAgent = 'Mozilla/5.0 (X11; Linux x86_64)';
+    await request(lic('a'));
+    hide();
+    expect(worker().posted).toHaveLength(1);
+  });
+
+  it('hidden pauses the running worker and shows the background message', async () => {
+    await request(lic('a'));
+    hide();
+    expect(worker().posted.at(-1)).toEqual({ cmd: 'pause' });
+    worker().say({ type: 'paused', id: 'a', have: 400 });
+    await settle();
+    expect(view('a')).toMatchObject({ state: 'queued', bytesHave: 400, msg: tr('account.downloads.msg.background') });
+    expect(M.stateLabel(view('a')!)).toBe(tr('account.downloads.msg.background'));
+    expect(FakeWorker.all).toHaveLength(1); // not restarted while hidden
+  });
+
+  it('pagehide pauses the running worker too', async () => {
+    await request(lic('a'));
+    listeners.get('pagehide')!();
+    expect(worker().posted.at(-1)).toEqual({ cmd: 'pause' });
+  });
+
+  it('visible resumes at once without back-off, from the stored bytes', async () => {
+    await request(lic('a'));
+    hide();
+    worker().say({ type: 'paused', id: 'a', have: 400 });
+    await settle();
+    server.list = [lic('a')];
+    show();
+    await settle();
+    expect(FakeWorker.all).toHaveLength(2);
+    expect(worker().posted[0]).toMatchObject({ cmd: 'start', have: 400 });
+    expect(view('a')).toMatchObject({ state: 'downloading', msg: undefined });
+  });
+
+  it('a network error while hidden uses the background message and no back-off', async () => {
+    await request(lic('a'));
+    (document as any).visibilityState = 'hidden';
+    worker().say({ type: 'error', id: 'a', code: 'network', message: 'x' });
+    await settle();
+    expect(view('a')).toMatchObject({ state: 'queued', msg: tr('account.downloads.msg.background') });
+    server.list = [lic('a')];
+    show();
+    await settle();
+    expect(FakeWorker.all).toHaveLength(2);
+  });
+
+  it('a network error right after coming back counts as a background pause', async () => {
+    await request(lic('a'));
+    hide();
+    show();
+    worker().say({ type: 'error', id: 'a', code: 'network', message: 'x' });
+    await settle();
+    expect(FakeWorker.all).toHaveLength(2); // restarted at once: no 15 s back-off
+    expect(worker().posted[0]).toMatchObject({ cmd: 'start', id: 'a' });
+  });
+
+  it('a user pause while hidden stays a pause', async () => {
+    await request(lic('a'));
+    M.pause('a');
+    hide();
+    worker().say({ type: 'paused', id: 'a', have: 10 });
+    await settle();
+    expect(view('a')!.state).toBe('paused');
+  });
+});
+
+describe('Background Fetch', () => {
+  beforeEach(() => { bg.supported = true; });
+  const progress = (id: string, n: number) => bg.watching.get(id)!(n);
+
+  it('a fresh download goes to Background Fetch, not to the worker; progress comes from the fetch', async () => {
+    await request(lic('a'));
+    expect(bg.starts).toEqual([{ id: 'a', url: '/media/d/a', opts: { title: 'Title a', total: 1000, icon: '/icon-192.png' } }]);
+    expect(FakeWorker.all).toHaveLength(0);
+    expect(view('a')).toMatchObject({ state: 'downloading', via: 'bg', bytesHave: 0 });
+    expect((await io(D.getDownload('a')))!.via).toBe('bg');
+    progress('a', 250);
+    expect(view('a')!.bytesHave).toBe(250);
+    expect(M.progressPct(view('a')!)).toBe(25);
+  });
+
+  it('a refused Background Fetch falls back to the worker and is remembered', async () => {
+    bg.result = 'failed';
+    await request(lic('a'));
+    expect(view('a')).toMatchObject({ state: 'downloading', noBg: true });
+    expect(view('a')!.via).toBeUndefined();
+    expect(FakeWorker.all).toHaveLength(1);
+  });
+
+  it('a running fetch (other tab) is attached, not started again', async () => {
+    bg.result = 'running';
+    await request(lic('a'));
+    expect(bg.watching.has('a')).toBe(true);
+    expect(view('a')).toMatchObject({ state: 'downloading', via: 'bg' });
+  });
+
+  it('a partly downloaded file continues in the worker with Range', async () => {
+    await io(D.putDownload(record('a', { bytesHave: 300 })));
+    server.list = [lic('a')];
+    await init();
+    expect(bg.starts).toHaveLength(0);
+    expect(worker().posted[0]).toMatchObject({ cmd: 'start', have: 300 });
+  });
+
+  it('needs room for the file twice (it is copied once at the end)', async () => {
+    opfs.estimate = { usage: 0, quota: 1600 };
+    await request(lic('a'));
+    expect(view('a')).toMatchObject({ state: 'error', msg: tr('account.downloads.msg.noSpace') });
+    expect(bg.starts).toHaveLength(0);
+  });
+
+  it('only one download runs: the next one waits for the service worker to finish the first', async () => {
+    await request(lic('a'), lic('b'));
+    expect(bg.starts.map((x) => x.id)).toEqual(['a']);
+    expect(view('b')!.state).toBe('queued');
+  });
+
+  it('pause aborts the fetch; the download restarts from zero', async () => {
+    await request(lic('a'));
+    progress('a', 600);
+    M.pause('a');
+    await settle();
+    expect(bg.log).toContain('abort a');
+    expect(view('a')).toMatchObject({ state: 'paused', bytesHave: 0 });
+    expect(view('a')!.via).toBeUndefined();
+    M.resume('a');
+    await settle();
+    expect(bg.starts).toHaveLength(2);
+  });
+
+  it('remove and revoke abort the fetch before the files are deleted', async () => {
+    await request(lic('a'), lic('b'));
+    await M.removeDownload('a');
+    await settle();
+    expect(bg.log.slice(0, 2)).toEqual(['abort a', 'delete a']);
+    await vi.advanceTimersByTimeAsync(60);
+    await settle();
+    expect(bg.starts.map((x) => x.id)).toEqual(['a', 'b']);
+    server.check = { valid: [], revoked: ['b'] };
+    await M.checkIn();
+    await settle();
+    expect(bg.log.slice(2, 4)).toEqual(['abort b', 'delete b']);
+    expect(view('b')!.state).toBe('expired');
+  });
+
+  it('the hidden pause of phones leaves a Background Fetch alone', async () => {
+    (navigator as any).userAgent = 'Mozilla/5.0 (Linux; Android 15)';
+    await request(lic('a'));
+    (document as any).visibilityState = 'hidden';
+    docListeners.get('visibilitychange')!();
+    await settle();
+    expect(bg.log).toEqual([]);
+    expect(view('a')!.state).toBe('downloading');
+  });
+
+  it('remembers the file URL once the server is ready, for the service worker to chain', async () => {
+    await request(lic('a', { prep: { status: 'preparing', percent: 5, error: null } }), lic('b'));
+    expect((await io(D.getDownload('b')))!.readyUrl).toBe('/media/d/b');
+    expect((await io(D.getDownload('a')))!.readyUrl).toBeUndefined();
+  });
+
+  it('service worker done: the record is re-read, subtitles and pictures follow in the worker, then the server is told', async () => {
+    await request(lic('a'), lic('b'));
+    await io(D.putDownload(record('a', { state: 'done', bytesHave: 1000, extrasPending: true })));
+    await io(D.putDownload(record('b', { state: 'downloading', via: 'bg' }))); // chained by the service worker
+    bg.msg!('a');
+    bg.msg!('b');
+    await settle();
+    expect(view('a')).toMatchObject({ state: 'done', bytesHave: 1000 });
+    expect(view('b')).toMatchObject({ state: 'downloading', via: 'bg' });
+    expect(bg.watching.has('b')).toBe(true);
+    // extras run once nothing else holds the slot: b runs in the background, so wait for it
+    expect(FakeWorker.all).toHaveLength(0);
+    await io(D.putDownload(record('b', { state: 'done', bytesHave: 1000, extrasPending: true })));
+    bg.msg!('b');
+    await settle();
+    expect(worker().posted[0]).toMatchObject({ cmd: 'start', id: 'a', extrasOnly: true, extras: [{ url: '/api/downloads/a/sub/de', name: 'sub-de.vtt' }, { url: '/p/a', name: 'poster.jpg' }] });
+    worker().say({ type: 'done', id: 'a', bytes: 1000, etag: '' });
+    await settle();
+    expect(view('a')!.extrasPending).toBe(false);
+    expect(calls.find((c) => c.path === '/api/downloads/a/fetched')!.body).toEqual({ bytes: 1000 });
+    await vi.advanceTimersByTimeAsync(60);
+    await settle();
+    expect(worker().posted[0]).toMatchObject({ id: 'b', extrasOnly: true });
+  });
+
+  it('a download the service worker chained while the extras run is followed, pausable, and blocks new starts', async () => {
+    bg.onAbort = (id) => String(view(id)?.state);
+    await request(lic('a'), lic('b'), lic('c'));
+    await io(D.putDownload(record('a', { state: 'done', bytesHave: 1000, extrasPending: true })));
+    bg.msg!('a');
+    await settle();
+    await vi.advanceTimersByTimeAsync(60);
+    await settle();
+    expect(worker().posted[0]).toMatchObject({ id: 'a', extrasOnly: true }); // the extras hold the slot
+    await io(D.putDownload(record('b', { state: 'downloading', via: 'bg' })));
+    bg.msg!('b');
+    await settle();
+    expect(bg.watching.has('b')).toBe(true);
+    bg.watching.get('b')!(300);
+    expect(view('b')!.bytesHave).toBe(300);
+    worker().say({ type: 'done', id: 'a', bytes: 1000, etag: '' });
+    await settle();
+    await vi.advanceTimersByTimeAsync(60);
+    await settle();
+    expect(bg.starts.map((x) => x.id)).toEqual(['a']); // c waits while b runs in the background
+    expect(FakeWorker.all).toHaveLength(1);
+    M.pause('b');
+    await settle();
+    expect(bg.log).toContain('abort b paused');
+    expect(view('b')).toMatchObject({ state: 'paused', bytesHave: 0 });
+  });
+
+  it('remove and revoke write the record away before the fetch is aborted (the service worker must not bring it back)', async () => {
+    bg.onAbort = (id) => String(view(id)?.state);
+    await request(lic('a'));
+    M.pause('a');
+    await settle();
+    expect(bg.log).toEqual(['abort a paused']);
+    M.resume('a');
+    await settle();
+    await M.removeDownload('a');
+    await settle();
+    expect(bg.log.slice(1)).toEqual(['abort a paused', 'delete a']);
+  });
+
+  it('a download removed while pump waits is not started', async () => {
+    let open!: () => void;
+    bg.gate = new Promise((r) => { open = r; });
+    server.list = [lic('a')];
+    const p = M.requestDownload({ itemId: 'item-a', quality: 'hd', subLangs: [] });
+    await settle();
+    await p;
+    await M.removeDownload('a');
+    open();
+    await settle();
+    await vi.advanceTimersByTimeAsync(60);
+    await settle();
+    expect(bg.starts).toHaveLength(0);
+    expect(FakeWorker.all).toHaveLength(0);
+    expect(view('a')).toBeUndefined();
+  });
+
+  it('service worker gave up (noBg): the worker takes over', async () => {
+    await request(lic('a'));
+    await io(D.putDownload(record('a', { state: 'queued', noBg: true })));
+    bg.msg!('a');
+    await settle();
+    await vi.advanceTimersByTimeAsync(60);
+    await settle();
+    expect(worker().posted[0]).toMatchObject({ cmd: 'start', id: 'a', have: 0 });
+    expect(worker().posted[0]).not.toHaveProperty('extrasOnly');
+  });
+
+  it('reopening the app attaches to a running fetch', async () => {
+    await io(D.putDownload(record('a', { state: 'downloading', via: 'bg' })));
+    server.list = [lic('a'), lic('b')];
+    await io(D.putDownload(record('b')));
+    await init();
+    expect(view('a')).toMatchObject({ state: 'downloading', via: 'bg' });
+    expect(bg.watching.has('a')).toBe(true);
+    expect(bg.starts).toHaveLength(0); // b waits for a
+  });
+
+  it('reopening the app with the fetch gone: a record the service worker did not finish goes to the worker', async () => {
+    bg.watchOk = false;
+    await io(D.putDownload(record('a', { state: 'downloading', via: 'bg', bytesHave: 0 })));
+    server.list = [lic('a')];
+    await init();
+    expect(view('a')).toMatchObject({ noBg: true });
+    expect(worker().posted[0]).toMatchObject({ cmd: 'start', id: 'a', have: 0 });
   });
 });
 

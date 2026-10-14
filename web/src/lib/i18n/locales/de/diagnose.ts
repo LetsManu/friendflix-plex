@@ -12,4 +12,7 @@ export default {
   airplayCopy: 'Kopieren',
   airplayClear: 'Leeren',
   airplayEmpty: 'Noch keine Einträge.',
+  timingTitle: 'Startzeiten',
+  timingHint: 'Die letzten Wiedergaben auf diesem Gerät: wie lange Info, Playlist, erstes Stück und erstes Bild gebraucht haben, dazu Spulen und Hänger.',
+  timingEmpty: 'Noch keine Messungen auf diesem Gerät.',
 } as const;

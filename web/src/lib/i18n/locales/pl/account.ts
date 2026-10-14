@@ -211,6 +211,8 @@ const pl: Translation<typeof de> = {
       error: 'Błąd',
       expired: 'Wygasło',
     },
+    iosKeepOpen: 'Na iPhonie nie zamykaj aplikacji podczas pobierania – iOS wstrzymuje pobieranie w tle.',
+    bgDone: '„{title}” został pobrany',
     msg: {
       signIn: 'Zaloguj się, aby kontynuować',
       busy: 'Serwer jest przeciążony, ponowna próba wkrótce',
@@ -221,6 +223,7 @@ const pl: Translation<typeof de> = {
       noSpace: 'Za mało miejsca na tym urządzeniu.',
       prepFailed: 'Przygotowanie na serwerze nie powiodło się.',
       size: 'Rozmiar się nie zgadza ({have} z {total})',
+      background: 'Wstrzymano – wznowi się po otwarciu FriendFlix',
     },
     support: {
       insecure: 'Pobieranie wymaga bezpiecznego połączenia (HTTPS).',

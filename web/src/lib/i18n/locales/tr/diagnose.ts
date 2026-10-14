@@ -14,5 +14,8 @@ const dict: Translation<typeof de> = {
   airplayCopy: 'Kopyala',
   airplayClear: 'Temizle',
   airplayEmpty: 'Henüz kayıt yok.',
+  timingTitle: 'Başlatma süreleri',
+  timingHint: 'Bu cihazdaki son oynatmalar: bilgi, çalma listesi, ilk parça ve ilk karenin ne kadar sürdüğü, ayrıca sarmalar ve takılmalar.',
+  timingEmpty: 'Bu cihazda henüz ölçüm yok.',
 };
 export default dict;

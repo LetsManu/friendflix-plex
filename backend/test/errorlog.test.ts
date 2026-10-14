@@ -51,7 +51,7 @@ describe('migration 35', () => {
     expect((await present()).tables).toEqual([]);
     await migrate(env.pool as never);
     expect(await present()).toEqual({ tables: [...TABLES].sort(), indexes: [...INDEXES].sort() });
-    expect((await env.pool.query('select max(version) v from schema_migrations')).rows[0].v).toBe(35);
+    expect((await env.pool.query('select max(version) v from schema_migrations')).rows[0].v).toBeGreaterThanOrEqual(35); // later migrations follow
   });
 });
 

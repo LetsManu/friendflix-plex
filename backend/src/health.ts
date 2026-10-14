@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { stat as fsStat, statfs as fsStatfs } from 'node:fs/promises';
 import type { Ctx } from './ctx.js';
 import { recentCount } from './errorlog.js';
+import { pruneTimings } from './playtiming.js';
 import { OMDB_DAILY_BUDGET, PAUSE_KEY, SOURCES, sourceStatus, type SourceName } from './sources/keys.js';
 
 /**
@@ -295,7 +296,7 @@ export async function getSnapshot(ctx: Ctx, opts: { refresh?: boolean } = {}, de
   return s;
 }
 
-/** Background job (every 60 s): rebuild + store; prunes banner dismissals older than 30 days once per hour. Never throws. */
+/** Background job (every 60 s): rebuild + store; prunes banner dismissals (30 days) and player timings (14 days) once per hour. Never throws. */
 export async function healthTick(ctx: Ctx, deps?: HealthDeps): Promise<void> {
   try {
     await rebuild(ctx, deps);
@@ -303,7 +304,10 @@ export async function healthTick(ctx: Ctx, deps?: HealthDeps): Promise<void> {
     // a failing build keeps the last snapshot
   }
   try {
-    if (await ctx.kv.setnx('health:prune', '1', 3600)) await ctx.db.query("delete from health_dismissals where at < now() - interval '30 days'");
+    if (await ctx.kv.setnx('health:prune', '1', 3600)) {
+      await ctx.db.query("delete from health_dismissals where at < now() - interval '30 days'");
+      await pruneTimings(ctx); // player start-time rows: 14 days
+    }
   } catch {
     // next hour
   }

@@ -196,6 +196,8 @@ const tr: Translation<typeof de> = {
       error: 'Hata',
       expired: 'Süresi doldu',
     },
+    iosKeepOpen: 'iPhone’da indirme sırasında uygulamayı açık tut – iOS arka planda indirmeleri duraklatır.',
+    bgDone: '“{title}” indirildi',
     msg: {
       signIn: 'Devam etmek için oturum aç',
       busy: 'Sunucu meşgul, yeniden denenecek',
@@ -206,6 +208,7 @@ const tr: Translation<typeof de> = {
       noSpace: 'Bu cihazda yeterli depolama alanı yok.',
       prepFailed: 'Sunucuda hazırlık başarısız oldu.',
       size: 'Boyut tutmuyor ({have} / {total})',
+      background: 'Duraklatıldı – FriendFlix açılınca devam eder',
     },
     support: {
       insecure: 'İndirmeler güvenli bir bağlantı (HTTPS) gerektirir.',

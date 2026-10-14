@@ -3,7 +3,7 @@
 <script lang="ts">
   import type Hls from 'hls.js';
   import { createEventDispatcher, onDestroy, onMount, tick as tickDom } from 'svelte';
-  import { api, ApiError, backdrop, fmtClock, getActiveProfile, HERO_WIDTHS, img, secToTicks, srcset, ticksToSec } from '#lib/api';
+  import { api, ApiError, backdrop, fmtClock, getActiveProfile, getCsrf, HERO_WIDTHS, img, secToTicks, srcset, ticksToSec } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
   import { get } from 'svelte/store';
   import { prefs, prefsLoaded, saveAudioFx } from '#lib/stores';
@@ -27,6 +27,7 @@
   import { speedLabel, SPEEDS } from '#lib/player/bar';
   import { firstPlaybackRequest, playbackInfoBody, type InfoBody, type PlaybackDto } from '#lib/player/infobody';
   import { holdPrefetch, takePrefetched } from '#lib/player/prefetch';
+  import { createTiming, deviceClass, effectiveType, sendTiming } from '#lib/player/timing';
   import EpisodesPanel from '#lib/player/EpisodesPanel.svelte';
   import CastInfoPanel from '#lib/player/CastInfoPanel.svelte';
   import CastPeek from '#lib/player/CastPeek.svelte';
@@ -127,6 +128,7 @@
   $: posterKinds = poster ? ([poster.backdrop !== false && 'Backdrop', poster.image !== false && 'Primary'].filter(Boolean) as Array<'Backdrop' | 'Primary'>) : [];
   $: posterKind = posterKinds[posterFail] ?? null;
   function firstFrame() {
+    timing.frame();
     if (!posterOn || posterOut) return;
     posterOut = true;
     clearTimeout(posterT); posterT = setTimeout(() => (posterOn = false), 320);
@@ -179,12 +181,23 @@
   /** the latest stop report (also one sent earlier, e.g. at the end of the film): leaving the player holds prefetches on it */
   let lastStop: unknown;
   const send = (kind: 'start' | 'progress' | 'stop', keepalive = false) => {
+    if (kind === 'stop') reportTiming();
     if (handedOff) return undefined; // the cast engine reports for the handed-over session
     lastSent = Date.now();
     const r = report && info && api(`/api/playback/${kind}`, { method: 'POST', body: body(), keepalive }).catch(() => undefined);
     if (kind === 'stop') lastStop = r;
     return r;
   };
+
+  // ---- start-time measurement per playback session (lib/player/timing.ts): sent once on stop / pagehide / end; never in a
+  //      watch party, while casting / AirPlay or for a stream handed to the cast engine (offline playback has its own player) ----
+  const timing = createTiming();
+  function reportTiming() {
+    try {
+      const r = timing.finish({ device: deviceClass({ coarse, tv: tvMode() }), effectiveType: effectiveType(navigator) });
+      if (r && !partyMode && !remote && !handedOff && !airInfo && !airOn) sendTiming(r, { csrf: getCsrf(), profile: getActiveProfile() });
+    } catch { /* measuring must never break playback */ }
+  }
 
   // ---- per-series audio / subtitle choice ("anime pack"): remembered per profile, applied before the global defaults ----
   let serPref: { audio: string | null; subtitle: string | null } = { audio: null, subtitle: null }, serPrefDone = false;
@@ -214,6 +227,8 @@
   };
   async function load(startSec?: number) {
     error = ''; errNote = '';
+    // a retry / track reload continues the running session (its clock keeps going); a quality switch starts a new one, flagged
+    if (!timing.active && !partyMode && !remote) timing.begin(switching);
     if (startSec !== undefined) { lastPos = startSec; posKnown = true; }
     // first start: the saved quality + audio language go into this same request (no second round trip)
     const first = !prefsApplied && !partyMode;
@@ -233,6 +248,7 @@
       // an empty/foreign answer (204, proxy page ...) has no playback session: show the error instead of crashing on it
       if (!validInfo(got)) throw new ApiError(502, null);
       info = got;
+      timing.info(sentBps);
     } catch (e: any) {
       if (!(e instanceof ApiError) || e.status >= 500) { recover('network', true); return; } // server/network hiccup: retry with backoff
       reconnecting = 0;
@@ -261,6 +277,7 @@
     hls?.destroy(); hls = null;
     const useDirect = info.directUrl && audioIndex === undefined && !rec.forcedHls && video.canPlayType('video/mp4');
     mode = useDirect ? 'direct' : 'hls';
+    timing.mode(useDirect ? 'direct' : 'hls');
     const seek = () => { if (startSec > 1) video!.currentTime = startSec; };
     // hls.js is loaded lazily, only on this path (and usually already prefetched by the play button)
     let H: typeof Hls | null = null;
@@ -276,7 +293,12 @@
       hls = new HC(hlsConfig(startSec));
       hls.loadSource(info.hlsUrl);
       hls.attachMedia(video);
-      hls.on(HC.Events.FRAG_LOADED, (_e, d) => { const st = d.frag.stats; est.add(st.loaded, st.loading.end - st.loading.start); });
+      hls.on(HC.Events.LEVEL_LOADED, (_e, d) => timing.manifest(d.details.targetduration)); // the variant playlist: the last step before the first fragment
+      hls.on(HC.Events.FRAG_LOADED, (_e, d) => {
+        const st = d.frag.stats, dl = st.loading.end - st.loading.start;
+        est.add(st.loaded, dl);
+        if (d.frag.type === 'main' && d.frag.sn !== 'initSegment') timing.frag(st.loaded, dl);
+      });
       hls.on(HC.Events.ERROR, (_e, d) => {
         if (!d.fatal) return;
         lastErrCode = String(d.details || d.type || 'hls');
@@ -289,6 +311,7 @@
       if (video.disableRemotePlayback) video.disableRemotePlayback = false; // set by an earlier hls.js ManagedMediaSource attach; it would block AirPlay
       video.src = info.hlsUrl; // Safari: native HLS
       video.addEventListener('loadedmetadata', seek, { once: true });
+      video.addEventListener('loadedmetadata', () => timing.manifest(), { once: true }); // native: no playlist events, the metadata is the closest
     }
     stopped = false; started = false;
     dispatch('ready', { info });
@@ -360,6 +383,7 @@
   function onWaiting() {
     if (handedOff) return;
     waiting = true;
+    timing.waiting(video?.seeking ?? false);
     if (!video || airOn || !started || stopped || !sessionPlaying || video.seeking || waitSince) return;
     waitSince = performance.now(); stallHandled = false;
     clearTimeout(stallT); stallT = setTimeout(() => { if (waitSince) { stallHandled = true; onStall(performance.now() - waitSince); } }, STALL_NOW_MS);
@@ -371,7 +395,7 @@
   }
   function onPlaying() {
     if (handedOff) return;
-    waiting = false; sessionPlaying = true; firstFrame();
+    waiting = false; sessionPlaying = true; firstFrame(); timing.playing();
     if (waitSince) { const ms = performance.now() - waitSince, done = stallHandled; resetStall(); if (!done && ms > 0) onStall(ms); }
     if (reconnecting) { reconnecting = 0; flash(tr('player.reconnected'), 1500); }
   }
@@ -1026,7 +1050,7 @@
       }
     }, 500);
     // after the hand-off the engine has its own pagehide (keepalive stop + revoke): nothing of that session is touched here
-    const bye = () => { persistEstimate(); if (handedOff) return; if (!stopped) { stopped = true; send('stop', true); } if (airInfo) castRevoke(airInfo); };
+    const bye = () => { persistEstimate(); reportTiming(); if (handedOff) return; if (!stopped) { stopped = true; send('stop', true); } if (airInfo) castRevoke(airInfo); };
     // keep the resume position safe when the tab is hidden / the phone locks (Picture-in-Picture keeps playing: only a progress report, no stop)
     const vis = () => { if (document.visibilityState === 'hidden' && started && !stopped && !handedOff) send('progress', true); };
     const online = () => { if (reconnecting) retryNow(resumePos()); };
@@ -1063,6 +1087,7 @@
     persistEstimate(); clearInterval(abrTimer); clearInterval(bwTimer); clearTimeout(stallT);
     clearInterval(progressTimer); clearInterval(activityTimer); clearTimeout(toastTimer); clearTimeout(retryT); clearTimeout(spinT); clearTimeout(pendingTap); clearTimeout(hudT); clearTimeout(rippleT); clearTimeout(lockT); clearTimeout(unlockT); nowPlaying.set(null);
     if (!handedOff && started && !stopped) { stopped = true; send('stop'); }
+    reportTiming(); // also a start the viewer gave up on (no first frame yet)
     holdPrefetch(Promise.resolve(lastStop)); // no cached info survives the player; the next prefetch waits for this stop (resume position)
     destroyed = true;
     // a handed-over cast keeps running (the engine owns token, element, controller and probe); otherwise AirPlay ends here
@@ -1079,10 +1104,10 @@
   <!-- svelte-ignore a11y_media_has_caption -->
   <video bind:this={video} playsinline crossorigin="use-credentials" style:filter={brightness < 1 ? `brightness(${brightness})` : null}
     on:error={onVideoError}
-    on:play={onPlay} on:pause={() => { if (handedOff) return; paused = true; resetStall(); if (!castBusy && !stopped) send('progress'); }} on:seeked={() => !handedOff && started && send('progress')}
+    on:play={onPlay} on:pause={() => { if (handedOff) return; paused = true; resetStall(); if (!castBusy && !stopped) send('progress'); }} on:seeked={() => { timing.seeked(video?.paused ?? true); if (!handedOff && started) send('progress'); }}
     on:ended={() => { if (handedOff) return; stopped = true; paused = true; send('stop'); }}
     on:timeupdate={() => { syncTime(); reportTick(); }} on:progress={syncTime} on:loadedmetadata={syncTime}
-    on:waiting={onWaiting} on:seeking={resetStall} on:playing={onPlaying} on:loadeddata={firstFrame} on:canplay={() => { if (handedOff) return; waiting = false; if (wantAutoplay) { wantAutoplay = false; playSafe(); } }}
+    on:waiting={onWaiting} on:seeking={() => { resetStall(); timing.seeking(); }} on:playing={onPlaying} on:loadeddata={firstFrame} on:canplay={() => { if (handedOff) return; waiting = false; if (wantAutoplay) { wantAutoplay = false; playSafe(); } }}
     on:volumechange={() => { if (video) { muted = video.muted; } }}
     on:play on:pause on:seeked on:seeking on:waiting on:playing on:canplay on:timeupdate on:ended>
     {#if info}{#each info.subtitles as s}<track id="sub-{s.index}" kind="subtitles" src={s.url} srclang={s.language?.slice(0, 2) ?? 'xx'} label={s.title} />{/each}{/if}

@@ -121,7 +121,7 @@ An app-like layout with a bottom tab bar, a preview sheet when you tap a poster,
 
 **On the big screen:** TV mode for smart-TV browsers, sticks and consoles – big type, arrow-key navigation, pairing with a code or QR code, and your **phone as the remote**. Chromecast from Chrome, Edge and Android; **AirPlay** from Safari on iPhone, iPad and Mac to Apple TV and AirPlay 2 TVs (e.g. LG webOS 2019+). Casting keeps running while you browse: a **bar at the bottom** controls the TV, Play buttons send new titles straight to it and the next episode starts on the TV when autoplay is allowed (otherwise the bar offers it).
 
-**Downloads for the train and the plane:** download movies and episodes (or the next few episodes of a show in one go) and watch them offline in the browser. Progress syncs back the next time you are online. Per-device licences with expiry; works in Chrome, Edge, Firefox, Safari 17+ and as a home-screen app on iOS 17+.
+**Downloads for the train and the plane:** download movies and episodes (or the next few episodes of a show in one go) and watch them offline in the browser. Progress syncs back the next time you are online. Per-device licences with expiry; works in Chrome, Edge, Firefox, Safari 17+ and as a home-screen app on iOS 17+. On Android (Chrome, Edge) downloads keep going in the background, even with the app closed; on iPhone they pause while the app is in the background and continue as soon as it is open again.
 
 <p align="center"><img src="docs/images/en/downloads.jpg" alt="Downloads page with finished, paused and preparing downloads" width="700"></p>
 
