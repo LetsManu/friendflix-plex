@@ -298,6 +298,19 @@ test.describe('admin content pages (desktop)', () => {
       expect(api.log.some((l) => l.startsWith('DELETE /api/admin/downloads/'))).toBe(true);
     });
 
+    test('start time: p50 / p90 per step, home vs. remote, the biggest step marked, the long-segment hint and the last starts', async ({ page }) => {
+      await page.goto('/admin/playback');
+      const tab = page.getByTestId('timing-table');
+      await expect(tab.getByRole('row', { name: /Unterwegs · Handy/ })).toContainText(/4[.,]2\ss \/ 8[.,]4\ss/);
+      await expect(tab.getByRole('row', { name: /Zuhause · alle Geräte/ })).toContainText('400 ms / 900 ms');
+      await expect(tab.getByRole('row', { name: /Unterwegs · Handy/ }).locator('td.big')).toContainText('größter Schritt');
+      await expect(page.getByTestId('timing-long-segments')).toHaveText('Unterwegs sind die Videostücke 6 s lang: lange Videostücke verzögern den Start.');
+      const recent = page.getByRole('table', { name: 'Letzte Starts' });
+      await expect(recent.getByRole('row')).toHaveCount(4);
+      await expect(recent).toContainText('Qualitätswechsel');
+      await expect(recent).toContainText(/5[.,]6\ss/);
+    });
+
     test('the health check lists failures without raw ids', async ({ page }) => {
       await page.goto('/admin/playback');
       await expect(page.getByText('1 fehlgeschlagen')).toBeVisible();

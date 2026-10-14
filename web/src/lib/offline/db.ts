@@ -30,6 +30,14 @@ export interface DownloadRecord {
   validUntil: number;
   positionSec: number;
   updatedAt: number;
+  /** running as a Background Fetch (the service worker stores the file) */
+  via?: 'bg';
+  /** Background Fetch failed or was refused for this download: use the worker */
+  noBg?: boolean;
+  /** the file URL once the server has it ready (the service worker starts the next download with it) */
+  readyUrl?: string;
+  /** finished by the service worker: subtitles and pictures are still to be fetched by the page */
+  extrasPending?: boolean;
 }
 export interface QueuedProgress { itemId: string; downloadId: string; positionTicks: number; played: boolean; at: number }
 

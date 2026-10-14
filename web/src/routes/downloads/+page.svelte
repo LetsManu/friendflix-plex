@@ -5,17 +5,18 @@
   import { api, type Me } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
   import { downloads, initManager, getSupport, pause, progressPct, refreshStorage, removeDownload, resume, stateLabel, storageInfo, checkIn, type DlView } from '#lib/offline/manager';
-  import { SUPPORT_HINT, persist, type Support } from '#lib/offline/opfs';
+  import { SUPPORT_HINT, isIos, persist, type Support } from '#lib/offline/opfs';
   import { daysLeft } from '#lib/offline/license';
   import { fmtBytes } from '#lib/offline/size';
   import { intlLocale, t, tr } from '#lib/i18n';
 
   let support: Support = { ok: false };
   let me: Me | null = null, ready = false;
-  let quality = 'hd', persistMsg = '';
+  let quality = 'hd', persistMsg = '', ios = false;
 
   onMount(async () => {
     support = await getSupport();
+    ios = isIos();
     me = await api<Me>('/api/me').catch(() => null);
     try { quality = localStorage.getItem('ff_dl_quality') ?? 'hd'; } catch { /* ignore */ }
     if (support.ok) { await initManager(); void refreshStorage(); void checkIn(); }
@@ -76,6 +77,7 @@
     </div>
     {#if persistMsg}<p class="muted" role="status">{persistMsg}</p>{/if}
     <p class="muted small">{$t('account.downloads.note')}</p>
+    {#if ios}<p class="muted small ios-note">{$t('account.downloads.iosKeepOpen')}</p>{/if}
   </section>
 
   {#if list.length}

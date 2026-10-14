@@ -207,4 +207,30 @@ describe('fetch worker', () => {
     await finished();
     expect(requests.map((r) => r.url)).toEqual([URL_]);
   });
+
+  it('extras only: fetches the side files, never the video, and reports the size of the video already on disk', async () => {
+    start();
+    await finished();
+    requests = [];
+    out = [];
+    handler = (req) => (req.url.endsWith('.vtt') ? new Response('WEBVTT') : server()(req));
+    start({ extras: [{ url: '/s.vtt', name: 'sub-de.vtt' }], extrasOnly: true, etag: '"e1"' });
+    expect(await finished()).toEqual({ type: 'done', id: ID, bytes: 1000, etag: '"e1"' });
+    expect(requests.map((r) => r.url)).toEqual(['/s.vtt']);
+    expect(video()!.data).toEqual(FILE);
+  });
+
+  it('extras only: a pause while the side files load reports paused, not done', async () => {
+    start();
+    await finished();
+    out = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    handler = async (req) => { await gate; if (req.signal.aborted) throw new DOMException('aborted', 'AbortError'); return new Response('WEBVTT'); };
+    start({ extras: [{ url: '/s.vtt', name: 'sub-de.vtt' }], extrasOnly: true });
+    await vi.waitFor(() => { if (!requests.some((r) => r.url === '/s.vtt')) throw new Error('not yet'); });
+    scope.onmessage!({ data: { cmd: 'pause' } });
+    release();
+    expect(await finished()).toEqual({ type: 'paused', id: ID, have: 0 });
+  });
 });

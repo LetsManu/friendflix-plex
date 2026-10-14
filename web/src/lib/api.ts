@@ -10,6 +10,8 @@ export class ApiError extends Error {
 
 let csrf = '';
 export const setCsrf = (t: string) => (csrf = t);
+/** for requests outside api() (the player's start-time report: a keepalive fetch that must never redirect on 401) */
+export const getCsrf = () => csrf;
 /** id of the profile the page loaded with; sent as x-ff-profile so the backend can detect a profile switch in another tab */
 let activeProfile = '';
 export const setActiveProfile = (id: string | null | undefined) => (activeProfile = id ?? '');

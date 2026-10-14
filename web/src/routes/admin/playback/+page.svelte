@@ -3,7 +3,8 @@
 <script lang="ts">
   /**
    * Admin → Wiedergabe-Check: (1) playback health check, (2) streams running right now (stop with confirm),
-   * (3) offline downloads: prepared files and active licenses. Everything is titled by name, never by id.
+   * (3) start time: player measurements per step (median / p90, home vs. remote, device class) and the last starts,
+   * (4) offline downloads: prepared files and active licenses. Everything is titled by name, never by id.
    */
   import { onDestroy, onMount } from 'svelte';
   import { api, ApiError } from '#lib/api';
@@ -19,6 +20,8 @@
   import Button from '#lib/ui/Button.svelte';
   import DataTable from '#lib/ui/DataTable.svelte';
   import Progress from '#lib/ui/Progress.svelte';
+  import Select from '#lib/ui/Select.svelte';
+  import { fmtMbit, fmtMs, fmtPct, groupBiggest, longRemoteSegments, orderGroups, PHASES, rowSteps, biggestPhase, type TimingGroup, type TimingRow, type TimingView } from '#lib/admin/timing';
   import Skeleton from '#lib/ui/Skeleton.svelte';
   import StatusPill, { type Tone } from '#lib/ui/StatusPill.svelte';
   import { fmtBytes } from '#lib/ui/format';
@@ -64,6 +67,25 @@
     else void refreshSummary();
   }
 
+  // ---------------------------------------------------------------- start time (player measurements, anonymous)
+  let timing: TimingView | null = null, timingErr: string | null = null, win: 'day' | 'week' = 'day';
+  async function loadTiming() {
+    try { timing = await api<TimingView>('/api/admin/playback/timing'); timingErr = null; } catch { timingErr = tr('adminContent.timing.loadFailed'); }
+  }
+  $: groups = timing ? orderGroups(timing[win]) : [];
+  $: longSeg = longRemoteSegments(groups);
+  const deviceText = (d: string | null) => (d === 'phone' || d === 'pc' || d === 'tv' ? tr(`adminContent.timing.device.${d}`) : tr('adminContent.timing.allDevices'));
+  const sideText = (home: boolean, d: string | null) => `${home ? tr('adminContent.timing.home') : tr('adminContent.timing.remote')} · ${deviceText(d)}`;
+  const groupKey = (g: TimingGroup) => `${g.home}:${g.device ?? 'all'}`;
+  $: timingCols = [
+    { key: 'at', label: $t('adminContent.timing.time'), value: (r) => r.at, primary: true, sortable: false },
+    { key: 'where', label: $t('adminContent.timing.where'), value: (r) => sideText(r.home, r.device), sortable: false },
+    { key: 'mode', label: $t('adminContent.timing.mode'), sortable: false, filter: false },
+    { key: 'steps', label: $t('adminContent.timing.phase.firstFrame'), sortable: false, filter: false },
+    { key: 'frag', label: $t('adminContent.timing.fragSize'), value: (r) => (r.firstFragBytes === null ? '–' : `${fmtBytes(r.firstFragBytes)} / ${fmtMs(r.firstFragDlMs)}`), sortable: false },
+    { key: 'stalls', label: $t('adminContent.timing.stalls'), value: (r) => (r.stalls ? `${r.stalls} · ${fmtMs(r.stallMs)}` : '0'), sortable: false, align: 'end' },
+  ] as Column<TimingRow>[];
+
   // ---------------------------------------------------------------- offline downloads
   type DlJob = { id: string; item_id: string; title: string | null; series_name: string | null; quality: string; audio_lang: string; status: string; seg_done: number; seg_total: number | null; bytes: string | number | null; error: string | null; updated_at: string; licenses: number };
   type DlLic = { id: string; item_id: string; title: string | null; series_name: string | null; user_name: string; device_label: string | null; quality: string; status: string; expires_at: string };
@@ -92,10 +114,11 @@
 
   let stops: Array<() => void> = [];
   onMount(() => {
-    void loadCheck(); void loadLive(); void loadDl();
+    void loadCheck(); void loadLive(); void loadDl(); void loadTiming();
     stops = [
       poll(() => { if (check?.running) void loadCheck(); }, 3000),
       poll(loadLive, 10_000),
+      poll(loadTiming, 60_000),
       poll(() => { if (dl?.jobs.some((j) => j.status === 'preparing' || j.status === 'queued')) void loadDl(); }, 5000),
     ];
   });
@@ -182,6 +205,60 @@
   </DataTable>
 </AdminCard>
 
+<AdminCard title={$t('adminContent.timing.title')} description={$t('adminContent.timing.intro')}>
+  <svelte:fragment slot="actions">
+    <div class="win"><Select label={$t('adminPeople.usage.period')} hideLabel value={win} options={[{ value: 'day', label: $t('adminContent.timing.day') }, { value: 'week', label: $t('adminContent.timing.week') }]} on:change={(e) => (win = (e.currentTarget as HTMLSelectElement).value === 'week' ? 'week' : 'day')} /></div>
+  </svelte:fragment>
+  {#if timingErr && !timing}
+    <div class="state" role="alert"><Icon name="alert" size={22} /><p>{timingErr}</p><Button variant="secondary" icon="refresh" on:click={loadTiming}>{$t('ui.retry')}</Button></div>
+  {:else if !timing}
+    <Skeleton lines={3} h="1rem" />
+  {:else}
+    {#if longSeg}<p class="hint warn" role="note" data-testid="timing-long-segments"><Icon name="alert" size={18} /><span>{$t('adminContent.timing.longSegments', { s: fmtNumber(longSeg) })}</span></p>{/if}
+    {#if !groups.length}<p class="muted" data-testid="timing-empty">{$t('adminContent.timing.empty')}</p>
+    {:else}
+      <div class="tscroll">
+        <table class="ttab" data-testid="timing-table">
+          <caption class="sr">{$t('adminContent.timing.title')}</caption>
+          <thead><tr>
+            <th scope="col">{$t('adminContent.timing.where')}</th><th scope="col" class="num">{$t('adminContent.timing.starts')}</th>
+            {#each PHASES as p (p)}<th scope="col" class="num">{$t(`adminContent.timing.phase.${p}`)}</th>{/each}
+            <th scope="col" class="num">{$t('adminContent.timing.total')}</th><th scope="col" class="num">{$t('adminContent.timing.segment')}</th><th scope="col" class="num">{$t('adminContent.timing.stalls')}</th>
+          </tr></thead>
+          <tbody>
+            {#each groups as g (groupKey(g))}
+              {@const big = groupBiggest(g)}
+              <tr class:sum={g.device === null}>
+                <th scope="row">{sideText(g.home, g.device)}{#if g.switches}<span class="muted small"> (+{g.switches} {$t('adminContent.timing.switchTag')})</span>{/if}</th>
+                <td class="num">{fmtNumber(g.n)}</td>
+                {#each PHASES as p (p)}<td class="num" class:big={big === p} title={big === p ? $t('adminContent.timing.biggest') : undefined}>{fmtPct(g.phases[p])}{#if big === p}<span class="sr"> ({$t('adminContent.timing.biggest')})</span>{/if}</td>{/each}
+                <td class="num"><b>{fmtPct(g.total)}</b></td>
+                <td class="num">{g.targetDuration === null ? '–' : `${fmtNumber(g.targetDuration)} s`}</td>
+                <td class="num">{fmtNumber(g.stallsPerSession, { maximumFractionDigits: 2 })}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
+    <h3>{$t('adminContent.timing.recent')}</h3>
+    <DataTable caption={$t('adminContent.timing.recent')} rows={timing.recent} columns={timingCols} key={(r) => `${r.at}:${r.device}:${r.firstFrameMs}`} pageSize={10} skeletonRows={3} emptyText={$t('adminContent.timing.empty')}>
+      <svelte:fragment slot="cell" let:row let:col>
+        {#if col.key === 'at'}<time datetime={row.at}>{fmtDateTime(row.at)}</time>
+        {:else if col.key === 'mode'}
+          <span class="st">{row.mode ? $t(`adminContent.timing.modes.${row.mode}`) : '–'} · {fmtMbit(row.bitrate)}{#if row.targetDuration}{' · '}{fmtNumber(row.targetDuration)} s{/if}
+            {#if row.qualitySwitch}<StatusPill tone="muted" label={$t('adminContent.timing.switchTag')} />{/if}</span>
+        {:else if col.key === 'steps'}
+          {@const st = rowSteps(row)}
+          {@const big = biggestPhase(st)}
+          <span class="steps"><b>{fmtMs(row.firstFrameMs)}</b>
+            <span class="muted small">{#each PHASES as p, i (p)}{i ? ' · ' : ''}<span class:big={big === p} title={$t(`adminContent.timing.phase.${p}`)}>{fmtMs(st[p])}</span>{/each}</span></span>
+        {:else}{col.value?.(row) ?? ''}{/if}
+      </svelte:fragment>
+    </DataTable>
+  {/if}
+</AdminCard>
+
 <AdminCard title={$t('admin.playback.dlTitle')}>
   <p class="muted intro"><Rich text={$t('admin.playback.dlIntro')} /></p>
   {#if dlErr}<div class="state" role="alert"><Icon name="alert" size={22} /><p>{dlErr}</p><Button variant="secondary" icon="refresh" on:click={loadDl}>{$t('ui.retry')}</Button></div>{/if}
@@ -242,4 +319,18 @@
   .state { display: flex; flex-direction: column; align-items: center; gap: .6rem; text-align: center; padding: 1.4rem 1rem; color: var(--fg); }
   .state p { margin: 0; } .state :global(svg) { color: var(--err); }
   time { white-space: nowrap; color: var(--mut); font-size: .9rem; }
+  .win { min-width: 10rem; }
+  .hint.warn { margin: 0 0 .8rem; background: var(--tone-warn); }
+  .hint.warn :global(svg) { color: var(--warn); }
+  .tscroll { overflow-x: auto; position: relative; } /* contains the visually hidden labels (else they widen the page) */
+  @media (max-width: 720px) { .ttab thead th { white-space: normal; } }
+  .ttab { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  .ttab th, .ttab td { padding: .4rem .5rem; border-bottom: 1px solid rgba(255,255,255,.06); text-align: start; white-space: nowrap; }
+  .ttab thead th { color: var(--mut); font-weight: 600; font-size: .82rem; }
+  .ttab tbody th { font-weight: 500; }
+  .ttab tr.sum th, .ttab tr.sum td { border-top: 1px solid rgba(255,255,255,.14); }
+  .ttab .num { text-align: end; font-variant-numeric: tabular-nums; }
+  .big { color: var(--warn); font-weight: 700; }
+  .steps { display: inline-flex; flex-direction: column; gap: .15rem; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>

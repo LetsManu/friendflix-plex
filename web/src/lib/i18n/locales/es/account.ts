@@ -196,6 +196,8 @@ const es: Translation<typeof de> = {
       error: 'Error',
       expired: 'Caducado',
     },
+    iosKeepOpen: 'En iPhone, mantén la app abierta durante la descarga: iOS pausa las descargas en segundo plano.',
+    bgDone: '«{title}» se ha descargado',
     msg: {
       signIn: 'Inicia sesión para continuar',
       busy: 'Servidor ocupado, se reintentará',
@@ -206,6 +208,7 @@ const es: Translation<typeof de> = {
       noSpace: 'No hay suficiente espacio en este dispositivo.',
       prepFailed: 'Ha fallado la preparación en el servidor.',
       size: 'El tamaño no coincide ({have} de {total})',
+      background: 'En pausa: continúa cuando FriendFlix esté abierto',
     },
     support: {
       insecure: 'Las descargas necesitan una conexión segura (HTTPS).',

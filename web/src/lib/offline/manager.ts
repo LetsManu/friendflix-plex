@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Download manager: store + queue + worker control + licence check-in + progress sync.
-// Runs in the page (tab must stay open: no Background Fetch yet). Everything is a no-op where OPFS is unsupported.
+// Runs in the page; phones pause it while the app is hidden (see pausesInBackground). Everything is a no-op where OPFS is unsupported.
 import { writable, get } from 'svelte/store';
 import { api } from '../api';
 import {
-  deleteDownloadRecord, getAllDownloads, getMeta, getQueuedProgress, putDownload, queueProgress, removeQueuedProgress, setMeta,
+  deleteDownloadRecord, getAllDownloads, getDownload, getMeta, getQueuedProgress, putDownload, queueProgress, removeQueuedProgress, setMeta,
   coalesceProgress, type DownloadRecord, type DownloadState, type QueuedProgress,
 } from './db';
 import { checkSupport, deleteDownloadFiles, deleteOrphans, persist, storageEstimate, type Support } from './opfs';
@@ -14,6 +14,7 @@ import { tr, type TKey } from '../i18n';
 import { fitsQuota, estimateBytes, pct, type QualityId } from './size';
 import { nextLocalState, pumpable } from './transition';
 import type { StartMsg, WorkerOut } from './fetch-worker';
+import { abortBg, bgSupported, onBgMessage, startBg, watchBg } from './bgfetch';
 
 /** record as shown in the UI: persisted fields + volatile ones (never written to IndexedDB) */
 export interface DlView extends DownloadRecord { prep?: number; msg?: string }
@@ -83,6 +84,10 @@ const mine = (v: { profileId: string }) => { const p = activeProfileId(); return
 const recs = new Map<string, DlView>();
 const srv = new Map<string, { ready: boolean; prep: number; failed: boolean; fileUrl: string; bytes: number; subs: ServerSub[]; poster: string; backdrop: string }>();
 let started = false, worker: Worker | null = null, running = '', wake: any = null, lastPut = 0;
+/** a pause asked for because the app went to the background (not by the user) / the download the user paused / last time the page became visible */
+let hiddenPause = false, userPause = '', visibleAt = 0;
+/** the running download is a Background Fetch (no worker) / the worker only fetches the side files of this download */
+let runningBg = false, extrasRun = '';
 const retryAt = new Map<string, number>();
 const publish = () => downloads.set(new Map(recs));
 const persisted = (v: DlView): DownloadRecord => {
@@ -109,11 +114,13 @@ function recordFromLicense(l: ServerLicense, me: any): DlView {
   };
 }
 
-/** apply a server licence list entry to the matching local record (status, prep, expiry) */
-function applyServer(l: ServerLicense) {
+/** apply a server licence list entry to the matching local record (status, prep, expiry); true when it needs saving */
+function applyServer(l: ServerLicense): boolean {
   const v = recs.get(l.id);
-  if (!v) return;
+  if (!v) return false;
   const ps = l.prep.status;
+  const newUrl = ps === 'ready' && v.readyUrl !== l.fileUrl;
+  if (newUrl) v.readyUrl = l.fileUrl;
   srv.set(l.id, { ready: ps === 'ready', prep: prepOf(l), failed: ps === 'failed', fileUrl: l.fileUrl, bytes: l.bytes ?? 0, subs: l.subtitles, poster: l.poster ?? '', backdrop: l.backdrop ?? '' });
   if (l.expiresAt) v.expiresAt = toMs(l.expiresAt);
   if (l.validUntil) v.validUntil = toMs(l.validUntil);
@@ -123,6 +130,7 @@ function applyServer(l: ServerLicense) {
     v.state = t.state; v.prep = t.prep;
     if (t.state === 'error') v.msg = tr('account.downloads.msg.prepFailed');
   }
+  return newUrl;
 }
 
 // ---- lifecycle ----
@@ -134,7 +142,7 @@ async function doInit(): Promise<void> {
   try {
     for (const r of await getAllDownloads()) {
       const v: DlView = { ...r };
-      if (v.state === 'downloading') v.state = 'queued'; // the tab was closed mid-download: continue when ready
+      if (v.state === 'downloading' && v.via !== 'bg') v.state = 'queued'; // the tab was closed mid-download: continue when ready
       recs.set(v.id, v);
     }
     publish();
@@ -143,7 +151,15 @@ async function doInit(): Promise<void> {
     await setMeta('maxSeenTime', seen);
   } catch { /* IndexedDB blocked: stays empty */ }
   window.addEventListener('online', () => { void checkIn(); void flushProgress(); void poll(); });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { void poll(); if (running) void acquireWake(); } });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { visibleAt = Date.now(); retryAt.clear(); void poll(); if (running) void acquireWake(); }
+    else pauseForBackground();
+  });
+  window.addEventListener('pagehide', pauseForBackground);
+  onBgMessage((id) => { void syncFromServiceWorker(id); });
+  // a Background Fetch kept running while the app was closed: follow it
+  const bgRun = [...recs.values()].find((v) => v.state === 'downloading' && v.via === 'bg');
+  if (bgRun) await syncFromServiceWorker(bgRun.id);
   setInterval(() => { void tick(); }, 60_000);
   void checkIn().then(() => flushProgress());
   void poll();
@@ -164,7 +180,7 @@ function pollLoop() {
 }
 
 export async function poll(): Promise<void> {
-  const open = [...recs.values()].some((v) => v.state === 'queued' || v.state === 'preparing' || v.state === 'downloading' || v.state === 'paused');
+  const open = [...recs.values()].some((v) => v.state === 'queued' || v.state === 'preparing' || v.state === 'downloading' || v.state === 'paused' || v.extrasPending);
   if (!open || !navigator.onLine) { void pump(); return; }
   try {
     await getMe();
@@ -174,7 +190,7 @@ export async function poll(): Promise<void> {
     const j = await r.json();
     const list: ServerLicense[] = j.downloads ?? [];
     const ids = new Set(list.map((l) => l.id));
-    for (const l of list) applyServer(l);
+    for (const l of list) if (applyServer(l)) await save(recs.get(l.id)!);
     // gone on the server (revoked/deleted/expired there): drop local copy
     for (const v of [...recs.values()]) if (mine(v) && !ids.has(v.id) && v.state !== 'done' && v.state !== 'expired') await dropLocal(v.id);
     publish();
@@ -214,19 +230,90 @@ export async function requestDownload(req: DownloadRequest): Promise<DlView[]> {
 }
 
 // ---- running ----
+/** phones freeze a hidden page (the fetch dies): pause cleanly there and continue at the same byte once visible again */
+export const pausesInBackground = (): boolean => /iPad|iPhone|iPod|Android/.test(navigator.userAgent ?? '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const hidden = () => document.visibilityState === 'hidden';
+function pauseForBackground() {
+  if (!running || !worker || hiddenPause || userPause === running || !pausesInBackground()) return;
+  hiddenPause = true;
+  worker.postMessage({ cmd: 'pause' });
+}
+/** a dropped connection while hidden or just after coming back is the background freeze, not the network */
+const backgroundDrop = () => hidden() || Date.now() - visibleAt < 2000;
+
 async function pump(): Promise<void> {
   if (running || !started) return;
+  if (hidden() && pausesInBackground()) return; // continues on visibilitychange
   const now = Date.now();
-  const next = [...recs.values()].find((v) => mine(v) && pumpable(v.state, !!srv.get(v.id)?.ready) && (retryAt.get(v.id) ?? 0) <= now);
+  const due = (v: DlView) => mine(v) && (retryAt.get(v.id) ?? 0) <= now;
+  // subtitles and pictures of a download the service worker finished
+  const extras = [...recs.values()].find((v) => due(v) && v.state === 'done' && v.extrasPending && srv.has(v.id));
+  if (extras) { startWorker(extras, true); return; }
+  if ([...recs.values()].some((v) => v.state === 'downloading' && v.via === 'bg')) return; // one download at a time, also when the service worker started it
+  const next = [...recs.values()].find((v) => due(v) && pumpable(v.state, !!srv.get(v.id)?.ready));
   if (!next) return;
+  running = next.id; // hold the slot over the awaits below
+  // Background Fetch has no Range: a partly downloaded file continues in the worker
+  const viaBg = !next.noBg && next.bytesHave === 0 && (await bgSupported());
   const info = await storageEstimate();
-  const need = (next.bytesTotal || estimateBytes(next.quality, next.runtimeTicks)) - next.bytesHave;
+  const size = next.bytesTotal || estimateBytes(next.quality, next.runtimeTicks);
+  const need = viaBg ? 2 * size : size - next.bytesHave; // the finished Background Fetch is copied once into OPFS
+  const gone = running !== next.id || recs.get(next.id) !== next || next.state !== 'queued'; // removed or paused meanwhile
+  if (running === next.id) running = '';
+  if (gone) return;
   if (!fitsQuota(need, info.quota, info.usage)) { await save(next, { state: 'error', msg: tr('account.downloads.msg.noSpace') }); return pump(); }
+  if (viaBg) return startBackground(next);
   startWorker(next);
 }
 
-function startWorker(v: DlView) {
+const bgTitle = (v: DlView) => (v.seriesName ? `${v.seriesName} S${v.s ?? '?'}:E${v.e ?? '?'} · ${v.title}` : v.title);
+async function startBackground(v: DlView) {
+  running = v.id; runningBg = true;
+  await save(v, { state: 'downloading', via: 'bg', bytesHave: 0, etag: '', msg: undefined, prep: undefined });
+  const r = await startBg(v.id, srv.get(v.id)!.fileUrl, { title: bgTitle(v), total: v.bytesTotal, icon: '/icon-192.png' });
+  if (r === 'failed') {
+    running = ''; runningBg = false;
+    await save(v, { via: undefined, noBg: true });
+    startWorker(v);
+    return;
+  }
+  await syncFromServiceWorker(v.id);
+}
+
+/**
+ * Re-read a record the service worker may have changed (finished, failed, chained) and follow a running Background
+ * Fetch. A record still marked running whose fetch is gone (browser data cleared, crash) goes to the worker.
+ */
+async function syncFromServiceWorker(id: string) {
+  let r: DownloadRecord | undefined;
+  try { r = await getDownload(id); } catch { return; }
+  if (!r || !recs.has(id)) return;
+  const v: DlView = { ...r };
+  recs.set(id, v);
+  if (v.state === 'downloading' && v.via === 'bg') {
+    if (!running) { running = id; runningBg = true; } // the slot may be held by an extras run: follow the fetch anyway
+    const follow = (n: number) => { const c = recs.get(id); if (c?.via === 'bg' && c.state === 'downloading') { c.bytesHave = n; publish(); } };
+    if (await watchBg(id, follow)) { publish(); return; }
+    await save(v, { state: 'queued', via: undefined, noBg: true, bytesHave: 0 });
+  }
+  if (running === id && runningBg) { running = ''; runningBg = false; }
+  publish();
+  setTimeout(() => { void pump(); }, 50);
+}
+
+/** stop whatever runs for this download: the worker or the Background Fetch (aborted before files are deleted) */
+async function stopRun(id: string) {
+  const v = recs.get(id);
+  if (running === id) { if (runningBg) { running = ''; runningBg = false; } else stopWorker(); }
+  if (v?.via !== 'bg') return;
+  // written before the abort: the service worker's abort/success handlers then leave the record alone
+  await save(v, { state: 'paused', bytesHave: 0, via: undefined });
+  await abortBg(id);
+}
+
+function startWorker(v: DlView, extrasOnly = false) {
   running = v.id;
+  extrasRun = extrasOnly ? v.id : '';
   const s = srv.get(v.id)!;
   worker = new Worker(new URL('./fetch-worker.ts', import.meta.url), { type: 'module' });
   worker.onmessage = (ev: MessageEvent<WorkerOut>) => { void onWorker(ev.data); };
@@ -236,15 +323,15 @@ function startWorker(v: DlView) {
     ...(s.poster ? [{ url: s.poster, name: 'poster.jpg' }] : []),
     ...(s.backdrop ? [{ url: s.backdrop, name: 'backdrop.jpg' }] : []),
   ];
-  void save(v, { state: 'downloading', msg: undefined, prep: undefined });
+  if (!extrasOnly) void save(v, { state: 'downloading', msg: undefined, prep: undefined });
   void acquireWake();
-  const msg: StartMsg = { cmd: 'start', id: v.id, url: s.fileUrl, have: v.bytesHave, etag: v.etag, total: v.bytesTotal, extras };
+  const msg: StartMsg = { cmd: 'start', id: v.id, url: s.fileUrl, have: v.bytesHave, etag: v.etag, total: v.bytesTotal, extras, ...(extrasOnly ? { extrasOnly: true } : {}) };
   worker.postMessage(msg);
 }
 
 function stopWorker() {
   worker?.terminate();
-  worker = null; running = '';
+  worker = null; running = ''; extrasRun = '';
   void releaseWake();
 }
 
@@ -257,17 +344,25 @@ async function onWorker(m: WorkerOut) {
     if (Date.now() - lastPut > 2000) { lastPut = Date.now(); try { await putDownload(persisted(v)); } catch { /* ignore */ } }
     return;
   }
+  const bgPause = hiddenPause && userPause !== v.id;
+  const extrasOnly = extrasRun === v.id;
+  hiddenPause = false; userPause = '';
   stopWorker();
-  if (m.type === 'done') {
+  if (extrasOnly) {
+    // the video came by Background Fetch: now the server learns it is fetched
+    if (m.type === 'done') { await save(v, { extrasPending: false }); void raw(`/api/downloads/${v.id}/fetched`, 'POST', { bytes: m.bytes }); }
+    else retryAt.set(v.id, Date.now() + 60_000);
+  } else if (m.type === 'done') {
     await save(v, { state: 'done', bytesHave: m.bytes, bytesTotal: m.bytes, etag: m.etag, msg: undefined });
     void raw(`/api/downloads/${v.id}/fetched`, 'POST', { bytes: m.bytes });
     void refreshStorage();
   } else if (m.type === 'paused') {
-    await save(v, { state: 'paused', bytesHave: m.have });
+    await save(v, bgPause ? { state: 'queued', bytesHave: m.have, msg: tr('account.downloads.msg.background') } : { state: 'paused', bytesHave: m.have });
   } else {
     const back = (ms: number) => retryAt.set(v.id, Date.now() + ms);
     if (m.code === 'auth') { await save(v, { state: 'paused', msg: tr('account.downloads.msg.signIn') }); }
     else if (m.code === 'busy') { back(30_000); await save(v, { state: 'queued', msg: tr('account.downloads.msg.busy') }); }
+    else if (m.code === 'network' && backgroundDrop()) { await save(v, { state: 'queued', msg: tr('account.downloads.msg.background') }); }
     else if (m.code === 'network') { back(15_000); await save(v, { state: 'queued', msg: tr('account.downloads.msg.network') }); }
     else if (m.code === 'size') { await deleteDownloadFiles(v.id).catch(() => undefined); back(5_000); await save(v, { state: 'queued', bytesHave: 0, etag: '', msg: tr('account.downloads.msg.reload') }); }
     else if (m.code === 'gone') { await save(v, { state: 'error', msg: tr('account.downloads.msg.gone') }); }
@@ -286,7 +381,8 @@ async function releaseWake() { try { await wake?.release(); } catch { /* ignore 
 export function pause(id: string) {
   const v = recs.get(id);
   if (!v) return;
-  if (running === id) worker?.postMessage({ cmd: 'pause' });
+  if (v.via === 'bg') void stopRun(id).then(() => pump());
+  else if (running === id && worker) { userPause = id; worker.postMessage({ cmd: 'pause' }); }
   else void save(v, { state: 'paused' });
 }
 export function resume(id: string) {
@@ -296,7 +392,7 @@ export function resume(id: string) {
   void save(v, { state: 'queued', msg: undefined }).then(() => poll());
 }
 export async function removeDownload(id: string): Promise<void> {
-  if (running === id) stopWorker();
+  await stopRun(id);
   await dropLocal(id);
   void raw(`/api/downloads/${id}`, 'DELETE');
   void refreshStorage();
@@ -314,6 +410,7 @@ export async function removeAll(): Promise<void> {
   const ids = new Set(recs.keys());
   try { for (const r of await getAllDownloads()) ids.add(r.id); } catch { /* no IndexedDB */ }
   await Promise.all([...ids].map(async (id) => {
+    await stopRun(id);
     await raw(`/api/downloads/${id}`, 'DELETE'); // best effort: frees the licence slot
     await dropLocal(id);
   }));
@@ -345,7 +442,7 @@ export async function checkIn(): Promise<void> {
   for (const id of r.json?.revoked ?? []) {
     const v = recs.get(id);
     if (!v) continue;
-    if (running === id) stopWorker();
+    await stopRun(id);
     await expire(v);
   }
   try { await setMeta('maxSeenTime', bumpMaxSeen((await getMeta<number>('maxSeenTime')) ?? 0, Date.now())); } catch { /* ignore */ }
@@ -393,6 +490,7 @@ export const stateLabel = (v: DlView): string => {
     expired: 'account.downloads.state.expired',
   };
   if (v.state === 'paused' && v.msg) return v.msg;
+  if (v.state === 'queued' && v.msg === tr('account.downloads.msg.background')) return v.msg;
   return tr(L[v.state], { n: v.state === 'preparing' ? v.prep ?? 0 : progressPct(v) });
 };
 export const snapshot = (): Map<string, DlView> => get(downloads);

@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
   import { t } from '#lib/i18n';
   import { airLogStart, clearAirLog, formatAirLog, readAirLog, type AirLogEntry } from '#lib/player/airplayLog';
+  import { formatTiming, readLocalTimings, type StoredTiming } from '#lib/player/timing';
 
   type Row = [string, string];
   let rows: Row[] = [];
@@ -29,6 +30,9 @@
       airNote = $t('diagnose.copyFailed');
     }
   }
+  // this device's last start-time measurements (lib/player/timing.ts; readLocalTimings never throws)
+  let timings: StoredTiming[] = [];
+
   function clearAir() { clearAirLog(); readAir(); airNote = ''; }
 
   const r1 = (n: number) => String(Math.round(n * 100) / 100);
@@ -99,6 +103,7 @@
   onMount(() => {
     measure();
     readAir();
+    timings = readLocalTimings();
     const id = setInterval(measure, 1000);
     window.addEventListener('resize', measure);
     window.addEventListener('orientationchange', measure);
@@ -136,6 +141,11 @@
   </div>
   {#if air.length}<pre class="airlog" bind:this={airPre} data-testid="airplay-log">{formatAirLog(air, airLogStart())}</pre>
   {:else}<p class="hint" data-testid="airplay-log-empty">{$t('diagnose.airplayEmpty')}</p>{/if}
+
+  <h2>{$t('diagnose.timingTitle')}</h2>
+  <p class="hint">{$t('diagnose.timingHint')}</p>
+  {#if timings.length}<pre class="airlog" data-testid="timing-log">{timings.map(formatTiming).join('\n\n')}</pre>
+  {:else}<p class="hint" data-testid="timing-log-empty">{$t('diagnose.timingEmpty')}</p>{/if}
 </div>
 
 <div class="probe" bind:this={probe} aria-hidden="true"></div>

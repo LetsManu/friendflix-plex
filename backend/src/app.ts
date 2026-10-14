@@ -30,6 +30,7 @@ import { seerrRoutes } from './routes/seerr.js';
 import { statsRoutes } from './routes/stats.js';
 import { tvRoutes } from './routes/tv.js';
 import { clientErrorRoutes } from './clientErrors.js';
+import { playbackTimingRoutes } from './playtiming.js';
 import { mediaRoutes } from './routes/media.js';
 import { socialRoutes } from './routes/social.js';
 import { reactionRoutes } from './routes/reactions.js';
@@ -158,6 +159,7 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   sceneRoutes(app, ctx);
   tvRoutes(app, ctx);
   clientErrorRoutes(app, ctx);
+  playbackTimingRoutes(app, ctx);
   reminderRoutes(app, ctx);
   listRoutes(app, ctx);
   pushRoutes(app, ctx);

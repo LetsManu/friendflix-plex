@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// <reference lib="webworker" />
 // Dedicated module worker: downloads /media/d/<id> into OPFS with Range resume. One download at a time.
-// Protocol (main -> worker): {cmd:'start', id, url, have, etag, total, extras:[{url,name}]} | {cmd:'pause'}
+// Protocol (main -> worker): {cmd:'start', id, url, have, etag, total, extras:[{url,name}], extrasOnly?} | {cmd:'pause'}
 // (worker -> main): {type:'progress', id, have, total, etag} | {type:'done', id, bytes, etag}
 //                   | {type:'paused', id, have} | {type:'error', id, code, message}
 // messages are technical (logs); the manager shows translated texts per code
 // error codes: auth (401, sign in again) | busy (429) | gone (403/404/410) | network | size | io
 
-export interface StartMsg { cmd: 'start'; id: string; url: string; have: number; etag: string; total: number; extras: Array<{ url: string; name: string }> }
+export interface StartMsg { cmd: 'start'; id: string; url: string; have: number; etag: string; total: number; extras: Array<{ url: string; name: string }>; /** the video is there already (Background Fetch): only the side files */ extrasOnly?: boolean }
 export type WorkerOut =
   | { type: 'progress'; id: string; have: number; total: number; etag: string }
   | { type: 'done'; id: string; bytes: number; etag: string }
@@ -49,6 +49,11 @@ async function run(m: StartMsg) {
   const d = await dir(m.id);
   await fetchExtras(d, m.extras, signal);
   const fh = await d.getFileHandle('video.mp4', { create: true });
+  if (m.extrasOnly) {
+    abort = null;
+    post(signal.aborted ? { type: 'paused', id: m.id, have: m.have } : { type: 'done', id: m.id, bytes: (await fh.getFile()).size, etag: m.etag });
+    return;
+  }
   const h = await fh.createSyncAccessHandle();
   let have = Math.min(m.have, h.getSize()); // never trust more than what is really on disk
   let etag = m.etag, total = m.total, sinceFlush = 0, lastPost = 0;

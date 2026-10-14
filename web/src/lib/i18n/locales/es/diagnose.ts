@@ -14,5 +14,8 @@ const dict: Translation<typeof de> = {
   airplayCopy: 'Copiar',
   airplayClear: 'Vaciar',
   airplayEmpty: 'Aún no hay entradas.',
+  timingTitle: 'Tiempos de inicio',
+  timingHint: 'Las últimas reproducciones en este dispositivo: cuánto tardaron la info, la playlist, el primer fragmento y la primera imagen, además de saltos y cortes.',
+  timingEmpty: 'Aún no hay mediciones en este dispositivo.',
 };
 export default dict;

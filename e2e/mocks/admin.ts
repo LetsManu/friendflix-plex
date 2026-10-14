@@ -504,6 +504,20 @@ export function adminRoute(st: AdminState, m: string, p: string, sp: URLSearchPa
     return ok();
   }
   if (p === '/api/admin/errors' && m === 'GET') return J(st.errors);
+  if (p === '/api/admin/playback/timing' && m === 'GET') {
+    // start-time measurements: remote phones load 6 s segments (the long-segment hint), the first fragment is the biggest step
+    const pct = (p50: number | null, p90 = p50) => ({ p50, p90 });
+    const g = (home: boolean, device: string | null, n: number, frag: number, td: number | null) => ({
+      home, device, n, switches: home ? 0 : 1, total: pct(400 + 300 + frag + 200, 2 * (900 + frag)), targetDuration: td, seekP50: 800, stallsPerSession: home ? 0 : 0.5, stallMsPerSession: home ? 0 : 1200,
+      phases: { info: pct(400, 900), manifest: pct(300, 600), firstFrag: pct(frag, frag * 2), firstFrame: pct(200, 400) },
+    });
+    const day = [g(true, null, 4, 600, 3), g(true, 'pc', 4, 600, 3), g(false, null, 3, 4200, 6), g(false, 'phone', 3, 4200, 6)];
+    const row = (i: number, home: boolean, device: string, frame: number) => ({
+      at: ago(i * 10), home, device, mode: 'hls', qualitySwitch: i === 2, bitrate: 8e6, targetDuration: home ? 3 : 6, infoMs: 400, manifestMs: 700, firstFragMs: frame - 200,
+      firstFragBytes: 4_200_000, firstFragDlMs: frame - 1000, firstFrameMs: frame, seeks: 1, seekMedianMs: 800, seekMaxMs: 800, stalls: home ? 0 : 1, stallMs: home ? 0 : 2400, effectiveType: null,
+    });
+    return J({ day, week: day, recent: [row(1, false, 'phone', 5600), row(2, false, 'phone', 3100), row(3, true, 'pc', 1500)] });
+  }
   if (p === '/api/admin/playback-check') {
     if (m === 'POST') return ok();
     return J({ running: false, done: 6, total: 6, startedAt: ago(3), finishedAt: ago(2), results: [{ itemId: 'a'.repeat(32), name: 'Kaputter Film', type: 'Movie', ok: false, status: 500, ms: 900, bytes: 0, error: 'HTTP 500 transcoder failed' }, ...Array.from({ length: 5 }, (_, i) => ({ itemId: String(i).repeat(32), name: 'Film ' + i, type: 'Movie', ok: true, status: 200, ms: 800 + i * 90, bytes: 1, error: null }))] });

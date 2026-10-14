@@ -197,6 +197,8 @@ export default {
       error: 'Fehler',
       expired: 'Abgelaufen',
     },
+    iosKeepOpen: 'Auf dem iPhone die App beim Laden offen lassen – im Hintergrund pausiert iOS den Download.',
+    bgDone: '„{title}“ ist heruntergeladen',
     msg: {
       signIn: 'Anmelden zum Fortsetzen',
       busy: 'Server ausgelastet, neuer Versuch folgt',
@@ -207,6 +209,7 @@ export default {
       noSpace: 'Nicht genug Speicherplatz auf diesem Gerät.',
       prepFailed: 'Vorbereitung auf dem Server fehlgeschlagen.',
       size: 'Größe stimmt nicht ({have} von {total})',
+      background: 'Pausiert – läuft weiter, sobald FriendFlix offen ist',
     },
     support: {
       insecure: 'Downloads brauchen eine sichere Verbindung (HTTPS).',
