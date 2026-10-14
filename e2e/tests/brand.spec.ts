@@ -9,6 +9,7 @@ test.describe('fork branding: "FriendFlix for Plex" (desktop)', () => {
     await expect(logo).toContainText('FriendFlix');
     await expect(logo.locator('.badge')).toBeVisible();
     await expect(logo.locator('.badge')).toHaveText('for Plex');
+    await expect(logo.locator('.badge')).toHaveCSS('background-color', 'rgb(242, 182, 50)'); // gold
   });
 
   test('document titles carry the product name (home and inner pages)', async ({ page }) => {
