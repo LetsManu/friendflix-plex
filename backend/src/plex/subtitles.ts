@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Text subtitles as WebVTT (capabilities.subtitleExtract; served at /api/items/:id/subtitle/:ms/:index/stream.vtt).
  * Plex cannot do this itself (spike): sidecar files come from /library/streams/<id> as raw SRT labelled text/html (no conversion,

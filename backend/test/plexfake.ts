@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * In-memory fake of the Plex Media Server HTTP API, seeded from REAL PMS answers (test/plex/fixtures, recorded by the block 16
  * spike against PMS 1.43). It reproduces the shapes the sync relies on: listings strip streams and reduce tags to {tag}, totalSize

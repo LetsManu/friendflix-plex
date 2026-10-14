@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Playback through the core Plex service (P1: mirror, access rules, user data) with the playback delegate plugged in, and through the
  * real routes: kids caps deny playback, the DTOs and every route answer are free of the Plex token, the transcoder is driven correctly.

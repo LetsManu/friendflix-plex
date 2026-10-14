@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Plex adapter (fork: FriendFlix for Plex). The gateway reaches Plex with ONE admin token (PLEX_TOKEN / PLEX_TOKEN_FILE from its own
  * env, sent as the X-Plex-Token header only: never in a URL, never to the client), so Plex cannot enforce per-profile visibility:

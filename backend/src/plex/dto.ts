@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Mirror rows (+ the viewer's FriendFlix user data) -> the server-neutral DTOs of ../media/types.ts. */
 import type { ImageTags, ItemDto } from '../media/types.js';
 import { encodePlexId } from './ids.js';

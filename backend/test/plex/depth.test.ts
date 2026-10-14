@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Block 17 parity on Plex (fork): chapters (real PMS 1.43 chapter answer, fixture movie_chapters_detail), quality traits from the
  * mirrored streams, credits from the mirrored tags, library-wide continuing series - all against the Plex fake.

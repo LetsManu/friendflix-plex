@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Block 21 on Plex (fork): itemAbout / itemCollections of PlexMediaServer (mirror -> neutral DTOs) and GET /api/items/:id/about,
  * the Data sources admin API and the TMDB / OMDb clients (mocked) behind the real routes with MEDIA_SERVER=plex.

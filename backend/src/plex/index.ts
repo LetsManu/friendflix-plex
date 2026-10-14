@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * FriendFlix for Plex: builds the PlexMediaServer for media/index.ts (MEDIA_SERVER=plex). One admin token (PLEX_TOKEN /
  * PLEX_TOKEN_FILE), backend + gateway only. The mirror, policies and user data live in the FriendFlix database (the backend's

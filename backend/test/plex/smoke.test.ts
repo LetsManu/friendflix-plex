@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Plex-mode smoke test: the whole app (real routes, MEDIA_SERVER=plex) with the PRODUCTION playback wiring of plex/index.ts
  * (playback module + role limits) against the Plex fakes, walked like a viewer: login -> profile -> home rows -> item detail ->

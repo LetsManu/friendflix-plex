@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Playback on Plex (MediaServer playback/credential methods). PlexMediaServer (service.ts) delegates to one PlexPlayback instance.
  *
