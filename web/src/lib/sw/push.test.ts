@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LOCALE_URL, META_CACHE, offlineLocale, rememberOfflineLocale } from './locale';
+import { BRAND_NAME } from '../brand';
 import { installPush, safeLink } from './push';
 
 const ORIGIN = 'https://portal.example';
@@ -61,14 +62,14 @@ describe('push handlers', () => {
     expect(shown[0]!.o.body).toHaveLength(300);
     expect(shown[0]!.o).toMatchObject({ tag: undefined, data: { link: '/' } });
     await push(null);
-    expect(shown[1]).toMatchObject({ title: 'FriendFlix', o: { body: '' } });
+    expect(shown[1]).toMatchObject({ title: BRAND_NAME, o: { body: '' } });
     await push({ json: () => 'just a string' });
-    expect(shown[2]!.title).toBe('FriendFlix');
+    expect(shown[2]!.title).toBe(BRAND_NAME);
   });
 
   it('a non-JSON payload is shown as plain text', async () => {
     await push({ json: () => { throw new SyntaxError('bad'); }, text: () => 'plain words' });
-    expect(shown[0]).toMatchObject({ title: 'FriendFlix', o: { body: 'plain words' } });
+    expect(shown[0]).toMatchObject({ title: BRAND_NAME, o: { body: 'plain words' } });
     await push({ json: () => { throw new SyntaxError('bad'); }, text: () => { throw new Error('no'); } });
     expect(shown[1]!.o.body).toBe('');
   });

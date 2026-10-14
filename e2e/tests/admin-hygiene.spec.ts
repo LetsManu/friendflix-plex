@@ -119,7 +119,7 @@ test.describe('admin library hygiene', () => {
   test('nav: Bibliothekspflege under Inhalte, active on /admin/hygiene', async ({ page }) => {
     await page.goto('/admin/hygiene');
     await expect(page.getByRole('heading', { level: 1, name: 'Bibliothekspflege' })).toBeVisible();
-    await expect(page).toHaveTitle('Bibliothekspflege · Admin – FriendFlix');
+    await expect(page).toHaveTitle('Bibliothekspflege · Admin – FriendFlix for Plex'); // fork: brand
     const nav = page.getByRole('navigation', { name: 'Admin-Bereiche' });
     const link = nav.getByRole('list', { name: 'Inhalte' }).getByRole('link', { name: /Bibliothekspflege/ });
     await expect(link).toHaveAttribute('aria-current', 'page');

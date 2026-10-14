@@ -75,7 +75,7 @@ test.describe('admin usage', () => {
   test('nav: Nutzung under Personen, active on /admin/usage', async ({ page }) => {
     await page.goto('/admin/usage');
     await expect(page.getByRole('heading', { level: 1, name: 'Nutzung' })).toBeVisible();
-    await expect(page).toHaveTitle('Nutzung · Admin – FriendFlix');
+    await expect(page).toHaveTitle('Nutzung · Admin – FriendFlix for Plex'); // fork: brand
     const link = page.getByRole('navigation', { name: 'Admin-Bereiche' }).getByRole('list', { name: 'Personen' }).getByRole('link', { name: /Nutzung/ });
     await expect(link).toHaveAttribute('aria-current', 'page');
   });
