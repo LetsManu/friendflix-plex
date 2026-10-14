@@ -28,7 +28,7 @@
   svg { flex: none; }
   .shadow svg { filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .45)); }
   .txt { font-weight: 800; letter-spacing: -.01em; font-size: clamp(1.15rem, 2.1vw, 1.55rem); color: #fff; }
-  /* fork: plain-text "for Plex" badge in neutral grey (no Plex logo, chevron or amber – their mark is a trademark) */
-  .badge { font-weight: 700; font-size: clamp(.62rem, 1vw, .78rem); letter-spacing: .02em; color: #e6e9ee; background: #3a3f47; border-radius: .4em; padding: .28em .5em; white-space: nowrap; }
+  /* fork: plain-text "for Plex" badge on gold (no Plex logo or chevron – their mark is a trademark) */
+  .badge { font-weight: 800; font-size: clamp(.62rem, 1vw, .78rem); letter-spacing: .02em; color: #141414; background: #f2b632; border-radius: .4em; padding: .28em .5em; white-space: nowrap; }
   @media (max-width: 340px) { .txt, .badge { display: none; } } /* fork: only very small phones (<= 340px) drop the lettering and the badge */
 </style>
