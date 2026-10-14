@@ -39,6 +39,10 @@ export class PlexFake {
   /** collection ratingKey -> member ratingKeys */
   members = new Map<string, string[]>();
   calls: PlexCall[] = [];
+  /** GET /status/sessions answer (Block 22; hand-written in PMS's shape, see fixtures/status_sessions.json) */
+  statusSessions: Record<string, any> = clone(fixture('status_sessions'));
+  /** ratingKeys of PUT /library/metadata/<rk>/refresh calls */
+  refreshed: string[] = [];
   /** next status for paths matching a regex (e.g. simulate an outage) */
   fail: { re: RegExp; status: number } | null = null;
   private nextKey = 100;
@@ -213,7 +217,14 @@ export class PlexFake {
     if (this.fail && this.fail.re.test(path)) return { status: this.fail.status };
     if (path === '/identity') return { status: 200, json: fixture('identity') };
     if (headers['X-Plex-Token'] !== PLEX_TOKEN) return { status: 401, text: '<html>401 Unauthorized</html>' };
+    const r = /^\/library\/metadata\/(\d+)\/refresh$/.exec(path);
+    if (r && method === 'PUT') {
+      if (!this.items.has(r[1]!)) return { status: 404 };
+      this.refreshed.push(r[1]!);
+      return { status: 200, text: '' };
+    }
     if (method !== 'GET') return { status: 404 };
+    if (path === '/status/sessions') return { status: 200, json: this.statusSessions };
     if (path === '/library/sections') return { status: 200, json: { MediaContainer: { size: this.sections.length, Directory: this.sections } } };
     let m = /^\/library\/sections\/(\d+)\/all$/.exec(path);
     if (m) {
@@ -223,6 +234,8 @@ export class PlexFake {
       const type = Number(q.get('type') ?? (sec.type === 'movie' ? 1 : 2));
       const list = [...this.items.values()]
         .filter((x) => Number(x.librarySectionID) === sid && TYPE_NUM[x.type] === type)
+        // PMS filter syntax `updatedAt>>=<epoch s>` (at or after)
+        .filter((x) => q.get('updatedAt>>') === null || Number(x.updatedAt ?? 0) >= Number(q.get('updatedAt>>')))
         .sort((a, b) => Number(a.ratingKey) - Number(b.ratingKey))
         .map((x) => this.listForm(x, q.get('includeGuids') === '1'));
       return { status: 200, json: this.page(list, q, { librarySectionID: sid }) };

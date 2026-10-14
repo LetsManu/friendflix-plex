@@ -241,7 +241,8 @@ What the preview implements (checked by the test suite against the fake Plex ser
 | Outbound links (TMDB, IMDb, TVDB, Trakt) | Works | From Plex's `Guid` entries (`imdb://`, `tmdb://`, `tvdb://`) or a legacy agent guid (`com.plexapp.agents.imdb://…`, `themoviedb`, `thetvdb`); items matched by Plex's own agent without external ids get no links |
 | Fresh labels (new, new season, new episode, season finale) | Limited | "Season finale" needs a series known to be ended; Plex has no series status, so FriendFlix treats a series as ended only when every episode has an air date and the newest is older than 60 days. Otherwise "new episode" is shown |
 | Leaving soon, story so far, themed lists, calm mode, clear voices, phone shortcuts and badge | Works | FriendFlix features; "story so far" uses Plex's season and episode summaries (none without a metadata agent) |
-| Admin pages (overview, people, content, live streams, previews, leaving soon) | Works | "Live streams" lists FriendFlix playback only; "Stop" ends the Plex transcode session, a direct-play file cannot be interrupted |
+| Admin pages (overview, people, content, live streams, previews, leaving soon, status, usage) | Works | "Live streams" also lists other Plex apps' sessions from Plex's `/status/sessions` (play method, codecs, hardware transcoding); "Stop" ends FriendFlix's Plex transcode session, a direct-play file cannot be interrupted. Plex reports no transcode reasons: a session of another app reads as "subtitles" (burnt in), "audio codec" (audio converted) or "other" |
+| Library care (admin) | Works | Read from Plex's library listings (`includeGuids`); language and subtitle checks use the stream details of FriendFlix's mirror, so a title the mirror has not read in detail yet is checked on the next scan. Incremental scans use Plex's `updatedAt`, which metadata edits do not bump: the weekly full scan (or "Check now") catches those. "Refresh metadata" asks Plex to refresh the item |
 | "More like this" | Limited | Computed by FriendFlix from shared genres and cast, not Plex's own recommendations |
 | Continue watching, watchlist, favourites, ratings, history | Works | In FriendFlix; nothing is written to Plex |
 | Direct play | Works | Browser-compatible files (MP4/WebM, H.264/VP9/AV1, AAC/MP3/Opus/FLAC) within the role's limits |
@@ -257,7 +258,7 @@ What the preview implements (checked by the test suite against the fake Plex ser
 | TV mode, watch parties, recommendations, notifications, hubs | Works | FriendFlix features |
 | "Upcoming episodes" / calendar | Not available | Plex does not offer it |
 | Wishes (request service) | Works | Each FriendFlix account gets its own local request-service user (request permission only), created on the first wish |
-| "Now playing" of other Plex apps | Not available | FriendFlix only shows its own sessions |
+| "Now playing" of other Plex apps | Not available | Viewers only see FriendFlix's own sessions (admins see all of them under "Live streams") |
 | nginx "Plan B" media path | Not available | Unsupported with Plex: `/internal/authz-nginx` answers `501 plan_b_unsupported` |
 
 ### Audio tracks

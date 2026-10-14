@@ -35,6 +35,17 @@ export class PlexLimitError extends Error {
 export const ACTIVE_TTL_S = 60;
 const activeKey = (identity: string, session: string) => `plexplay:${identity}:${session}`;
 const startedKey = (identity: string, session: string) => `plexstarted:${identity}:${session}`;
+/** FriendFlix play session id -> identity, from the limit bookkeeping (Block 22: who an active Plex session belongs to). */
+export async function sessionIdentities(kv: Pick<KV, 'keys'>): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (const prefix of ['plexstarted:', 'plexplay:']) {
+    for (const k of await kv.keys(prefix)) {
+      const [identity, session] = k.slice(prefix.length).split(':');
+      if (identity && session && SESSION_RE.test(session) && !out.has(session)) out.set(session, identity);
+    }
+  }
+  return out;
+}
 /** a started transcode is counted at most this long (Plex reaps idle transcodes much earlier) */
 export const STARTED_TTL_S = 6 * 3600;
 

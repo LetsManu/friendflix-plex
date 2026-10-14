@@ -170,7 +170,7 @@ Die FriendFlix-Oberfläche ist dieselbe; unterschiedlich ist, was Plex liefern k
 | Kapitel („Szenen“-Panel) | Funktioniert | Kapitelmarken aus den Dateien; Kapitelbilder nur, wenn Plex Kapitel-Vorschaubilder erzeugt |
 | Qualitäts-Chips, Filter 4K / HDR | Funktioniert | Aus Plex' Stream-Angaben (Auflösung, Dolby Vision / HDR10 / HDR10+ / HLG, Kanäle, Atmos) |
 | Neu-Labels („Neue Folge“, „Staffelfinale“ …) | Eingeschränkt | Plex kennt keinen Serienstatus, deshalb erscheint „Staffelfinale“ nur bei Serien, deren letzte Folge vor mehr als 60 Tagen lief |
-| Bald nicht mehr verfügbar, „Bisher geschah“, Themenlisten, ruhiger Modus, klare Stimmen, Handy-Kurzbefehle, Admin-Seiten | Funktioniert | FriendFlix-Funktionen; „Live-Streams“ zeigt nur FriendFlix-Wiedergaben, „Beenden“ stoppt den Plex-Transcode |
+| Bald nicht mehr verfügbar, „Bisher geschah“, Themenlisten, ruhiger Modus, klare Stimmen, Handy-Kurzbefehle, Admin-Seiten | Funktioniert | FriendFlix-Funktionen; „Live-Streams“ zeigt auch Sitzungen anderer Plex-Apps (Plex nennt keine Transcode-Gründe), „Beenden“ stoppt den Plex-Transcode; die Bibliothekspflege liest Plex' Listen und die Stream-Details des Spiegels |
 | „Mehr davon“ | Eingeschränkt | Von FriendFlix aus gemeinsamen Genres und Besetzung berechnet |
 | Marken-Hubs, „Weil du … gesehen hast“-Reihen, Folgenkommentare, Willkommen | Funktioniert | FriendFlix-Funktionen; Hubs entstehen aus Plex-Sammlungen/Genres/Tags |
 | Extras-Tab (Trailer, Bonusmaterial) | Eingeschränkt | Nur, was Plex als lokale Extras hat |

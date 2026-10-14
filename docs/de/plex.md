@@ -241,7 +241,8 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | Links (TMDB, IMDb, TVDB, Trakt) | Funktioniert | Aus Plex' `Guid`-Einträgen (`imdb://`, `tmdb://`, `tvdb://`) oder einer GUID eines alten Agenten (`com.plexapp.agents.imdb://…`, `themoviedb`, `thetvdb`); Titel ohne externe IDs bekommen keine Links |
 | Neu-Labels (neu, neue Staffel, neue Folge, Staffelfinale) | Eingeschränkt | „Staffelfinale“ braucht eine sicher beendete Serie; Plex kennt keinen Serienstatus, deshalb gilt eine Serie nur als beendet, wenn jede Folge ein Ausstrahlungsdatum hat und die neueste älter als 60 Tage ist. Sonst steht „Neue Folge“ |
 | Bald nicht mehr verfügbar, „Bisher geschah“, Themenlisten, ruhiger Modus, klare Stimmen, Handy-Kurzbefehle und Badge | Funktioniert | FriendFlix-Funktionen; „Bisher geschah“ nutzt die Staffel- und Folgenbeschreibungen aus Plex (ohne Metadaten-Agent gibt es keine) |
-| Admin-Seiten (Übersicht, Personen, Inhalte, Live-Streams, Vorschauen, Bald nicht mehr verfügbar) | Funktioniert | „Live-Streams“ zeigt nur Wiedergaben über FriendFlix; „Beenden“ stoppt die Plex-Transcode-Sitzung, eine Direct-Play-Datei lässt sich nicht unterbrechen |
+| Admin-Seiten (Übersicht, Personen, Inhalte, Live-Streams, Vorschauen, Bald nicht mehr verfügbar, Status, Nutzung) | Funktioniert | „Live-Streams“ zeigt auch Sitzungen anderer Plex-Apps aus Plex' `/status/sessions` (Wiedergabeart, Codecs, Hardware-Transcoding); „Beenden“ stoppt FriendFlix' Plex-Transcode-Sitzung, eine Direct-Play-Datei lässt sich nicht unterbrechen. Plex nennt keine Transcode-Gründe: eine Sitzung einer anderen App erscheint als „Untertitel“ (eingebrannt), „Audio-Codec“ (Ton umgewandelt) oder „Sonstiges“ |
+| Bibliothekspflege (Admin) | Funktioniert | Liest Plex' Bibliothekslisten (`includeGuids`); Sprach- und Untertitel-Prüfungen nutzen die Stream-Details aus FriendFlix' Spiegel, ein Titel, den der Spiegel noch nicht im Detail gelesen hat, wird beim nächsten Durchlauf geprüft. Teil-Prüfungen nutzen Plex' `updatedAt`, das Metadaten-Änderungen nicht erhöhen: die wöchentliche vollständige Prüfung (oder „Jetzt prüfen“) erfasst sie. „Metadaten aktualisieren“ lässt Plex den Titel neu einlesen |
 | „Mehr davon“ | Eingeschränkt | Von FriendFlix aus gemeinsamen Genres und Besetzung berechnet, nicht Plex' eigene Empfehlungen |
 | Weiterschauen, Merkliste, Favoriten, Bewertungen, Verlauf | Funktioniert | In FriendFlix; nichts wird in Plex geschrieben |
 | Direct Play | Funktioniert | Browser-taugliche Dateien (MP4/WebM, H.264/VP9/AV1, AAC/MP3/Opus/FLAC) innerhalb der Rollengrenzen |
@@ -257,7 +258,7 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen, Hubs | Funktioniert | FriendFlix-Funktionen |
 | „Kommende Folgen“ / Kalender | Nicht verfügbar | Plex bietet das nicht |
 | Wünsche (Request-Dienst) | Funktioniert | Jedes FriendFlix-Konto bekommt beim ersten Wunsch einen eigenen lokalen Wunsch-Dienst-Nutzer (nur Wunsch-Recht) |
-| „Aktuell läuft“ anderer Plex-Apps | Nicht verfügbar | FriendFlix zeigt nur eigene Sitzungen |
+| „Aktuell läuft“ anderer Plex-Apps | Nicht verfügbar | Zuschauer sehen nur FriendFlix' eigene Sitzungen (Admins sehen alle unter „Live-Streams“) |
 | nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt: `/internal/authz-nginx` antwortet `501 plan_b_unsupported` |
 
 ### Tonspuren

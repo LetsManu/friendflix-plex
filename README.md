@@ -169,7 +169,7 @@ The FriendFlix interface is the same; what differs is what Plex can deliver. Sta
 | Chapters ("Scenes" panel) | Works | Chapter marks from the files; chapter stills only if Plex generates chapter thumbnails |
 | Quality chips, 4K / HDR filter | Works | From Plex's stream details (resolution, Dolby Vision / HDR10 / HDR10+ / HLG, channels, Atmos) |
 | Fresh labels ("New episode", "Season finale" …) | Limited | Plex has no series status, so "Season finale" only appears for series whose last episode aired more than 60 days ago |
-| Leaving soon, story so far, themed lists, calm mode, clear voices, phone shortcuts, admin pages | Works | FriendFlix features; "Live streams" lists FriendFlix playback only, "Stop" ends the Plex transcode |
+| Leaving soon, story so far, themed lists, calm mode, clear voices, phone shortcuts, admin pages | Works | FriendFlix features; "Live streams" also lists other Plex apps' sessions (Plex reports no transcode reasons), "Stop" ends the Plex transcode; library care reads Plex's listings and the mirror's stream details |
 | "More like this" | Limited | Computed by FriendFlix from shared genres and cast |
 | Brand hubs, "Because you watched …" rows, episode comments, onboarding | Works | FriendFlix features; hubs are built from Plex collections/genres/tags |
 | Extras tab (trailers, special features) | Limited | Only what Plex has as local extras |
