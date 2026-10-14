@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Pure helpers for the home page / rows (paging, data cache, tab choice). */
 
 /** cards rendered immediately beyond the visible ones; the rest follow on hover / scroll / idle */

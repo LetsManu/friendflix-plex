@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { api, backdrop, img, primeItem, srcset, CARD_SIZES, CARD_WIDTHS, type Item } from '#lib/api';
   import { prefetchModal } from '#lib/lazy';

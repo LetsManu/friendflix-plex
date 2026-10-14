@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Adaptive quality decisions. Pure: time comes from the injected now(), no DOM.
 
 export type RungKey = 'original' | '1080p' | '720p' | '480p' | '360p';

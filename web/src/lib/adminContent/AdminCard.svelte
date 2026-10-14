@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /**
    * Titled card for admin pages (the page <h1> comes from the shell, so cards use <h2>).

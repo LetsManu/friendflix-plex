@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Ctx } from '../ctx.js';
 import { extFetch, extRequest, omdbReserve, statusOf, type ExtLog } from './fetch.js';
 import type { SourceName } from './keys.js';

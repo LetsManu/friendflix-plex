@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /**
    * The version as a button with the codename easter egg: 7 taps (or 7× OK on a TV remote) open a card with the

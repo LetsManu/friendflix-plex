@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { createECDH, randomBytes } from 'node:crypto';
 import webpush from 'web-push';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';

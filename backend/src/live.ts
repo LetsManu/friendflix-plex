@@ -1,4 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Ctx } from './ctx.js';
+import type { TranscodeReason } from './media/types.js';
 
 /** Live playback state (Redis, short TTL). Source of "Now Playing", stream limits and metrics. */
 export interface Live {
@@ -16,6 +19,12 @@ export interface Live {
   playSessionId: string;
   updatedAt: number;
   source: 'portal' | 'jellyfin';
+  /** Block 22 (portal streams): direct / remux / transcode as counted in play_daily, the server's reason, the FriendFlix device */
+  playMethod?: 'direct' | 'remux' | 'transcode';
+  transcodeReason?: TranscodeReason;
+  deviceId?: string;
+  /** the media server identity that plays (matches the server's own session list) */
+  serverUserId?: string;
 }
 
 const TTL = 45;

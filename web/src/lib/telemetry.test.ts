@@ -1,5 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEDUPE_MS, MAX_REPORTS, Reporter, describeError, installTelemetry, reportError, resetTelemetryForTests, shouldIgnore, toPayload, transmit, type RawReport } from './telemetry';
+import { DEDUPE_MS, MAX_REPORTS, Reporter, describeError, installTelemetry, reportError, reportPlayback, resetTelemetryForTests, shouldIgnore, toPayload, transmit, type RawReport } from './telemetry';
 
 const err = (message: string, kind: RawReport['kind'] = 'error', extra: Partial<RawReport> = {}): RawReport => ({ message, kind, ...extra });
 
@@ -171,5 +173,31 @@ describe('installTelemetry', () => {
 
   it('reportError before installation is a no-op', () => {
     expect(() => reportError(new Error('early'))).not.toThrow();
+  });
+
+  it('reportPlayback sends kind playback with itemId and code; an identical report within 60 s is deduped', () => {
+    const target = fakeTarget();
+    const beacons: any[] = [];
+    installTelemetry({ target, release: 'r1', env: { url: '/watch/x', userAgent: 'UA', sendBeacon: (_u, d) => (beacons.push(JSON.parse(d)), true) } });
+    const id = 'ab'.repeat(16);
+    expect(reportPlayback(id, 'bufferStalledError')).toBe(true);
+    expect(reportPlayback(id, 'bufferStalledError')).toBe(false);
+    expect(reportPlayback('cd'.repeat(16), 'bufferStalledError')).toBe(true); // another title is another failure
+    expect(beacons).toHaveLength(2);
+    expect(beacons[0]).toMatchObject({ kind: 'playback', itemId: id, code: 'bufferStalledError', url: '/watch/x', release: 'r1' });
+  });
+
+  it('reportPlayback cleans the code and drops an item id the server would reject', () => {
+    const target = fakeTarget();
+    const beacons: any[] = [];
+    installTelemetry({ target, env: { sendBeacon: (_u, d) => (beacons.push(JSON.parse(d)), true) } });
+    reportPlayback('not-an-id', 'media err/4 <x>');
+    expect(beacons[0].itemId).toBeUndefined();
+    expect(beacons[0].code).toMatch(/^[\w.:-]+$/);
+    expect(beacons[0].kind).toBe('playback');
+  });
+
+  it('reportPlayback before installation is a no-op', () => {
+    expect(reportPlayback('ab'.repeat(16), 'x')).toBe(false);
   });
 });

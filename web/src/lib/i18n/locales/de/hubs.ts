@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Block 15 area 'hubs': Marken-Kacheln unter dem Billboard, Marken-Seite, Admin-Verwaltung und Bonusmaterial-Reiter.
  * German is the typed source (see docs/i18n.md).

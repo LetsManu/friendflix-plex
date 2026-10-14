@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test } from '../fixtures.js';
 import type { AdminRequest } from '../mocks/admin.js';
 
@@ -302,6 +304,30 @@ test.describe('admin content pages (desktop)', () => {
       await expect(page.getByText('Kaputter Film')).toBeVisible();
       await expect(page.getByText('Jellyfin konnte nicht umwandeln')).toBeVisible();
     });
+
+    test('empty video from the media server: hint under the row, once on top when every title failed, and on a failed download', async ({ page }) => {
+      const hint = 'Medienserver liefert leere Videostücke – Plex neu starten; hilft das nicht, Hardware-Beschleunigung prüfen';
+      const row = (i: number, ok: boolean, error: string | null) => ({ itemId: String(i).repeat(32), name: 'Film ' + i, type: 'Movie', ok, status: 200, ms: 800, bytes: ok ? 1 : 0, error });
+      let results = [row(1, false, 'HTTP 200 empty body'), row(2, true, null), row(3, false, 'HTTP 404')];
+      await page.route('**/api/admin/playback-check', (r) => (r.request().method() === 'GET'
+        ? r.fulfill({ contentType: 'application/json', body: JSON.stringify({ running: false, done: results.length, total: results.length, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), results }) })
+        : r.fallback()));
+      await page.route('**/api/admin/downloads', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({
+        enabled: true, maxBytes: 1e10, diskBytes: 0, licenses: [],
+        jobs: [{ id: 'j1', item_id: 'b'.repeat(32), title: 'Inkwell', series_name: null, quality: 'hd', audio_lang: '', status: 'failed', seg_done: 0, seg_total: 10, bytes: null, error: 'empty segment from media server', updated_at: new Date().toISOString(), licenses: 1 }],
+      }) }));
+      await page.goto('/admin/playback');
+      await expect(page.getByTestId('empty-media-row-hint')).toHaveCount(1);
+      await expect(page.getByTestId('empty-media-row-hint')).toHaveText(hint);
+      await expect(page.getByTestId('empty-media-hint')).toHaveCount(0);
+      await expect(page.getByRole('table', { name: /Vorbereitung/ }).getByRole('row', { name: /Inkwell/ })).toContainText(hint);
+
+      results = [row(1, false, 'HTTP 200 empty body'), row(2, false, 'HTTP 200 empty body'), row(3, false, 'empty playlist')];
+      await page.reload();
+      await expect(page.getByTestId('empty-media-hint')).toHaveText(hint);
+      await expect(page.getByText('Film 3')).toBeVisible();
+      await expect(page.getByTestId('empty-media-row-hint')).toHaveCount(0);
+    });
   });
 
   test.describe('digest', () => {
@@ -379,11 +405,11 @@ test.describe('admin content pages (desktop)', () => {
       await expect(page.getByRole('heading', { level: 1, name: 'Status' })).toBeVisible();
       const health = page.getByRole('region', { name: 'Systemzustand' });
       await expect(health.getByRole('link', { name: /Medienserver.*Läuft/ })).toBeVisible();
-      await expect(health.getByRole('link', { name: /Vorschauen.*10 fehlgeschlagen/ })).toHaveAttribute('href', '/admin/previews');
       const nums = page.getByRole('region', { name: 'Zahlen' });
+      await expect(nums.getByRole('link', { name: /Vorschauen.*10 fehlgeschlagen/ })).toHaveAttribute('href', '/admin/previews');
       await expect(nums.getByRole('link', { name: /Geräte warten/ })).toHaveAttribute('href', '/admin/devices');
       await expect(nums.getByRole('link', { name: /Offene Wünsche/ })).toContainText('4');
-      await expect(page.getByRole('region', { name: 'Speicher' }).getByRole('progressbar')).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Speicher' }).getByRole('progressbar')).toHaveCount(2);
     });
 
     test('a failing summary shows one error with retry, no dead space', async ({ page, api }) => {

@@ -1,0 +1,101 @@
+{
+  "MediaContainer": {
+    "size": 4,
+    "Metadata": [
+      {
+        "ratingKey": "1",
+        "key": "/library/metadata/1",
+        "type": "movie",
+        "title": "Test Movie One",
+        "duration": 60021,
+        "viewOffset": 30010,
+        "sessionKey": "11",
+        "Media": [
+          {
+            "id": "1",
+            "bitrate": 1902,
+            "videoCodec": "h264",
+            "audioCodec": "aac",
+            "selected": true,
+            "Part": [{ "id": "1", "decision": "transcode", "file": "/media/Movies/Test Movie One (2020)/Test Movie One (2020).mkv", "Stream": [] }]
+          }
+        ],
+        "User": { "id": "1", "title": "friendflix-admin", "thumb": "https://plex.tv/users/abc/avatar" },
+        "Player": {
+          "address": "172.18.0.5",
+          "machineIdentifier": "0123456789abcdef-0123456789abcdef01234567",
+          "platform": "Chrome",
+          "product": "FriendFlix",
+          "remotePublicAddress": "203.0.113.7",
+          "state": "playing",
+          "title": "Web",
+          "local": true
+        },
+        "Session": { "id": "s-ff-1", "bandwidth": 4000, "location": "lan" },
+        "TranscodeSession": {
+          "key": "/transcode/sessions/0123456789abcdef-0123456789abcdef01234567",
+          "throttled": true,
+          "complete": false,
+          "progress": 61.5,
+          "speed": 4.2,
+          "sourceVideoCodec": "hevc",
+          "sourceAudioCodec": "aac",
+          "videoDecision": "transcode",
+          "audioDecision": "copy",
+          "protocol": "hls",
+          "container": "mpegts",
+          "videoCodec": "h264",
+          "audioCodec": "aac",
+          "transcodeHwRequested": true,
+          "transcodeHwDecoding": "vaapi",
+          "transcodeHwEncoding": "vaapi",
+          "transcodeHwFullPipeline": true
+        }
+      },
+      {
+        "ratingKey": "5",
+        "key": "/library/metadata/5",
+        "type": "episode",
+        "title": "Episode 1",
+        "grandparentTitle": "MAD TEST",
+        "grandparentRatingKey": "3",
+        "duration": 60021,
+        "viewOffset": 6002,
+        "sessionKey": "12",
+        "Media": [{ "id": "3", "bitrate": 1902, "videoCodec": "h264", "audioCodec": "aac", "selected": true, "Part": [{ "id": "3", "file": "/media/TV/Test Show (2019)/Season 01/Test Show (2019) - s01e01.mkv" }] }],
+        "User": { "id": "7", "title": "neighbour" },
+        "Player": { "address": "192.168.1.50", "machineIdentifier": "plexweb-firefox-1", "platform": "Firefox", "product": "Plex Web", "state": "paused", "title": "Firefox" },
+        "Session": { "id": "s-web-1", "bandwidth": 2500 },
+        "TranscodeSession": {
+          "key": "/transcode/sessions/plexweb-firefox-1",
+          "throttled": false,
+          "progress": 20,
+          "videoDecision": "transcode",
+          "audioDecision": "transcode",
+          "subtitleDecision": "burn",
+          "videoCodec": "h264",
+          "audioCodec": "aac",
+          "transcodeHwRequested": false
+        }
+      },
+      {
+        "ratingKey": "2",
+        "key": "/library/metadata/2",
+        "type": "movie",
+        "title": "Test Movie Two",
+        "duration": 60021,
+        "viewOffset": 0,
+        "sessionKey": "13",
+        "Media": [{ "id": "2", "bitrate": 615, "videoCodec": "hevc", "audioCodec": "aac", "selected": true, "Part": [{ "id": "2", "decision": "directplay", "file": "/media/Movies/Test Movie Two (2021)/Test Movie Two (2021).mkv" }] }],
+        "User": { "id": "1", "title": "friendflix-admin" },
+        "Player": { "address": "192.168.1.60", "machineIdentifier": "lg-tv-1", "platform": "webOS", "product": "Plex for LG", "state": "playing", "title": "Living room TV" },
+        "Session": { "id": "s-tv-1", "bandwidth": 700 }
+      },
+      {
+        "key": "/library/metadata/broken",
+        "type": "movie",
+        "title": "No rating key"
+      }
+    ]
+  }
+}

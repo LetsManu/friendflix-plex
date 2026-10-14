@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Block 17 area 'fresh': Neu-Labels, "Bald nicht mehr verfügbar", Bild-/Ton-Chips, "Die Geschichte bisher", Admin-Seite (German source).
  */

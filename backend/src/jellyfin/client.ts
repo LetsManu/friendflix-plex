@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { randomUUID } from 'node:crypto';
 import { MediaError } from '../media/types.js';
 import type { RoleTemplate } from '../roles.js';
@@ -142,6 +144,11 @@ export class JellyfinClient {
 
   sessions() {
     return this.adminJson<Array<Record<string, any>>>('/Sessions?activeWithinSeconds=15');
+  }
+
+  /** Block 22: every recently active session (FriendFlix devices included), for the admin's active streams */
+  allSessions() {
+    return this.adminJson<Array<Record<string, any>>>('/Sessions?activeWithinSeconds=30');
   }
 
   async ping(): Promise<boolean> {

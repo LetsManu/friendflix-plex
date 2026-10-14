@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /**
    * Admin → Wiedergabe-Check: (1) playback health check, (2) streams running right now (stop with confirm),
@@ -10,6 +12,7 @@
   import Rich from '#lib/i18n/Rich.svelte';
   import { poll } from '#lib/adminContent/poll';
   import AdminCard from '#lib/adminContent/AdminCard.svelte';
+  import { emptyHintOnTop, isEmptyMediaError } from '#lib/admin/health';
   import { refreshSummary } from '#lib/admin/summary';
   import { busyKeys, errorText, runAction } from '#lib/ui/action';
   import { confirm } from '#lib/ui/confirm';
@@ -27,6 +30,7 @@
   let check: Check | null = null, checkErr = false;
   $: failed = check?.results.filter((r) => !r.ok) ?? [];
   $: good = check?.results.filter((r) => r.ok) ?? [];
+  $: hintOnTop = emptyHintOnTop(check?.results ?? []);
   async function loadCheck() {
     try { check = await api<Check>('/api/admin/playback-check'); checkErr = false; } catch { checkErr = true; if (!check) check = null; }
   }
@@ -139,13 +143,17 @@
     {:else}
       <p class="muted">{$t('adminContent.playback.neverRun')}</p>
     {/if}
+    {#if hintOnTop && !check.running}
+      <p class="hint" role="alert" data-testid="empty-media-hint"><Icon name="alert" size={18} /><span>{$t('adminContent.health.reason.empty_media')}</span></p>
+    {/if}
     {#if failed.length}
       <ul class="fails">
         {#each failed as r (r.itemId)}
           <li>
             <div class="fh"><b>{r.name}</b><span class="muted">{r.type === 'Series' ? $t('admin.kind.series') : $t('admin.kind.movie')}{r.status ? ' · ' + $t('admin.playback.http', { status: String(r.status) }) : ''}</span></div>
             {#if r.error}<code>{r.error}</code>{/if}
-            {#if r.error?.includes('500')}<p class="muted small">{$t('admin.playback.transcodeHint')}</p>{/if}
+            {#if r.error?.includes('500')}<p class="muted small">{$t('admin.playback.transcodeHint')}</p>
+            {:else if !hintOnTop && isEmptyMediaError(r.error)}<p class="muted small" data-testid="empty-media-row-hint">{$t('adminContent.health.reason.empty_media')}</p>{/if}
           </li>
         {/each}
       </ul>
@@ -192,6 +200,7 @@
           <StatusPill tone={statusTone(row.status)} label={statusText(row.status)} />
           {#if row.status === 'preparing' && row.seg_total}<Progress value={row.seg_done} max={row.seg_total} showValue label={$t('adminContent.playback.preparing')} />{/if}
           {#if row.error}<code>{row.error}</code>{/if}
+          {#if isEmptyMediaError(row.error)}<span class="muted small">{$t('adminContent.health.reason.empty_media')}</span>{/if}
         </span>
       {:else}{col.value?.(row) ?? ''}{/if}
     </svelte:fragment>
@@ -221,6 +230,8 @@
   .fh b { overflow-wrap: anywhere; }
   code { display: block; font-size: .82rem; color: var(--err); word-break: break-all; white-space: pre-wrap; }
   .small { font-size: .85rem; margin: 0; }
+  .hint { display: flex; gap: .5rem; align-items: flex-start; margin: .8rem 0 0; padding: .7rem .9rem; border-radius: 6px; background: var(--tone-err); color: var(--fg); }
+  .hint :global(svg) { color: var(--err); flex: none; margin-top: .1rem; }
   .oks { margin-top: 1rem; }
   .oks summary { cursor: pointer; min-height: 36px; display: flex; align-items: center; color: var(--mut); }
   .oks ul { list-style: none; margin: .4rem 0 0; padding: 0; max-height: 18rem; overflow: auto; }

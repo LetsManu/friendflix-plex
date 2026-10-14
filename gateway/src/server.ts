@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { readFileSync } from 'node:fs';
 import { createGateway } from './gateway.js';
 import { checkUpstreamConfig, selectUpstream } from './upstream/index.js';

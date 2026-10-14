@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin → Abstimmungen: closed polls whose winner is not in the library yet wait here for approval (creates a wish). */
   import { onMount } from 'svelte';

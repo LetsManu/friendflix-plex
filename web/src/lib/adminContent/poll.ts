@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Interval that skips ticks while the tab is hidden and runs once when it becomes visible again; returns the stop function. */
 export function poll(fn: () => unknown, ms: number): () => void {
   const tick = () => { if (typeof document === 'undefined' || document.visibilityState === 'visible') void fn(); };

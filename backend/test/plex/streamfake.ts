@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Fake of the Plex transcoder / part / stream endpoints (behaviour from the block16 spike against PMS 1.43):
  * decision required before start (same session), X-Plex-Platform + Product mandatory, audio track = account-level part selection

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { hasKey, trDynamic } from '#lib/i18n';
 
 /** A role as /api/admin/roles reports it: `builtinLabel` = the label is the built-in default of that role. */

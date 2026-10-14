@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { intlLocale } from '#lib/i18n';
 
 /** "1,2 GB" / "340 MB" in the UI language (binary multiples, unit names from Intl). */

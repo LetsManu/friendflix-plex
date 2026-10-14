@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { APP_CODENAME, APP_VERSION, CODENAMES, codenameEntry, shortVersion } from './codenames';
 import { EGG_START, eggTap, type EggState } from './egg';

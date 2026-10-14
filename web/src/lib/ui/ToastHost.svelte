@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Renders lib/ui/toast.ts. Mounted once in the root layout; pages never mount it. */
   import { fly, fade } from 'svelte/transition';
@@ -37,7 +39,7 @@
 </section>
 
 <style>
-  .toasts { position: fixed; z-index: 120; right: 1.2rem; bottom: 1.2rem; width: min(420px, calc(100vw - 2rem)); pointer-events: none; }
+  .toasts { position: fixed; z-index: 120; right: 1.2rem; bottom: calc(1.2rem + var(--castbar-h, 0px)); width: min(420px, calc(100vw - 2rem)); pointer-events: none; }
   ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
   .toast { pointer-events: auto; display: flex; align-items: center; gap: .6rem; padding: .45rem .45rem .45rem .9rem; min-height: 52px; background: #20262d; color: var(--fg); border-radius: 8px; border: 1px solid #323a43; border-left: 4px solid var(--mut); box-shadow: var(--shadow-pop); }
   .success { border-left-color: var(--ok); } .success .ic { color: var(--ok); }
@@ -50,8 +52,8 @@
   .x { flex: none; width: 44px; padding: 0; background: transparent; color: var(--mut); border-radius: 50%; }
   .x:hover:not(:disabled) { background: rgba(255,255,255,.08); color: var(--fg); }
   @media (max-width: 720px) {
-    /* above the phone tab bar */
-    .toasts { left: 50%; right: auto; transform: translateX(-50%); bottom: calc(56px + var(--safe-bottom) + .6rem); }
+    /* above the phone tab bar (and the cast bar on it) */
+    .toasts { left: 50%; right: auto; transform: translateX(-50%); bottom: calc(56px + var(--safe-bottom) + .6rem + var(--castbar-h, 0px)); }
   }
   :global(html.tv) .toasts { bottom: 2rem; right: 2rem; }
 </style>

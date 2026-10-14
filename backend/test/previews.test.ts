@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +11,7 @@ import { ENC_KEY, makeEnv, type TestEnv } from './helpers.js';
 const MOVIE = 'a'.repeat(32); // 90 min -> clip starts at 1800 s = segment 600
 const BAD = 'b'.repeat(32); // Jellyfin answers segments with 500
 const SECRET = 'c'.repeat(32); // not visible to Lea
+const FRESH = 'f'.repeat(32); // in the library listing, never requested: the background warmer's pick
 const LEA_JF = '1'.repeat(32);
 
 const box = (type: string, body: Buffer) => { const h = Buffer.alloc(8); h.writeUInt32BE(8 + body.length); h.write(type, 4, 'latin1'); return Buffer.concat([h, body]); };
@@ -37,6 +40,8 @@ beforeAll(async () => {
   env = await makeEnv({
     'GET /Items/[^/]+': itemHandler,
     'GET /Users/[^/]+/Items/[^/]+': itemHandler,
+    'GET /Items': () => ({ json: { Items: [MOVIE, BAD, FRESH].map(item), TotalRecordCount: 3 } }),
+    'GET /Users/[^/]+/Items': () => ({ json: { Items: [MOVIE, BAD, FRESH].map(item), TotalRecordCount: 3 } }),
     'GET /Items/[^/]+/LocalTrailers': () => ({ json: [] }),
     'POST /Items/[^/]+/PlaybackInfo': (u) => ({ json: { PlaySessionId: 'ps-12345678', MediaSources: [{ Id: u.pathname.split('/')[2], Container: 'mkv', Bitrate: 8_000_000, MediaStreams: [] }] } }),
     'GET /Videos/[^/]+/master.m3u8': (u) => { requested.push(`master${u.search}`); return { raw: '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1500000\nmain.m3u8?PlaySessionId=ps-12345678\n' }; },
@@ -127,5 +132,29 @@ describe('cached preview clips', () => {
     await new Promise((res) => setTimeout(res, 20));
     await previews(env.ctx).whenIdle();
     expect((await env.pool.query('select status from preview_clips where item_id=$1', [MOVIE])).rows[0].status).toBe('ok');
+  });
+});
+
+describe('background warmer', () => {
+  it('stays out of the way while paused or a download is prepared', async () => {
+    const p = previews(env.ctx);
+    p.paused = true;
+    await p.warmTick();
+    p.paused = false;
+    p.downloadBusy = true;
+    await p.warmTick();
+    p.downloadBusy = false;
+    expect((await env.pool.query('select 1 from preview_clips where item_id=$1', [FRESH])).rowCount).toBe(0);
+  });
+
+  it('generates the clip of the first library title that has no row yet, then has nothing left to do', async () => {
+    const p = previews(env.ctx);
+    await p.warmTick();
+    await p.whenIdle();
+    expect((await env.pool.query('select status from preview_clips where item_id=$1', [FRESH])).rows[0]?.status).toBe('ok');
+    const before = requested.length;
+    await p.warmTick(); // every listed title has a row now
+    await p.whenIdle();
+    expect(requested.length).toBe(before);
   });
 });

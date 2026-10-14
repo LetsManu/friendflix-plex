@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Plan B only (docs/operations.md): lets NPM serve /media/ itself, so Jellyfin must be reachable from the host.
 # It is published on loopback ONLY. Never use 0.0.0.0 here, and keep the host firewall closed for 8096.
 #   docker compose -f compose.yaml -f compose.planb.yaml --profile bundled up -d

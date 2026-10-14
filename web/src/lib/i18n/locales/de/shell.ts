@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * App shell: header, avatar menu, phone tab bar, categories, footer, help dialog, device approval screen.
  * Messages may contain <b>, <kbd> and <a href="/…"> where rendered with Rich.svelte (see docs/i18n.md).

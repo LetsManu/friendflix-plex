@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/admin';
 import type { Translation } from '../../types';
 
@@ -7,6 +9,8 @@ const es: Translation<typeof de> = {
   tabs: {
     users: 'Usuarios', status: 'Estado', previews: 'Vistas previas', playback: 'Prueba de reproducción', digest: 'Resumen semanal', sources: 'Fuentes de datos', invites: 'Invitaciones',
     requests: 'Peticiones', polls: 'Votaciones', lists: 'Listas', roles: 'Roles', devices: 'Dispositivos', audit: 'Registro de auditoría', update: 'Actualización',
+    hygiene: 'Cuidado de la biblioteca',
+    usage: 'Uso',
   },
   roleNames: { friend: 'Amigo', family: 'Familia', guest: 'Invitado', admin: 'Administrador' },
   kind: { movie: 'Película', series: 'Serie' },
@@ -380,6 +384,37 @@ const es: Translation<typeof de> = {
     leaving: { set: '{actor} fijó una fecha de retirada', clear: '{actor} quitó una fecha de retirada' },
     subtitle: {
       download: '{actor} descargó subtítulos',
+    },
+  },
+  banner: {
+    label: 'Avisos para admins',
+    more: { one: '+{n} más', many: '+{n} más', other: '+{n} más' },
+    less: 'Mostrar menos',
+    view: 'Ver',
+    dismiss: 'Ocultar',
+    dismissOne: 'Ocultar «{text}»',
+    generic: 'Algo necesita tu atención',
+    name: { downloads: 'Almacenamiento de descargas', previews: 'Almacenamiento de vistas previas', database: 'Base de datos' },
+    svc: {
+      slow: '{name} responde despacio',
+      down: '{name} no disponible',
+      issuer_mismatch: '{name}: el proveedor no coincide con el ajuste',
+      invalid_key: '{name}: clave no válida',
+      paused: '{name} en pausa (clave rechazada)',
+      budget: '{name}: {pct} % del límite diario usado',
+      failed_titles: { one: '{n} título falló en la prueba de reproducción', many: '{n} títulos fallaron en la prueba de reproducción', other: '{n} títulos fallaron en la prueba de reproducción' },
+      empty_media: 'El servidor multimedia devuelve vídeo vacío: reinicia Plex; si no ayuda, revisa la aceleración por hardware',
+    },
+    disk: {
+      full: '{name} casi lleno ({pct} %)',
+      low_free: '{name}: poco espacio libre',
+      cap: 'Límite de descargas casi alcanzado ({pct} %)',
+      large: 'La base de datos ha crecido mucho',
+    },
+    errors: {
+      server_errors: { one: '{n} error del servidor en 15 minutos', many: '{n} errores del servidor en 15 minutos', other: '{n} errores del servidor en 15 minutos' },
+      client_errors: { one: '{n} error del navegador en 15 minutos', many: '{n} errores del navegador en 15 minutos', other: '{n} errores del navegador en 15 minutos' },
+      failed_playbacks: { one: '{n} reproducción fallida', many: '{n} reproducciones fallidas', other: '{n} reproducciones fallidas' },
     },
   },
 };

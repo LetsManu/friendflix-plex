@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setLocale } from '#lib/i18n';
 import { collectionView, defaultTab, detailTabs, ratingParts, withFriends, type About, type AboutCollection, type AboutPart, type AboutRating } from './about';

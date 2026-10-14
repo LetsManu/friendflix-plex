@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 export interface Box { left: number; right: number; top: number; bottom: number; width: number }
 export interface Placed { left: number; width: number; top?: number; bottom?: number; maxHeight: number; up: boolean }
 

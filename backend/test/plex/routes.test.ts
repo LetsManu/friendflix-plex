@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The Plex implementation behind the real routes (makeEnv({ server: 'plex' })): provisioning creates synthetic identities with
  * policies, kids profiles get their caps, and every item-bearing route / the gateway's /internal/authz/item answer from the

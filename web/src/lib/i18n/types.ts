@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Types of the translation dictionaries (see docs/i18n.md).
  * German (locales/de) is the typed source; every other language is a `Translation<…>` of it, so it may leave keys out

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Ctx } from './ctx.js';
 import { broadcastLanguage, isMsg, renderKnown, renderNotice, userLanguage, type Language, type Rendered, type Text } from './i18n.js';
 export { renderNotice, type Rendered } from './i18n.js';

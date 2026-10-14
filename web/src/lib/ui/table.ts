@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Pure helpers behind DataTable.svelte (filter, sort, page); unit-tested in table.test.ts. */
 
 export type SortDir = 'asc' | 'desc';

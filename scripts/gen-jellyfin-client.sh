@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Generates typed Jellyfin API paths from YOUR instance's OpenAPI spec.
 # Usage: JELLYFIN_URL=http://jellyfin:8096 ./scripts/gen-jellyfin-client.sh
 # Jellyfin >= 10.9 serves the spec at /api-docs/openapi.json (Swagger UI: /api-docs/swagger/index.html).

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Block 21 for Plex (fork): pure mappers from the mirror (plex_items + plex_tags, written by sync.ts) to the neutral DTOs of the
  * optional MediaServer methods itemAbout / itemCollections. No I/O here; service.ts does the visibility checks and the queries.

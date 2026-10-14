@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { get } from 'svelte/store';
 import { api } from '#lib/api';
 import { kidsMode } from '#lib/kids';

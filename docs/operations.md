@@ -29,7 +29,7 @@ Bei einer leeren/neuen Datenbank zuerst den Stack mit `postgres` starten (`docke
 Startet einen Wegwerf-Postgres ohne Port-Mapping, spielt den neuesten Dump ein und prüft Migrationen und Tabellen. Schnellprüfung einer einzelnen Datei: `docker compose exec -T postgres pg_restore --list < backups/<datei>.dump | head`.
 
 - **APP_ENC_KEY sichern!** (Passwort-Manager, getrennt vom Dump). Ohne ihn sind die gespeicherten Jellyfin-Passwörter der Nutzer unlesbar.
-- Nicht im Dump: Jellyfin-/Seerr-/Authentik-Daten (eigene Backups dieser Dienste; Authentik: [de/authentik.md §2.6](de/authentik.md#26-backups-und-updates)).
+- Nicht im Dump: Daten von Jellyfin, Wunsch-Dienst und Authentik (eigene Backups dieser Dienste; Authentik: [de/authentik.md §2.6](de/authentik.md#26-backups-und-updates)).
 
 ## TMDB-/OMDb-Schlüssel wechseln
 Die optionalen Schlüssel für die Detailseite lassen sich ohne Neustart tauschen:
@@ -38,7 +38,7 @@ Die optionalen Schlüssel für die Detailseite lassen sich ohne Neustart tausche
 - Der im Portal gespeicherte Schlüssel ist mit `APP_ENC_KEY` verschlüsselt. Geht `APP_ENC_KEY` verloren, meldet die Seite den Schlüssel als ungültig; dann einfach neu eintragen.
 
 ## Host-Firewall (zusätzlich zum fehlenden Port-Mapping)
-Jellyfin/Seerr haben keine `ports:` und hängen nur im internen Netz. Falls sie auf dem Host zusätzlich laufen (nicht gebündelt):
+Jellyfin und der Wunsch-Dienst haben keine `ports:` und hängen nur im internen Netz. Falls sie auf dem Host zusätzlich laufen (nicht gebündelt):
 ```bash
 # Docker umgeht ufw: Regeln gehören in DOCKER-USER
 iptables -I DOCKER-USER -p tcp -m multiport --dports 8096,8920,5055 ! -s 127.0.0.1 -j DROP
@@ -57,6 +57,29 @@ Nach Jellyfin-Updates: `JELLYFIN_URL=… ./scripts/gen-jellyfin-client.sh` und D
 - **API:** In Portainer → *My account* → *Access tokens* ein Token anlegen (`PORTAINER_API_KEY`), `PORTAINER_URL` (intern erreichbar vom Backend), `PORTAINER_STACK_ID` (steht in der URL des Stacks, `…/stacks/<id>`) und ggf. `PORTAINER_ENDPOINT_ID` (Default 1) setzen. Das Portal liest den Stack (Git- oder Datei-Stack), behält dessen Umgebungsvariablen unverändert und löst ein Redeploy mit Image-Pull aus.
 
 Sicherheit: Webhook-URL und Token können den Stack neu deployen. Am besten einen eigenen Portainer-Benutzer nur mit Zugriff auf dieses eine Stack verwenden (kein Admin) und das Token ausschließlich in der `.env`/den Docker-Secrets ablegen. Beide Werte erscheinen weder in Antworten noch in Logs. Pro 2 Minuten ist ein Update möglich; jeder Auslöser steht als `system.update` im Audit-Log. Optional senkt `GITHUB_TOKEN` (ohne Rechte) das GitHub-Limit-Risiko; Ergebnisse werden 10 Minuten gecacht.
+
+## Warnband und Status-Seite
+Admins sehen im Hauptprofil ein schmales **Warnband** unter der Kopfzeile, sobald auf der Status-Seite etwas gelb oder rot ist (Grenzwerte: [monitoring.md](monitoring.md#zustand-im-portal-admin--status)). Rot steht vor Gelb, jede Meldung ist ein ganzer Satz, „Ansehen“ führt zur Status-Seite. „Ausblenden“ gilt pro Admin und Meldung, bis sie sich ändert (andere Stufe oder anderer Grund; nur eine andere Zahl, etwa 86 statt 85 %, blendet sie nicht wieder ein); Ausblendungen werden nach 30 Tagen vergessen. Im Player, in der Watch-Party, im TV-Modus, auf öffentlichen Seiten, in Kinder- und Nebenprofilen erscheint das Band nie.
+
+| Meldung | Was tun |
+| --- | --- |
+| Medienserver nicht erreichbar | Läuft der Medienserver-Container? Stimmt `JELLYFIN_URL` (interne Adresse) und ist der API-Schlüssel noch gültig? Ohne Medienserver läuft keine Wiedergabe. |
+| Datenbank / Redis nicht erreichbar | `docker compose ps`, Logs von `postgres` / `redis`; voller Datenträger ist die häufigste Ursache. Das Backend meldet dann auch `/health/ready` als nicht bereit. |
+| Gateway nicht erreichbar | Gateway-Container und `GATEWAY_URL` prüfen (Standard `http://gateway:4000`); ohne Gateway laufen keine Streams und Downloads. |
+| Login nicht erreichbar / anderer Aussteller | Authentik erreichbar? `OIDC_ISSUER` muss genau dem `issuer` im Discovery-Dokument entsprechen (abschließender Schrägstrich egal). Bestehende Sitzungen laufen weiter, neue Anmeldungen scheitern. |
+| Langsam (gelb) | Einmalig harmlos; bleibt es, Last auf dem Host prüfen (Transcodes, Backups, Datenträger). |
+| Wunschdienst nicht erreichbar (gelb) | Betrifft nur Wünsche; Container und Schlüssel des Wunschdienstes prüfen. |
+| TMDB/OMDb: Schlüssel ungültig, pausiert oder Budget fast aufgebraucht | *Admin → Datenquellen*: Schlüssel testen oder ersetzen (siehe oben). Ohne Schlüssel fehlen nur Zusatzdaten. |
+| Wiedergabe-Check: Titel fehlgeschlagen | *Admin → Wiedergabe-Check* zeigt die Titel; meist fehlt die Datei oder sie lässt sich nicht umwandeln (Bibliothekspflege → Datei). |
+| Speicher fast voll / zu wenig frei | Downloads: `DOWNLOAD_CACHE_MAX_GB` senken oder alte Lizenzen löschen; Vorschauen: *Admin → Vorschauen* leeren; sonst Datenträger vergrößern. Rot heißt: Vorbereitungen bleiben in der Warteschlange. |
+| Download-Cache fast ausgeschöpft | ≥ 90 % von `DOWNLOAD_CACHE_MAX_GB`: alte Downloads laufen aus, oder die Grenze anheben, wenn Platz da ist. |
+| Datenbank groß | Über `HEALTH_DB_WARN_GB`: Backups prüfen (dauern länger), ggf. `VACUUM`; die Grenze passt man mit der Variable an. |
+| Viele Server-Fehler | Fehlerprotokoll auf der Status-Seite (Route und Status); Backend-Logs zur selben Zeit. |
+| Viele Browser-Fehler | Meist nach einem Update: Seite neu laden lassen; `resource` deutet auf ein fehlendes JS-/CSS-Asset (Cache des Proxys). |
+| Fehlgeschlagene Wiedergaben | Die Status-Seite listet die Titel der letzten 24 h mit Fehlercode; Datei und Codecs in der Bibliothekspflege prüfen. |
+
+## Bibliothekspflege (Scan)
+*Admin → Inhalte → Bibliothekspflege* liest die Bibliothek im Hintergrund (`BACKGROUND_JOBS=true`, nie während einer Anfrage) in Seiten zu 200 Titeln mit kurzer Pause dazwischen. Alle **30 Minuten** werden nur geänderte Titel gelesen (seit dem letzten erfolgreichen Lauf, 5 min Überlappung), beim ersten Start und danach alle **7 Tage** die ganze Bibliothek; nur ein vollständiger Durchlauf entfernt Einträge verschwundener Titel. Meldet der Medienserver neue Titel, läuft ein Scan etwa 2 Minuten später. **„Jetzt prüfen“** startet sofort einen Lauf (höchstens 2 pro 10 Minuten und Admin); die Seite zeigt den Fortschritt und lädt die Liste neu, wenn er fertig ist. „Metadaten neu laden“ bittet den Medienserver, Infos und Bilder eines Titels neu zu holen (höchstens 30 pro Minute). „Ignorieren“ blendet ein Problem für diesen Titel aus, bis man es wieder einblendet. Medienserver ohne die optionalen Methoden zeigen „nicht unterstützt“.
 
 ## Release erstellen
 Versionen folgen SemVer; die Quelle ist `version.json` im Repo-Wurzelverzeichnis (`{ "version": "1.0.0", "codename": "Arancini" }`). Jede **Hauptversion** bekommt den nächsten Codenamen aus `codenames.json` (Kino-Snacks von A bis Z: 1 Arancini, 2 Brezel, 3 Churros, …). Minor- und Patch-Releases behalten den Codenamen.
@@ -160,6 +183,13 @@ Strenger (nur `main` und Versions-Tags): `--certificate-identity-regexp '^https:
 
 **Beim Deployment** am besten einen geprüften Digest pinnen statt `latest`: `docker buildx imagetools inspect "$IMG" --format '{{.Manifest.Digest}}'`, prüfen, dann in `compose.prod.yaml` per `FF_TAG` den Tag (oder direkt `image: …@sha256:…`) setzen.
 
+**Reproduzierbar nachbauen:** Jedes Image lässt sich aus dem Quellcode bitgenau nachbauen (gleicher Digest des linux/amd64-Image-Manifests), z. B. für ein Release:
+```bash
+git clone https://github.com/LetsManu/friendflix && cd friendflix
+scripts/reproduce-image.sh backend --ref v1.4.0 --compare ghcr.io/letsmanu/friendflix-backend:1.4.0
+```
+Das Skript baut aus `git archive` mit `SOURCE_DATE_EPOCH` = Commit-Zeit, `rewrite-timestamp=true`, ohne Cache und mit der in `ci.yml` gepinnten BuildKit-Version. Was verglichen wird, was nicht (Attestations, Index-Digest) und wo die Grenze liegt (Alpine-Pakete): [reproducible-builds.md](reproducible-builds.md). Der CI-Job `reproducible` prüft das bei jedem PR (zwei saubere Builds) und jedem Push (Nachbau gegen den gepushten Kandidaten); `publish` wartet auf ihn.
+
 ## Weitere Prüfungen in der Pipeline
 - **DAST:** Der CI-Job `dast` startet die gebaute Web-App und lässt einen **OWASP-ZAP-Baseline-Scan** darüber laufen (schlägt bei „High“ fehl, warnt bei „Medium/Low“; Regeln und bewusste Ausnahmen in `.zap/rules.tsv`, Bericht als Artefakt `zap-report`). `publish` wartet auf ihn.
 - **Lieferkette:** Trivy (Image-Digest), gitleaks (Secrets), `npm audit` und der **OpenSSF Scorecard** ([scorecard.yml](../.github/workflows/scorecard.yml), wöchentlich und bei jedem Push auf `main`, Ergebnis im Code-Scanning und als Badge im README).
@@ -170,7 +200,8 @@ GitHub → *Settings* → *Rules* → *Rulesets* (oder *Branches* → *Branch pr
 - **Require a pull request before merging** (ohne Pflicht-Review reicht für ein Ein-Personen-Projekt), **Block force pushes**, **Restrict deletions**.
 - *Bypass list*: nur der Akteur hinter `RELEASE_TOKEN` (für den Release-Commit), nie „GitHub Actions“. Dazu ein Tag-Ruleset für `v*` (siehe *Release erstellen*).
 - **Require status checks to pass** mit genau diesen Checks aus `.github/workflows/ci.yml` (Namen wie in der Auswahl; sie erscheinen dort erst, nachdem sie einmal gelaufen sind):
-  `test (22)`, `test (26)`, `e2e`, `dast`, `secrets`, `docker (backend)`, `docker (gateway)`, `docker (web)`
+  `test (22)`, `test (26)`, `e2e`, `dast`, `secrets`, `docker (backend)`, `docker (gateway)`, `docker (web)`,
+  `reproducible (backend)`, `reproducible (gateway)`, `reproducible (web)`
 - **Require branches to be up to date before merging** (*Require status checks to pass* → *Require branches to be up to date before merging*): die Checks müssen gegen den aktuellen Stand von `main` gelaufen sein.
 - Optional: den Check der CodeQL-Standardeinrichtung (Name erscheint nach dem ersten Lauf) bzw. unter Rulesets **Require code scanning results** für CodeQL.
 - Nicht als Pflicht-Check eintragen: `publish / …` und `Scorecard analysis` (laufen nur bei Push bzw. zeitgesteuert, nie in einem PR – der PR würde ewig warten).

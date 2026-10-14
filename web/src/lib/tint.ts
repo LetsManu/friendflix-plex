@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Average "mood" colour of an image (small canvas sample, saturation-weighted). Same-origin images only. */
 export function dominantColor(src: string): Promise<[number, number, number] | null> {
   return new Promise((resolve) => {

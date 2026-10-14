@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Release notes (GitHub release body = a CHANGELOG section in Markdown) as plain blocks for safe rendering:
  * the page only ever inserts text (no {@html}), so markup in the notes is shown, never executed.

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Timeline previews from Plex BIF index files (Part.indexes = "sd"; needs GenerateBIFBehavior != never on the server, no Plex Pass).
  * Plex serves single JPEG frames at /library/parts/<id>/indexes/sd/<ms>, so the DTO describes 1x1 "tiles": sheet n = frame n, its

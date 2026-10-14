@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /**
    * Admin frame: grouped sidebar (≥900px), page header with breadcrumb + <h1> + per-page <title>, pending badges from

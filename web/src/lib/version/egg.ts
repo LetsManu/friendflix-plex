@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Tap counter of the version easter egg (7 taps like Android's build number; hint from the 4th tap). */
 export const EGG_TAPS = 7;
 /** a pause longer than this starts over */

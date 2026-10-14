@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { z } from 'zod';
 
 /** Allowed reactions (whitelist: nothing user-controlled gets rendered as markup). */

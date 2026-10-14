@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/adminPeople';
 import type { Translation } from '../../types';
 
@@ -160,6 +162,38 @@ const dict: Translation<typeof de> = {
       authentik: 'Authentik', by: 'Approuvé', sessions: 'Sessions terminées', language: 'Langue', count: 'Nombre', name: 'Titre', leavesAt: 'Retiré le',
     },
     values: { yes: 'Oui', no: 'Non', unlimited: 'Illimité', ok: 'OK', failed: 'Échec', off: 'Désactivé', skipped: 'Ignoré', admin: 'Admin', self: 'Lui-même' },
+  },
+  usage: {
+    period: 'Période',
+    periods: { d7: '7 derniers jours', d30: '30 derniers jours', d90: '90 derniers jours' },
+    privacy: 'Agrégé, sans titres : combien on regarde, pas quoi.',
+    since: 'Données depuis le {date}',
+    col: { name: 'Compte', lastSeen: 'Vu pour la dernière fois', time: 'Temps de visionnage', titles: 'Titres', streams: 'Flux', transcodes: 'Transcodages', devices: 'Appareils', now: 'Maintenant' },
+    split: 'Films {movies} · Séries {series}',
+    tcShare: '{pct} % · {reason}',
+    tcPct: '{pct} %',
+    devicesUsed: '{used}/{total}',
+    live: { one: '{n} flux en cours', many: '{n} flux en cours', other: '{n} flux en cours' },
+    locked: 'Bloqué',
+    never: 'Jamais',
+    details: 'Détails',
+    detailsFor: 'Détails pour {name}',
+    detailTitle: '{name} · {period}',
+    perDay: 'Temps de visionnage par jour',
+    bars: 'Temps de visionnage par jour : {total} au total, au maximum {max} le {date}',
+    barsEmpty: 'Temps de visionnage par jour : aucune lecture sur cette période',
+    devicesTitle: 'Appareils sur la période',
+    deviceUnknown: 'Appareil inconnu',
+    app: 'Application',
+    deviceStreams: { one: '{n} flux', many: '{n} flux', other: '{n} flux' },
+    deviceTc: { one: '{n} transcodé', many: '{n} transcodés', other: '{n} transcodés' },
+    noDevices: 'Aucun appareil sur cette période.',
+    reasonsTitle: 'Raisons des transcodages',
+    reasonsNone: 'Aucun transcodage.',
+    empty: 'Pas encore de comptes.',
+    loadFailed: 'Impossible de charger l’utilisation.',
+    detailFailed: 'Impossible de charger les détails.',
+    close: 'Fermer',
   },
 };
 export default dict;

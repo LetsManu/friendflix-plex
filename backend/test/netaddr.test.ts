@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { describe, expect, it, vi } from 'vitest';
 import { clientAddress, isHomeAddress, isHomeRequest, isValidCidr } from '../src/netaddr.js';
 import { loadConfig } from '../src/config.js';
 
@@ -52,7 +54,7 @@ describe('unusable forwarding headers', () => {
 describe('HOME_NETWORKS config', () => {
   const BASE = {
     PUBLIC_URL: 'https://p.example.com', DATABASE_URL: 'x', REDIS_URL: 'x', APP_ENC_KEY: 'k'.repeat(44), INTERNAL_SECRET: 'i'.repeat(20), OIDC_ISSUER: 'https://a.example.com',
-    OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's', JELLYFIN_URL: 'http://j', JELLYFIN_ADMIN_API_KEY: 'k', SEERR_URL: 'http://s', SEERR_API_KEY: 'k', WEBHOOK_SECRET: 'w'.repeat(20),
+    OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's', JELLYFIN_URL: 'http://j', JELLYFIN_ADMIN_API_KEY: 'k', REQUESTS_URL: 'http://s', REQUESTS_API_KEY: 'k', WEBHOOK_SECRET: 'w'.repeat(20),
   };
   it('defaults to RFC1918 + loopback + ULA + link-local', () => {
     expect(loadConfig(BASE).HOME_NETWORKS).toEqual(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8', '::1/128', 'fc00::/7', 'fe80::/10']);
@@ -61,6 +63,17 @@ describe('HOME_NETWORKS config', () => {
     expect(loadConfig({ ...BASE, HOME_NETWORKS: ' 203.0.113.0/24 , 2001:db8::/32 ' }).HOME_NETWORKS).toEqual(['203.0.113.0/24', '2001:db8::/32']);
     expect(() => loadConfig({ ...BASE, HOME_NETWORKS: '10.0.0.0/8,192.168.0.0/33' })).toThrow(/HOME_NETWORKS: invalid CIDR '192\.168\.0\.0\/33'/);
     expect(() => loadConfig({ ...BASE, HOME_NETWORKS: 'lan' })).toThrow(/invalid CIDR 'lan'/);
+  });
+  it('HEALTH_DISK_WARN_PCT at or above HEALTH_DISK_CRIT_PCT falls back to 85 / 95 with a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(loadConfig({ ...BASE, HEALTH_DISK_WARN_PCT: '90', HEALTH_DISK_CRIT_PCT: '80' })).toMatchObject({ HEALTH_DISK_WARN_PCT: 85, HEALTH_DISK_CRIT_PCT: 95 });
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/HEALTH_DISK_WARN_PCT \(90\) must be below HEALTH_DISK_CRIT_PCT \(80\)/));
+      expect(loadConfig({ ...BASE, HEALTH_DISK_WARN_PCT: '70', HEALTH_DISK_CRIT_PCT: '90' })).toMatchObject({ HEALTH_DISK_WARN_PCT: 70, HEALTH_DISK_CRIT_PCT: 90 });
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
   it('isValidCidr', () => {
     for (const c of ['10.0.0.0/8', '1.2.3.4', 'fc00::/7', '::1/128']) expect(isValidCidr(c)).toBe(true);

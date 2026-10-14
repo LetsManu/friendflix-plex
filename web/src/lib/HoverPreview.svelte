@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import { beforeNavigate } from '$app/navigation';
@@ -139,6 +141,12 @@
     { id: 'details', label: $t('home.card.openDetail'), icon: 'info', href: detail },
   ];
   function more(e: MouseEvent) { if (item.type !== 'Episode') primeItem(item); dispatch('close', { refocus: false }); openModal(e, detail); }
+  /** a click on the picture (not on one of its buttons) opens the detail popup like "Mehr Infos"; ctrl/cmd/middle opens the page in a new tab */
+  function mediaClick(e: MouseEvent) {
+    if ((e.target as HTMLElement).closest('button, a')) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) { window.open(detail, '_blank', 'noopener'); return; }
+    more(e);
+  }
 
   // ---- closing: Escape, scroll, navigation ----
   function onKey(e: KeyboardEvent) {
@@ -174,7 +182,8 @@
   on:mouseenter={() => (over = true)} on:mouseleave={() => (over = false)}
   on:focusin={() => (focused = true)} on:focusout={leaveFocus} on:keydown={tabKey}
 >
-  <div class="media" data-play-art style={box ? `height:${box.mediaH}px` : ''}>
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div class="media" data-play-art style={box ? `height:${box.mediaH}px` : ''} on:click={mediaClick} on:auxclick={mediaClick}>
     {#if posterOnly}<img class="blur" src={startSrc || src} alt="" aria-hidden="true" />{/if}
     {#if startSrc}<img class:contain={posterOnly} class:spoil={isSpoiler(item, $prefs)} src={startSrc} alt="" />{/if}
     {#if src}<img class="hi" class:on={hiLoaded || !startSrc} class:contain={posterOnly} class:spoil={isSpoiler(item, $prefs)} {src} srcset={srcs} sizes="{box?.width ?? 360}px" alt="" on:load={() => (hiLoaded = true)} />{/if}
@@ -212,7 +221,7 @@
 <style>
   .hp { position: fixed; z-index: 65; background: var(--surface); border-radius: 8px; box-shadow: 0 14px 40px rgba(0,0,0,.75), 0 0 0 1px rgba(255,255,255,.06); overflow: hidden; transform-origin: 0 0; visibility: hidden; color: var(--fg); }
   .hp.ready { visibility: visible; }
-  .media { position: relative; background: #0a0d10; overflow: hidden; }
+  .media { position: relative; background: #0a0d10; overflow: hidden; cursor: pointer; }
   .media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
   .media img.contain { object-fit: contain; }
   .blur { inset: -10%; width: 120%; height: 120%; filter: blur(18px) brightness(.55); }

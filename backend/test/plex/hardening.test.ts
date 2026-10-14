@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Review follow-ups: paging totals past the end, collection posters that never reveal hidden members, the ffmpeg subtitle slots.
  */

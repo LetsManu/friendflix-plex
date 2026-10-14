@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { preloadCode } from '$app/navigation';
 import { get } from 'svelte/store';
 import { api, getActiveProfile } from '#lib/api';

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Area 'diagnose' (German source): /diagnose viewport page. */
 export default {
   title: 'Anzeige-Diagnose',

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Area "social": party, voting, matcher, tonight, lists, favourites, my list, history, stats/year in review, digest, calendar, upcoming, requests, now playing. German is the typed source. */
 export default {
   /** shared bits of the social pages */

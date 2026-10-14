@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Minimal safe markup for translated sentences: only <b>…</b>, <kbd>…</kbd> and <a href="/internal">…</a>
  * (no nesting, no attributes besides an app-internal href). Everything else stays plain text, so a translation can never inject HTML.

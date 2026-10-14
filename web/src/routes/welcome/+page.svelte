@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <svelte:head><title>{$t('common.pageTitle', { page: $t('kids.welcome.pageTitle') })}</title></svelte:head>
 <script lang="ts">
   import { onMount, tick } from 'svelte';

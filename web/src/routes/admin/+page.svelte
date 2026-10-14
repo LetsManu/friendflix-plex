@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin overview: health strip, things waiting for a decision (inline approve/decline), recent activity, counts, storage. */
   import { onMount } from 'svelte';
@@ -5,6 +7,7 @@
   import Icon from '#lib/Icon.svelte';
   import { fmtDateTime, fmtNumber, fmtRelative, t, tr } from '#lib/i18n';
   import { describeActivity, type AuditEntry } from '#lib/admin/activity';
+  import { levelTone, loadHealth, serviceText, type HealthSnapshot, type ServiceId } from '#lib/admin/health';
   import { bumpPending, refreshSummary, summary, summaryFailed } from '#lib/admin/summary';
   import { busyKeys, runAction } from '#lib/ui/action';
   import Button from '#lib/ui/Button.svelte';
@@ -25,7 +28,10 @@
   const loadDevs = () => api<{ devices: Dev[] }>('/api/admin/devices').then((r) => { devs = r.devices.filter((d) => !d.approved); devErr = false; }, () => { devs = []; devErr = true; });
   const loadAudit = () => api<{ entries: AuditEntry[] }>('/api/admin/audit?limit=8').then((r) => { audit = r.entries; auditErr = false; }, () => { audit = []; auditErr = true; });
   const loadUpdate = () => api('/api/admin/update').then((u) => (update = u), () => (update = 'err'));
-  function loadAll() { void refreshSummary(); void loadReqs(); void loadDevs(); void loadAudit(); void loadUpdate(); }
+  // Block 22: the strip reads the health snapshot (media server, request service, playback check); the summary is the fallback
+  let snap: HealthSnapshot | null = null;
+  const loadSnap = () => loadHealth().then((h) => (snap = h), () => (snap = null));
+  function loadAll() { void refreshSummary(); void loadReqs(); void loadDevs(); void loadAudit(); void loadUpdate(); void loadSnap(); }
   onMount(loadAll);
 
   /** removes a row optimistically; the returned rollback puts the list back */
@@ -67,9 +73,16 @@
   $: s = $summary;
   type Health = { label: string; icon: string; href: string; tone: Tone; text: string } | null;
   const svc = (label: string, icon: string, href: string, tone: Tone, text: string): Health => ({ label, icon, href, tone, text });
+  /** strip entry from the snapshot (null without one) */
+  const fromSnap = (sn: HealthSnapshot | null, id: ServiceId, label: string, icon: string, href: string): Health => {
+    const h = sn?.services.find((x) => x.id === id);
+    return h ? svc(label, icon, href, levelTone(h.level), serviceText(h)) : null;
+  };
   $: health = [
-    s ? svc($t('admin.dash.svc.jellyfin'), 'film', '/admin/status', s.services.jellyfin ? 'ok' : 'err', s.services.jellyfin ? $t('admin.dash.state.ok') : $t('admin.dash.state.down')) : null,
-    s ? svc($t('admin.dash.svc.seerr'), 'inbox', '/admin/requests', s.services.seerr ? 'ok' : 'err', s.services.seerr ? $t('admin.dash.state.ok') : $t('admin.dash.state.down')) : null,
+    fromSnap(snap, 'media', $t('admin.dash.svc.jellyfin'), 'film', '/admin/status')
+      ?? (s ? svc($t('admin.dash.svc.jellyfin'), 'film', '/admin/status', s.services.jellyfin ? 'ok' : 'err', s.services.jellyfin ? $t('admin.dash.state.ok') : $t('admin.dash.state.down')) : null),
+    fromSnap(snap, 'requests', $t('admin.dash.svc.seerr'), 'inbox', '/admin/requests')
+      ?? (s ? svc($t('admin.dash.svc.seerr'), 'inbox', '/admin/requests', s.services.seerr ? 'ok' : 'err', s.services.seerr ? $t('admin.dash.state.ok') : $t('admin.dash.state.down')) : null),
     update === null ? null
       : update !== 'err' && update.updateAvailable != null ? svc($t('admin.dash.svc.update'), 'refresh', '/admin/update', update.updateAvailable ? 'warn' : 'ok', update.updateAvailable ? $t('admin.dash.state.updateAvailable') : $t('admin.dash.state.upToDate'))
       : update === 'err' || update.behind === null || update.behind === undefined ? svc($t('admin.dash.svc.update'), 'refresh', '/admin/update', 'muted', $t('admin.dash.state.unknown'))

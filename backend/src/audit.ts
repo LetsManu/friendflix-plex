@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Ctx } from './ctx.js';
 
 export async function audit(ctx: Pick<Ctx, 'db'>, actor: string | null, action: string, target?: string, meta: Record<string, unknown> = {}) {

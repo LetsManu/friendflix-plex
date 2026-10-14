@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { get, writable } from 'svelte/store';
 
 /** What the TV reports to the phone. */

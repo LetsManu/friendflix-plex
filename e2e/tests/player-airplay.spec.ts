@@ -1,52 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { MOVIE } from '../mocks/fixtures.js';
-import { HLS_INIT, HLS_PLAYLIST, HLS_SEGMENTS } from '../mocks/hls.js';
+import { available, castOn, castSessions, mockHls, picks, srcAtPick, stubAirPlay, wireless } from '../mocks/cast.js';
 import { mockPlayer, videoReady } from '../mocks/scenes.js';
 import { expect, test } from '../fixtures.js';
 import type { Page } from '@playwright/test';
 
-/**
- * AirPlay button (Safari API simulated): Chromium has no webkitShowPlaybackTargetPicker, so the spec stubs it on
- * HTMLMediaElement and fires Safari's events by hand. The real picker / receiver can only be checked on Apple hardware.
- * `pickTv`: the stubbed picker "chooses the TV" right away (Safari then reports the wireless target); `__srcAtPick` is what the TV
- * would have been handed.
- */
-async function stubAirPlay(page: Page, o: { pickTv?: boolean } = {}) {
-  await page.addInitScript((pickTv) => {
-    const w = window as unknown as { __picks: number; __wireless: boolean; __srcAtPick: string };
-    w.__picks = 0; w.__wireless = false; w.__srcAtPick = '';
-    Object.defineProperty(HTMLMediaElement.prototype, 'webkitShowPlaybackTargetPicker', { configurable: true, value(this: HTMLMediaElement) {
-      w.__picks++; w.__srcAtPick = this.src;
-      if (pickTv) { w.__wireless = true; this.dispatchEvent(new Event('webkitcurrentplaybacktargetiswirelesschanged')); }
-    } });
-    Object.defineProperty(HTMLMediaElement.prototype, 'webkitCurrentPlaybackTargetIsWireless', { configurable: true, get: () => w.__wireless });
-  }, Boolean(o.pickTv));
-}
-/** /api/cast/config enabled (the AirPlay button's gate); the Chromecast SDK Chromium then asks for is answered empty */
-async function castOn(page: Page, enabled = true) {
-  await page.route('**/api/cast/config', (r) => r.fulfill({ json: { enabled } }));
-  await page.route('https://www.gstatic.com/**', (r) => r.fulfill({ contentType: 'text/javascript', body: '' }));
-}
-/** the player plays a real HLS stream through hls.js (like Safari normally does) */
-async function mockHls(page: Page, segTypes: string[] = []) {
-  await page.route('**/api/playback/info', (r) => r.fulfill({ json: {
-    resumeTicks: 0, mediaSourceId: 'ms1', playSessionId: 'ps1', roleMaxBitrate: 20_000_000, subtitles: [], audioTracks: [],
-    hlsUrl: '/media/hls/4000000/out.m3u8', maxBitrate: 4_000_000, transcodeReason: 'network',
-  } }));
-  await page.route('**/media/hls/**', (r) => {
-    const file = new URL(r.request().url()).pathname.split('/').pop()!;
-    const seg = /^s(\d+)\.m4s$/.exec(file);
-    if (file === 'out.m3u8') return r.fulfill({ contentType: 'application/vnd.apple.mpegurl', body: HLS_PLAYLIST });
-    if (file === 'init.mp4') return r.fulfill({ contentType: 'video/mp4', body: HLS_INIT });
-    if (seg) segTypes.push(r.request().resourceType());
-    if (seg) return r.fulfill({ contentType: 'video/mp4', body: HLS_SEGMENTS[Number(seg[1])]! }).catch(() => undefined);
-    return r.fulfill({ status: 404 });
-  });
-}
-const available = (page: Page) => page.evaluate(() => document.querySelector('video')!.dispatchEvent(Object.assign(new Event('webkitplaybacktargetavailabilitychanged'), { availability: 'available' })));
-const wireless = (page: Page, on: boolean) => page.evaluate((on) => {
-  (window as unknown as { __wireless: boolean }).__wireless = on;
-  document.querySelector('video')!.dispatchEvent(new Event('webkitcurrentplaybacktargetiswirelesschanged'));
-}, on);
 const src = (page: Page) => page.evaluate(() => document.querySelector('video')!.src);
 const hlsPlaying = async (page: Page) => {
   await page.waitForFunction(() => (document.querySelector('video')?.duration ?? 0) > 20);
@@ -104,24 +63,6 @@ test('Safari-like playback keeps hls.js (MSE + bandwidth samples) until the AirP
   await expect(page.getByTestId('airplay')).toBeVisible();
   expect(await src(page)).toMatch(/^blob:/);
 });
-
-/** POST /api/cast/session answers with a token URL (a test file the phone can play); `fail` -> 429 max_streams */
-async function castSessions(page: Page, o: { fail?: () => boolean; castId?: string } = {}) {
-  const sessions: Array<Record<string, unknown>> = [];
-  const deleted: string[] = [];
-  await page.route('**/api/cast/session', (r) => {
-    sessions.push(r.request().postDataJSON());
-    if (o.fail?.()) return r.fulfill({ status: 429, json: { error: 'max_streams', max: 1 } });
-    return r.fulfill({ json: {
-      castId: o.castId ?? 'c'.repeat(32), expiresAt: Date.now() + 3 * 3600_000, playSessionId: 'air-ps', mediaSourceId: 'ms', startTime: 0,
-      contentUrl: `${new URL(page.url()).origin}/media/p1test.webm#airplay`, contentType: 'application/x-mpegURL', hlsSegmentFormat: 'ts', title: 'Film', subtitles: [],
-    } });
-  });
-  await page.route('**/api/cast/session/*', (r) => { deleted.push(r.request().url().split('/').pop()!); return r.fulfill({ json: { ok: true } }); });
-  return { sessions, deleted };
-}
-const picks = (page: Page) => page.evaluate(() => (window as unknown as { __picks: number }).__picks);
-const srcAtPick = (page: Page) => page.evaluate(() => (window as unknown as { __srcAtPick: string }).__srcAtPick);
 
 test('AirPlay: tap -> cast token URL on the element FIRST, then the picker; TV -> active without a new token; end -> token revoked, hls.js again', async ({ page, api: _api }) => {
   await stubAirPlay(page, { pickTv: true });

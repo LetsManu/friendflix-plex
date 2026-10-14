@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Optional monitoring stack: Prometheus + Grafana with the FriendFlix dashboard (docs/monitoring.md "Prometheus + Grafana").
 # Overlay for compose.prod.yaml (or compose.yaml):
 #   docker compose -f compose.prod.yaml -f compose.monitoring.yaml up -d

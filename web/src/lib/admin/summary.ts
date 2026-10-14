@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** /api/admin/summary as a shared store: the shell shows its badges, the overview its tiles; pages refresh it after actions. */
 import { writable, type Readable } from 'svelte/store';
 import { api } from '#lib/api';

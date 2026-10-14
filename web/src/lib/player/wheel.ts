@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Mouse wheel / trackpad -> volume steps: deltas are normalised to pixels and add up; one step per 100 px, idle for 200 ms starts over. */
 export const WHEEL_STEP_PX = 100;
 export const WHEEL_IDLE_MS = 200;

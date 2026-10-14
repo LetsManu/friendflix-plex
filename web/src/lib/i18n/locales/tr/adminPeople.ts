@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/adminPeople';
 import type { Translation } from '../../types';
 
@@ -160,6 +162,38 @@ const dict: Translation<typeof de> = {
       authentik: 'Authentik', by: 'Onaylayan', sessions: 'Sonlandırılan oturumlar', language: 'Dil', count: 'Sayı', name: 'Başlık', leavesAt: 'Kalkış tarihi',
     },
     values: { yes: 'Evet', no: 'Hayır', unlimited: 'Sınırsız', ok: 'Tamam', failed: 'Başarısız', off: 'Kapalı', skipped: 'Atlandı', admin: 'Yönetici', self: 'Kendisi' },
+  },
+  usage: {
+    period: 'Dönem',
+    periods: { d7: 'Son 7 gün', d30: 'Son 30 gün', d90: 'Son 90 gün' },
+    privacy: 'Toplu, başlıklar olmadan: ne kadar izlendiği, ne izlendiği değil.',
+    since: '{date} tarihinden beri veri',
+    col: { name: 'Hesap', lastSeen: 'Son görülme', time: 'İzleme süresi', titles: 'Başlıklar', streams: 'Yayınlar', transcodes: 'Dönüştürmeler', devices: 'Cihazlar', now: 'Şimdi' },
+    split: 'Filmler {movies} · Diziler {series}',
+    tcShare: '%{pct} · {reason}',
+    tcPct: '%{pct}',
+    devicesUsed: '{used}/{total}',
+    live: { one: '{n} yayın oynatılıyor', other: '{n} yayın oynatılıyor' },
+    locked: 'Kilitli',
+    never: 'Hiç',
+    details: 'Ayrıntılar',
+    detailsFor: '{name} için ayrıntılar',
+    detailTitle: '{name} · {period}',
+    perDay: 'Günlük izleme süresi',
+    bars: 'Günlük izleme süresi: toplam {total}, en çok {date} tarihinde {max}',
+    barsEmpty: 'Günlük izleme süresi: bu dönemde oynatma yok',
+    devicesTitle: 'Dönemdeki cihazlar',
+    deviceUnknown: 'Bilinmeyen cihaz',
+    app: 'Uygulama',
+    deviceStreams: { one: '{n} yayın', other: '{n} yayın' },
+    deviceTc: { one: '{n} dönüştürüldü', other: '{n} dönüştürüldü' },
+    noDevices: 'Bu dönemde cihaz yok.',
+    reasonsTitle: 'Dönüştürme nedenleri',
+    reasonsNone: 'Dönüştürme yok.',
+    empty: 'Henüz hesap yok.',
+    loadFailed: 'Kullanım yüklenemedi.',
+    detailFailed: 'Ayrıntılar yüklenemedi.',
+    close: 'Kapat',
   },
 };
 export default dict;

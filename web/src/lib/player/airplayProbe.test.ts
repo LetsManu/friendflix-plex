@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chunkNotes, firstVariantUri, runProbe, scrubMessage, summarizeMaster, summarizeVariant, uriExt, uriKind } from './airplayProbe';
 

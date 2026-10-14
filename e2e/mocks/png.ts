@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { deflateSync } from 'node:zlib';
 
 // Tiny PNG encoder so no binary fixtures are committed: /media/** is answered with a generated solid-colour image.

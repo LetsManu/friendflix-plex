@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Release version + codename of this build and the codename list (A–Z cinema snacks, one per major version).
  * Sources: /version.json and /codenames.json at the repo root (shared with backend/src/version.ts and

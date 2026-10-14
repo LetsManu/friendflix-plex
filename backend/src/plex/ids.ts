@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Plex ids <-> FriendFlix 32-hex ids. Plex ratingKeys and tag ids are small integers; FriendFlix routes, the DB and the
  * web expect 32 lowercase hex chars (id32). Encoding: "9f1e" + one kind nibble + the value as 27 zero-padded hex digits.

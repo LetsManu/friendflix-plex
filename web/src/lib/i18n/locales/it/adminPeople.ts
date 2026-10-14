@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/adminPeople';
 import type { Translation } from '../../types';
 
@@ -160,6 +162,38 @@ const dict: Translation<typeof de> = {
       authentik: 'Authentik', by: 'Approvato', sessions: 'Sessioni terminate', language: 'Lingua', count: 'Numero', name: 'Titolo', leavesAt: 'Esce il',
     },
     values: { yes: 'Sì', no: 'No', unlimited: 'Illimitato', ok: 'OK', failed: 'Non riuscito', off: 'Disattivato', skipped: 'Saltato', admin: 'Admin', self: 'Sé stesso' },
+  },
+  usage: {
+    period: 'Periodo',
+    periods: { d7: 'Ultimi 7 giorni', d30: 'Ultimi 30 giorni', d90: 'Ultimi 90 giorni' },
+    privacy: 'Aggregato, senza titoli: quanto si guarda, non cosa.',
+    since: 'Dati dal {date}',
+    col: { name: 'Account', lastSeen: 'Ultimo accesso', time: 'Tempo di visione', titles: 'Titoli', streams: 'Stream', transcodes: 'Transcodifiche', devices: 'Dispositivi', now: 'Ora' },
+    split: 'Film {movies} · Serie {series}',
+    tcShare: '{pct} % · {reason}',
+    tcPct: '{pct} %',
+    devicesUsed: '{used}/{total}',
+    live: { one: '{n} stream in corso', many: '{n} stream in corso', other: '{n} stream in corso' },
+    locked: 'Bloccato',
+    never: 'Mai',
+    details: 'Dettagli',
+    detailsFor: 'Dettagli di {name}',
+    detailTitle: '{name} · {period}',
+    perDay: 'Tempo di visione al giorno',
+    bars: 'Tempo di visione al giorno: {total} in totale, al massimo {max} il {date}',
+    barsEmpty: 'Tempo di visione al giorno: nessuna riproduzione nel periodo',
+    devicesTitle: 'Dispositivi nel periodo',
+    deviceUnknown: 'Dispositivo sconosciuto',
+    app: 'App',
+    deviceStreams: { one: '{n} stream', many: '{n} stream', other: '{n} stream' },
+    deviceTc: { one: '{n} transcodificato', many: '{n} transcodificati', other: '{n} transcodificati' },
+    noDevices: 'Nessun dispositivo nel periodo.',
+    reasonsTitle: 'Motivi delle transcodifiche',
+    reasonsNone: 'Nessuna transcodifica.',
+    empty: 'Ancora nessun account.',
+    loadFailed: 'Impossibile caricare l’utilizzo.',
+    detailFailed: 'Impossibile caricare i dettagli.',
+    close: 'Chiudi',
   },
 };
 export default dict;

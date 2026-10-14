@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pathOnly, scrub, toLogEntry } from '../src/clientErrors.js';
 import { registry } from '../src/metrics.js';
@@ -60,6 +62,15 @@ describe('POST /api/client-errors', () => {
       kind: 'error', message: 'fail for [email]', url: '/search', userAgent: 'UA/1', release: 'abc1234',
       stack: 'Error\n at x (https://portal.example.com/a.js?[query])',
     });
+  });
+
+  it('accepts kind playback with itemId and code and logs them (scrubbed like the rest)', async () => {
+    logged.length = 0;
+    const id = '0123456789abcdef0123456789abcdef';
+    const r = await beacon(body({ kind: 'playback', itemId: id, code: 'MEDIA_ERR_DECODE', message: 'fatal' }));
+    expect(r.statusCode).toBe(204);
+    expect(logged[0]!.obj.clientError).toMatchObject({ kind: 'playback', itemId: id, code: 'MEDIA_ERR_DECODE' });
+    expect((await beacon(body({ kind: 'playback', itemId: id.toUpperCase(), code: 'x' }))).statusCode).toBe(400);
   });
 
   it('also accepts application/json', async () => {

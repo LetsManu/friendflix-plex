@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * AirPlay (Safari on iOS / iPadOS / macOS) for the player's own <video> element.
  *
@@ -62,6 +64,8 @@ export interface AirPlayVideo extends EventTarget {
   src: string;
   webkitShowPlaybackTargetPicker?: () => void;
   readonly webkitCurrentPlaybackTargetIsWireless?: boolean;
+  /** Remote Playback API (Safari 13+): `connected` while a remote device plays, even when the webkit wireless flag flips */
+  readonly remote?: { readonly state?: 'connecting' | 'connected' | 'disconnected' };
   play(): Promise<void>;
   setAttribute(name: string, value: string): void;
   removeAttribute(name: string): void;
@@ -125,6 +129,10 @@ export interface AirPlayController {
   videoError(code?: number, message?: string): void;
   /** the cast session while AirPlay plays the token stream */
   readonly info: CastInfo | null;
+  /** replaces every callback (the controller moves from the Player to the cast engine); state, listeners, token, breaker and timers stay */
+  rebind(deps: AirPlayDeps): void;
+  /** while AirPlay is active: new token for the item `deps.request(pos)` now resolves, at `pos`, always playing afterwards; no-op otherwise */
+  switchItem(pos: number): Promise<void>;
   /** removes the listeners and revokes a live token (leaving the player) */
   destroy(): void;
 }
@@ -144,6 +152,8 @@ const realTimers: AirPlayTimers = { set: (fn, ms) => setTimeout(fn, ms), clear: 
  * `timers` is injectable for tests.
  */
 export function createAirPlay(video: AirPlayVideo, deps: AirPlayDeps, probe?: EventTarget | null, timers: AirPlayTimers = realTimers): AirPlayController {
+  /** the callbacks in use: `rebind` swaps them (the Player that owned the element is gone, the cast engine took over) */
+  let d = deps;
   let available = false, active = false, busy = false, ready = false, error = false, info: CastInfo | null = null, seq = 0, dead = false;
   let armT: ReturnType<typeof setTimeout> | undefined, armPos: number | null = null;
   /** the cast session whose token URL WE put on the element (cleared when the normal stream is restored) */
@@ -154,13 +164,13 @@ export function createAirPlay(video: AirPlayVideo, deps: AirPlayDeps, probe?: Ev
   let autoUsed = false;
   /** the running settle window follows a stop(): its re-check decides whether the wireless episode really ended */
   let afterStop = false;
-  /** deps.restore() is running (the player re-attaches its normal stream, src changes at some point): keep the window open */
+  /** d.restore() is running (the player re-attaches its normal stream, src changes at some point): keep the window open */
   let restoring = false;
   const autoTimes: number[] = [];
   const now = () => (timers.now ?? Date.now)();
   const avail = new Map<EventTarget, boolean>();
   const state = (): AirPlayState => ({ available, active, busy, ready, error });
-  const emit = () => { if (!dead) deps.change(state()); };
+  const emit = () => { if (!dead) d.change(state()); };
   const flags = () => `${available ? 'v' : ''}${active ? 'A' : ''}${busy ? 'B' : ''}${ready ? 'R' : ''}${error ? 'E' : ''}${tokenOnElement ? 'T' : ''}${settleT !== undefined ? 'S' : ''}${offT !== undefined ? 'O' : ''}${autoUsed ? 'U' : ''}`;
   const log = (ev: string, o: { wireless?: boolean; note?: string } = {}) => { if (!dead) airLog(ev, { ...o, src: video.src, state: flags() }); };
   const trustedLog = (ev: string, note: string) => { if (!dead) airLog(ev, { src: video.src, state: flags(), note, trusted: true }); };
@@ -267,6 +277,7 @@ export function createAirPlay(video: AirPlayVideo, deps: AirPlayDeps, probe?: Ev
     offT = undefined;
     if (dead) return;
     if (isWireless()) { log('wireless', { wireless: true, note: 'grace over: on again, ignored' }); return; }
+    if (video.remote?.state === 'connected') { log('wireless', { wireless: false, note: 'grace over: remote playback connected, ignored' }); return; }
     if (!active) return;
     log('wireless', { wireless: false, note: 'grace over: sustained off -> stop' });
     void stop();
@@ -278,26 +289,26 @@ export function createAirPlay(video: AirPlayVideo, deps: AirPlayDeps, probe?: Ev
     busy = true; error = false; emit();
     let ci: CastInfo;
     try {
-      await deps.detach();
+      await d.detach();
       if (my !== seq || dead) return;
       log('token-start', { note: 'tap' });
-      ci = await deps.request(pos);
+      ci = await d.request(pos);
     } catch (e) {
       if (my !== seq || dead) return;
       log('token-fail', { note: `tap: ${status(e)}` });
       busy = false;
-      if (isWireless()) { active = true; error = true; emit(); deps.fail(e); return; } // the TV is the target: never the cookie URL, Retry
+      if (isWireless()) { active = true; error = true; emit(); d.fail(e); return; } // the TV is the target: never the cookie URL, Retry
       emit();
-      deps.fail(e);
+      d.fail(e);
       log('restore', { note: 'token failed, local' });
-      await deps.restore(pos, wasPlaying, null); // detach() dropped the normal stream: bring it back
+      await d.restore(pos, wasPlaying, null); // detach() dropped the normal stream: bring it back
       return;
     }
-    if (my !== seq || dead) { deps.revoke(ci); return; }
+    if (my !== seq || dead) { d.revoke(ci); return; }
     log('token-ok', { note: 'tap' });
     startProbe(ci);
     info = ci;
-    deps.started(ci);
+    d.started(ci);
     play(ci, pos, wasPlaying);
     busy = false;
     if (isWireless()) { active = true; emit(); log('wireless', { wireless: true, note: 'already wireless after token: started' }); return; } // a TV was picked meanwhile
@@ -306,31 +317,31 @@ export function createAirPlay(video: AirPlayVideo, deps: AirPlayDeps, probe?: Ev
   }
 
   /** automatic request (route without our token), Retry, or a new token for the running / ready session (audio track, quality, renewal) */
-  async function switchTo(old: CastInfo | null, from?: number, why = 'auto') {
-    const my = ++seq, pos = from ?? position(), wasPlaying = !video.paused;
+  async function switchTo(old: CastInfo | null, from?: number, why = 'auto', forcePlay = false) {
+    const my = ++seq, pos = from ?? position(), wasPlaying = forcePlay || !video.paused;
     if (!ready) active = true;
     busy = true; emit();
     try {
-      await deps.detach();
+      await d.detach();
       if (my !== seq) return;
       log('token-start', { note: why });
-      const ci = await deps.request(pos);
-      if (my !== seq || dead) { deps.revoke(ci); return; } // AirPlay ended (or the player closed) meanwhile
+      const ci = await d.request(pos);
+      if (my !== seq || dead) { d.revoke(ci); return; } // AirPlay ended (or the player closed) meanwhile
       log('token-ok', { note: why });
       startProbe(ci);
-      if (old) deps.revoke(old);
+      if (old) d.revoke(old);
       info = ci; error = false;
-      deps.started(ci);
+      d.started(ci);
       play(ci, pos, wasPlaying);
       if (ready && !active && armT === undefined) arm(); // Retry from the `ready` error: wait for the picker again
     } catch (e) {
       if (my !== seq || dead) return;
       log('token-fail', { note: `${why}: ${status(e)}` });
-      if (!active && !ready && !isWireless()) { busy = false; deps.fail(e); await stop(); return; } // plain local: normal stream
+      if (!active && !ready && !isWireless()) { busy = false; d.fail(e); await stop(); return; } // plain local: normal stream
       // the TV is (or may become) the target: never hand it the cookie URL; no restore, no src change, no automatic retry
       error = true; info = old;
       if (ready) stopArmTimer(); // stay in the error state (Retry / picker) instead of restoring after ARM_MS
-      deps.fail(e);
+      d.fail(e);
     } finally {
       if (my === seq) { busy = false; emit(); }
     }
@@ -341,13 +352,13 @@ export function createAirPlay(video: AirPlayVideo, deps: AirPlayDeps, probe?: Ev
     const ci = info, pos = position(), wasPlaying = !video.paused;
     seq++; disarm(); clearOff();
     info = null; tokenOnElement = null; active = false; busy = false; error = false;
-    if (ci) deps.revoke(ci);
+    if (ci) d.revoke(ci);
     video.setAttribute('crossorigin', 'use-credentials');
     emit();
     log('restore', { note: 'stop' });
     afterStop = true; settle(); // the restore changes src: WebKit may flip the route state again
     restoring = true;
-    try { await deps.restore(pos, wasPlaying, ci); }
+    try { await d.restore(pos, wasPlaying, ci); }
     finally { restoring = false; }
     if (!dead && settleT !== undefined) settle(); // the window runs SETTLE_MS from the end of the restore
   }
@@ -387,10 +398,10 @@ export function createAirPlay(video: AirPlayVideo, deps: AirPlayDeps, probe?: Ev
 
   /** the token stream failed for good: the phone's (`ready`) -> normal stream; the TV's -> error state (Retry) */
   function failed() {
-    if (ready && !active) { deps.fail(new Error('airplay_media')); void stop(); return; }
+    if (ready && !active) { d.fail(new Error('airplay_media')); void stop(); return; }
     if (!active) return;
     error = true;
-    deps.fail(new Error('airplay_media'));
+    d.fail(new Error('airplay_media'));
     emit();
   }
 
@@ -433,6 +444,8 @@ export function createAirPlay(video: AirPlayVideo, deps: AirPlayDeps, probe?: Ev
       if (tryVariant(code)) return;
       failed();
     },
+    rebind(next: AirPlayDeps) { d = next; log('rebind'); },
+    async switchItem(pos: number) { if (active && !busy && !dead) await switchTo(info, pos, 'switch', true); },
     get info() { return info; },
     destroy() {
       log('destroy');
@@ -441,7 +454,7 @@ export function createAirPlay(video: AirPlayVideo, deps: AirPlayDeps, probe?: Ev
       settleT = undefined;
       for (const t of probe ? [video, probe] : [video]) t.removeEventListener(AVAILABILITY_EVENT, onAvailability);
       video.removeEventListener(WIRELESS_EVENT, onWireless);
-      if (info) deps.revoke(info);
+      if (info) d.revoke(info);
       info = null; tokenOnElement = null;
     },
   };

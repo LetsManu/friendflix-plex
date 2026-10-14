@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { Redis } from 'ioredis';
 
 /** Minimal key-value store used for sessions, login state and live playback state. */

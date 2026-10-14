@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
@@ -6,7 +8,7 @@ import type { Ctx } from '../ctx.js';
 import { authorizeDownload } from '../downloads.js';
 import { setLive } from '../live.js';
 import { dispatchMediaEvent } from '../media/events.js';
-import { MediaError } from '../media/types.js';
+import { MediaError, type ExternalSession } from '../media/types.js';
 import { jfUserFor, resolveProfile } from '../profiles.js';
 import { isHomeAddress } from '../netaddr.js';
 import { effectiveRole, remoteBitrateCap } from '../roles.js';
@@ -15,6 +17,7 @@ import { upstreamUri } from '../mediapath.js';
 import { authzNginx } from '../metrics.js';
 import { getUserById } from '../users.js';
 import type { UserRow } from '../types.js';
+import { appDeviceId, countStreamOnce, methodOf } from '../playstats.js';
 
 const eq = (a: string, b: string) => {
   const x = Buffer.from(a);
@@ -225,16 +228,40 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
 export async function pollJellyfinSessions(ctx: Ctx) {
   const active = await ctx.jf.admin.externalSessions();
   if (!active.length) return;
-  const r = await ctx.db.query<UserRow>('select * from users where jellyfin_user_id = any($1)', [active.map((s) => s.serverUserId)]);
+  const jfIds = active.map((s) => s.serverUserId);
+  const r = await ctx.db.query<UserRow>('select * from users where jellyfin_user_id = any($1)', [jfIds]);
   const byJf = new Map(r.rows.map((u) => [u.jellyfin_user_id.replace(/-/g, ''), u]));
+  // Block 22: a profile's own server identity counts for its account (usage sums profiles into the account)
+  const p = await ctx.db.query<{ jf: string; user_id: string }>(
+    `select replace(lower(jellyfin_user_id), '-', '') jf, user_id from profiles
+      where not is_owner and jellyfin_user_id is not null and replace(lower(jellyfin_user_id), '-', '') = any($1)`,
+    [jfIds.map((id) => id.replace(/-/g, '').toLowerCase())],
+  );
+  const profileOwner = new Map(p.rows.map((x) => [x.jf, x.user_id]));
   for (const s of active) {
-    const u = byJf.get(s.serverUserId.replace(/-/g, ''));
-    if (!u) continue;
+    const jf = s.serverUserId.replace(/-/g, '');
+    const u = byJf.get(jf);
+    const accountId = u?.id ?? profileOwner.get(jf.toLowerCase());
+    if (!accountId) continue;
     const it = s.item;
+    await countForeignStream(ctx, accountId, s).catch(() => undefined);
+    if (!u) continue;
     await setLive(ctx, {
       userId: u.id, userName: u.name, itemId: it.id, title: it.name, seriesName: it.seriesName, type: it.type,
       positionTicks: s.positionTicks, runtimeTicks: it.runtimeTicks, isPaused: s.isPaused,
       playSessionId: `jf-${s.sessionId}`, updatedAt: Date.now(), source: 'jellyfin',
     }, 25);
   }
+}
+
+/**
+ * Block 22: a foreign app's stream counts once for its account (device = the app's name, never the title). The server
+ * fills the transcode reasons only after the encoder reported: a transcode first seen without reasons waits one poll, so
+ * it is not counted as remux for good.
+ */
+async function countForeignStream(ctx: Ctx, userId: string, s: ExternalSession) {
+  const key = `jf-${s.sessionId}:${s.item.id}`;
+  if (s.playMethod === 'Transcode' && !s.reasons?.length && (await ctx.kv.setnx(`pstat:wait:${userId}:${key}`, '1', 600))) return;
+  const method = methodOf(s.playMethod, s.reasons?.[0]);
+  await countStreamOnce(ctx, userId, key, appDeviceId(s.client), method, method === 'transcode' ? s.reasons?.[0] : undefined);
 }

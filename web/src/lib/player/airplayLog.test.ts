@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { airLog, AIRLOG_KEY, AIRLOG_MAX, clearAirLog, formatAirLog, readAirLog, srcKind } from './airplayLog';
 

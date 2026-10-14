@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Cuts a release by hand (Actions → Release → Run workflow, on main):
 #   bump version.json (a major bump takes the next codename; `none` keeps it - first release), sync every package.json +
 #   package-lock.json, turn CHANGELOG "## [Unreleased]" into "## [x.y.z] – Codename – date" (scripts/release.mjs, tested),

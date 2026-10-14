@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import type { KV } from './kv.js';

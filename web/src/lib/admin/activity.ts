@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Audit log entries as readable sentences ("Tester hat Anna gesperrt") for the overview and the audit page. */
 import { hasKey, trDynamic, tr } from '#lib/i18n';
 

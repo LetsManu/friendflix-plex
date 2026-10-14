@@ -1,8 +1,10 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeHttp, makeEnv, type Call, type Handler, type TestEnv } from './helpers.js';
 import { extFetch } from '../src/sources/fetch.js';
-import { getSourceKey, INVALID_KEY, OMDB_COUNT_KEY, PAUSE_KEY, setSourceKey } from '../src/sources/keys.js';
-import { omdbRatings } from '../src/sources/omdb.js';
+import { getSourceKey, INVALID_KEY, OMDB_COUNT_KEY, OMDB_DAILY_BUDGET, PAUSE_KEY, setSourceKey } from '../src/sources/keys.js';
+import { omdbRatings, testSourceKey } from '../src/sources/omdb.js';
 import { tmdbCollection, tmdbTitle } from '../src/sources/tmdb.js';
 
 const V3 = 'v3key-abcdef123456';
@@ -166,5 +168,31 @@ describe('admin source test route', () => {
     expect((await post(V3)).json()).toEqual({ ok: false, error: 'unreachable' });
     const r = await post(V3);
     expect(r.body).not.toContain(V3);
+  });
+});
+
+describe('OMDb key probe (testSourceKey)', () => {
+  it('accepts a working key, maps "Invalid API key" and 401 to invalid_key, other failures to unreachable', async () => {
+    use({ 'GET /': (u) => {
+      const key = u.searchParams.get('apikey');
+      if (key === 'good') return { json: { Response: 'True', Title: 'The Shawshank Redemption' } };
+      if (key === 'wrong') return { json: { Response: 'False', Error: 'Invalid API key!' } };
+      if (key === 'limit') return { json: { Response: 'False', Error: 'Request limit reached!' } };
+      if (key === 'unauth') return { status: 401, json: { Response: 'False' } };
+      return { status: 503 };
+    } });
+    expect(await testSourceKey(env.ctx, 'omdb', 'good')).toEqual({ ok: true });
+    expect(await testSourceKey(env.ctx, 'omdb', 'wrong')).toEqual({ ok: false, error: 'invalid_key' });
+    expect(await testSourceKey(env.ctx, 'omdb', 'limit')).toEqual({ ok: false, error: 'unreachable' });
+    expect(await testSourceKey(env.ctx, 'omdb', 'unauth')).toEqual({ ok: false, error: 'invalid_key' });
+    expect(await testSourceKey(env.ctx, 'omdb', 'down')).toEqual({ ok: false, error: 'unreachable' });
+    expect(calls.every((c) => c.search.includes('i=tt0111161'))).toBe(true);
+  });
+
+  it('spends the shared daily OMDb budget: once it is used up the probe makes no request', async () => {
+    use({ 'GET /': () => ({ json: { Response: 'True' } }) });
+    await env.ctx.kv.set(OMDB_COUNT_KEY(day()), String(OMDB_DAILY_BUDGET), 86_400);
+    expect(await testSourceKey(env.ctx, 'omdb', 'good')).toEqual({ ok: false, error: 'budget' });
+    expect(calls).toHaveLength(0);
   });
 });

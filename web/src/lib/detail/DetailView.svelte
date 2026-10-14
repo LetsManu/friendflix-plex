@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
@@ -16,6 +18,7 @@
   import { focusFirst, usable } from '#lib/spatial';
   import { autoStartAllowed, AUTOSTART_COUNTDOWN_S, countdownLabel, interactionCancels, isTextEntry, previewDone } from '#lib/detail/autostart';
   import { playPrefetch } from '#lib/player/prefetch';
+  import { playOrCast } from '#lib/cast/playOrCast';
   import Icon from '#lib/Icon.svelte';
   import ListMenu from '#lib/ListMenu.svelte';
   import DownloadButton from '#lib/DownloadButton.svelte';
@@ -214,6 +217,8 @@
   $: qs = [lgA && `audio=${encodeURIComponent(lgA)}`, lgS && `sub=${encodeURIComponent(lgS)}`].filter(Boolean).join('&');
   $: playBase = item ? (item.type === 'Series' ? (next ? `/watch/${next.id}` : episodes?.[0] ? `/watch/${episodes[0].id}` : '') : `/watch/${item.id}`) : '';
   $: playHref = playBase ? (qs ? `${playBase}?${qs}` : playBase) : item ? `/item/${item.id}` : '';
+  /** while casting, Play sends the title (the next episode for a series) to the TV; a series without an episode keeps its /item link */
+  function castPlay(e: MouseEvent) { if (playBase) playOrCast(e, { id: playTarget, positionTicks: resumeFrom?.positionTicks }); }
   $: playTarget = playBase.split('/').pop() ?? '';
   $: resumeFrom = item ? (item.type === 'Series' ? next : item) : null;
   $: remaining = resumeFrom ? remainingLabel(resumeFrom.positionTicks, resumeFrom.runtimeTicks) : '';
@@ -387,7 +392,7 @@
           <svelte:element this={heroTitleTag()} id={titleId} class:sr-only={item.logo && !logoFailed} class="ttl">{item.name}</svelte:element>
           {#if item.logo && !logoFailed}<img class="tlogo" src={logoUrl(item.id)} alt="" on:error={() => (logoFailed = true)} />{/if}
           <div class="btns">
-            <a class="btn pill play" data-autofocus href={playHref} use:playPrefetch><Icon name="play" size={24} />{playLabel}</a>
+            <a class="btn pill play" data-autofocus href={playHref} use:playPrefetch on:click={castPlay}><Icon name="play" size={24} />{playLabel}</a>
             <button type="button" class="rb" class:on={inList} aria-pressed={inList} aria-label={inList ? $t('detail.view.removeFromList') : $t('detail.view.addToList')} title={$t('detail.view.myList')} on:click={toggleMine}><Icon name={inList ? 'check' : 'plus'} size={22} /></button>
             <RatingButton itemId={item.id} bind:value={thumb} size={44} on:change={onThumb} />
             <MoreActions actions={moreActions} variant="ring" title={item.name} up={variant === 'modal'}>
@@ -430,7 +435,7 @@
       </p>
       <TitleFacts {facts} episode={item.type === 'Episode'} />
       <div class="lead" use:smoothHeight><div class="lead-in"><RatingsLine {about} />{#if tagline}<p class="tagline">{tagline}</p>{/if}</div></div>
-      <a class="btn pill play wide" data-autofocus href={playHref} use:playPrefetch><Icon name="play" size={24} />{playLabel}</a>
+      <a class="btn pill play wide" data-autofocus href={playHref} use:playPrefetch on:click={castPlay}><Icon name="play" size={24} />{playLabel}</a>
       {#if item.type !== 'Series'}<DownloadButton itemId={item.id} block />{:else if playTarget}<DownloadButton itemId={playTarget} seriesId={item.id} block />{/if}
       {#if resumeLine}<p class="resume">{resumeLine}</p>{/if}
       <div class="syn">

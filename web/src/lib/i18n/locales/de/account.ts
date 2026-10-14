@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Profiles, PIN pad, Mein Bereich, settings, language choice (devices, downloads, offline, invite follow in phase B). */
 export default {
   profiles: {

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Access control for Plex: FriendFlix reaches Plex with ONE admin token, so Plex cannot enforce per-profile visibility. Every
  * browse query runs over the Postgres mirror with the predicate built here (library sections of the role, content-rating age

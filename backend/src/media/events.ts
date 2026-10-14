@@ -1,5 +1,8 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { bus } from '../bus.js';
 import type { Ctx } from '../ctx.js';
+import { hygieneRemoved, hygieneSoon } from '../hygiene/scan.js';
 import { clearLive, setLive } from '../live.js';
 import { fireEpisode, fireTmdb } from '../reminders.js';
 import type { UserRow } from '../types.js';
@@ -8,6 +11,8 @@ import type { MediaEvent } from './types.js';
 /** Applies one neutral media server event: "Erinnere mich" reminders, "now playing" entries, user-data caches. */
 export async function handleMediaEvent(ctx: Ctx, e: MediaEvent): Promise<void> {
   if (e.type === 'itemAdded') {
+    // library hygiene: an early incremental scan (Block 22)
+    if (e.itemType === 'Movie' || e.itemType === 'Series' || e.itemType === 'Episode') await hygieneSoon(ctx);
     // "Erinnere mich": a title or episode just arrived in the library
     if ((e.itemType === 'Movie' || e.itemType === 'Series') && e.tmdbId !== undefined && Number.isInteger(e.tmdbId) && e.tmdbId > 0) {
       await fireTmdb(ctx, e.itemType === 'Movie' ? 'movie' : 'tv', e.tmdbId, e.itemId);
@@ -16,7 +21,10 @@ export async function handleMediaEvent(ctx: Ctx, e: MediaEvent): Promise<void> {
     }
     return;
   }
-  if (e.type !== 'playback') return; // itemRemoved: nothing keeps state about library items yet
+  if (e.type === 'itemRemoved') {
+    await hygieneRemoved(ctx, e.itemId); // library hygiene row (Block 22)
+    return;
+  }
   const r = e.serverUserId
     ? await ctx.db.query<UserRow>('select * from users where jellyfin_user_id=$1', [e.serverUserId])
     : await ctx.db.query<UserRow>('select * from users where lower(jellyfin_username)=lower($1)', [e.serverUserName ?? '']);

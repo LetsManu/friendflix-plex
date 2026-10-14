@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Plex JSON -> mirror rows (plex_items / plex_tags / plex_collection_items) and their bulk upserts. The mirror is written only
  * by the sync job (sync.ts) and read by every browse query (service.ts). No server file paths are stored.

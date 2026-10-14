@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Area "detail": detail view (modal + page), info block, episodes, "Mehr davon", person page, cast, reactions, ratings,
  * friends, watch status, list picker, audio/subtitle picker, download button. German is the typed source (docs/i18n.md).

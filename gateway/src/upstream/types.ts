@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * What the gateway needs to know about the media server behind /media/: which upstream paths it may forward, which
  * query parameters carry credentials or caps, and how to authenticate as the user. One adapter per server kind

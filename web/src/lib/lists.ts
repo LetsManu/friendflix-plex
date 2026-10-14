@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { api, ApiError, type Item } from '#lib/api';
 import { tr } from '#lib/i18n';
 

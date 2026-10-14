@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { LIST_A, LIST_C, ME } from '../mocks/fixtures.js';
 import { expect, test } from '../fixtures.js';
 

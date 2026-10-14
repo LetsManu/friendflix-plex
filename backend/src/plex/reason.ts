@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Why a Plex playback session is transcoded (PlaybackDto.transcodeReason, Block 20). Plex has no reason list like Jellyfin's
  * TranscodeReasons: the decision call answers per stream whether it is copied or converted (Metadata[0].Media[0].Part[0].Stream[].decision,

@@ -1,7 +1,9 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import type Hls from 'hls.js';
   import { createEventDispatcher, onDestroy, onMount, tick as tickDom } from 'svelte';
-  import { api, ApiError, backdrop, fmtClock, getActiveProfile, HERO_WIDTHS, img, secToTicks, srcset } from '#lib/api';
+  import { api, ApiError, backdrop, fmtClock, getActiveProfile, HERO_WIDTHS, img, secToTicks, srcset, ticksToSec } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
   import { get } from 'svelte/store';
   import { prefs, prefsLoaded, saveAudioFx } from '#lib/stores';
@@ -13,6 +15,7 @@
   import { isTypingTarget, nextSubtitle, resolveKey, SHORTCUTS, type KeyAction } from '#lib/player/keymap';
   import { BRIGHTNESS_MIN, brightnessPct, classifyMove, levelFromDrag, registerTap, scrubTarget, TAP_WINDOW, volumeSettable, zoneOf, type Axis, type TapState, type Zone } from '#lib/player/gestures';
   import { creditsStart } from '#lib/player/nextup';
+  import { reportPlayback } from '#lib/telemetry';
   import { COOLDOWN_RETRY_MS, decideRecovery, freshRecovery, kindOfMediaError, lowerQuality, MAX_NETWORK_TRIES, networkStep, type ErrorKind } from '#lib/player/retry';
   import { WheelAccumulator } from '#lib/player/wheel';
   import { parseVolume, stepVolume } from '#lib/player/volume';
@@ -33,7 +36,8 @@
   import { AudioFxEngine, fxActive, fxBlocked, fxFromPref, fxToPref, loadFx, saveFx, type AudioFx } from '#lib/player/audiofx';
   import { fmtDuration, getLocale, t, tr, type TFn, type TKey } from '#lib/i18n';
   import { animeAudio, animeDefaultApplies, animeSubtitle } from '#lib/player/anime';
-  import { castConfigEnabled, castPause, castPlay, castPlayPause, castSeek, castSetSubtitle, castSetVolume, castState, castStop, castToggleMute, initCast, loadOnCast, onCastEvent, requestCastSession, type CastInfo, type CastState } from '#lib/cast';
+  import { castConfigEnabled, castSetVolume, castState, castToggleMute, initCast, loadOnCast, onCastEvent, requestCastSession, type CastInfo } from '#lib/cast';
+  import { CAST_VIDEO_ATTR, castEngine, castSession, type CastSession } from '#lib/cast/engine';
 
   export let itemId: string;
   /** shown on the phone's remote while this plays */
@@ -73,6 +77,8 @@
    * false = the item has none; undefined = unknown yet (tried in that order). null = no poster (watch party).
    */
   export let poster: { id: string; backdrop?: boolean; image?: boolean } | null = null;
+  /** true while the cast engine owns this title's cast session (the Player is a remote for it) */
+  export let remote = false;
   const dispatch = createEventDispatcher();
 
   type Info = PlaybackDto;
@@ -80,11 +86,26 @@
   let segments: Array<{ type: string; start: number; end: number }> = [];
   let progressTimer: ReturnType<typeof setInterval>, started = false, stopped = false;
 
-  // ---- Chromecast: while casting the local <video> stays paused and every control drives the receiver ----
-  let casting = false, castBusy = false, castInfo: CastInfo | null = null, castPos = 0, castPaused: boolean | null = null, castOff: (() => void) | null = null;
+  // ---- casting: once the receiver plays, the session is handed to the cast engine (lib/cast/engine.ts), which keeps it
+  //      running after this page; from then on (`handedOff`) this Player never reports, revokes or stops anything itself,
+  //      and while it stays mounted (`remote`) it is a remote for `castSession` ----
+  /**
+   * set at the hand-off (for good once this Player unmounts): the AirPlay <video> now plays the engine's session while this
+   * component's `on:*` handlers are still on it (as long as the watch page stays open), so every media handler, timer and
+   * report returns early on it; only the engine reports
+   */
+  let handedOff = false;
+  $: tvSession = remote ? $castSession : null;
+  /** the tracks menu: the playback info's tracks, or (attached to a running cast, no info) the cast session's */
+  $: audioOpts = info?.audioTracks ?? tvSession?.audioTracks ?? [];
+  $: subOpts = info?.subtitles ?? tvSession?.subtitles ?? [];
+  /** Chromecast: while casting the local <video> stays paused and every control drives the receiver */
+  $: casting = remote && $castSession?.kind === 'chromecast';
+  let castBusy = false, castOff: (() => void) | null = null;
   // ---- AirPlay (Safari): the <video> itself plays on the receiver, from a cast token URL (lib/player/airplay.ts) ----
-  let air: AirPlayController | null = null, airState: AirPlayState = { available: false, active: false, busy: false, ready: false, error: false }, airInfo: CastInfo | null = null, airProbe: HTMLVideoElement | null = null;
-  $: airOn = airState.active;
+  const AIR_IDLE: AirPlayState = { available: false, active: false, busy: false, ready: false, error: false };
+  let air: AirPlayController | null = null, airState: AirPlayState = AIR_IDLE, airInfo: CastInfo | null = null, airProbe: HTMLVideoElement | null = null;
+  $: airOn = remote ? $castSession?.kind === 'airplay' : airState.active;
   let destroyed = false;
 
   // ---- UI state ----
@@ -100,7 +121,7 @@
   // ---- robustness: stall spinner (only after 500 ms), reconnect overlay, recovery bookkeeping ----
   let spin = false, spinT: ReturnType<typeof setTimeout>, reconnecting = 0, retryT: ReturnType<typeof setTimeout>, rec = freshRecovery(), lastPos = 0, posKnown = false, errPos = 0, errTitle = '', errNote = '';
   function setSpin(on: boolean) { clearTimeout(spinT); if (!on) { spin = false; return; } spinT = setTimeout(() => (spin = true), 500); }
-  $: setSpin(waiting && !error && !casting && !reconnecting);
+  $: setSpin(waiting && !error && !remote && !reconnecting);
   // ---- loading poster: shown until the first frame (loadeddata / playing), then a 300 ms crossfade; the control bar waits for it ----
   let posterOn = Boolean(poster), posterOut = false, posterFail = 0, posterT: ReturnType<typeof setTimeout>;
   $: posterKinds = poster ? ([poster.backdrop !== false && 'Backdrop', poster.image !== false && 'Primary'].filter(Boolean) as Array<'Backdrop' | 'Primary'>) : [];
@@ -110,7 +131,7 @@
     posterOut = true;
     clearTimeout(posterT); posterT = setTimeout(() => (posterOn = false), 320);
   }
-  $: if (casting) posterOn = false;
+  $: if (remote) posterOn = false;
   // ---- adaptive quality (quality 0 = Auto): bandwidth estimate -> rung; stalls and network errors step down, a good link steps up ----
   const est = new BandwidthEstimator();
   let abr: AbrController | null = null, reqHint: 'network' | 'manual' = 'network', switching = false, queuedPick: number | null = null, sessionPlaying = false, shownQ = 0, chipOpen = false, waitSince = 0, stallHandled = false, stallT: ReturnType<typeof setTimeout>, abrTimer: ReturnType<typeof setInterval>, bwTimer: ReturnType<typeof setInterval>, directSeen = 0;
@@ -129,7 +150,7 @@
    */
   let phone = false, ctlH = 0;
   $: ccOn = phone && showUi && !locked && !error && !reconnecting && !(posterOn && !posterOut);
-  $: phoneChip = phone && Boolean(info && mode && !casting);
+  $: phoneChip = phone && Boolean(info && mode && !remote);
   /** height of the bottom bar: panels, the skip button and the page's cards sit above it (phones only; elsewhere the old fixed offsets apply) */
   $: barVar = phone && ctlH ? `;--bar-h:${ctlH}px` : '';
   let hud: { icon: string; text: string; pct: number } | null = null, hudT: ReturnType<typeof setTimeout>;
@@ -148,9 +169,7 @@
   const segKey = (k: string, kind: 'segment' | 'skip' | 'skipped'): TKey | null => (isSeg(k) ? `player.${kind}.${k}` : null);
   const segText = (tf: TFn, k: string, kind: 'segment' | 'skip' | 'skipped'): string => { const key = segKey(k, kind); return key ? tf(key) : k; };
 
-  const body = () => casting && castInfo
-    ? { itemId, playSessionId: castInfo.playSessionId, mediaSourceId: castInfo.mediaSourceId, positionTicks: secToTicks(castPos), isPaused: $castState.paused, audioIndex, playMethod: 'Transcode' }
-    : airInfo
+  const body = () => airInfo
     ? { itemId, playSessionId: airInfo.playSessionId, mediaSourceId: airInfo.mediaSourceId, positionTicks: secToTicks(video?.currentTime ?? 0), isPaused: video?.paused ?? false, audioIndex, playMethod: 'Transcode' }
     : {
       itemId, playSessionId: info!.playSessionId, mediaSourceId: info!.mediaSourceId,
@@ -160,6 +179,7 @@
   /** the latest stop report (also one sent earlier, e.g. at the end of the film): leaving the player holds prefetches on it */
   let lastStop: unknown;
   const send = (kind: 'start' | 'progress' | 'stop', keepalive = false) => {
+    if (handedOff) return undefined; // the cast engine reports for the handed-over session
     lastSent = Date.now();
     const r = report && info && api(`/api/playback/${kind}`, { method: 'POST', body: body(), keepalive }).catch(() => undefined);
     if (kind === 'stop') lastStop = r;
@@ -235,7 +255,7 @@
 
   let attachSeq = 0;
   async function attach(startSec: number) {
-    if (!video || !info || airInfo) return; // AirPlay plays its own token stream
+    if (!video || !info || airInfo || handedOff) return; // AirPlay plays its own token stream
     const my = ++attachSeq, cur = info;
     sessionPlaying = false; resetStall(); // the first buffering of each stream is a start, not a stall
     hls?.destroy(); hls = null;
@@ -259,6 +279,7 @@
       hls.on(HC.Events.FRAG_LOADED, (_e, d) => { const st = d.frag.stats; est.add(st.loaded, st.loading.end - st.loading.start); });
       hls.on(HC.Events.ERROR, (_e, d) => {
         if (!d.fatal) return;
+        lastErrCode = String(d.details || d.type || 'hls');
         recover(d.type === HC.ErrorTypes.NETWORK_ERROR ? 'network' : d.type === HC.ErrorTypes.MEDIA_ERROR ? 'media' : 'other');
       });
     } else if (!H && !video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -285,7 +306,7 @@
   const lowerStep = () => lowerQuality(QUALITIES.map(([, b]) => b).filter((b) => b < (info?.roleMaxBitrate ?? Infinity)), quality, info?.maxBitrate ?? 0);
   let retryViaLoad = false;
   function recover(kind: ErrorKind, viaLoad = false) {
-    if (casting || airOn || airInfo || airState.busy) return;
+    if (handedOff || airOn || airInfo || airState.busy) return;
     retryViaLoad = viaLoad;
     // the first retry already failed: the line is the problem, not a hiccup -> a lower rung (none = cooldown or 360p: the usual retries go on and end in giveUp)
     if (kind === 'network' && !viaLoad && abr && !switching && rec.networkTries >= 1) {
@@ -307,7 +328,15 @@
     else if (d.do === 'lower-quality') { rec.loweredQuality = true; errPos = pos; const q = lowerStep(); if (q) { wantAutoplay = !paused; abr = makeAbr(q, quality ? q : undefined); void changeQuality(q, 'abr', 3000, tr('player.quality.stepDown', { q: rungLabel(q) })); } else giveUp(); }
     else giveUp();
   }
-  function giveUp() { clearTimeout(retryT); reconnecting = 0; waiting = false; errTitle = tr('player.error.title'); error = errNote || tr('player.error.connection'); hls?.stopLoad(); }
+  function giveUp() { clearTimeout(retryT); reconnecting = 0; waiting = false; errTitle = tr('player.error.title'); error = errNote || tr('player.error.connection'); hls?.stopLoad(); reportFatal(); }
+  // Block 22: a playback that ends in an error is reported once per play session (admin health page, grouped by title)
+  let lastErrCode = '', reportedFor = '';
+  function reportFatal() {
+    const ps = info?.playSessionId ?? '';
+    if (!ps || reportedFor === ps) return;
+    reportedFor = ps;
+    reportPlayback(itemId, lastErrCode || 'unknown');
+  }
   function retryNow(pos: number) {
     clearTimeout(retryT);
     if (!reconnecting) return;
@@ -318,26 +347,30 @@
   function retryManually() { rec = freshRecovery(); reconnecting = 0; error = ''; errNote = ''; waiting = true; wantAutoplay = true; void load(posKnown ? resumePos() : undefined); }
   function leave() { if (history.length > 1) history.back(); else location.href = '/'; }
   function onVideoError() {
+    if (handedOff) return; // the engine's element: its controller handles errors
     if (airState.ready && !airOn) { if (video?.error && video.error.code !== 1) air?.videoError(video.error.code, video.error.message); return; } // the phone plays the AirPlay token stream: back to normal
     if (airOn) { if (video?.error && video.error.code !== 1) air?.videoError(video.error.code, video.error.message); return; } // the TV's token stream failed: Retry, never the cookie URL
-    if (hls || casting || !video?.error || !info) return; // hls.js reports its own errors
+    if (hls || !video?.error || !info) return; // hls.js reports its own errors
     const kind = kindOfMediaError(video.error.code);
     if (video.error.code === 1) return; // aborted by us
+    lastErrCode = `media_err_${video.error.code}`;
     recover(kind);
   }
   /** waiting -> start timing; playing -> the stall is over. Seeks and the first buffering after a (re)start are no stalls. */
   function onWaiting() {
+    if (handedOff) return;
     waiting = true;
-    if (!video || casting || airOn || !started || stopped || !sessionPlaying || video.seeking || waitSince) return;
+    if (!video || airOn || !started || stopped || !sessionPlaying || video.seeking || waitSince) return;
     waitSince = performance.now(); stallHandled = false;
     clearTimeout(stallT); stallT = setTimeout(() => { if (waitSince) { stallHandled = true; onStall(performance.now() - waitSince); } }, STALL_NOW_MS);
   }
   function resetStall() { clearTimeout(stallT); waitSince = 0; stallHandled = false; }
   function onStall(ms: number) {
-    if (!abr || casting || airOn || airInfo || switching || reconnecting || error) return;
+    if (!abr || handedOff || airOn || airInfo || switching || reconnecting || error) return;
     applyAbr(abr.onStall(ms)); // 'fail' needs nothing here: a stall at the lowest rung just keeps buffering
   }
   function onPlaying() {
+    if (handedOff) return;
     waiting = false; sessionPlaying = true; firstFrame();
     if (waitSince) { const ms = performance.now() - waitSince, done = stallHandled; resetStall(); if (!done && ms > 0) onStall(ms); }
     if (reconnecting) { reconnecting = 0; flash(tr('player.reconnected'), 1500); }
@@ -349,63 +382,109 @@
   const castRequest = (pos: number, via?: 'airplay') => api<CastInfo>('/api/cast/session', { method: 'POST', body: { itemId, startTicks: secToTicks(pos), audioIndex, maxBitrate: quality || undefined, via } });
   const castRevoke = (ci: CastInfo | null) => { if (ci) api(`/api/cast/session/${ci.castId}`, { method: 'DELETE' }).catch(() => undefined); };
 
-  /** local playback -> receiver: reports the local stop, frees the stream slot, asks for a cast token and loads it */
+  /** what the cast engine needs to own this title's cast session */
+  const handoff = (pos: number, dur: number, isPaused: boolean) => ({
+    itemId, seriesId: seriesId || undefined, title: barTitle || title, subtitle: barSub, isEpisode: Boolean(seriesId),
+    position: pos, duration: dur, paused: isPaused, audioIndex, subIndex, maxBitrate: quality || undefined, sleepAfterEpisode,
+    audioTracks: info?.audioTracks.map(({ index, title, language, isDefault }) => ({ index, title, language, isDefault })),
+    subtitles: info?.subtitles.map(({ index, title, language }) => ({ index, title, language })),
+  });
+  /** from now on the engine owns the session: nothing is reported, revoked or stopped from here (also not after unmount) */
+  function handedOver() {
+    handedOff = true; remote = true;
+    started = true; stopped = true; // the Player's own session already reported its stop
+    clearTimeout(retryT); reconnecting = 0; resetStall();
+  }
+
+  /** local playback -> receiver: reports the local stop, frees the stream slot, asks for a cast token, loads it, hands it to the engine */
   async function startCast() {
-    if (partyMode || casting || castBusy || !$castState.connected) return;
+    if (partyMode || remote || castBusy || !$castState.connected) return;
     castBusy = true;
     const pos = video?.currentTime ?? 0;
     if (started && !stopped) { stopped = true; await send('stop'); }
-    video?.pause(); hls?.destroy(); hls = null;
+    video?.pause(); hls?.destroy(); hls = null; waiting = true;
+    let ci: CastInfo | null = null;
     try {
-      const ci = await castRequest(pos);
-      castInfo = ci; castPos = pos; casting = true; started = false; stopped = false; castPaused = null; waiting = true;
+      ci = await castRequest(pos);
       if (!(await loadOnCast(ci, subIndex))) throw new Error('load');
     } catch (e) {
-      await endCast(pos, castErr(e));
+      castRevoke(ci);
+      castBusy = false;
+      if (destroyed) return;
+      // the receiver did not take it: local playback at the position
+      flash(castErr(e), 4000);
+      started = false; stopped = false; wantAutoplay = true;
+      await load(pos);
+      return;
     }
     castBusy = false;
+    // the Player never reported `start` for a Chromecast token: the engine does once the receiver plays
+    castEngine.adopt({ kind: 'chromecast', ...handoff(pos, ci.runtimeTicks ? ticksToSec(ci.runtimeTicks) : duration, false), cast: ci, started: false });
+    handedOver();
   }
-  /** receiver -> local playback at the last known position (disconnect, user ended the session, receiver error) */
-  async function endCast(resumeAt: number, msg = '') {
-    const ci = castInfo;
-    if (casting && started && !stopped) { stopped = true; await send('stop'); }
-    casting = false; castInfo = null; started = false; stopped = false;
-    castRevoke(ci);
-    if (msg) flash(msg, 4000);
-    wantAutoplay = true;
-    await load(resumeAt);
-  }
-  /** new token + LOAD at the current position: token about to expire, other audio track or quality */
-  async function recast(pos: number) {
-    if (!casting || castBusy) return;
-    castBusy = true;
-    const old = castInfo;
-    try {
-      if (started && !stopped) { castPos = pos; stopped = true; await send('stop'); }
-      const ci = await castRequest(pos);
-      castInfo = ci; started = false; stopped = false; castPaused = null; castPos = pos;
-      castRevoke(old);
-      if (!(await loadOnCast(ci, subIndex))) throw new Error('load');
-    } catch {
-      await endCast(pos, tr('player.cast.resumeFailed'));
-    }
-    castBusy = false;
-  }
-  /** the film ended on the receiver: close the session, tell the page (next episode) */
-  async function finishCast() {
-    const ci = castInfo;
-    if (started && !stopped) { stopped = true; castPos = duration || castPos; await send('stop'); }
-    casting = false; castInfo = null; paused = true;
-    castRevoke(ci);
-    castStop();
-    dispatch('ended');
-  }
+  /** the engine owns Chromecast session end / media end; a picked device starts a cast unless one is already handed over */
   function handleCast(e: 'session-start' | 'session-end' | 'media-end') {
-    if (e === 'session-start') void startCast();
-    else if (e === 'session-end') { if (casting && !castBusy) void endCast(castPos); }
-    else if (casting && !castBusy) { if (duration > 0 && castPos >= duration - 20) void finishCast(); else void endCast(castPos, tr('player.cast.continuedLocally')); }
+    if (e === 'session-start' && !remote) void startCast();
   }
-  /** mirrors the receiver into the player state and reports start/progress to the server */
+
+  /** the AirPlay route plays our token on the TV: element, controller and probe go to the engine */
+  function handOverAirPlay() {
+    const v = video, ctl = air, ci = airInfo;
+    if (!v || !ctl || !ci || partyMode) return;
+    // `start` was reported for this token exactly when the element played it here (the phone's token stream / the TV)
+    castEngine.adopt({ kind: 'airplay', ...handoff(v.currentTime, duration, v.paused), cast: ci, started: started && !stopped, video: v, air: ctl, probe: airProbe });
+    handedOver();
+    air = null; airProbe = null; airInfo = null; airState = AIR_IDLE;
+  }
+
+  /**
+   * Opening a title while a cast runs: this Player becomes the remote of the engine's session instead of playing itself
+   * (no playback info, no AirPlay controller, no own token; a local stream would be a second one). The same title is only
+   * moved to `startAt`; another title plays on the TV (`playOnTv`). Party mode never attaches. Without playback info the tracks
+   * menu lists the session's tracks (`castSession`); "change device" opens the engine's AirPlay picker (`castEngine.pick`).
+   */
+  function attachToCast(): boolean {
+    const s = get(castSession);
+    if (partyMode || !s) return false;
+    handedOver();
+    if (s.itemId !== itemId) void castEngine.playOnTv(itemId, startAt);
+    else if (startAt !== undefined) castEngine.seek(startAt);
+    followTv(get(castSession));
+    return true;
+  }
+
+  /** "change device": the system picker of the controller the engine owns (from the tap); a lost route: the engine reconnects */
+  function changeAirPlay() { if ($castSession?.state === 'reconnect') castEngine.reconnect(); else castEngine.pick(); }
+
+  /** while this Player is still mounted: mirror the engine's session; a lost / failed one plays on locally */
+  let lastTv: CastSession | null = null;
+  function followTv(s: CastSession | null) {
+    if (!remote || destroyed) return;
+    if (!s) { void resumeLocal(); return; }
+    current = s.position; if (s.duration) duration = s.duration;
+    paused = s.paused; waiting = s.buffering || s.state === 'connecting';
+    audioIndex = s.audioIndex; subIndex = s.subIndex;
+    if (s.state === 'reconnect') { queueMicrotask(() => void castEngine.stop()); return; } // watch page: the phone plays on instead
+    if (s.state === 'failed') { queueMicrotask(() => castEngine.release()); return; }
+    lastTv = s;
+  }
+  $: followTv($castSession);
+  $: if (casting) { volume = $castState.volume; muted = $castState.muted; }
+  /** the engine's session ended while this page is open: the element comes back (AirPlay) and local playback resumes */
+  async function resumeLocal() {
+    const was = lastTv;
+    remote = false; handedOff = false; lastTv = null;
+    started = false; stopped = false;
+    if (video && stage && video.parentElement !== stage) {
+      for (const a of [CAST_VIDEO_ATTR, 'aria-hidden', 'style']) video.removeAttribute(a);
+      video.setAttribute('crossorigin', 'use-credentials');
+      stage.insertBefore(video, stage.firstChild);
+    }
+    if (!air) void initAirPlay();
+    if (was?.state === 'ended') { paused = true; dispatch('ended'); return; } // finished on the TV: the page offers what comes next
+    wantAutoplay = !(was?.paused ?? true);
+    await load(was?.position);
+  }
   // ---- AirPlay session lifecycle (the controller tells when Safari's playback target becomes / stops being wireless) ----
   const airErr = (e: any) => e?.body?.error === 'max_streams' ? tr('player.error.maxStreams', { n: Number(e.body.max) })
     : e?.body?.error === 'transcoding_disabled' ? tr('player.airplay.needsTranscode') : tr('player.airplay.failed');
@@ -430,7 +509,10 @@
         await load(pos);
       },
       fail: (e) => flash(airErr(e), 4000),
-      change: (st) => { airState = st; },
+      change: (st) => {
+        airState = st;
+        if (st.active && !st.error && !st.busy && airInfo && !handedOff) handOverAirPlay(); // the TV plays our token
+      },
     }, airProbe);
   }
   /** the player's AirPlay button: same gate as Chromecast (/api/cast/config); a hidden non-MSE probe <video> reports receivers */
@@ -445,22 +527,12 @@
     startAirPlay(video);
   }
 
-  function castTick(s: CastState) {
-    waiting = !s.loaded || s.state === 'buffering';
-    if (!s.loaded) return;
-    current = castPos = s.currentTime; if (s.duration) duration = s.duration;
-    paused = s.paused; volume = s.volume; muted = s.muted;
-    if (s.state === 'playing' && !started) { started = true; stopped = false; send('start'); }
-    else if (started && castPaused !== null && castPaused !== s.paused) send('progress');
-    castPaused = s.paused;
-  }
-  $: if (casting) castTick($castState);
-  const doPause = () => (casting ? castPause() : video?.pause());
+  const doPause = () => { if (remote) { if (!paused) castEngine.playPause(); } else video?.pause(); };
 
   async function changeAudio(i: number) {
-    const lang = info?.audioTracks.find((a) => a.index === i)?.language;
+    const lang = audioOpts.find((a) => a.index === i)?.language;
     if (lang && lang !== 'und') rememberLang({ audio: lang });
-    if (casting) { audioIndex = i; await recast(castPos); return; }
+    if (remote) { audioIndex = i; await castEngine.refresh({ audioIndex: i }); return; } // a new token with that track on the TV
     if (airInfo) { audioIndex = i; await air?.refresh(); return; } // AirPlay: a new token stream with that track
     const pos = video?.currentTime ?? 0;
     await send('stop');
@@ -470,15 +542,15 @@
   }
   function setSubtitle(i: number, remember = true) {
     subIndex = i;
-    if (remember) { const lang = i === -1 ? 'off' : info?.subtitles.find((x) => x.index === i)?.language; if (lang && lang !== 'und') rememberLang({ subtitle: lang }); }
-    if (casting) castSetSubtitle(i);
+    if (remember) { const lang = i === -1 ? 'off' : subOpts.find((x) => x.index === i)?.language; if (lang && lang !== 'und') rememberLang({ subtitle: lang }); }
+    if (remote) castEngine.setSubtitle(i);
     [...(video?.textTracks ?? [])].forEach((t) => (t.mode = t.id === `sub-${i}` ? 'showing' : 'disabled'));
   }
 
   // ---- start playback: browsers may refuse sound without a prior key press (a TV that was only cast to) -> start muted, first key unmutes ----
   let wantAutoplay = !partyMode, needsSound = false;
   async function playSafe() {
-    if (casting) { castPlay(); return; }
+    if (remote) { if (paused) castEngine.playPause(); return; }
     if (!video) return;
     try { await video.play(); return; } catch { /* blocked: try muted */ }
     try { video.muted = true; muted = true; await video.play(); needsSound = true; flash(tr('player.soundOff'), 7000); }
@@ -508,11 +580,11 @@
   function announce(t: string) { live = t + (liveN++ % 2 ? '\u200b' : ''); }
   function flash(t: string, ms = 1100) { toast = t; announce(t); clearTimeout(toastTimer); toastTimer = setTimeout(() => (toast = ''), ms); }
   function allowed(): boolean { if (canControl) return true; flash(denyHint, 1800); return false; }
-  function togglePlay() { if (casting) { if (allowed()) castPlayPause(); return; } if (!video || !allowed()) return; if (video.paused) video.play().catch(() => undefined); else video.pause(); }
+  function togglePlay() { if (remote) { if (allowed()) castEngine.playPause(); return; } if (!video || !allowed()) return; if (video.paused) video.play().catch(() => undefined); else video.pause(); }
   function seekTo(t: number) {
-    if (casting) { if (!allowed()) return; t = Math.max(0, Math.min(duration || t, t)); castSeek(t); current = castPos = t; setTimeout(() => { if (started && !stopped) send('progress'); }, 700); return; }
+    if (remote) { if (!allowed()) return; castEngine.seek(t); return; } // the engine clamps, reports and mirrors the position
     if (!video || !allowed()) return; video.currentTime = Math.max(0, Math.min(duration || t, t)); }
-  function seekBy(d: number, quiet = false) { if (!video || !allowed()) return; seekTo((casting ? castPos : video.currentTime) + d); if (quiet) announce(d > 0 ? tr('player.secondsForward', { n: d }) : tr('player.secondsBack', { n: -d })); else flash(d > 0 ? `+${d} s` : `−${-d} s`, 700); }
+  function seekBy(d: number, quiet = false) { if (!video || !allowed()) return; seekTo((remote ? current : video.currentTime) + d); if (quiet) announce(d > 0 ? tr('player.secondsForward', { n: d }) : tr('player.secondsBack', { n: -d })); else flash(d > 0 ? `+${d} s` : `−${-d} s`, 700); }
   function doSkip() {
     if (!skip) return;
     const key = segKey(skip.type, 'skipped');
@@ -535,7 +607,7 @@
   async function changeQuality(bps: number, how: 'manual' | 'abr' = 'manual', ms = 1100, msg = '') {
     menu = '';
     if (how === 'manual' && bps === shownQ) return;
-    if (casting) { quality = bps; shownQ = bps; await recast(castPos); flash(qualityToast(bps)); return; }
+    if (remote) { quality = bps; shownQ = bps; await castEngine.refresh({ maxBitrate: bps || undefined }); flash(qualityToast(bps)); return; }
     if (airInfo) { quality = bps; shownQ = bps; await air?.refresh(); flash(qualityToast(bps)); return; }
     if (switching) { if (how === 'manual') queuedPick = bps; return; } // a pick during a running switch is applied right after it
     switching = true;
@@ -620,10 +692,10 @@
     casting: isCasting, nativeHls: m === 'hls' && !h, src: video.currentSrc || video.src || '', crossOrigin: video.crossOrigin, origin: location.origin,
     hasWebAudio: typeof window !== 'undefined' && ('AudioContext' in window || 'webkitAudioContext' in window),
   }) : 'unsupported';
-  $: fxDisabled = menu === 'tracks' ? (casting || airOn ? 'casting' : fxNote === 'unsupported' ? 'unsupported' : fxBlockFor(casting, mode, hls)) : null;
+  $: fxDisabled = menu === 'tracks' ? (remote || airOn ? 'casting' : fxNote === 'unsupported' ? 'unsupported' : fxBlockFor(casting, mode, hls)) : null;
   async function applyFx(quiet = false) {
     if (!video || (!fxActive(fx) && !fxEngine)) return;
-    const b = fxBlockFor(casting, mode, hls);
+    const b = fxBlockFor(remote, mode, hls);
     if (b) { if (b === 'unsupported') fxNote = 'unsupported'; return; }
     fxEngine ??= new AudioFxEngine(video);
     const r = await fxEngine.apply(fx);
@@ -667,7 +739,7 @@
     subBusy = true;
     try {
       await api(`/api/items/${itemId}/subtitles/download`, { method: 'POST', body: { subtitleId: id } });
-      if (casting) { subDlg = false; await recast(castPos); flash(tr('player.subs.added'), 2500); subBusy = false; return; }
+      if (remote) { subDlg = false; await castEngine.refresh(); flash(tr('player.subs.added'), 2500); subBusy = false; return; }
       const pos = video?.currentTime ?? 0, was = !(video?.paused ?? true);
       subDlg = false; await send('stop'); await load(pos); if (was) video?.play().catch(() => undefined);
       flash(tr('player.subs.added'), 2500);
@@ -683,7 +755,7 @@
     setRate(SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, i + delta))]!, true);
   }
   // ---- Chromecast entry in the "Mehr" menu (the SDK loads lazily, Chromium only) ----
-  function castClick() { menu = ''; if (!$castState.connected) void requestCastSession(); else if (casting) castStop(); else void startCast(); }
+  function castClick() { menu = ''; if (!$castState.connected) void requestCastSession(); else if (casting) void castEngine.stop(); else if (!remote) void startCast(); }
   $: castLabel = casting ? $t('player.cast.stopOn', { name: $castState.deviceName || 'Chromecast' }) : $castState.connected ? $t('player.cast.playOn', { name: $castState.deviceName || 'Chromecast' }) : $t('player.cast.castTo');
   $: modeLabel = casting ? 'Chromecast' : airOn ? 'AirPlay' : mode === 'direct' ? $t('player.mode.direct') : mode ? $t('player.mode.hls') : '';
   const toggleMenu = (m: typeof menu) => (menu = menu === m ? '' : m);
@@ -738,7 +810,7 @@
       case 'next': if (hasNext && allowed()) dispatch('next'); else flash(tr('player.noNext')); break;
       case 'help': help = !help; break;
       case 'speed': speedBy(a.delta); break;
-      case 'pip': if (pipOk && !casting) void pip(); break;
+      case 'pip': if (pipOk && !remote) void pip(); break;
       case 'tvControls': focusControls(); break;
       case 'escape': menu = ''; subDlg = false; help = false; if (showXray) closeCastInfo(); peek = false; break;
       case 'peek': if (peek) openCastInfo(true); else openPeek(); break;
@@ -839,7 +911,7 @@
     if (g) { g = null; showHud(null); return; } // second finger: not ours (pinch)
     if ((e.target as HTMLElement).closest(NO_GESTURE)) return;
     const r = (stage ?? (e.currentTarget as HTMLElement)).getBoundingClientRect();
-    g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: Date.now(), w: r.width - inset, h: r.height, left: r.left, axis: null, moved: false, startTime: casting ? castPos : video?.currentTime ?? 0, startVol: muted ? 0 : volume, startBri: brightness, target: 0 };
+    g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: Date.now(), w: r.width - inset, h: r.height, left: r.left, axis: null, moved: false, startTime: remote ? current : video?.currentTime ?? 0, startVol: muted ? 0 : volume, startBri: brightness, target: 0 };
   }
   function gMove(e: PointerEvent) {
     if (!g || e.pointerId !== g.id || locked) return;
@@ -848,7 +920,7 @@
       g.axis = classifyMove(dx, dy, g.x - g.left, g.w, { volumeOk: volOk });
       if (!g.axis) return;
       if (g.axis === 'scrub' && (!duration || !canControl)) { if (!canControl) allowed(); g.axis = null; g.moved = true; return; }
-      if (g.axis === 'brightness' && casting) { g.axis = null; g.moved = true; return; }
+      if (g.axis === 'brightness' && remote) { g.axis = null; g.moved = true; return; }
       g.moved = true; clearTimeout(pendingTap); tapState = null;
     }
     if (g.axis === 'scrub') {
@@ -892,15 +964,17 @@
   function lockKey(e: KeyboardEvent) { if (locked && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); locked = false; lockHint = false; unlockedAt = Date.now(); wake(); flash(tr('player.lock.unlocked'), 900); } }
 
   const syncTime = () => {
-    if (!video) return;
+    if (!video || handedOff) return; // remote: the position comes from the engine's session
     current = video.currentTime; duration = Number.isFinite(video.duration) ? video.duration : duration;
     if (current > 0 && !reconnecting && !error) lastPos = current;
     if ((rec.networkTries || rec.mediaRecovered) && current > errPos + 8) rec = freshRecovery(); // stable again: new error budget
     const b = video.buffered; buffered = b.length ? b.end(b.length - 1) : 0;
   };
   /** progress report that does not depend on timers (those are throttled in background tabs / Picture-in-Picture) */
-  const reportTick = () => { if (started && !stopped && !casting && Date.now() - lastSent >= 10_000) send('progress'); };
-  const onPlay = () => { fxEngine?.resume(); if (fxActive(fx) && !fxEngine?.routed) void applyFx(true); paused = false; if (stopped) { stopped = false; started = false; } if (!started) { started = true; send('start'); } else send('progress'); };
+  const reportTick = () => { if (!handedOff && started && !stopped && Date.now() - lastSent >= 10_000) send('progress'); };
+  const onPlay = () => {
+    if (handedOff) return; // the engine's element (also after this Player unmounted)
+    fxEngine?.resume(); if (fxActive(fx) && !fxEngine?.routed) void applyFx(true); paused = false; if (stopped) { stopped = false; started = false; } if (!started) { started = true; send('start'); } else send('progress'); };
 
   /**
    * Direct play has no fragments: the bandwidth sample is the file's own transfers from the Resource Timing buffer
@@ -923,10 +997,13 @@
     const narrow = matchMedia('(max-width: 720px)'), setIcon = () => (ICON = narrow.matches ? 28 : 36);
     setIcon(); narrow.addEventListener?.('change', setIcon);
     try { const v = parseVolume(localStorage.getItem('ff_vol')); if (video && v !== null) { volume = v; video.volume = v; } } catch { /* ignore */ }
-    load(startAt);
+    // a party plays here, in sync: a cast still running from an earlier title would be a second live stream
+    if (partyMode && get(castSession)) void castEngine.stop();
+    const attached = attachToCast();
+    if (!attached) load(startAt);
     castOff = onCastEvent(handleCast);
     if (!partyMode) void initCast();
-    void initAirPlay();
+    if (!attached) void initAirPlay();
     loadBookmarks();
     if ($serverCaps.chapters) api(`/api/items/${itemId}/chapters`).then((r) => (chapters = r?.supported ? normalizeChapters(r.chapters) : [])).catch(() => undefined);
     if ($serverCaps.segments.length) api(`/api/items/${itemId}/segments`).then((r) => (segments = (r.segments as typeof segments).map((x) => ({ ...x, type: String(x.type).toLowerCase() })).filter((x) => segmentShown($serverCaps, x.type)))).catch(() => undefined);
@@ -935,22 +1012,23 @@
     // every 5 s: direct-play bandwidth sample + step-up check; every 30 s the estimate is remembered
     abrTimer = setInterval(() => {
       sampleDirect();
-      if (!abr || casting || airOn || airInfo || switching || !started || stopped || paused || waiting || reconnecting || error) return;
+      if (!abr || handedOff || airOn || airInfo || switching || !started || stopped || paused || waiting || reconnecting || error) return;
       applyAbr(abr.onTick({ estimate: est.estimate, bufferSec: Math.max(0, buffered - current) }));
     }, 5000);
     bwTimer = setInterval(persistEstimate, 30_000);
     activityTimer = setInterval(() => {
       tick = Date.now();
-      if (casting && castInfo && !castBusy && castInfo.expiresAt - tick < 10 * 60_000) void recast(castPos); // renew the token before it expires
-      if (airInfo && !airState.busy && airInfo.expiresAt - tick < 10 * 60_000) void air?.refresh(); // same for AirPlay
+      // renew the token before it expires (the AirPlay token stream before the hand-off; afterwards the engine renews)
+      if (airInfo && !airState.busy && airInfo.expiresAt - tick < 10 * 60_000) void air?.refresh();
       if (sleepAt) {
-        if (tick >= sleepAt) { sleepAt = 0; sleepMin = 0; video?.pause(); flash(tr('player.sleep.paused'), 3000); }
+        if (tick >= sleepAt) { sleepAt = 0; sleepMin = 0; doPause(); flash(tr('player.sleep.paused'), 3000); }
         else sleepLeft = fmtClock((sleepAt - tick) / 1000);
       }
     }, 500);
-    const bye = () => { persistEstimate(); if (!stopped) { stopped = true; send('stop', true); } if (casting) { castRevoke(castInfo); castStop(); } if (airInfo) castRevoke(airInfo); };
+    // after the hand-off the engine has its own pagehide (keepalive stop + revoke): nothing of that session is touched here
+    const bye = () => { persistEstimate(); if (handedOff) return; if (!stopped) { stopped = true; send('stop', true); } if (airInfo) castRevoke(airInfo); };
     // keep the resume position safe when the tab is hidden / the phone locks (Picture-in-Picture keeps playing: only a progress report, no stop)
-    const vis = () => { if (document.visibilityState === 'hidden' && started && !stopped && !casting) send('progress', true); };
+    const vis = () => { if (document.visibilityState === 'hidden' && started && !stopped && !handedOff) send('progress', true); };
     const online = () => { if (reconnecting) retryNow(resumePos()); };
     const pipOn = () => { inPip = true; }, pipOff = () => { inPip = false; };
     window.addEventListener('online', online);
@@ -984,10 +1062,12 @@
     clearTimeout(peekT); clearTimeout(posterT); fxEngine?.destroy();
     persistEstimate(); clearInterval(abrTimer); clearInterval(bwTimer); clearTimeout(stallT);
     clearInterval(progressTimer); clearInterval(activityTimer); clearTimeout(toastTimer); clearTimeout(retryT); clearTimeout(spinT); clearTimeout(pendingTap); clearTimeout(hudT); clearTimeout(rippleT); clearTimeout(lockT); clearTimeout(unlockT); nowPlaying.set(null);
-    if (started && !stopped) { stopped = true; send('stop'); }
+    if (!handedOff && started && !stopped) { stopped = true; send('stop'); }
     holdPrefetch(Promise.resolve(lastStop)); // no cached info survives the player; the next prefetch waits for this stop (resume position)
-    if (casting) { castRevoke(castInfo); castStop(); casting = false; } // leaving the page ends the cast session and revokes its token
-    destroyed = true; air?.destroy(); airInfo = null; airProbe?.remove(); // revokes a live AirPlay token
+    destroyed = true;
+    // a handed-over cast keeps running (the engine owns token, element, controller and probe); otherwise AirPlay ends here
+    if (!handedOff) { air?.destroy(); airProbe?.remove(); } // revokes a live AirPlay token
+    airInfo = null;
     castOff?.();
     hls?.destroy();
   });
@@ -999,10 +1079,10 @@
   <!-- svelte-ignore a11y_media_has_caption -->
   <video bind:this={video} playsinline crossorigin="use-credentials" style:filter={brightness < 1 ? `brightness(${brightness})` : null}
     on:error={onVideoError}
-    on:play={onPlay} on:pause={() => { paused = true; resetStall(); if (!castBusy && !casting && !stopped) send('progress'); }} on:seeked={() => started && send('progress')}
-    on:ended={() => { stopped = true; paused = true; send('stop'); }}
+    on:play={onPlay} on:pause={() => { if (handedOff) return; paused = true; resetStall(); if (!castBusy && !stopped) send('progress'); }} on:seeked={() => !handedOff && started && send('progress')}
+    on:ended={() => { if (handedOff) return; stopped = true; paused = true; send('stop'); }}
     on:timeupdate={() => { syncTime(); reportTick(); }} on:progress={syncTime} on:loadedmetadata={syncTime}
-    on:waiting={onWaiting} on:seeking={resetStall} on:playing={onPlaying} on:loadeddata={firstFrame} on:canplay={() => { waiting = false; if (wantAutoplay) { wantAutoplay = false; playSafe(); } }}
+    on:waiting={onWaiting} on:seeking={resetStall} on:playing={onPlaying} on:loadeddata={firstFrame} on:canplay={() => { if (handedOff) return; waiting = false; if (wantAutoplay) { wantAutoplay = false; playSafe(); } }}
     on:volumechange={() => { if (video) { muted = video.muted; } }}
     on:play on:pause on:seeked on:seeking on:waiting on:playing on:canplay on:timeupdate on:ended>
     {#if info}{#each info.subtitles as s}<track id="sub-{s.index}" kind="subtitles" src={s.url} srclang={s.language?.slice(0, 2) ?? 'xx'} label={s.title} />{/each}{/if}
@@ -1027,10 +1107,17 @@
     </div>
   {:else if reconnecting}
     <div class="center" role="status"><div class="reco ui"><div class="spin sm"></div><span>{$t('player.reconnecting')}</span><small>{$t('player.attempt', { n: reconnecting, max: MAX_NETWORK_TRIES })}</small></div></div>
-  {:else if spin && waiting && !casting && !posterOn && !ccOn}<div class="center" role="status" aria-label={$t('player.loading')}><div class="spin"></div></div>
-  {:else if (posterOn && !posterOut && !casting) || (spin && waiting && !casting && !posterOn)}<div class="sr" role="status">{$t('player.loading')}</div>{/if}
-  {#if casting}
-    <div class="center castov" role="status"><div class="castbox"><Icon name="cast" size={56} /><b>{$t('player.cast.playingOn', { name: $castState.deviceName || 'Chromecast' })}</b><button class="btn light ui" on:click|stopPropagation={() => castStop()}>{$t('player.cast.stop')}</button></div></div>
+  {:else if spin && waiting && !remote && !posterOn && !ccOn}<div class="center" role="status" aria-label={$t('player.loading')}><div class="spin"></div></div>
+  {:else if (posterOn && !posterOut && !remote) || (spin && waiting && !remote && !posterOn)}<div class="sr" role="status">{$t('player.loading')}</div>{/if}
+  {#if tvSession}
+    <!-- the cast engine plays this title on the TV (also after this page): the player is its remote -->
+    <div class="center castov" role="status" aria-busy={tvSession.buffering} data-testid={tvSession.kind === 'airplay' ? 'airplay-active' : undefined}><div class="castbox">
+      <Icon name={tvSession.kind === 'airplay' ? 'airplay' : 'cast'} size={56} />
+      <b>{tvSession.kind === 'airplay' ? $t('player.airplay.playing') : $t('player.cast.playingOn', { name: tvSession.device })}</b>
+      {#if tvSession.buffering}<div class="spin sm" aria-hidden="true"></div>{/if}
+      {#if tvSession.kind === 'airplay'}<button class="btn light ui" on:click|stopPropagation={changeAirPlay}>{$t('player.airplay.change')}</button>{/if}
+      <button class="btn light ui" on:click|stopPropagation={() => void castEngine.stop()}>{$t('player.cast.stop')}</button>
+    </div></div>
   {:else if airOn || airState.error}
     <!-- Safari does not tell which receiver was picked; ending AirPlay happens in its picker (choose this device).
          Also while `ready` (no TV yet) when a token request failed: Retry, the src stays as it is (no restore loop) -->
@@ -1050,7 +1137,7 @@
       <button class="btn light ui" on:click|stopPropagation={() => air?.pick()}>{$t('player.airplay.choose')}</button>
     </div></div>
   {/if}
-  {#if !phone && paused && !waiting && !error && !casting && !locked && !reconnecting}
+  {#if !phone && paused && !waiting && !error && !remote && !locked && !reconnecting}
     <button class="bigplay ui" aria-label={$t('player.controls.play')} on:click|stopPropagation={togglePlay}><Icon name="play" size={44} /></button>
   {/if}
   {#if toast}<div class="toast" aria-hidden="true">{toast}</div>{/if}
@@ -1061,7 +1148,7 @@
   {#if hud}
     <div class="hud" aria-hidden="true"><Icon name={hud.icon} size={26} /><span>{hud.text}</span><i style="--p:{Math.max(0, Math.min(100, hud.pct))}%"></i></div>
   {/if}
-  {#if coarse && !tvMode() && !casting && (locked ? lockHint : showUi && !phone)}
+  {#if coarse && !tvMode() && !remote && (locked ? lockHint : showUi && !phone)}
     <button class="lockbtn ic" class:holding={lockHold} aria-label={locked ? $t('player.lock.unlockAria') : $t('player.lock.lockAria')}
       on:pointerdown|stopPropagation={() => (locked ? unlockDown() : undefined)} on:pointerup|stopPropagation={unlockUp} on:pointercancel={unlockUp} on:pointerleave={unlockUp}
       on:keydown={lockKey} on:click|stopPropagation={() => { if (!locked && Date.now() - unlockedAt > 1000) lockNow(); }} on:contextmenu|preventDefault>
@@ -1086,7 +1173,7 @@
     <!-- phones: play / pause between -10 and +10 in the middle of the picture (shown and hidden with the bar) -->
     <div class="cc" class:hide={!ccOn}>
       <button class="ic ccs" class:locked={!canControl} aria-label={$t('player.controls.back10')} on:click|stopPropagation={() => seekBy(-10)}><Icon name="rewind10" size={34} /></button>
-      <button class="ic ccp" class:locked={!canControl} class:busy={spin && waiting && !casting} aria-label={paused ? $t('player.controls.play') : $t('player.controls.pause')} on:click|stopPropagation={togglePlay}><Icon name={paused ? 'play' : 'pause'} size={44} /></button>
+      <button class="ic ccp" class:locked={!canControl} class:busy={spin && waiting && !remote} aria-label={paused ? $t('player.controls.play') : $t('player.controls.pause')} on:click|stopPropagation={togglePlay}><Icon name={paused ? 'play' : 'pause'} size={44} /></button>
       <button class="ic ccs" class:locked={!canControl} aria-label={$t('player.controls.forward10')} on:click|stopPropagation={() => seekBy(10)}><Icon name="forward10" size={34} /></button>
     </div>
   {/if}
@@ -1096,7 +1183,7 @@
 
   {#if showXray}
     <div class="cihost" class:hide={!showUi && !xray}><CastInfoPanel data={castData} failed={castFailed} autofocus={infoFocus} on:close={closeCastInfo} /></div>
-  {:else if peek && !locked && menu === '' && !casting}
+  {:else if peek && !locked && menu === '' && !remote}
     <CastPeek data={castData} hint={tvMode() ? 'tv' : coarse ? 'none' : 'key'} on:more={() => openCastInfo(false)} />
   {/if}
   {#if subDlg}
@@ -1142,7 +1229,7 @@
           {#if !phone}<input class="vslider" type="range" min="0" max="1" step="0.05" value={muted ? 0 : volume} aria-label={$t('player.volume.label')} on:input={(e) => setVolume(Number(e.currentTarget.value))} />{/if}
         </div>{/if}
         {#if !phone}<span class="clock">{fmtClock(shown)} / {fmtClock(duration)}</span>{/if}
-        {#if info && mode && !casting && !phone}<QualityChip bind:open={chipOpen} direct={chipDirect} label={rungLabel(info.maxBitrate)} reason={info.transcodeReason ?? 'other'} />{/if}
+        {#if info && mode && !remote && !phone}<QualityChip bind:open={chipOpen} direct={chipDirect} label={rungLabel(info.maxBitrate)} reason={info.transcodeReason ?? 'other'} />{/if}
       </div>
       {#if !phone}<div class="mid" title={barSub ? `${barTitle} · ${barSub}` : barTitle}>{#if barTitle}<b>{barTitle}</b>{#if barSub}<span>{barSub}</span>{/if}{/if}</div>{/if}
       <div class="grp right">
@@ -1162,20 +1249,20 @@
         {/if}
         {#if air && (airState.available || airOn || airState.ready || airState.busy)}<button class="ic" class:on={airOn} class:airbusy={airState.busy} aria-pressed={airOn} aria-busy={airState.busy} data-testid="airplay" aria-label={$t(airOn ? 'player.airplay.playing' : 'player.airplay.play')} title={$t(airOn ? 'player.airplay.playing' : 'player.airplay.play')} on:click={() => air?.pick()}><Icon name="airplay" size={ICON} /></button>{/if}
         <button class="ic" class:on={showXray || peek} bind:this={castBtn} aria-label={$t('scenes.info.open')} title={$t(coarse ? 'scenes.info.open' : 'scenes.info.openKey')} aria-pressed={showXray} on:click={castButton}><Icon name="users" size={ICON} /></button>
-        {#if info}
+        {#if info || tvSession}
           <div class="mwrap">
             <button class="ic" aria-label={$t('player.controls.tracks')} title={$t('player.controls.tracksKey')} aria-expanded={menu === 'tracks'} on:click={() => toggleMenu('tracks')}><Icon name="subtitles" size={ICON} /></button>
             {#if menu === 'tracks'}
               <div class="menu tracks" data-nav data-scope role="dialog" aria-label={$t('player.controls.tracks')}>
-                {#if info.audioTracks.length > 1}
+                {#if audioOpts.length > 1}
                   <div><h3>{$t('player.controls.audio')}</h3>
-                    {#each info.audioTracks as a}<button class="mi" class:on={audioIndex === a.index || (audioIndex === undefined && a.isDefault)} on:click={() => { menu = ''; changeAudio(a.index); }}>{#if audioIndex === a.index || (audioIndex === undefined && a.isDefault)}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{a.title}</button>{/each}
+                    {#each audioOpts as a}<button class="mi" class:on={audioIndex === a.index || (audioIndex === undefined && a.isDefault)} on:click={() => { menu = ''; changeAudio(a.index); }}>{#if audioIndex === a.index || (audioIndex === undefined && a.isDefault)}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{a.title}</button>{/each}
                   </div>
                 {/if}
                 <div><h3>{$t('player.subs.title')}</h3>
                   <button class="mi" class:on={subIndex === -1} on:click={() => { setSubtitle(-1); menu = ''; }}>{#if subIndex === -1}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{$t('common.off')}</button>
-                  {#if $serverCaps.subtitleSearch}<button class="mi" on:click={() => { menu = ''; subDlg = true; subResults = null; subMsg = ''; }}><Icon name="search" size={16} />{$t('player.subs.searchMenu')}</button>{/if}
-                  {#each info.subtitles as s}<button class="mi" class:on={subIndex === s.index} on:click={() => { setSubtitle(s.index); menu = ''; }}>{#if subIndex === s.index}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{s.title}</button>{/each}
+                  {#if $serverCaps.subtitleSearch && info}<button class="mi" on:click={() => { menu = ''; subDlg = true; subResults = null; subMsg = ''; }}><Icon name="search" size={16} />{$t('player.subs.searchMenu')}</button>{/if}
+                  {#each subOpts as s}<button class="mi" class:on={subIndex === s.index} on:click={() => { setSubtitle(s.index); menu = ''; }}>{#if subIndex === s.index}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}{s.title}</button>{/each}
                 </div>
                 <div class="fxcol"><h3>{$t('scenes.audio.title')}</h3>
                   {#each FX_OPTS as o (o.k)}<button class="mi fx" class:on={fx[o.k] && !fxDisabled} role="switch" aria-checked={fx[o.k]} disabled={Boolean(fxDisabled)} on:click={() => toggleFx(o.k)}>{#if fx[o.k] && !fxDisabled}<Icon name="check" size={16} />{:else}<span class="sp"></span>{/if}<span class="fxl">{$t(o.label)}<small>{$t(o.hint)}</small></span></button>{/each}
@@ -1211,10 +1298,10 @@
               <button class="mi" on:click={() => (menu = 'scenes')}><Icon name="bookmark" size={20} />{$t('player.bookmark.menu')}<span class="chev" aria-hidden="true">›</span></button>
               <button class="mi" class:on={showXray} aria-pressed={showXray} on:click={() => { if (showXray) { menu = ''; closeCastInfo(); } else openCastInfo(tvMode()); }}><Icon name="users" size={20} />{$t('scenes.info.open')}</button>
               {#if !partyMode && ($castState.available || $castState.connected)}<button class="mi" class:on={casting} aria-pressed={casting} on:click={castClick}><Icon name="cast" size={20} />{castLabel}</button>{/if}
-              {#if phone && !casting}<button class="mi" on:click={lockNow}><Icon name="lock" size={20} />{$t('player.lock.lockAria')}</button>{/if}
-              {#if pipOk && !casting}<button class="mi" class:on={inPip} aria-pressed={inPip} aria-keyshortcuts="P" on:click={() => { menu = ''; void pip(); }}><Icon name="pip" size={20} />{$t('player.controls.pip')}</button>{/if}
+              {#if phone && !remote}<button class="mi" on:click={lockNow}><Icon name="lock" size={20} />{$t('player.lock.lockAria')}</button>{/if}
+              {#if pipOk && !remote}<button class="mi" class:on={inPip} aria-pressed={inPip} aria-keyshortcuts="P" on:click={() => { menu = ''; void pip(); }}><Icon name="pip" size={20} />{$t('player.controls.pip')}</button>{/if}
               <button class="mi" on:click={() => (menu = 'settings')}><Icon name="settings" size={20} />{$t('player.controls.settings')}{#if sleepAt}<span class="muted"> · {$t('player.sleep.left', { t: sleepLeft })}</span>{/if}<span class="chev" aria-hidden="true">›</span></button>
-              {#if coarse && !tvMode() && !casting && !airOn && !airState.available && !$castState.available}<p class="modeinfo tvhint" data-testid="tv-hint"><Icon name="tv" size={16} /><span>{$t('player.airplay.tvHint', { url: `${location.host}/tv` })}</span></p>{/if}
+              {#if coarse && !tvMode() && !remote && !airOn && !airState.available && !$castState.available}<p class="modeinfo tvhint" data-testid="tv-hint"><Icon name="tv" size={16} /><span>{$t('player.airplay.tvHint', { url: `${location.host}/tv` })}</span></p>{/if}
               {#if modeLabel}<p class="modeinfo"><Icon name="info" size={16} /><span>{$t('player.mode.label', { mode: modeLabel })}</span></p>{/if}
             </div>
           {:else if menu === 'scenes'}

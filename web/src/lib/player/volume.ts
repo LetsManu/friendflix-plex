@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** saved volume (0..1) from localStorage text; null when absent or invalid */
 export function parseVolume(raw: string | null): number | null {
   if (raw === null || raw.trim() === '') return null;

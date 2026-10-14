@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Prometheus config for compose.monitoring.yaml (docs/monitoring.md "Prometheus + Grafana").
 # Scrapes backend and gateway over the internal `monitoring` network. The bearer token is METRICS_TOKEN, mounted as
 # the compose secret /run/secrets/metrics_token (never written into this file).

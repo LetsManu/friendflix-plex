@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * AirPlay event log for diagnosis on the device (shown on /diagnose, "AirPlay-Protokoll"): a ring buffer of the last
  * AIRLOG_MAX controller events, kept in sessionStorage AND localStorage (the iOS home-screen app may reload or be killed).

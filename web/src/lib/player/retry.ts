@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Error recovery policy of the player (pure): what to do after the n-th fatal error. */
 export const MAX_NETWORK_TRIES = 3;
 export const BACKOFF_MS = [1000, 2500, 5000];

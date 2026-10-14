@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * FriendFlix for Plex: `PlexMediaServer implements MediaServer`.
  *
@@ -18,12 +20,15 @@ import type {
   MediaCapabilities, MediaCollection, MediaCredentials, MediaRuntime, MediaServer, MediaTraits, MediaUser, PersonDto, PlaybackDto, PlaybackOptions, PlaybackReport, Segment, SegmentType,
   SubtitleHit, TrackList, TrickplayDto,
 } from '../media/types.js';
+import type { HygieneFacts, ServerSession } from '../media/types.js'; // Block 22
 import { tmdbGuids, tmdbIdOf, toPlexAbout, type AboutRow } from './about.js';
+import { plexHygienePage, plexServerSessions, toPlexHygieneFacts } from './care.js'; // Block 22
 import { loadPolicy, paramList, refreshAges, resolveAccess, visibleSql, type Access, type Param } from './access.js';
 import { PlexError, type PlexClient } from './client.js';
 import { chapterDtos, plexTraits, type MirrorChapter } from './depth.js';
 import { plexTypes, sectionDto, toItemDto, type ItemRow } from './dto.js';
 import { decodePlexId, encodePlexId, plexKey } from './ids.js';
+import { sessionIdentities } from './limits.js';
 import { PlexSync } from './sync.js';
 import * as ud from './userdata.js';
 
@@ -974,6 +979,35 @@ export class PlexMediaServer implements MediaServer {
     });
   }
 
+  // ---------------------------------------------------------------- Block 22: admin care (library hygiene, metadata refresh)
+
+  /**
+   * One page of hygiene facts of the whole library, read from Plex (`/library/sections/<id>/all?includeGuids=1`, admin token);
+   * `savedSince` -> `updatedAt>>=` (incremental scans). Streams come from the mirror's detail data (listings carry none).
+   */
+  async libraryHygiene(type: 'Movie' | 'Series' | 'Episode', page: { start: number; limit: number; savedSince?: string }): Promise<HygieneFacts[]> {
+    const list = await plexHygienePage(this.client, type, page);
+    const detail = new Map<string, Array<Record<string, any>>>();
+    if (type !== 'Series' && list.length) {
+      const r = await this.q<{ rating_key: string; media: Array<Record<string, any>> | null }>(
+        'select rating_key, media from plex_items where rating_key = any($1::bigint[]) and detail_at is not null and media is not null',
+        [list.map((m) => String(m.ratingKey))]);
+      for (const x of r) if (Array.isArray(x.media)) detail.set(String(x.rating_key), x.media);
+    }
+    return list.map((m) => toPlexHygieneFacts(m, type, detail.get(String(m.ratingKey))));
+  }
+
+  /** `PUT /library/metadata/<ratingKey>/refresh` (admin token); MediaError(404) for an id that is no Plex item. */
+  async refreshMetadata(id: string): Promise<void> {
+    const rk = plexKey(id);
+    if (!rk) throw new PlexError(404, 'Plex: unknown item');
+    const res = await this.client.fetch(`/library/metadata/${rk}/refresh`, { method: 'PUT' });
+    await res.body?.cancel().catch(() => undefined);
+    if (!res.ok) throw new PlexError(res.status === 404 ? 404 : 502, `Plex refresh -> ${res.status}`);
+    // metadata edits do not bump updatedAt: let the next sync pass fetch the item's details again
+    await this.q('update plex_items set detail_at = null where rating_key = $1', [rk]).catch(() => undefined);
+  }
+
   // ---------------------------------------------------------------- admin
 
   private makeAdmin(): MediaAdmin {
@@ -1023,6 +1057,11 @@ export class PlexMediaServer implements MediaServer {
       ping: () => this.client.ping(),
       /** Playback by other Plex apps runs under the admin account: not attributable to a FriendFlix user. */
       externalSessions: async (): Promise<ExternalSession[]> => [],
+      /** Block 22: every playing session (`/status/sessions`), FriendFlix's own transcodes matched to their identity */
+      transcodeSessions: async (): Promise<ServerSession[]> => {
+        const ids = await sessionIdentities(this.kv).catch(() => new Map<string, string>());
+        return plexServerSessions(this.client, (s) => ids.get(s));
+      },
     };
   }
 }

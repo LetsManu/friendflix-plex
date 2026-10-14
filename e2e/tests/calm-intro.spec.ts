@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test } from '../fixtures.js';
 
 // Block 17 calm mode: the cold-start brand intro must not play for a calm profile. The server prefs arrive after the intro

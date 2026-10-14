@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Verifies the Plan B nginx config against a running backend + a fake Jellyfin, using a throw-away nginx container.
 # Needs: docker, node, curl. The backend must be reachable at BACKEND_URL (default http://127.0.0.1:3100) with
 # a valid session cookie in SID and INTERNAL_SECRET set. See docs/operations.md ("Plan B testen").

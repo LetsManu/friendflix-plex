@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Profile avatars are a colour key; rendered as a rounded square with the initial. */
 export const AVATARS: Array<[key: string, label: string, css: string]> = [
   ['red', 'Rot', 'linear-gradient(135deg, #ff6b81, #9a2440)'],

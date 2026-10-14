@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Unit tests for scripts/release.mjs (node:test, run by `npm test` at the repo root).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

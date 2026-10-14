@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { AbrController, AUTO_MAX, LADDER, autoBps, isOriginalBps, pickRung, rungKey } from './abr';
 

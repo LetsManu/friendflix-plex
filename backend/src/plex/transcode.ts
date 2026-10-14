@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Plex universal transcoder (HLS, MPEG-TS segments). Verified against PMS 1.43 (block16 spike):
  *  - X-Plex-Platform + X-Plex-Product are mandatory (else 400 "unable to find client profile"); Chrome -> "Web" profile

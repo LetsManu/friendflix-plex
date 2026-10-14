@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { FOOTER_COLUMNS, HEADER_TABS, MENU_LINKS, groupLinks, isTabActive, linksFor } from './menu';
 

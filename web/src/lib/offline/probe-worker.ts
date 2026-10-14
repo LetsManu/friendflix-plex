@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /// <reference lib="webworker" />
 // Tiny dedicated worker: answers whether OPFS sync access handles exist here. FileSystemFileHandle.createSyncAccessHandle
 // is only exposed in dedicated workers, so the main thread cannot test it itself (see probeSyncAccess in opfs.ts).

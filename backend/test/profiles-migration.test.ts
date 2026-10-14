@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import pg from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 import { MIGRATIONS } from '../src/db.js';

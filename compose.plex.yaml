@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # FriendFlix for Plex (preview) - override for compose.prod.yaml (or compose.yaml): connects the portal to an EXISTING Plex Media
 # Server instead of Jellyfin. There is no Plex container here, and Plan B (compose.planb.yaml / NPM serving /media itself) is not
 # supported with Plex.

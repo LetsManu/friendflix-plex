@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { getLocale, intlLocale, tr } from '#lib/i18n';
 
 /** ISO 639-2/T language codes (as indexed by the backend) -> German labels. */

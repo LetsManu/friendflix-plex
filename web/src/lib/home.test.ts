@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { createSwr, failedParts, firstNonEmptyTab, HOME_PARTS, pageCount, pageIndex, swrLoad } from './home';
 

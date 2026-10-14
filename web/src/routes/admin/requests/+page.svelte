@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin → Wünsche: Seerr requests, server-side paging + status filter, approve / decline (decline with Undo). */
   import { onMount } from 'svelte';

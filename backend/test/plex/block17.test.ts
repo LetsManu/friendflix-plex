@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Block 17 / 18 features behind the real routes with MEDIA_SERVER=plex (makeEnv({ server: 'plex' })): chapters, cast & info,
  * facts (quality chips, leaving soon), the 4K / HDR browse filter (quality index from libraryMediaTraits), story so far, fresh

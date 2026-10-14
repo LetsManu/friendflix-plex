@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDuePolls, pollTick, resolveRequestedPolls } from '../src/polls.js';
 import { calendarNotifications } from '../src/routes/polls.js';

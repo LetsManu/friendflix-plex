@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { MediaCapabilities } from '../src/media/types.js';
 import { ensureSeerrUser, placeholderEmail, SEERR_PERMISSION_REQUEST } from '../src/seerr/service.js';

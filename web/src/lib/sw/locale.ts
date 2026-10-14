@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The UI language for the service worker: the page stores it in a small cache (Cache Storage is shared with the worker,
  * localStorage is not). The worker reads it on install and precaches that language's chunks (service-worker/precache.ts).

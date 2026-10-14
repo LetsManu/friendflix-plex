@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, describe, expect, it } from 'vitest';
 import { setLocale } from '#lib/i18n';
 import { activityKey, describeActivity } from './activity';
@@ -37,6 +39,10 @@ describe('admin nav', () => {
     expect(activeItem('/admin/users/x')?.href).toBe('/admin/users');
     expect(groupOf(activeItem('/admin/hubs'))?.id).toBe('content');
     expect(activeItem('/adminx')).toBeNull();
+    expect(activeItem('/admin/hygiene')?.label).toBe('admin.tabs.hygiene');
+    expect(groupOf(activeItem('/admin/hygiene'))?.id).toBe('content');
+    expect(activeItem('/admin/usage')?.label).toBe('admin.tabs.usage');
+    expect(groupOf(activeItem('/admin/usage'))?.id).toBe('people');
   });
   it('badge counts ignore zero and unknown', () => {
     const s = { pending: { requests: null, devices: 2, polls: 0, invites: 1, previewsFailed: 3 } } as never;

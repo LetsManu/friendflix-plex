@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Lazily loaded pieces of the app shell. The detail popup (ItemModal + DetailView, ~35 KB gz incl. CSS) is not part of the
  * layout chunk; it loads on first use, or earlier via prefetchModal() (hover/focus/touch of a card or an info button).

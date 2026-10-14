@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { reminderTick } from '../src/reminders.js';
 import { calendarNotifications } from '../src/routes/polls.js';

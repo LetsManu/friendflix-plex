@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * User-facing texts the backend sends (in-app notifications, Web Push, ntfy, Discord, digest, device/role/quality labels).
  * German is the source; every other language must provide every key (backend/test/i18n-messages.test.ts checks keys,

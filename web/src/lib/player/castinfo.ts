@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { api, type Item } from '#lib/api';
 /** "Besetzung & Infos" in the player: GET /api/items/:id/castinfo, shared by the quick peek and the full panel. */
 

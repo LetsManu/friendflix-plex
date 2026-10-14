@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { episodeFacts, instanceToday, movieLabel, qualityIndexTick, seriesLabel, leavingTick, SERIES_LABELS_PER_REQUEST, type EpisodeFacts } from '../src/fresh.js';
 import { bestTraits, toMediaTraits } from '../src/jellyfin/dto.js';

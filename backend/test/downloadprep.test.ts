@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
@@ -5,7 +7,7 @@ import { copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { DOWNLOAD_PRESETS, enqueueJob, ffmpegArgs, ffmpegRunner, gcDownloads, jobProgress, preparer, type FfmpegRunner } from '../src/downloadprep.js';
+import { DOWNLOAD_PRESETS, EMPTY_SEGMENT, enqueueJob, ffmpegArgs, ffmpegRunner, gcDownloads, jobProgress, preparer, type FfmpegRunner } from '../src/downloadprep.js';
 import { deleteLicense } from '../src/downloads.js';
 import { setLive } from '../src/live.js';
 import { previews } from '../src/previews.js';
@@ -22,6 +24,7 @@ let env: TestEnv;
 let dir: string;
 let requested: string[] = [];
 let badSeg = -99;
+let emptySeg = -99;
 let initBytes = INIT;
 const remuxed: Buffer[] = [];
 const runner: FfmpegRunner = { remux: async (input, output) => { remuxed.push(readFileSync(input)); await copyFile(input, output); } };
@@ -78,6 +81,7 @@ beforeAll(async () => {
       const n = parseInt(u.pathname.split('/').pop()!, 10);
       requested.push(`seg${n}`);
       if (n === badSeg) return { status: 500, raw: 'boom' };
+      if (n === emptySeg) return { raw: '' };
       return { raw: n < 0 ? initBytes : seg(n) };
     },
     'DELETE /Videos/ActiveEncodings': () => ({ status: 204 }),
@@ -92,6 +96,7 @@ afterAll(() => env.close());
 beforeEach(async () => {
   requested = [];
   badSeg = -99;
+  emptySeg = -99;
   initBytes = INIT;
   remuxed.length = 0;
   env.jfCalls.length = 0;
@@ -215,6 +220,23 @@ describe('preparer', () => {
     expect(existsSync(join(dir, `${id}.part`))).toBe(false);
     expect(existsSync(join(dir, `${id}.mp4`))).toBe(false);
     expect(env.jfCalls.some((c) => c.method === 'DELETE' && c.path === '/Videos/ActiveEncodings')).toBe(true);
+  });
+
+  it('fails with a clear error before ffmpeg runs when the init segment or a media segment is 0 bytes', async () => {
+    for (const [n, expectedRequests] of [[-1, 4], [0, 4]] as const) {
+      emptySeg = n;
+      requested = [];
+      remuxed.length = 0;
+      env.jfCalls.length = 0;
+      const id = await jobs.create();
+      await enqueueJob(env.ctx, id);
+      expect(await jobs.get(id)).toMatchObject({ status: 'failed', error: EMPTY_SEGMENT });
+      expect(EMPTY_SEGMENT).toBe('empty segment from media server');
+      expect(segRequests().filter((x) => x === `seg${n}`)).toHaveLength(expectedRequests); // retried, then given up
+      expect(remuxed).toHaveLength(0); // ffmpeg never ran
+      expect(readdirSync(dir).filter((f) => f.startsWith(id))).toEqual([]);
+      expect(env.jfCalls.some((c) => c.method === 'DELETE' && c.path === '/Videos/ActiveEncodings')).toBe(true);
+    }
   });
 
   it('fails when ffmpeg fails, leaving no output', async () => {

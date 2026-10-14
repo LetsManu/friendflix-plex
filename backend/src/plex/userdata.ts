@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Played / resume / favourite state per FriendFlix identity (users.jellyfin_user_id or profiles.jellyfin_user_id), kept in
  * plex_userdata. Plex is never told: its scrobble/timeline/rating endpoints would write into the ONE admin account.

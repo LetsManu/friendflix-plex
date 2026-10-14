@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type de from '../de/player';
 import type { Translation } from '../../types';
 
@@ -125,6 +127,22 @@ const en: Translation<typeof de> = {
     chooseHint: 'Now pick the TV from the list.',
     needsTranscode: 'AirPlay needs transcoding – not allowed for your role.',
     tvHint: 'No AirPlay or Chromecast on your TV? Open {url} in the TV’s browser and pair your phone as the remote.',
+  },
+  /** the bar while a title plays on a TV (cast engine) */
+  castBar: {
+    region: 'Now on TV',
+    failed: "Can't play “{title}” on {device}.",
+    airplayDevice: 'AirPlay device',
+    reconnect: 'Connection lost – tap to continue on TV',
+    on: 'on {device}',
+    stop: 'Stop playback on {device}',
+    stopQuestion: 'Stop playback on {device}?',
+    next: 'Next: {label}',
+    nextIn: 'in {n} s',
+    playHere: 'Play here',
+    playingOn: 'Playing on {device}',
+    open: 'Open remote',
+    progress: 'Progress',
   },
   mode: {
     label: 'Playback: {mode}',

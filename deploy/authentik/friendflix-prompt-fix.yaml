@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # FriendFlix – prompt fields WITHOUT placeholder expressions + one prompt stage for an existing enrollment flow.
 #
 # Why: Authentik's default-user-settings-field-* prompts evaluate their placeholder as an expression on the

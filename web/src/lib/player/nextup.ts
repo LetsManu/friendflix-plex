@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Decides when the "Nächste Folge" / "Mehr davon" card appears and how its countdown runs. */
 export interface Segment { type: string; start: number; end: number }
 export const LAST_SECONDS = 25;

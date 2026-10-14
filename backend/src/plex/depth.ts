@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Block 17 parity for Plex (fork): pure mappers from the mirror (plex_items.media / .chapters, written by sync.ts) to the neutral
  * DTOs of the optional MediaServer methods mediaTraits / libraryMediaTraits (quality chips, 4K / HDR filter) and chapters

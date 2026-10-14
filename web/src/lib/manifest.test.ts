@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { LOCALE_CODES, trIn, loadLocale } from '#lib/i18n';
 import { chooseLang, manifestFor } from './manifest';

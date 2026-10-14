@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * What the service worker stores on install: only the app shell the offline hub needs (the prerendered /offline page,
  * the modules and stylesheets it references, the latin Inter subset and the icons). Every other immutable file

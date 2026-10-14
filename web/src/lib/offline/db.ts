@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // IndexedDB 'ff-offline' v1 -- the CONTRACT between the download manager (T4) and offline playback (T5).
 // Stores:
 //   downloads     keyPath 'id'      DownloadRecord

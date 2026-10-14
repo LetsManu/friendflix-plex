@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /** Admin: roles – one card per role (requests / playback / downloads), only changed fields are saved, unsaved-changes guard. */
   import { onMount } from 'svelte';

@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   import { fmtDate as fmtD, t, tr, type TKey } from '#lib/i18n';
   import { api, ApiError } from '#lib/api';

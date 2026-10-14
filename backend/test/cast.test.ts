@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AIRPLAY_PIN2_WINDOW_MS, CAST_IDLE_TTL, castKeyTtl, hashToken } from '../src/cast.js';
 import { revokeSessions } from '../src/devices.js';

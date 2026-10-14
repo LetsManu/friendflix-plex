@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Real ffmpeg (skipped without the binary): Plex-style MPEG-TS HLS segments remuxed one by one must concatenate into an fMP4 the
  * download preparer's final remux accepts, with the full duration; embedded text subtitles are extracted through the loopback proxy.

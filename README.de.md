@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/status-in%20Entwicklung%20%7C%20Preview-orange" alt="Status: in Entwicklung / Preview">
   <img src="https://img.shields.io/badge/self--hosted-Docker-2496ED" alt="Selbst gehostet mit Docker">
   <img src="https://img.shields.io/badge/Sprachen-7-ff4f6d" alt="7 Sprachen">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-AGPL--3.0-blue" alt="Lizenz: AGPL-3.0"></a>
 </p>
 
 <p align="center"><img src="docs/images/de/hero.jpg" alt="FriendFlix-Startseite mit großem Billboard und Titelreihen" width="900"></p>
@@ -118,7 +119,7 @@ App-artige Oberfläche mit Tab-Leiste unten, einer Vorschau beim Antippen eines 
   </tr>
 </table>
 
-**Auf dem großen Bildschirm:** TV-Modus für Smart-TV-Browser, Sticks und Konsolen – große Schrift, Steuerung mit Pfeiltasten, Kopplung per Code oder QR-Code und das **Handy als Fernbedienung**. Chromecast aus Chrome, Edge und Android; **AirPlay** aus Safari auf iPhone, iPad und Mac zu Apple TV und AirPlay-2-Fernsehern (z. B. LG webOS ab 2019).
+**Auf dem großen Bildschirm:** TV-Modus für Smart-TV-Browser, Sticks und Konsolen – große Schrift, Steuerung mit Pfeiltasten, Kopplung per Code oder QR-Code und das **Handy als Fernbedienung**. Chromecast aus Chrome, Edge und Android; **AirPlay** aus Safari auf iPhone, iPad und Mac zu Apple TV und AirPlay-2-Fernsehern (z. B. LG webOS ab 2019). Die Übertragung läuft beim Stöbern weiter: eine **Leiste am unteren Rand** steuert den Fernseher, die Play-Tasten senden neue Titel direkt dorthin und die nächste Folge startet auf dem Fernseher, wenn Autoplay erlaubt ist (sonst bietet die Leiste sie an).
 
 **Downloads für Zug und Flugzeug:** Filme und Folgen herunterladen (bei Serien auch gleich die nächsten Folgen) und offline im Browser ansehen. Der Fortschritt wird beim nächsten Online-Sein abgeglichen. Lizenzen pro Gerät mit Ablaufdatum; funktioniert in Chrome, Edge, Firefox, Safari 17+ und als Home-Bildschirm-App auf iOS 17+.
 
@@ -133,6 +134,8 @@ App-artige Oberfläche mit Tab-Leiste unten, einer Vorschau beim Antippen eines 
 Ein aufgeräumter Admin-Bereich mit Seitenleiste (Personen, Inhalte, Betrieb) und einer **Übersicht**, die Systemzustand, offene Entscheidungen – einen Wunsch oder ein neues Gerät gleich dort freigeben oder ablehnen –, die letzte Aktivität in ganzen Sätzen, Zahlen und Speicher zeigt. Alles meldet sich zurück: keine Pop-up-Fenster, riskante Aktionen fragen vorher, kleine bieten **Rückgängig**. Auf dem Handy ist derselbe Bereich eine einfache Liste mit großen Tippflächen.
 
 Außerdem im Admin-Bereich: Einladungen und Rollen, **Marken-Hubs**, hervorgehobene und Themenlisten, **Bald-weg-Termine**, Vorschau-Clips, der nächtliche Wiedergabe-Check, der Wochenrückblick, ein Audit-Log und Updates per Knopfdruck.
+
+**Admin-Pflege:** eine Status-Seite mit Ampeln für jeden Dienst, Speicherplatz, laufenden Streams (direkt oder umgewandelt, und warum) und den letzten Fehlern, dazu ein schmales Warnband, wenn etwas dich braucht; eine Seite **Bibliothekspflege**, die fehlende Bilder, Sprachlücken, Doppelte und Problemdateien findet; und eine Seite **Nutzung** mit Sehzeit, Streams und Geräten pro Konto (nur Summen, keine Titel).
 
 <table>
   <tr>
@@ -167,7 +170,7 @@ Die FriendFlix-Oberfläche ist dieselbe; unterschiedlich ist, was Plex liefern k
 | Kapitel („Szenen“-Panel) | Funktioniert | Kapitelmarken aus den Dateien; Kapitelbilder nur, wenn Plex Kapitel-Vorschaubilder erzeugt |
 | Qualitäts-Chips, Filter 4K / HDR | Funktioniert | Aus Plex' Stream-Angaben (Auflösung, Dolby Vision / HDR10 / HDR10+ / HLG, Kanäle, Atmos) |
 | Neu-Labels („Neue Folge“, „Staffelfinale“ …) | Eingeschränkt | Plex kennt keinen Serienstatus, deshalb erscheint „Staffelfinale“ nur bei Serien, deren letzte Folge vor mehr als 60 Tagen lief |
-| Bald nicht mehr verfügbar, „Bisher geschah“, Themenlisten, ruhiger Modus, klare Stimmen, Handy-Kurzbefehle, Admin-Seiten | Funktioniert | FriendFlix-Funktionen; „Live-Streams“ zeigt nur FriendFlix-Wiedergaben, „Beenden“ stoppt den Plex-Transcode |
+| Bald nicht mehr verfügbar, „Bisher geschah“, Themenlisten, ruhiger Modus, klare Stimmen, Handy-Kurzbefehle, Admin-Seiten | Funktioniert | FriendFlix-Funktionen; „Live-Streams“ zeigt auch Sitzungen anderer Plex-Apps (Plex nennt keine Transcode-Gründe), „Beenden“ stoppt den Plex-Transcode; die Bibliothekspflege liest Plex' Listen und die Stream-Details des Spiegels |
 | „Mehr davon“ | Eingeschränkt | Von FriendFlix aus gemeinsamen Genres und Besetzung berechnet |
 | Marken-Hubs, „Weil du … gesehen hast“-Reihen, Folgenkommentare, Willkommen | Funktioniert | FriendFlix-Funktionen; Hubs entstehen aus Plex-Sammlungen/Genres/Tags |
 | Extras-Tab (Trailer, Bonusmaterial) | Eingeschränkt | Nur, was Plex als lokale Extras hat |
@@ -218,7 +221,7 @@ git clone https://github.com/LetsManu/friendflix-plex.git && cd friendflix-plex
 cp .env.example .env
 openssl rand -base64 32    # -> APP_ENC_KEY
 openssl rand -hex 24       # -> INTERNAL_SECRET, WEBHOOK_SECRET, METRICS_TOKEN (je ein Wert)
-$EDITOR .env               # PUBLIC_URL, Passwörter, OIDC_*, PLEX_URL, PLEX_TOKEN, SEERR_*
+$EDITOR .env               # PUBLIC_URL, Passwörter, OIDC_*, PLEX_URL, PLEX_TOKEN, REQUESTS_*
 docker login ghcr.io -u <user>                                 # nur bei privaten Paketen (PAT mit read:packages)
 docker compose -f compose.prod.yaml -f compose.plex.yaml config --quiet   # prüfen
 docker compose -f compose.prod.yaml -f compose.plex.yaml up -d    # compose.plex.yaml verbindet nur mit deinem vorhandenen Plex-Server
@@ -235,7 +238,7 @@ Danach:
 5. **Web-Push (optional):** `node scripts/gen-vapid.mjs`, beide Schlüssel in `.env`, neu starten.
 6. **Erster Login** mit einem Mitglied der Authentik-Gruppe `friendflix-admins`: Du wirst Portal-Admin, wählst die Sprache der Instanz und lädst deine Freunde unter *Admin → Einladungen* ein.
 
-Das Gateway muss `PLEX_URL` erreichen; nimm die lokale Adresse deines Plex-Servers (Details in [docs/de/plex.md](docs/de/plex.md)). Läuft der Wunsch-Dienst schon in einem eigenen Stack: `docker network connect friendflix_media <container>`, dessen öffentliche Ports entfernen und `SEERR_URL` setzen.
+Das Gateway muss `PLEX_URL` erreichen; nimm die lokale Adresse deines Plex-Servers (Details in [docs/de/plex.md](docs/de/plex.md)). Läuft der Wunsch-Dienst schon in einem eigenen Stack: `docker network connect friendflix_media <container>`, dessen öffentliche Ports entfernen und `REQUESTS_URL` setzen.
 
 ### Konfiguration
 
@@ -253,7 +256,7 @@ Vorlage: [.env.example](.env.example). Jede Variable kann mit der Endung `_FILE`
 | `PLEX_URL` | – (Pflicht bei `plex`) | URL deines Plex-Servers aus Sicht von Backend und Gateway, z. B. `http://192.168.1.10:32400` oder `http://host.docker.internal:32400` |
 | `PLEX_TOKEN` oder `PLEX_TOKEN_FILE` | – (Pflicht bei `plex`) | Plex-Token (am besten eines eigenen Plex-Kontos). Nur Backend und Gateway nutzen es; geht nie an Browser |
 | `JELLYFIN_URL`, `JELLYFIN_ADMIN_API_KEY` | – (nur Original / `MEDIA_SERVER=jellyfin`) | Mit Plex nicht verwendet; leer lassen |
-| `SEERR_URL`, `SEERR_API_KEY` | – (Pflicht) | Interne URL und API-Key des Wunsch-Dienstes |
+| `REQUESTS_URL`, `REQUESTS_API_KEY` | – (Pflicht) | Interne URL (mitgeliefert: `http://requests:5055`) und API-Key des Wunsch-Dienstes (ältere Variablennamen funktionieren weiter, mit Hinweis im Log) |
 | `ADMIN_GROUP` | `friendflix-admins` | Authentik-Gruppe, deren Mitglieder Portal-Admins werden |
 | `BIND_ADDR` | `127.0.0.1` | Host-Adresse für die drei Ports – nie eine öffentliche Schnittstelle |
 | `WEB_PORT`, `BACKEND_PORT`, `GATEWAY_PORT` | `3080`, `3081`, `3082` | Host-Ports für den Reverse Proxy |
@@ -275,6 +278,9 @@ Vorlage: [.env.example](.env.example). Jede Variable kann mit der Endung `_FILE`
 | `PLAYBACK_CHECK_HOUR` | `4` | Nächtlicher Wiedergabe-Check mit Admin-Hinweis; `-1` = aus |
 | `BACKGROUND_JOBS` | `true` | Download-Vorbereitung/-Aufräumen, Sprach- und Bildqualitäts-Index, Bald-weg-Erinnerungen, Plex-Bibliotheks-Sync (auf dem einzigen Backend `true` lassen) |
 | `API_COMPRESSION` | `true` | gzip/brotli für JSON-Antworten ab 1 KB; `false`, wenn der Proxy `/api` schon komprimiert |
+| `GATEWAY_URL` | `http://gateway:4000` | Interne Gateway-Adresse für die Status-Seite im Admin-Bereich (nur `/health` wird abgefragt) |
+| `HEALTH_DISK_WARN_PCT`, `HEALTH_DISK_CRIT_PCT` | `85`, `95` | Belegung (Prozent), ab der Status-Seite und Warnband gelb / rot werden (Warnwert muss unter dem kritischen liegen, sonst gelten beide Standardwerte, mit Warnung beim Start) |
+| `HEALTH_DB_WARN_GB` | `10` | Datenbankgröße (GB), ab der die Status-Seite warnt |
 | `METRICS_TOKEN` | leer | Bearer-Token für `/metrics` |
 | `PORTAINER_WEBHOOK_URL` oder `PORTAINER_URL` + `PORTAINER_API_KEY` + `PORTAINER_STACK_ID` | leer | Updates per Knopfdruck unter *Admin → Update* (`PORTAINER_ENDPOINT_ID` Standard `1`) |
 | `UPDATE_REPO`, `GITHUB_TOKEN` | `LetsManu/friendflix`, leer | Versionsprüfung; das Token hebt nur das GitHub-Limit an |
@@ -349,7 +355,7 @@ flowchart TB
 - **Backups:** Der optionale Sidecar `backup` macht täglich um `BACKUP_HOUR` einen `pg_dump`, prüft jeden Dump mit `pg_restore --list`, behält `BACKUP_KEEP_DAYS` Tage und wird `unhealthy`, wenn ein Lauf fehlschlägt. Wiederherstellung und monatlicher Restore-Test (`scripts/restore-test.sh`): [docs/operations.md](docs/operations.md). `APP_ENC_KEY` getrennt von den Dumps im Passwort-Manager aufbewahren.
 - **Updates:** *Admin → Update* zeigt die installierte Version und das neueste Release samt Notizen (dazu die Commits auf main) und stößt über Portainer (Webhook oder API) ein Redeploy an. Von Hand: `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`. Datenbank-Migrationen laufen beim Start.
 - **Monitoring:** `/health` (Liveness) und `/health/ready` (Redis, Postgres, Medienserver) auf `127.0.0.1:3081`; Prometheus-Metriken unter `:3081/metrics` und `:3082/metrics` (Bearer `METRICS_TOKEN`). Beispiele für Icinga und Prometheus sowie ein optionaler Prometheus-+-Grafana-Stack mit fertigem Dashboard (`compose.monitoring.yaml`, internes Netz, kein Standardpasswort): [docs/monitoring.md](docs/monitoring.md).
-- **Lieferkette:** Images werden gescannt (Trivy), keyless mit cosign signiert und mit SBOM- und Provenienz-Attestations veröffentlicht; vor dem Deployen lassen sie sich prüfen – [docs/operations.md](docs/operations.md).
+- **Lieferkette:** Images werden gescannt (Trivy), keyless mit cosign signiert und mit SBOM- und Provenienz-Attestations veröffentlicht; vor dem Deployen lassen sie sich prüfen – [docs/operations.md](docs/operations.md). Die Builds sind reproduzierbar: jedes Release lässt sich aus dem Quellcode nachbauen und ergibt denselben Image-Digest – [docs/reproducible-builds.md](docs/reproducible-builds.md) (englisch).
 - **Ladezeiten:** Jede API-Antwort trägt einen `Server-Timing`-Header (`jf` = Medienserver, `db` = Postgres, `kv` = Redis, `app` = gesamt), das Gateway ergänzt `authz` und `upstream`; sichtbar in den Browser-DevTools unter *Network → Timing*. Anfragen ab 500 ms erscheinen als `slow request` im Log. Browser-Fehler landen im Backend-Log und in `friendflix_client_errors_total`.
 
 ### Versionen und Releases
@@ -411,7 +417,9 @@ npm run e2e                                     # Playwright: baut die Web-App u
 
 ### Mitmachen
 
-Beiträge sind willkommen – die Anforderungen (Code-Standard, Tests, alle 7 Sprachen) stehen in [CONTRIBUTING.md](CONTRIBUTING.md), Sicherheitslücken bitte wie in [SECURITY.md](SECURITY.md) beschrieben melden.
+
+Wie Entscheidungen getroffen werden, steht in [GOVERNANCE.md](GOVERNANCE.md). Beiträge sind willkommen – die Anforderungen (Code-Standard, Tests, alle 7 Sprachen) stehen in [CONTRIBUTING.md](CONTRIBUTING.md), Sicherheitslücken bitte wie in [SECURITY.md](SECURITY.md) beschrieben melden.
+
 
 ### Lizenz
 

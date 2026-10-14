@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Area 'version' (German source): version in the footer and Admin → Update, the codename easter egg (7 taps). */
 export default {
   egg: {

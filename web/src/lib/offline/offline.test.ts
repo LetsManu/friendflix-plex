@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { coalesceProgress, type QueuedProgress } from './db';
 import { CLOCK_TOLERANCE_MS, daysLeft, isPlayable, bumpMaxSeen, toMs } from './license';

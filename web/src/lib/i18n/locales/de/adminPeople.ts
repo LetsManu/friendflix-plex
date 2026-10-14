@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Area "adminPeople": admin pages Users, Roles, Devices, Invites, Audit (worker B fills it). German is the typed source. */
 export default {
   loadFailed: 'Das ließ sich nicht laden. Prüfe die Verbindung und versuche es erneut.',
@@ -157,5 +159,38 @@ export default {
       authentik: 'Authentik', by: 'Freigegeben', sessions: 'Beendete Sitzungen', language: 'Sprache', count: 'Anzahl', name: 'Titel', leavesAt: 'Verlässt uns am',
     },
     values: { yes: 'Ja', no: 'Nein', unlimited: 'Unbegrenzt', ok: 'In Ordnung', failed: 'Fehlgeschlagen', off: 'Aus', skipped: 'Übersprungen', admin: 'Admin', self: 'Selbst' },
+  },
+  /** Block 22: usage page (/admin/usage), aggregated per account, never titles */
+  usage: {
+    period: 'Zeitraum',
+    periods: { d7: 'Letzte 7 Tage', d30: 'Letzte 30 Tage', d90: 'Letzte 90 Tage' },
+    privacy: 'Zusammengefasst, ohne Titel: wie viel geschaut wird, nicht was.',
+    since: 'Daten seit {date}',
+    col: { name: 'Konto', lastSeen: 'Zuletzt gesehen', time: 'Schauzeit', titles: 'Titel', streams: 'Streams', transcodes: 'Umwandlungen', devices: 'Geräte', now: 'Jetzt' },
+    split: 'Filme {movies} · Serien {series}',
+    tcShare: '{pct} % · {reason}',
+    tcPct: '{pct} %',
+    devicesUsed: '{used}/{total}',
+    live: { one: '{n} Stream läuft', other: '{n} Streams laufen' },
+    locked: 'Gesperrt',
+    never: 'Nie',
+    details: 'Details',
+    detailsFor: 'Details zu {name}',
+    detailTitle: '{name} · {period}',
+    perDay: 'Schauzeit pro Tag',
+    bars: 'Schauzeit pro Tag: insgesamt {total}, am meisten {max} am {date}',
+    barsEmpty: 'Schauzeit pro Tag: keine Wiedergabe in diesem Zeitraum',
+    devicesTitle: 'Geräte im Zeitraum',
+    deviceUnknown: 'Unbekanntes Gerät',
+    app: 'App',
+    deviceStreams: { one: '{n} Stream', other: '{n} Streams' },
+    deviceTc: { one: '{n} umgewandelt', other: '{n} umgewandelt' },
+    noDevices: 'Keine Geräte in diesem Zeitraum.',
+    reasonsTitle: 'Gründe für Umwandlungen',
+    reasonsNone: 'Keine Umwandlungen.',
+    empty: 'Noch keine Konten.',
+    loadFailed: 'Die Nutzung konnte nicht geladen werden.',
+    detailFailed: 'Die Details konnten nicht geladen werden.',
+    close: 'Schließen',
   },
 } as const;

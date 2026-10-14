@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
 name: Publish images
 # Does NOT build. Re-tags the image that CI already built and scanned (ghcr.io/<owner>/friendflix-<service>:ci-<git sha>,
 # see the top of ci.yml) to the release tags - same manifest digest, no second build.

@@ -1,7 +1,9 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { Redis } from 'ioredis';
 import pg from 'pg';
 import { buildApp } from './app.js';
-import { loadConfig } from './config.js';
+import { deprecatedEnvNames, loadConfig } from './config.js';
 import { keyFromBase64 } from './crypto.js';
 import { migrate } from './db.js';
 import { createMediaServer, mediaConfigProblems } from './media/index.js';
@@ -26,6 +28,9 @@ import { reminderTick } from './reminders.js';
 import { leavingTick, qualityIndexTick } from './fresh.js';
 import { langIndexTick } from './langindex.js';
 import type { Ctx } from './ctx.js';
+import { jobFailed } from './errorlog.js';
+import { healthTick } from './health.js';
+import { hygieneDue, stopHygiene } from './hygiene/scan.js';
 
 const cfg = loadConfig();
 const pool = new pg.Pool({ connectionString: cfg.DATABASE_URL, max: 10 });
@@ -39,16 +44,18 @@ const ctx: Ctx = {
   cfg, kv, db: pool, encKey, fetchImpl: fetch,
   oidc: await createAuthentikProvider(cfg),
   jf: createMediaServer({ cfg, kv, db: pool, encKey }),
-  seerr: new SeerrClient(cfg.SEERR_URL, cfg.SEERR_API_KEY),
+  seerr: new SeerrClient(cfg.REQUESTS_URL, cfg.REQUESTS_API_KEY),
   roles: loadRoles(cfg.ROLE_TEMPLATES),
 };
 
 const app = await buildApp(ctx);
 await app.listen({ port: cfg.PORT, host: '0.0.0.0' });
+// renamed settings that still use their old name (names only, never values)
+for (const msg of deprecatedEnvNames()) app.log.warn(msg);
 // the media server's own change feed (websocket, sync job …), if it has one; Jellyfin pushes webhooks instead
 await ctx.jf.start?.({ dispatch: (e) => dispatchMediaEvent(ctx, e), log: app.log });
 // one-off: push the changed role policies (guest transcoding) to every existing Jellyfin user
-void reapplyPoliciesOnce(ctx).catch((e) => app.log.warn({ e }, 'role policy re-apply failed'));
+void reapplyPoliciesOnce(ctx).catch(jobFailed(ctx, app.log, 'role-reapply', 'role policy re-apply failed'));
 pushEnabled(cfg); // validates the VAPID pair once (warns and disables push when invalid)
 const akMissing = authentikConfigProblem(cfg);
 if (akMissing) app.log.warn({ missing: akMissing }, `Authentik invitations disabled: ${akMissing.join(', ')} not set (see docs/integrations.md)`);
@@ -60,32 +67,41 @@ let pollTickBusy = false;
 timers.push(setInterval(() => {
   if (pollTickBusy) return;
   pollTickBusy = true;
-  void pollTick(ctx).catch((e) => app.log.warn({ e }, 'poll tick failed')).finally(() => { pollTickBusy = false; });
+  void pollTick(ctx).catch(jobFailed(ctx, app.log, 'poll-tick', 'poll tick failed')).finally(() => { pollTickBusy = false; });
 }, 5_000));
-timers.push(setInterval(() => void resolveRequestedPolls(ctx).catch((e) => app.log.warn({ e }, 'resolve failed')), 60_000));
-timers.push(setInterval(() => void calendarNotifications(ctx).catch((e) => app.log.warn({ e }, 'calendar job failed')), 3600_000));
+timers.push(setInterval(() => void resolveRequestedPolls(ctx).catch(jobFailed(ctx, app.log, 'poll-resolve', 'resolve failed')), 60_000));
+timers.push(setInterval(() => void calendarNotifications(ctx).catch(jobFailed(ctx, app.log, 'calendar', 'calendar job failed')), 3600_000));
 if (cfg.PREVIEW_WARM === 'true') {
-  timers.push(setInterval(() => void previews(ctx).warmTick().catch((e) => app.log.warn({ e }, 'preview warm failed')), 60_000));
+  timers.push(setInterval(() => void previews(ctx).warmTick().catch(jobFailed(ctx, app.log, 'preview-warm', 'preview warm failed')), 60_000));
 }
-timers.push(setInterval(() => void reminderTick(ctx).catch((e) => app.log.warn({ e }, 'reminder tick failed')), 1800_000));
-timers.push(setInterval(() => void nightlyTick(ctx).catch((e) => app.log.warn({ e }, 'playback check failed')), 600_000));
-timers.push(setInterval(() => void digestTick(ctx).catch((e) => app.log.warn({ e }, 'digest tick failed')), 600_000));
+timers.push(setInterval(() => void reminderTick(ctx).catch(jobFailed(ctx, app.log, 'reminder', 'reminder tick failed')), 1800_000));
+timers.push(setInterval(() => void nightlyTick(ctx).catch(jobFailed(ctx, app.log, 'playback-check', 'playback check failed')), 600_000));
+timers.push(setInterval(() => void digestTick(ctx).catch(jobFailed(ctx, app.log, 'digest', 'digest tick failed')), 600_000));
 if (cfg.BACKGROUND_JOBS === 'true') {
   if (cfg.DOWNLOADS_ENABLED === 'true') {
-    timers.push(setInterval(() => void startPreparerTick(ctx).catch((e) => app.log.warn({ e }, 'download prep tick failed')), 15_000));
-    timers.push(setInterval(() => void gcDownloads(ctx).then(() => gcLicenses(ctx)).catch((e) => app.log.warn({ e }, 'download gc failed')), 600_000));
-    void startPreparerTick(ctx).catch((e) => app.log.warn({ e }, 'download prep start failed'));
+    timers.push(setInterval(() => void startPreparerTick(ctx).catch(jobFailed(ctx, app.log, 'download-prep', 'download prep tick failed')), 15_000));
+    timers.push(setInterval(() => void gcDownloads(ctx).then(() => gcLicenses(ctx)).catch(jobFailed(ctx, app.log, 'download-gc', 'download gc failed')), 600_000));
+    void startPreparerTick(ctx).catch(jobFailed(ctx, app.log, 'download-prep', 'download prep start failed'));
   }
+  timers.push(setInterval(() => void healthTick(ctx), 60_000)); // admin health snapshot (kv health:snap); never throws
+  void healthTick(ctx);
   timers.push(setInterval(() => void langIndexTick(ctx), 1800_000)); // self-limits to every 12 h, never throws
   void langIndexTick(ctx);
   timers.push(setInterval(() => void qualityIndexTick(ctx), 1800_000)); // 4K / HDR browse filter; self-limits to every 12 h, never throws
   void qualityIndexTick(ctx);
-  timers.push(setInterval(() => void leavingTick(ctx).catch((e) => app.log.warn({ e }, 'leaving-soon tick failed')), 1800_000)); // expired dates + 7-day / last-day notices
-  timers.push(setInterval(() => void pollJellyfinSessions(ctx).catch((e) => app.log.warn({ e }, 'session poll failed')), 10_000));
+  timers.push(setInterval(() => void leavingTick(ctx).catch(jobFailed(ctx, app.log, 'leaving-soon', 'leaving-soon tick failed')), 1800_000)); // expired dates + 7-day / last-day notices
+  timers.push(setInterval(() => void pollJellyfinSessions(ctx).catch(jobFailed(ctx, app.log, 'session-poll', 'session poll failed')), 10_000));
+  // library hygiene (Block 22): every 30 min + early after library additions, checked every minute from 2 min after start; never throws
+  const hygieneStart = setTimeout(() => {
+    void hygieneDue(ctx);
+    timers.push(setInterval(() => void hygieneDue(ctx), 60_000));
+  }, 120_000);
+  timers.push(hygieneStart); // clearInterval also clears a timeout
 }
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
   process.on(sig, () => {
     timers.forEach(clearInterval);
+    stopHygiene();
     void Promise.resolve(ctx.jf.stop?.()).catch(() => undefined).then(() => app.close()).then(() => process.exit(0));
   });
 }

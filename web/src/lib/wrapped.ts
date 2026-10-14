@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Renders a shareable "year in review" card (PNG) in the browser: nothing leaves the device. */
 import { fmtDate, tr } from './i18n';
 

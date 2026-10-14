@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Manuel Weißböck
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Area "ui": shared UI kit (lib/ui: toasts, confirm dialog, data table, copy field …). German is the typed source. */
 export default {
   done: 'Erledigt.',
