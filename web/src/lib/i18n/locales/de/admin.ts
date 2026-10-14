@@ -314,7 +314,7 @@ export default {
       paused: '{name} pausiert (Schlüssel abgelehnt)',
       budget: '{name}: Tageslimit zu {pct} % genutzt',
       failed_titles: { one: '{n} Titel im Wiedergabe-Check fehlgeschlagen', other: '{n} Titel im Wiedergabe-Check fehlgeschlagen' },
-      empty_media: 'Medienserver liefert leere Videostücke – Jellyfin neu starten; hilft das nicht, Hardware-Beschleunigung prüfen',
+      empty_media: 'Medienserver liefert leere Videostücke – Plex neu starten; hilft das nicht, Hardware-Beschleunigung prüfen',
     },
     disk: {
       full: '{name} fast voll ({pct} %)',

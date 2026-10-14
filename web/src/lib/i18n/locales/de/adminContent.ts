@@ -157,7 +157,7 @@ export default {
       budget: 'Tageslimit zu {pct} % genutzt',
       not_set: 'Nicht eingerichtet',
       failed_titles: { one: '{n} Titel fehlgeschlagen', other: '{n} Titel fehlgeschlagen' },
-      empty_media: 'Medienserver liefert leere Videostücke – Jellyfin neu starten; hilft das nicht, Hardware-Beschleunigung prüfen',
+      empty_media: 'Medienserver liefert leere Videostücke – Plex neu starten; hilft das nicht, Hardware-Beschleunigung prüfen',
       unavailable: 'Nicht verfügbar',
       full: 'Fast voll',
       low_free: 'Wenig freier Platz',

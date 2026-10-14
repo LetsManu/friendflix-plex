@@ -159,7 +159,7 @@ const dict: Translation<typeof de> = {
       budget: 'Günlük sınırın %{pct} kadarı kullanıldı',
       not_set: 'Ayarlanmadı',
       failed_titles: { one: '{n} başlık başarısız', other: '{n} başlık başarısız' },
-      empty_media: 'Medya sunucusu boş video döndürüyor – Jellyfin’i yeniden başlat; işe yaramazsa donanım hızlandırmayı kontrol et',
+      empty_media: 'Medya sunucusu boş video döndürüyor – Plex’i yeniden başlat; işe yaramazsa donanım hızlandırmayı kontrol et',
       unavailable: 'Kullanılamıyor',
       full: 'Neredeyse dolu',
       low_free: 'Az boş alan',

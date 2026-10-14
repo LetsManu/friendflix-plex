@@ -26,7 +26,7 @@ describe('issueText', () => {
     expect(issueText(issue('svc:tmdb', 'warn', 'invalid_key'))).toBe('TMDB-Schlüssel ungültig');
     expect(issueText(issue('errors:playback', 'warn', 'failed_playbacks', { n: 4 }))).toBe('4 Wiedergaben fehlgeschlagen');
     expect(issueText(issue('svc:playbackCheck', 'warn', 'failed_titles', { n: 2 }))).toBe('2 Titel im Wiedergabe-Check fehlgeschlagen');
-    expect(issueText(issue('svc:playbackCheck', 'err', 'empty_media', { n: 86 }))).toBe('Medienserver liefert leere Videostücke – Jellyfin neu starten; hilft das nicht, Hardware-Beschleunigung prüfen');
+    expect(issueText(issue('svc:playbackCheck', 'err', 'empty_media', { n: 86 }))).toBe('Medienserver liefert leere Videostücke – Plex neu starten; hilft das nicht, Hardware-Beschleunigung prüfen');
     expect(issueText(issue('weird:thing', 'warn', 'slow'))).toBe('Etwas braucht deine Aufmerksamkeit');
   });
 });

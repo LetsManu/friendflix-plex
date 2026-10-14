@@ -306,7 +306,7 @@ test.describe('admin content pages (desktop)', () => {
     });
 
     test('empty video from the media server: hint under the row, once on top when every title failed, and on a failed download', async ({ page }) => {
-      const hint = 'Medienserver liefert leere Videostücke – Jellyfin neu starten; hilft das nicht, Hardware-Beschleunigung prüfen';
+      const hint = 'Medienserver liefert leere Videostücke – Plex neu starten; hilft das nicht, Hardware-Beschleunigung prüfen';
       const row = (i: number, ok: boolean, error: string | null) => ({ itemId: String(i).repeat(32), name: 'Film ' + i, type: 'Movie', ok, status: 200, ms: 800, bytes: ok ? 1 : 0, error });
       let results = [row(1, false, 'HTTP 200 empty body'), row(2, true, null), row(3, false, 'HTTP 404')];
       await page.route('**/api/admin/playback-check', (r) => (r.request().method() === 'GET'

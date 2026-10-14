@@ -432,7 +432,7 @@ const pl: Translation<typeof de> = {
       paused: '{name} wstrzymane (klucz odrzucony)',
       budget: '{name}: wykorzystano {pct} % dziennego limitu',
       failed_titles: { one: '{n} tytuł z błędem w teście odtwarzania', few: '{n} tytuły z błędem w teście odtwarzania', many: '{n} tytułów z błędem w teście odtwarzania', other: '{n} tytułu z błędem w teście odtwarzania' },
-      empty_media: 'Serwer multimediów zwraca pusty obraz – uruchom ponownie Jellyfin; jeśli to nie pomoże, sprawdź akcelerację sprzętową',
+      empty_media: 'Serwer multimediów zwraca pusty obraz – uruchom ponownie Plex; jeśli to nie pomoże, sprawdź akcelerację sprzętową',
     },
     disk: {
       full: '{name} prawie pełne ({pct} %)',

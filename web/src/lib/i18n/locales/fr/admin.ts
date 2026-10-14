@@ -403,7 +403,7 @@ const fr: Translation<typeof de> = {
       paused: '{name} en pause (clé refusée)',
       budget: '{name} : {pct} % de la limite quotidienne utilisés',
       failed_titles: { one: '{n} titre en échec au test de lecture', many: '{n} titres en échec au test de lecture', other: '{n} titres en échec au test de lecture' },
-      empty_media: 'Le serveur multimédia renvoie une vidéo vide – redémarrez Jellyfin ; si cela ne suffit pas, vérifiez l’accélération matérielle',
+      empty_media: 'Le serveur multimédia renvoie une vidéo vide – redémarrez Plex ; si cela ne suffit pas, vérifiez l’accélération matérielle',
     },
     disk: {
       full: '{name} presque plein ({pct} %)',

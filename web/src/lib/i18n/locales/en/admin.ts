@@ -394,7 +394,7 @@ const en: Translation<typeof de> = {
       paused: '{name} paused (key rejected)',
       budget: '{name}: {pct} % of the daily limit used',
       failed_titles: { one: '{n} title failed in the playback check', other: '{n} titles failed in the playback check' },
-      empty_media: 'Media server returns empty video – restart Jellyfin; if that doesn’t help, check hardware acceleration',
+      empty_media: 'Media server returns empty video – restart Plex; if that doesn’t help, check hardware acceleration',
     },
     disk: {
       full: '{name} almost full ({pct} %)',

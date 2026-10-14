@@ -159,7 +159,7 @@ const dict: Translation<typeof de> = {
       budget: '{pct} % del límite diario usado',
       not_set: 'Sin configurar',
       failed_titles: { one: '{n} título fallido', many: '{n} títulos fallidos', other: '{n} títulos fallidos' },
-      empty_media: 'El servidor multimedia devuelve vídeo vacío: reinicia Jellyfin; si no ayuda, revisa la aceleración por hardware',
+      empty_media: 'El servidor multimedia devuelve vídeo vacío: reinicia Plex; si no ayuda, revisa la aceleración por hardware',
       unavailable: 'No disponible',
       full: 'Casi lleno',
       low_free: 'Poco espacio libre',

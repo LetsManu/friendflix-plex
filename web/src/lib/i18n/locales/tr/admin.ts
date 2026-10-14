@@ -394,7 +394,7 @@ const tr: Translation<typeof de> = {
       paused: '{name} duraklatıldı (anahtar reddedildi)',
       budget: '{name}: günlük sınırın %{pct} kadarı kullanıldı',
       failed_titles: { one: 'Oynatma testinde {n} başlık başarısız', other: 'Oynatma testinde {n} başlık başarısız' },
-      empty_media: 'Medya sunucusu boş video döndürüyor – Jellyfin’i yeniden başlat; işe yaramazsa donanım hızlandırmayı kontrol et',
+      empty_media: 'Medya sunucusu boş video döndürüyor – Plex’i yeniden başlat; işe yaramazsa donanım hızlandırmayı kontrol et',
     },
     disk: {
       full: '{name} neredeyse dolu (%{pct})',

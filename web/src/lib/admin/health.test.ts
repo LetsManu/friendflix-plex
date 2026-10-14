@@ -46,7 +46,7 @@ describe('health view helpers', () => {
   });
 
   it('empty media: red pill text, error matching, hint placement', () => {
-    expect(serviceText({ id: 'playbackCheck', level: 'err', reason: 'empty_media', detail: { n: 86 } })).toBe('Medienserver liefert leere Videostücke – Jellyfin neu starten; hilft das nicht, Hardware-Beschleunigung prüfen');
+    expect(serviceText({ id: 'playbackCheck', level: 'err', reason: 'empty_media', detail: { n: 86 } })).toBe('Medienserver liefert leere Videostücke – Plex neu starten; hilft das nicht, Hardware-Beschleunigung prüfen');
     expect(isEmptyMediaError('HTTP 200 empty body')).toBe(true);
     expect(isEmptyMediaError('empty playlist')).toBe(true);
     expect(isEmptyMediaError('empty segment from media server')).toBe(true);

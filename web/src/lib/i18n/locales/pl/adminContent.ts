@@ -164,7 +164,7 @@ const dict: Translation<typeof de> = {
       budget: 'Wykorzystano {pct} % dziennego limitu',
       not_set: 'Nieskonfigurowane',
       failed_titles: { one: '{n} tytuł z błędem', few: '{n} tytuły z błędem', many: '{n} tytułów z błędem', other: '{n} tytułu z błędem' },
-      empty_media: 'Serwer multimediów zwraca pusty obraz – uruchom ponownie Jellyfin; jeśli to nie pomoże, sprawdź akcelerację sprzętową',
+      empty_media: 'Serwer multimediów zwraca pusty obraz – uruchom ponownie Plex; jeśli to nie pomoże, sprawdź akcelerację sprzętową',
       unavailable: 'Niedostępne',
       full: 'Prawie pełny',
       low_free: 'Mało wolnego miejsca',

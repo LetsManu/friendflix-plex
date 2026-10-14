@@ -403,7 +403,7 @@ const es: Translation<typeof de> = {
       paused: '{name} en pausa (clave rechazada)',
       budget: '{name}: {pct} % del límite diario usado',
       failed_titles: { one: '{n} título falló en la prueba de reproducción', many: '{n} títulos fallaron en la prueba de reproducción', other: '{n} títulos fallaron en la prueba de reproducción' },
-      empty_media: 'El servidor multimedia devuelve vídeo vacío: reinicia Jellyfin; si no ayuda, revisa la aceleración por hardware',
+      empty_media: 'El servidor multimedia devuelve vídeo vacío: reinicia Plex; si no ayuda, revisa la aceleración por hardware',
     },
     disk: {
       full: '{name} casi lleno ({pct} %)',
