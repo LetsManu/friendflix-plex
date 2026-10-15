@@ -241,6 +241,7 @@ Die FriendFlix-Oberfläche ist dieselbe; unterschiedlich ist, was Plex liefern k
 | Chromecast | Funktioniert | Inklusive Text-Untertiteln (signierte FriendFlix-Untertitel-URLs) |
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen | Funktioniert | FriendFlix-Funktionen, unabhängig vom Medienserver |
 | „Demnächst erscheinende Folgen“ | Nicht verfügbar | Plex bietet das nicht |
+| Anmeldung in der App, Passwort-Wiederherstellung, Kontosicherheit, Cover-Wand | Funktioniert | Zwischen FriendFlix und Authentik; Plex ist nicht beteiligt. Die Cover-Wand zeigt Plex-Poster nur von Titeln, deren eigene Plex-Altersfreigabe auf der Erlaubt-Liste steht (bis 12, nichts ohne Freigabe), siehe [docs/de/plex.md](docs/de/plex.md#anmeldung-und-kontosicherheit-unter-plex) |
 | Wünsche / Wunsch-Dienst | Funktioniert | Jedes FriendFlix-Konto bekommt beim ersten Wunsch einen eigenen lokalen Wunsch-Dienst-Nutzer (nur Wunsch-Recht) |
 | nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt |
 

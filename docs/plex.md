@@ -309,6 +309,11 @@ What the preview implements (checked by the test suite against the fake Plex ser
 | Delete my account (7-day grace, restore) | Works | After the grace period the account's Plex identities, their limits and their watch state in FriendFlix are removed. Within the 7 days a restore re-enables every identity. Nothing exists in Plex itself, so nothing is deleted there |
 | Admin → Users: approvals, lock, access until, per-user limits, bulk actions | Works | Approving a request creates the account's identity in FriendFlix; role and limit overrides apply to every profile of the account. The *Activity* tab lists the Plex history of every profile. An active account whose Plex identity is lost shows its link as **broken** until you use *Repair links* |
 | Admin → Settings and setup wizard | Works | Plex address and token, see [Setup wizard on Plex](#setup-wizard-on-plex). The token is encrypted and write-only; env values show locked. No automatic token (see the note there) |
+| In-app sign-in (FriendFlix's own sign-in page, Authentik behind it) | Works | Nothing in it touches Plex: Authentik checks password and second factor, FriendFlix finishes the sign-in. An invite creates the account's Plex identity (a row in FriendFlix, no Plex account) on the first sign-in; an account whose *Access until* has passed is locked at sign-in together with its Plex identities. See [Sign-in and account security on Plex](#sign-in-and-account-security-on-plex) |
+| Cover wall behind the sign-in | Works | Posters from FriendFlix's mirror of the Plex library, only for titles whose own Plex `contentRating` is on the allow-list (up to age 12, nothing unrated), scaled by Plex's photo transcoder to 200 px. See [the rating table](#sign-in-and-account-security-on-plex). Switch off under *Admin → Settings → General* |
+| Password recovery (*Forgot password?*, the `/reset` link) | Works | Authentik's recovery flow only; Plex is not involved |
+| Account security (password, authenticator app, passkeys, recovery codes, e-mail change) | Works | Authentik flows only; Plex and plex.tv are not involved, and nothing about it reaches the Plex token |
+| Recommendation measurement (`scripts/reco-eval.mjs`) | Limited | Reads only FriendFlix's tables, so it runs on a Plex database; item features come from the mirror (SQL in [Recommendation measurement on Plex](#recommendation-measurement-on-plex)). The `v1` baseline emulates Jellyfin's similar titles and does not match Plex's "More like this" |
 | Wishes (request service) | Works | Each FriendFlix account gets its own local request-service user (request permission only), created on the first wish |
 | "Now playing" of other Plex apps | Not available | Viewers only see FriendFlix's own sessions (admins see all of them under "Live streams") |
 | nginx "Plan B" media path | Not available | Unsupported with Plex: `/internal/authz-nginx` answers `501 plan_b_unsupported` |
@@ -328,6 +333,38 @@ Plex only knows one token, so FriendFlix enforces the role settings itself:
 - **Remote limit** (Block 20, `HOME_NETWORKS`): outside the home networks the role's remote limit is the cap of `POST /api/playback/info`, so it is part of the transcode start (`maxVideoBitrate` = cap − 192 kbit/s for audio, `videoResolution` = the rung's height: 1080p from 8 Mbit/s, 720p from 4, 480p from 1.5, else 360p; never above the role's height cap). The gateway cannot change a running Plex transcode and needs no bitrate rule for it: it never passes client parameters to Plex. A session started at home keeps its limit when the viewer leaves the home network until the next quality change or playback start.
 - **Transcoding off** (role template or *Admin → Roles*): only Direct Play. Titles that would need the transcoder answer `403 transcoding_not_allowed`; no Plex transcode is started. Casting and transcoded downloads are refused the same way.
 - **Max. streams**: counted per account (as upstream) and per profile identity, on the server: every Plex transcode FriendFlix started for the profile counts as long as Plex still runs it (`/transcode/sessions`; Plex ends transcodes nobody fetches), plus Direct Play sessions with a progress report in the last 60 s. A title beyond the limit answers `429 max_streams` before a transcode starts. Changing quality or audio on the same title never counts twice. A stop report ends the Plex transcode immediately.
+
+### Sign-in and account security on Plex
+
+The in-app sign-in, password recovery, the account page's *Security* section and the e-mail change run between FriendFlix and Authentik ([docs/authentik.md §10a](authentik.md#10a-in-app-sign-in)); the Plex token plays no part in them. What touches Plex:
+
+- **First sign-in from an invite:** the account and its Plex identity are created like with an approval (a row in FriendFlix with the role's limits; Plex gets no user).
+- **Access until:** an account whose date has passed is locked when it signs in (in-app and classic), and its Plex identities are closed like by the expiry job. The last active admin is never locked.
+- **Cover wall:** FriendFlix picks up to 36 random movies and shows with a poster from its mirror of the Plex library and asks Plex's photo transcoder for each poster at 200 px (token in the request header, never in a URL or an answer; posters over 2 MB are skipped). The browser only sees FriendFlix paths: no item ids, no Plex address, no titles. A title qualifies only through its **own** `contentRating`, compared **exactly and case-sensitively** with the allow-list of `backend/src/loginArt.ts`:
+
+  | Plex stores | Compared as | On the wall |
+  |---|---|---|
+  | plain value, e.g. `G`, `PG`, `TV-G`, `TV-PG`, `TV-Y`, `TV-Y7`, `TV-Y7-FV`, `12A`, `0`, `6`, `12`, `FSK 12` | itself | yes |
+  | `de/0`, `de/6`, `de/12` | `DE-0`, `DE-6`, `DE-12` | yes |
+  | `gb/U`, `gb/PG`, `gb/12`, `gb/12A` | `GB-U`, `GB-PG`, `GB-12`, `GB-12A` | yes |
+  | `us/G`, `us/PG`, `us/TV-PG` … | the plain US value | yes |
+  | `PG-13`, `TV-14`, `R`, `de/16`, `gb/15`, any other higher value | – | no |
+  | `fr/12`, `at/6`, `au/PG`, `nl/AL`, `de/FSK 12` and other countries or spellings | `FR-12`, … (not on the list) | no |
+  | `pg`, `tv-pg`, `gb/u` (other case) | itself (not on the list) | no |
+  | empty, `NR`, `Not Rated`, `Unrated` | – | no, never |
+
+  As a second check FriendFlix's own rating table ([Age ratings](#5-age-ratings)) must place the value at age 0 to 12, so a plain `U` (no country) is not shown either. Episodes and seasons are never on the wall, and a show counts with the show's own rating. A rating edited in Plex counts after the next sync. With an empty mirror (right after setup) or no qualifying title the sign-in shows generated art instead.
+
+### Recommendation measurement on Plex
+
+`scripts/reco-eval.mjs --db` (upstream's R0 step) reads FriendFlix's own tables read-only (`profiles`, `play_seconds`, `thumbs`, `ratings`), which hold Plex items under their FriendFlix ids, so it runs unchanged on a Plex database. Item features (year, genres) are not in those tables; export them from the mirror and pass them with `--items`:
+
+```bash
+psql "$DATABASE_URL" -Atc "select coalesce(json_agg(json_build_object(   'id', '9f1e0' || lpad(to_hex(i.rating_key), 27, '0'),   'year', i.year,   'genres', coalesce((select json_agg(t.tag order by t.tag) from plex_tags t where t.rating_key = i.rating_key and t.kind = 'genre'), '[]'::json) )), '[]'::json) as items from plex_items i where i.type in ('movie', 'show')" > items.json
+DATABASE_URL=... node scripts/reco-eval.mjs --db --items items.json
+```
+
+The `popularity` and `cooccurrence` engines and every metric apply as upstream. **The `v1` baseline does not**: offline it emulates Jellyfin's similar titles (genre overlap, then year), while Plex's "Because you watched" and "More like this" use FriendFlix's own similar titles from shared genres **and cast**. Read `v1` on Plex as a rough genre baseline only; upstream's v1 numbers are not a Plex baseline. The recommendation counters (`friendflix_reco_impressions_total`, `…_clicks_total`, `…_plays_total`, `…_dismiss_total`, by row and engine) work the same on Plex.
 
 ## Troubleshooting
 

@@ -234,6 +234,7 @@ The FriendFlix interface is the same; what differs is what Plex can deliver. Sta
 | Chromecast | Works | Including text subtitles (signed FriendFlix subtitle URLs) |
 | TV mode, watch parties, recommendations, notifications | Works | FriendFlix features, independent of the media server |
 | "Upcoming episodes" | Not available | Plex does not offer it |
+| In-app sign-in, password recovery, account security, cover wall | Works | Between FriendFlix and Authentik; Plex is not involved. The cover wall shows Plex posters only for titles whose own Plex age rating is on the allow-list (up to 12, nothing unrated), see [docs/plex.md](docs/plex.md#sign-in-and-account-security-on-plex) |
 | Wishes / request service | Works | Each FriendFlix account gets its own local request-service user (request permission only), created on the first wish |
 | nginx "Plan B" media path | Not available | Not supported with Plex |
 
