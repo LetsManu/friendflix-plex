@@ -437,7 +437,17 @@ describe('saved credentials never go to a new host without re-authentication', (
 // fork: Admin -> Settings lists and accepts only the configured media server kind's settings (MEDIA_SETUP / mediaSettings); the Plex
 // side is in 'fork: the media probe on Plex'
 describe('fork: on Jellyfin, Admin -> Settings shows only the active media server\'s settings', () => {
-  const h = harness();
+  const h = harness({ settingsEnv: { PLEX_URL: 'http://plex.example.com:32400', NTFY_URL: 'https://ntfy.example.com/friendflix' } }); // stray PLEX_URL
+
+  it('import-env: all leaves a stray PLEX_* env key out, naming it -> 400 unknown; nothing of it reaches the database', async () => {
+    const all = await h.as(h.admin, 'POST', '/api/admin/settings/import-env', { keys: 'all' });
+    expect(all.statusCode).toBe(200);
+    expect(all.json().moved).toEqual(['NTFY_URL']);
+    const named = await h.as(h.admin, 'POST', '/api/admin/settings/import-env', { keys: ['PLEX_URL', 'NTFY_URL'] });
+    expect(named.statusCode).toBe(400);
+    expect(named.json()).toMatchObject({ error: 'invalid_settings', errors: { PLEX_URL: 'unknown' } });
+    expect((await h.env.pool.query("select key from settings where key like 'PLEX_%'")).rows).toEqual([]);
+  });
 
   it('GET has no PLEX_* row; PUT and Test of a PLEX_* key -> 400 unknown, nothing saved, no call out', async () => {
     const body = (await h.as(h.admin, 'GET', '/api/admin/settings')).json();
@@ -456,7 +466,7 @@ describe('fork: on Jellyfin, Admin -> Settings shows only the active media serve
     expect(t.json().errors).toEqual({ PLEX_URL: 'unknown' });
     expect(h.hosts).toEqual([]);
     expect(h.env.ctx.settings.rev()).toBe(rev);
-    expect(h.env.ctx.cfg.PLEX_URL).toBeUndefined();
+    expect((await h.env.pool.query("select key from settings where key like 'PLEX_%'")).rows).toEqual([]);
   });
 });
 
@@ -529,6 +539,32 @@ describe('logs', () => {
       expect(line).not.toContain(short);
       expect(line).not.toContain(generated);
     }
+  });
+});
+
+// fork: import-env on Plex with stray Jellyfin env keys: 'all' leaves them out, naming one is refused like PUT
+describe('fork: import-env on Plex never moves a JELLYFIN_* key', () => {
+  let env: TestEnv;
+  let admin: Sess;
+  beforeAll(async () => {
+    env = await makeEnv({}, {
+      server: 'plex', plexFake: new PlexFake(),
+      settingsEnv: { JELLYFIN_URL: 'http://media.internal:8096', JELLYFIN_ADMIN_API_KEY: 'stray-jf-key-placeholder', NTFY_URL: 'https://ntfy.example.com/friendflix' },
+    });
+    admin = await env.login(ADMIN);
+  });
+  afterAll(() => env.close());
+  const imp = (keys: unknown) => env.app.inject({ method: 'POST', url: '/api/admin/settings/import-env', cookies: admin.cookies, headers: { 'x-csrf-token': admin.csrf }, payload: { keys } });
+
+  it('all moves only the Plex instance\'s own keys; naming a JELLYFIN_* key -> 400 unknown; none reaches the database', async () => {
+    const all = await imp('all');
+    expect(all.statusCode).toBe(200);
+    expect(all.json().moved).toEqual(['NTFY_URL']);
+    const named = await imp(['JELLYFIN_URL']);
+    expect(named.statusCode).toBe(400);
+    expect(named.json()).toMatchObject({ error: 'invalid_settings', errors: { JELLYFIN_URL: 'unknown' } });
+    expect((await imp(['JELLYFIN_ADMIN_API_KEY', 'NTFY_URL'])).json().errors).toEqual({ JELLYFIN_ADMIN_API_KEY: 'unknown' });
+    expect((await env.pool.query("select key from settings where key like 'JELLYFIN_%'")).rows).toEqual([]);
   });
 });
 

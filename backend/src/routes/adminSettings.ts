@@ -77,7 +77,8 @@ function shownUrl(v: string): string {
 }
 const envNames = (key: string, legacy: readonly string[] = []) => [key, ...legacy].flatMap((n) => [n, `${n}_FILE`]);
 // fork: the media group lists and accepts only the configured kind's settings (MEDIA_SETUP / mediaSettings via mediaSetupKeys): on Plex
-// no JELLYFIN_* rows, on Jellyfin no PLEX_* rows; another kind's key is `unknown` like a hidden one (MEDIA_SERVER is env-only)
+// no JELLYFIN_* rows, on Jellyfin no PLEX_* rows; another kind's key is `unknown` like a hidden one (MEDIA_SERVER is env-only).
+// MEDIA_KEYS is read once at load: mediaSettings() is static (a fork that makes it dynamic computes it per call)
 const MEDIA_KEYS: ReadonlySet<string> = new Set(mediaSettings().map((d) => d.key));
 const otherMediaKind = (cfg: Config, key: string) => MEDIA_KEYS.has(key) && !mediaSetupKeys(cfg).includes(key);
 
@@ -336,7 +337,10 @@ export function adminSettingsRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.post('/api/admin/settings/import-env', admin, async (req) => {
     const { keys } = z.object({ keys: z.union([z.literal('all'), z.array(z.string().max(64)).max(100)]) }).parse(req.body);
-    const moved = await ctx.settings.importEnv(keys, req.user!.id);
+    // fork: never another media kind's keys (a stray env var): left out of 'all', refused as `unknown` when named (like PUT)
+    const other = keys === 'all' ? [] : keys.filter((k) => otherMediaKind(ctx.cfg, k));
+    if (other.length) throw new SettingsError(Object.fromEntries(other.map((k) => [k, 'unknown'])));
+    const moved = await ctx.settings.importEnv(keys === 'all' ? SETTINGS.map((d) => d.key).filter((k) => !otherMediaKind(ctx.cfg, k)) : keys, req.user!.id);
     await audit(ctx, req.user!.id, 'settings.import_env', undefined, { keys: moved });
     return { moved };
   });
