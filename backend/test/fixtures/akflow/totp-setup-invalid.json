@@ -1,0 +1,21 @@
+{
+  "flow_info": {
+    "title": "Set up Two-Factor authentication",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-authenticator-totp",
+  "response_errors": {
+    "code": [
+      {
+        "string": "Code does not match",
+        "code": "invalid"
+      }
+    ]
+  },
+  "pending_user": "anna",
+  "pending_user_avatar": "data:image/svg+xml;base64,PHN2Zy8+",
+  "config_url": "otpauth://totp/authentik%3Aanna?secret=FAKESECRETFAKESECRETFAKESECRETAA&algorithm=SHA1&digits=6&period=30&issuer=authentik"
+}

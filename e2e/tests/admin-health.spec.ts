@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test } from '../fixtures.js';
-import { healthOk } from '../mocks/admin.js';
+import { healthOk, loginCheckOk } from '../mocks/admin.js';
 
 const GiB = 1024 ** 3;
 const ID = 'ab'.repeat(16);
@@ -146,5 +146,36 @@ test.describe('admin health page', () => {
     fail = false;
     await alert.getByRole('button', { name: 'Erneut versuchen' }).click();
     await expect(page.getByRole('region', { name: 'Systemzustand' }).getByRole('link', { name: /Medienserver/ })).toBeVisible();
+  });
+  test('sign-in card: flows, warnings with texts, and the cover switch saves LOGIN_COVER_WALL through the settings', async ({ page, api }) => {
+    api.admin.loginCheck = {
+      ...loginCheckOk(), authCodeGrant: false, passkeys: 'sign-in page', passkeysReason: 'forwarded_host_ignored',
+      warnings: ['flow_missing:recovery', 'auth_code_grant', 'passkeys:forwarded_host_ignored'],
+      flows: [{ kind: 'login', slug: 'default-authentication-flow', state: 'ok', stages: [] }, { kind: 'recovery', slug: 'default-recovery-flow', state: 'missing', stages: [] }],
+    };
+    await page.goto('/admin/status');
+    const card = page.getByRole('region', { name: 'Anmeldung', exact: true });
+    await expect(card).toContainText('FriendFlix (eigene Bildschirme)');
+    await expect(card.getByRole('listitem').filter({ hasText: 'Passwort vergessen' }).locator('.pill.err')).toHaveText('Fehlt');
+    await expect(card.getByRole('listitem').filter({ hasText: 'Anmelden' }).first().locator('.pill.ok')).toHaveText('In Ordnung');
+    await expect(card.getByText('Der Ablauf „Passwort vergessen“ fehlt bei Authentik.')).toBeVisible();
+    await expect(card.getByText(/Grant-Typ „authorization_code“/)).toBeVisible();
+    await expect(card.getByText(/AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS/)).toBeVisible();
+    // the switch: PUT /api/admin/settings {values:{LOGIN_COVER_WALL:false}}
+    const sw = card.getByRole('switch', { name: 'Titelbilder hinter der Anmeldung' });
+    await expect(sw).toBeChecked();
+    await sw.click();
+    await expect(sw).not.toBeChecked();
+    expect(api.settings.puts).toEqual([{ values: { LOGIN_COVER_WALL: false } }]);
+    await expect(page.getByRole('region', { name: 'Hinweise' }).getByText('Gespeichert.')).toBeVisible();
+  });
+
+  test('sign-in card: a cover switch from the environment is locked', async ({ page, api }) => {
+    api.settings.groups.find((g) => g.id === 'general')!.items.find((i) => i.key === 'LOGIN_COVER_WALL')!.source = 'env';
+    await page.goto('/admin/status');
+    const card = page.getByRole('region', { name: 'Anmeldung', exact: true });
+    await expect(card.getByRole('switch', { name: 'Titelbilder hinter der Anmeldung' })).toBeDisabled();
+    await expect(card.getByText('Gesperrt (kommt aus der Umgebung)')).toBeVisible();
+    await expect(card.getByText('Alles in Ordnung.')).toBeVisible();
   });
 });

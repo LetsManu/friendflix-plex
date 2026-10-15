@@ -92,7 +92,7 @@
 </script>
 
 <DataTable
-  caption={$t('admin.tabs.requests')} {rows} {columns} key={(r) => String(r.id)} {error} pageSize={PAGE} bind:page total={rows === null ? null : total}
+  caption={$t('admin.tabs.requests')} {rows} {columns} key={(r) => String(r.id)} {error} pageSize={PAGE} bind:page {total}
   skeletonRows={6} emptyText={$t(`adminContent.requests.empty.${filter}` as TKey)} busyKey={(r) => `req:${r.id}`}
   on:query={onQuery} on:retry={() => load(0)}>
   <svelte:fragment slot="toolbar">

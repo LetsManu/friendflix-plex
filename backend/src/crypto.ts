@@ -26,6 +26,20 @@ export const keyFromBase64 = (b64: string): Buffer => {
 export const randomPassword = () => randomBytes(24).toString('base64url');
 export const randomToken = (bytes = 32) => randomBytes(bytes).toString('base64url');
 export const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
+const secretTags = new Map<string, string>();
+/** A stand-in for a secret inside a cache key: a random tag per distinct secret value, kept in this process's memory only. The
+ *  secret itself is never hashed or stored; a changed secret gets a new tag (a new cache key). Tags differ between processes,
+ *  which only costs one cache miss per instance. */
+export function secretTag(secret: string | undefined): string {
+  if (!secret) return '-';
+  let t = secretTags.get(secret);
+  if (!t) {
+    if (secretTags.size >= 64) secretTags.clear();
+    t = randomToken(12);
+    secretTags.set(secret, t);
+  }
+  return t;
+}
 
 /** Profile PIN: scrypt with a random 16-byte salt, stored as `scrypt$<salt>$<hash>` (base64url). */
 export function hashPin(pin: string): string {

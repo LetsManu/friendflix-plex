@@ -38,8 +38,9 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   const text = await res.text();
   let json: any = null;
   try { json = text ? JSON.parse(text) : null; } catch (e) { if (res.status !== 401) throw e; } // a 401 from a proxy may not be JSON
+  // public pages (invite, TV pairing, waiting room, restore, setup, the in-app sign-in and reset) handle a 401 themselves: no redirect loop
   // 401 reauth_required: the session is fine, only a sensitive action wants a fresh sign-in; the caller starts it (lib/account/reauth.ts)
-  if (res.status === 401 && json?.error !== 'reauth_required' && !location.pathname.startsWith('/invite/') && location.pathname !== '/tv' && location.pathname !== '/pending' && location.pathname !== '/restore' && location.pathname !== '/setup') {
+  if (res.status === 401 && json?.error !== 'reauth_required' && !location.pathname.startsWith('/invite/') && location.pathname !== '/tv' && location.pathname !== '/pending' && location.pathname !== '/restore' && location.pathname !== '/setup' && location.pathname !== '/login' && location.pathname !== '/reset' && location.pathname !== '/confirm-email') {
     clearHint(); // the session is gone: the next start must not render early with this account's hint/profile
     location.href = localStorage.getItem('ff_tv_device') ? '/tv' : '/auth/login'; // a TV re-pairs instead of typing a login
     await new Promise(() => undefined);
@@ -116,6 +117,18 @@ export interface Account {
   manageUrl: string | null;
   /** epoch ms until which sensitive actions need no new sign-in; null = sign in again first */
   reauthUntil: number | null;
+  /** the masked new address of an e-mail change whose link was not opened yet (Block 23 phase 3) */
+  emailChangePending?: string | null;
+}
+/** GET /api/account/security: the second factors and what the security section can offer */
+export interface AccountSecurity {
+  mfa: { totp: boolean; webauthn: boolean; static: boolean } | null;
+  devices: Array<{ id: string; type: 'totp' | 'static' | 'webauthn'; name: string; lastUsed: string | null }>;
+  /** `in-app`: passkeys are created on FriendFlix's own page; else on the sign-in page */
+  passkeySetup: 'in-app' | 'sign-in page';
+  /** the e-mail change flow exists in Authentik */
+  emailChange: boolean;
+  emailChangePending: string | null;
 }
 /** GET /api/devices: the account's own devices */
 export interface OwnDevice { id: string; label: string; approved: boolean; current: boolean; created_at: string; last_seen: string }

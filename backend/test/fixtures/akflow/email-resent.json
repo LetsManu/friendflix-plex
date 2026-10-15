@@ -1,0 +1,18 @@
+{
+  "flow_info": {
+    "title": "Reset your password",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-email",
+  "response_errors": {
+    "non_field_errors": [
+      {
+        "string": "email-sent",
+        "code": "email-sent"
+      }
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "flow_info": {
+    "title": "Reset your password",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-identification",
+  "user_fields": [
+    "email",
+    "username"
+  ],
+  "pending_user_identifier": null,
+  "password_fields": false,
+  "allow_show_password": false,
+  "flow_designation": "recovery",
+  "captcha_stage": null,
+  "primary_action": "Continue",
+  "sources": [],
+  "show_source_labels": false,
+  "enable_remember_me": false,
+  "passkey_challenge": null
+}

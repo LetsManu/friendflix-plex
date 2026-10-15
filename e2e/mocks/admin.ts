@@ -60,6 +60,8 @@ export interface AdminState {
   healthRefreshed: Record<string, any> | null;
   /** query strings of /api/admin/health calls ('' or '?refresh=1') */
   healthCalls: string[];
+  /** Block 23 phase 3: /api/admin/health/login (backend flowCheck.ts LoginCheck) */
+  loginCheck: Record<string, any>;
   /** /api/admin/streams */
   streams: Record<string, any>;
   /** /api/admin/errors */
@@ -201,6 +203,7 @@ export function adminState(): AdminState {
     health: healthOk(),
     healthRefreshed: null,
     healthCalls: [],
+    loginCheck: loginCheckOk(),
     streams: { streams: [], totals: { direct: 0, remux: 0, transcode: 0 }, details: true, failed: [] },
     errors: { entries: [], overflow: 0 },
     bannerIssues: [],
@@ -297,6 +300,15 @@ function hygieneList(h: HygieneMock, sp: URLSearchParams) {
 }
 
 const GiB = 1024 ** 3;
+/** Block 23 phase 3: a healthy sign-in check */
+export function loginCheckOk(): Record<string, any> {
+  const row = (kind: string, slug: string, state = 'ok') => ({ kind, slug, state, stages: [] });
+  return {
+    mode: 'app', implicitConsent: true, authCodeGrant: true, issuerMatches: true, passkeys: 'in-app', passkeysReason: 'ok', unreachable: false, warnings: [],
+    flows: [row('login', 'default-authentication-flow'), row('recovery', 'default-recovery-flow'), row('invalidation', 'default-invalidation-flow'), row('setup-totp', 'default-authenticator-totp-setup')],
+  };
+}
+
 /** Block 22: a healthy snapshot (shapes follow backend/src/health.ts) */
 export function healthOk(): Record<string, any> {
   return {
@@ -648,6 +660,7 @@ export function adminRoute(st: AdminState, m: string, p: string, sp: URLSearchPa
     if (sp.get('refresh') === '1' && st.healthRefreshed) { st.health = st.healthRefreshed; st.healthRefreshed = null; }
     return J(st.health);
   }
+  if (p === '/api/admin/health/login' && m === 'GET') return J(st.loginCheck);
   if (p === '/api/admin/streams' && m === 'GET') return J(st.streams);
   if (p === '/api/admin/health/banner' && m === 'GET') {
     st.bannerCalls++;

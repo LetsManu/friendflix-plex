@@ -21,6 +21,10 @@
     try { account = await api<Account>('/api/account'); phase = 'ok'; }
     catch (e) { phase = e instanceof ApiError && e.status === 403 ? 'owner' : 'error'; }
   }
+  /** re-reads the account without the loading state (the security section stays mounted) */
+  async function refresh() {
+    try { account = await api<Account>('/api/account'); } catch { /* the old state stays */ }
+  }
   onMount(() => {
     // back from /auth/reauth signed in as somebody else; the flag is dropped from the address so a reload does not repeat it
     const u = new URL(location.href);
@@ -51,7 +55,7 @@
   {:else}
     <div class="grid">
       <ProfileCard {account} on:saved={(e) => saved(e.detail)} />
-      <SecurityCard {account} />
+      <SecurityCard {account} on:changed={refresh} />
       <div class="wide"><SessionsCard /></div>
       <DataCard />
       <DeleteCard {account} />

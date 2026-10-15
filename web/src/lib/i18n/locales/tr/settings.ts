@@ -105,6 +105,8 @@ const settings: Translation<typeof de> = {
   keyErrors: {
     PLEX_URL: { invalid_url: 'Lütfen yalnızca sunucu adresini gir: http:// veya https:// ile başlayan, kullanıcı adı ve parola içermeyen, ? veya # işaretinden sonra hiçbir şey olmayan bir adres. Token, Plex token’ı alanına girilir.' },
   },
+  /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
+  options: { auto: 'Otomatik', LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Otomatik', off: 'Kapalı' } },
   keys: {
     PUBLIC_URL: { label: 'Genel adres', help: 'Herkesin FriendFlix’e ulaştığı adres, ör. https://friend.example.com. Bağlantılar, oturum açma ve yayın buna dayanır.' },
     WEBHOOK_SECRET: { label: 'Webhook sırrı', help: 'Medya sunucusu ve istek hizmetinin webhook’ları için ortak sır.' },
@@ -118,6 +120,15 @@ const settings: Translation<typeof de> = {
     AUTHENTIK_ENROLL_FLOW: { label: 'Kayıt akışı', help: 'Davet edilenlerin hesap oluşturduğu akışın slug’ı.' },
     AUTHENTIK_RECOVERY_FLOW: { label: 'Kurtarma akışı', help: 'Parola sıfırlama e-postasını gönderen akışın slug’ı.' },
     AUTHENTIK_TOTP_SETUP_FLOW: { label: 'İki adımlı doğrulama kurulum akışı', help: 'Kimlik doğrulama uygulaması kurmak için akışın slug’ı.' },
+    LOGIN_UI: { label: 'Giriş sayfası', help: 'Girişi kimin gösterdiği: kendi ekranlarıyla FriendFlix ya da Authentik sayfası. Otomatik, Authentik bağlanır bağlanmaz FriendFlix’i kullanır.' },
+    AUTHENTIK_LOGIN_FLOW: { label: 'Giriş akışı', help: 'FriendFlix içindeki girişin Authentik’te izlediği akışın slug’ı.' },
+    AUTHENTIK_INVALIDATION_FLOW: { label: 'Çıkış akışı', help: 'Biri çıkış yaptığında Authentik’te çalışan akışın slug’ı.' },
+    AUTHENTIK_STATIC_SETUP_FLOW: { label: 'Kurtarma kodları akışı', help: 'Yeni kurtarma kodları oluşturan akışın slug’ı.' },
+    AUTHENTIK_WEBAUTHN_SETUP_FLOW: { label: 'Geçiş anahtarı akışı', help: 'Geçiş anahtarı (passkey) eklemek için akışın slug’ı.' },
+    AUTHENTIK_PASSWORD_CHANGE_FLOW: { label: 'Parola değiştirme akışı', help: 'Hesapta parolayı değiştirmek için akışın slug’ı.' },
+    AUTHENTIK_EMAIL_CHANGE_FLOW: { label: 'E-posta değiştirme akışı', help: 'Onay bağlantısından sonra yeni e-posta adresini devralan akışın slug’ı (şablon: friendflix-email-change).' },
+    PASSKEYS_IN_APP: { label: 'FriendFlix içinde passkey', help: 'Otomatik: Authentik izin veriyorsa FriendFlix içinde passkey. Kapalı: passkey yalnızca Authentik giriş sayfasında.' },
+    LOGIN_COVER_WALL: { label: 'Girişin arkasında kapaklar', help: 'Girişin arkasında kütüphaneden kapaklar gösterir (yalnızca 12 yaşa kadar derecelendirmeler, derecesiz hiçbir şey yok). Görseller giriş yapmadan alınabilir.' },
     JELLYFIN_URL: { label: 'Jellyfin adresi', help: 'Medya sunucusunun iç adresi, ör. http://jellyfin:8096.' },
     JELLYFIN_ADMIN_API_KEY: { label: 'Jellyfin API anahtarı (yönetici)', help: 'Yönetici yetkili API anahtarı (Jellyfin → Kontrol paneli → API anahtarları).' },
     PLEX_URL: { label: 'Plex adresi', help: 'Backend’in ve medya geçidinin Plex sunucusuna ulaştığı iç adres. Yalnızca adres: token kendi alanına girilir, asla adrese değil.' },

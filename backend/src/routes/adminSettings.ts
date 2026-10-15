@@ -46,6 +46,8 @@ export interface SettingView {
   envNames: string[];
   updatedAt: string | null;
   options?: readonly string[];
+  /** an enum with no default: unset is a valid state ("automatic"), the page offers it as the first option */
+  optional?: boolean;
   min?: number;
   max?: number;
   generate?: SettingDef['generate'];
@@ -104,6 +106,7 @@ export async function settingsView(ctx: Ctx): Promise<{ rev: number; pendingRest
       if (last4) view.last4 = last4;
     }
     if (d.options) view.options = d.options;
+    if (d.kind === 'enum' && d.default === undefined) view.optional = true;
     if (d.min !== undefined) view.min = d.min;
     if (d.max !== undefined) view.max = d.max;
     if (d.generate) view.generate = d.generate;
@@ -166,7 +169,7 @@ const DESTINATIONS: ReadonlySet<string> = new Set(Object.values(CREDENTIAL_DESTI
  * the public URL (cast tokens, invite and notification links, the OIDC redirect URI and the websocket Origin are built from it); the home
  * networks (they widen which clients get home trust).
  */
-const REAUTH_KEYS: ReadonlySet<string> = new Set(['ADMIN_GROUP', 'NTFY_URL', 'NTFY_BASE_URL', 'PUBLIC_URL', 'HOME_NETWORKS']);
+const REAUTH_KEYS: ReadonlySet<string> = new Set(['LOGIN_UI', 'PASSKEYS_IN_APP', 'ADMIN_GROUP', 'NTFY_URL', 'NTFY_BASE_URL', 'PUBLIC_URL', 'HOME_NETWORKS']);
 
 /** Keys whose saving needs a recent re-authentication: secrets, OIDC_* / AUTHENTIK_*, REAUTH_KEYS and every credential destination. */
 export function needsReauth(keys: readonly string[]): boolean {

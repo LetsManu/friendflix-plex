@@ -252,7 +252,7 @@ describe('repair, sessions, Authentik, profiles', () => {
       'GET /api/v3/core/users/': () => ({ json: { pagination: { next: 0 }, results: [ak] } }),
       'GET /api/v3/authenticators/admin/all/': () => ({ json: [{ type: 'authentik_stages_authenticator_webauthn.webauthndevice', confirmed: true }] }),
       'GET /api/v3/flows/instances/default-recovery-flow/': () => ({ json: { pk: 'f1' } }),
-      'GET /api/v3/flows/bindings/': () => ({ json: { pagination: { next: 0 }, results: [{ order: 10, stage: 'mail', stage_obj: { component: 'ak-stage-email' } }] } }),
+      'GET /api/v3/flows/bindings/': () => ({ json: { pagination: { next: 0 }, results: [{ order: 10, stage: 'mail', stage_obj: { component: 'ak-stage-email-form', meta_model_name: 'authentik_stages_email.emailstage' } }] } }),
       'POST /api/v3/core/users/3/recovery_email/': (u) => { posted.push(u.search); return { status: 204 }; },
     });
     try {

@@ -34,7 +34,7 @@ Solange ein Titel auf dem Fernseher läuft (Chromecast oder AirPlay), kann man i
 
 ## Das Cast-Token
 
-Der Receiver kann weder Cookies noch eigene Header senden. Deshalb steht ein **Cast-Token** im Pfad: `https://portal.example.com/media/c/<token>/Videos/<id>/master.m3u8?…`. Jellyfin liefert in Playlists relative URIs, daher erben alle Segmente und Untertitel den Pfad.
+Der Receiver kann weder Cookies noch eigene Header senden. Deshalb steht ein **Cast-Token** im Pfad: `https://friend.example.com/media/c/<token>/Videos/<id>/master.m3u8?…`. Jellyfin liefert in Playlists relative URIs, daher erben alle Segmente und Untertitel den Pfad.
 
 Eigenschaften:
 

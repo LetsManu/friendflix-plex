@@ -19,6 +19,8 @@ export interface KV {
   delIfEquals(key: string, value: string): Promise<boolean>;
   /** Atomic counter: increments (creating it at 1 with the ttl on first use) and returns the new value. */
   incr(key: string, ttlSeconds: number): Promise<number>;
+  /** Atomic decrement of an existing positive counter, keeping its ttl (a reservation given back); never creates the key. The new value, or 0. */
+  decr(key: string): Promise<number>;
   /** Keys starting with prefix. */
   keys(prefix: string): Promise<string[]>;
   ping(): Promise<boolean>;
@@ -52,9 +54,14 @@ export class RedisKV implements KV {
     return (await this.redis.eval(lua, 1, key, value)) === 1;
   }
   async incr(key: string, ttl: number) {
-    const n = await this.redis.incr(key);
-    if (n === 1) await this.redis.expire(key, ttl);
-    return n;
+    // one atomic call: INCR and EXPIRE as two calls could leave a counter without a TTL after a crash in between (a permanent
+    // in-app lock for that name); a counter found without a TTL (ttl -1) gets one too
+    const lua = "local n = redis.call('incr', KEYS[1]) if n == 1 or redis.call('ttl', KEYS[1]) == -1 then redis.call('expire', KEYS[1], ARGV[1]) end return n";
+    return Number(await this.redis.eval(lua, 1, key, String(ttl)));
+  }
+  async decr(key: string) {
+    const lua = "local v = tonumber(redis.call('get', KEYS[1])) if v and v > 0 then return redis.call('decr', KEYS[1]) else return 0 end";
+    return Number(await this.redis.eval(lua, 1, key));
   }
   async keys(prefix: string) {
     const out: string[] = [];
@@ -116,6 +123,14 @@ export class MemoryKV implements KV {
     const n = (cur === null ? 0 : Number(cur)) + 1;
     const e = this.m.get(key);
     this.m.set(key, { v: String(n), exp: cur === null || !e ? Date.now() + ttl * 1000 : e.exp });
+    return n;
+  }
+  async decr(key: string) {
+    const cur = this.live(key);
+    const e = this.m.get(key);
+    if (cur === null || !e || !(Number(cur) > 0)) return 0;
+    const n = Number(cur) - 1;
+    this.m.set(key, { v: String(n), exp: e.exp });
     return n;
   }
   async mget(keys: string[]) {

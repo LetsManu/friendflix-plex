@@ -143,7 +143,7 @@
   {#if sumErr && !sum}<p class="muted small" role="alert">{$t('adminContent.hygiene.loadFailed')}</p>{/if}
 
   <DataTable
-    caption={$t('admin.tabs.hygiene')} {rows} {columns} key={(r) => r.itemId} {error} pageSize={PAGE} bind:page bind:q bind:sort total={rows === null ? null : total}
+    caption={$t('admin.tabs.hygiene')} {rows} {columns} key={(r) => r.itemId} {error} pageSize={PAGE} bind:page bind:q bind:sort {total}
     filterable filterPlaceholder={$t('adminContent.hygiene.search')} emptyText={$t('adminContent.hygiene.empty')} busyKey={(r) => `hyg:${r.itemId}`}
     rowLabel={(r) => rowTitle(r)} on:query={onQuery} on:retry={reloadAll} {actions}>
     <svelte:fragment slot="toolbar">

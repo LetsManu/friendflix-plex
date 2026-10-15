@@ -1,0 +1,84 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+# SPDX-FileCopyrightText: 2026 Manuel Weißböck
+# SPDX-License-Identifier: AGPL-3.0-or-later
+version: 1
+metadata:
+  name: FriendFlix - change e-mail with confirmation
+entries:
+  - model: authentik_flows.flow
+    id: flow
+    identifiers:
+      slug: friendflix-email-change
+    attrs:
+      name: FriendFlix e-mail change
+      title: Change e-mail address
+      designation: stage_configuration
+      authentication: require_authenticated
+  - model: authentik_stages_prompt.prompt
+    id: field-email
+    identifiers:
+      name: friendflix-email-change-field
+    attrs:
+      field_key: email
+      label: New e-mail address
+      type: email
+      required: true
+      placeholder: ""
+      order: 0
+  - model: authentik_stages_prompt.promptstage
+    id: prompt
+    identifiers:
+      name: friendflix-email-change-prompt
+    attrs:
+      fields:
+        - !KeyOf field-email
+  - model: authentik_stages_email.emailstage
+    id: email
+    identifiers:
+      name: friendflix-email-change-confirm
+    attrs:
+      use_global_settings: true
+      template: friendflix-email-change.html
+      subject: Confirm your new e-mail address
+      activate_user_on_success: false
+      token_expiry: minutes=30
+  - model: authentik_stages_user_write.userwritestage
+    id: write
+    identifiers:
+      name: friendflix-email-change-write
+    attrs:
+      user_creation_mode: never_create
+  - model: authentik_policies_expression.expressionpolicy
+    id: to-new-address
+    identifiers:
+      name: friendflix-email-change-send-to-new-address
+    attrs:
+      expression: |
+        plan = context["flow_plan"]
+        plan.context["pending_user"] = request.user
+        plan.context["email"] = context["prompt_data"]["email"]
+        return True
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow
+      stage: !KeyOf prompt
+      order: 10
+  - model: authentik_flows.flowstagebinding
+    id: email-binding
+    identifiers:
+      target: !KeyOf flow
+      stage: !KeyOf email
+      order: 20
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf to-new-address
+      target: !KeyOf email-binding
+      order: 0
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow
+      stage: !KeyOf write
+      order: 30

@@ -1,0 +1,21 @@
+{
+  "flow_info": {
+    "title": "Welcome to authentik!",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/?next=%2F",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-authenticator-validate",
+  "pending_user": "anna",
+  "pending_user_avatar": "data:image/svg+xml;base64,PHN2Zy8+",
+  "device_challenges": [
+    {
+      "device_class": "sms",
+      "device_uid": "4",
+      "challenge": {},
+      "last_used": null
+    }
+  ],
+  "configuration_stages": []
+}

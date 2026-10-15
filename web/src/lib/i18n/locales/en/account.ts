@@ -283,8 +283,6 @@ const en: Translation<typeof de> = {
   /** /pending: a login without an invite waits for an admin */
   pending: {
     pageTitle: 'Access request',
-    title: 'Request sent',
-    sent: 'Your access request was sent. An admin will approve it soon.',
     autoUpdate: 'This page updates by itself.',
     approvedTitle: 'You’re in',
     approvedText: 'An admin approved your access. Sign in now.',
@@ -353,8 +351,8 @@ const en: Translation<typeof de> = {
       avatar: 'Colour',
       email: 'E-mail',
       noEmail: 'No e-mail address on file',
-      emailHint: 'The e-mail address cannot be changed here yet.',
-      emailManage: 'Manage e-mail on the sign-in page',
+      emailHint: 'You change the e-mail address under "Security".',
+      emailManage: 'Go to the e-mail address',
       save: 'Save',
       saved: 'Profile saved.',
       nameInvalid: 'The name must be 1 to 60 characters long and must not contain control characters.',
@@ -371,7 +369,6 @@ const en: Translation<typeof de> = {
       notAvailableHint: 'The state cannot be checked right now.',
       manage: 'Manage on the sign-in page',
       newTab: '(opens in a new tab)',
-      coming: 'Changing your password and 2FA in FriendFlix is coming.',
     },
     sessions: {
       title: 'Sessions & devices',

@@ -116,7 +116,8 @@ describe('expiryTick', () => {
     // the locked admin gets the account notice; only the remaining active admin gets the admin notice
     expect((await notices('notify.access.endedAdmin')).map((n) => n.user_id)).toEqual([adminId, ids.ben]);
     expect((await notices('notify.access.ended')).map((n) => n.user_id)).toEqual([adminId]);
-    await env.pool.query("update users set disabled=false, locked_reason=null where id=$1", [adminId]);
+    // unlocked with the access extended: a sign-in with ended access would lock the account again (loginFinish, Ruling 7)
+    await env.pool.query("update users set disabled=false, locked_reason=null, access_until=null where id=$1", [adminId]);
     admin = await env.login(); // the lock revoked the admin's session
   });
 });

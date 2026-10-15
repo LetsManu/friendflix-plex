@@ -310,4 +310,19 @@ test.describe('admin: settings', () => {
     const nav = page.getByRole('navigation', { name: 'Admin-Bereiche' });
     await expect(nav.getByRole('link', { name: 'Einstellungen' })).toHaveAttribute('aria-current', 'page');
   });
+  test('LOGIN_UI starts with "Automatisch" and offers FriendFlix / Authentik; clearing it sends null', async ({ page, api }) => {
+    await page.goto('/admin/settings');
+    const row = setting(page, 'Anmeldeseite');
+    const sel = row.getByRole('combobox');
+    await expect(sel).toHaveValue('');
+    await expect(sel.locator('option')).toHaveText(['Automatisch', 'FriendFlix', 'Authentik']);
+    await sel.selectOption('authentik');
+    await card(page, 'Anmeldung').getByRole('button', { name: 'Speichern' }).click();
+    await expect.poll(() => api.settings.puts.length).toBe(1);
+    expect(api.settings.puts[0]!.values).toEqual({ LOGIN_UI: 'authentik' });
+    await sel.selectOption('');
+    await card(page, 'Anmeldung').getByRole('button', { name: 'Speichern' }).click();
+    await expect.poll(() => api.settings.puts.length).toBe(2);
+    expect(api.settings.puts[1]!.values).toEqual({ LOGIN_UI: null });
+  });
 });

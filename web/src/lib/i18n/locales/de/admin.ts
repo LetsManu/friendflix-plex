@@ -312,7 +312,7 @@ export default {
     setup: { completed: '{actor} hat die Einrichtung abgeschlossen' },
     system: { update: '{actor} hat ein Update gestartet' },
     session: { revoke_others: '{actor} hat sich auf anderen Geräten abgemeldet', revoke_device: '{actor} hat ein eigenes Gerät abgemeldet', reauth: '{actor} hat sich erneut angemeldet (für eine Kontoaktion)', reauth_mismatch: '{actor}: erneute Anmeldung mit einem anderen Konto abgelehnt' },
-    account: { export: '{actor} hat die eigenen Daten heruntergeladen', profile: '{actor} hat Name oder Farbe des eigenen Kontos geändert' },
+    account: { export: '{actor} hat die eigenen Daten heruntergeladen', profile: '{actor} hat Name oder Farbe des eigenen Kontos geändert', email: '{actor} hat die eigene E-Mail-Adresse geändert', email_requested: '{actor} hat eine Änderung der eigenen E-Mail-Adresse angefordert', mfa_removed: '{actor} hat einen zweiten Faktor entfernt' },
     tv: { pair: '{actor} hat einen Fernseher gekoppelt', claim: '{actor} hat einen Fernseher verbunden' },
     party: { create: '{actor} hat eine Watch-Party gestartet' },
     preview: { clear: '{actor} hat einen Vorschau-Clip gelöscht', regenerate: '{actor} hat einen Vorschau-Clip neu erzeugen lassen' },

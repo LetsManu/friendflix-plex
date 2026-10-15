@@ -1,0 +1,28 @@
+{
+  "flow_info": {
+    "title": "Welcome to authentik!",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/?next=%2F",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-identification",
+  "user_fields": [
+    "email",
+    "username"
+  ],
+  "pending_user_identifier": null,
+  "password_fields": false,
+  "allow_show_password": false,
+  "flow_designation": "authentication",
+  "captcha_stage": {
+    "js_url": "https://auth.example.com/static/captcha/api.js",
+    "site_key": "fake-site-key-0001",
+    "interactive": true
+  },
+  "primary_action": "Log in",
+  "sources": [],
+  "show_source_labels": false,
+  "enable_remember_me": false,
+  "passkey_challenge": null
+}

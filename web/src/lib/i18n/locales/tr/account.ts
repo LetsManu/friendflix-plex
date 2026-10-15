@@ -284,8 +284,6 @@ const tr: Translation<typeof de> = {
   /** /pending: a login without an invite waits for an admin */
   pending: {
     pageTitle: 'Erişim talebi',
-    title: 'Talep gönderildi',
-    sent: 'Erişim talebin gönderildi. Bir yönetici yakında onaylayacak.',
     autoUpdate: 'Bu sayfa kendiliğinden güncellenir.',
     approvedTitle: 'Erişimin açıldı',
     approvedText: 'Bir yönetici erişimini onayladı. Şimdi giriş yap.',
@@ -354,8 +352,8 @@ const tr: Translation<typeof de> = {
       avatar: 'Renk',
       email: 'E-posta',
       noEmail: 'Kayıtlı e-posta adresi yok',
-      emailHint: 'E-posta adresi burada henüz değiştirilemiyor.',
-      emailManage: 'E-postayı giriş sayfasında yönet',
+      emailHint: 'E-posta adresini "Güvenlik" bölümünde değiştirirsin.',
+      emailManage: 'E-posta adresine git',
       save: 'Kaydet',
       saved: 'Profil kaydedildi.',
       nameInvalid: 'Ad 1 ile 60 karakter arasında olmalı ve kontrol karakteri içermemelidir.',
@@ -372,7 +370,6 @@ const tr: Translation<typeof de> = {
       notAvailableHint: 'Durum şu anda sorgulanamıyor.',
       manage: 'Giriş sayfasında yönet',
       newTab: '(yeni sekmede açılır)',
-      coming: 'Şifreni ve 2FA’yı doğrudan FriendFlix’te değiştirme özelliği yakında geliyor.',
     },
     sessions: {
       title: 'Oturumlar ve cihazlar',

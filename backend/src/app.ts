@@ -12,10 +12,12 @@ import { metricsPlugin } from './metrics.js';
 import { recordError } from './errorlog.js';
 import { HttpError } from './users.js';
 import { accountRoutes } from './routes/account.js';
+import { accountSecurityRoutes } from './routes/accountSecurity.js';
 import { adminRoutes, inviteRoutes } from './routes/admin.js';
 import { adminSettingsRoutes } from './routes/adminSettings.js';
 import { adminUserRoutes } from './routes/adminUsers.js';
 import { authRoutes } from './routes/auth.js';
+import { authFlowRoutes } from './routes/authFlow.js';
 import { castRoutes } from './routes/cast.js';
 import { internalRoutes } from './routes/internal.js';
 import { downloadRoutes } from './routes/downloads.js';
@@ -33,8 +35,10 @@ import { searchRoutes } from './routes/search.js';
 import { seerrRoutes } from './routes/seerr.js';
 import { setupRoutes } from './routes/setup.js';
 import { statsRoutes } from './routes/stats.js';
+import { publicArtRoutes } from './routes/publicArt.js';
 import { tvRoutes } from './routes/tv.js';
 import { clientErrorRoutes } from './clientErrors.js';
+import { recoRoutes } from './routes/reco.js';
 import { playbackTimingRoutes } from './playtiming.js';
 import { mediaRoutes } from './routes/media.js';
 import { socialRoutes } from './routes/social.js';
@@ -62,8 +66,8 @@ export interface Extra {
   logger?: { stream: { write(line: string): void }; level?: string };
 }
 
-/** routes whose bodies hold secrets or one-time credentials (spec Part E3): never logged with an error */
-const SENSITIVE_BODY = /^\/api\/(setup\/|admin\/settings)/;
+/** routes whose bodies hold secrets or one-time credentials (spec Part E3; the in-app sign-in's passwords and codes): never logged with an error */
+const SENSITIVE_BODY = /^\/(api\/(setup\/|admin\/settings)|auth\/flow\/)/;
 
 /**
  * What answers while setup is incomplete (spec Part E1, rulings D23): matched by the route pattern, so an unknown or encoded path is
@@ -72,6 +76,20 @@ const SENSITIVE_BODY = /^\/api\/(setup\/|admin\/settings)/;
 const SETUP_OPEN_GET: ReadonlySet<string> = new Set(['/health', '/api/version']);
 const SETUP_OPEN: ReadonlySet<string> = new Set(['/internal/gateway-config']);
 const SETUP_LOGIN: ReadonlySet<string> = new Set(['/auth/login', '/auth/callback']);
+
+/**
+ * State-changing /api routes that carry no session authority, by route pattern (never the raw url: `/%61pi/...` routes to `/api/...`).
+ * - /api/invite/*: anonymous, token-protected
+ * - /api/client-errors: the browser error beacon (sendBeacon cannot send the csrf header); no ambient authority, rate limited
+ * - /api/tv/code, /api/tv/claim: anonymous, protected by the TV's own poll secret
+ * - /api/restore: acts on the account named by the signed ff_restore cookie, never on a session (another account's live session in the
+ *   same browser must not make it demand that session's token); JSON-only + SameSite + HMAC cookie protect it (routes/auth.ts)
+ * - /api/setup/*: never acts on an account session; requireSetupSession checks its own token (x-ff-setup-csrf against the setup session
+ *   and the ff_setup_csrf cookie). An admin's ff_sid next to an old ff_setup cookie must get 409 setup_complete, never this hook's 403.
+ */
+const CSRF_EXEMPT: ReadonlySet<string> = new Set(['/api/client-errors', '/api/tv/code', '/api/tv/claim', '/api/restore']);
+const CSRF_EXEMPT_PREFIX = /^\/api\/(invite|setup)\//;
+const MUTATING: ReadonlySet<string> = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** requests slower than this are logged (info) with their jf/db/kv breakdown */
 const SLOW_REQUEST_MS = 500;
@@ -117,7 +135,10 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
     }
     // the wizard's and Admin -> Settings' requests carry one-time admin credentials and secrets: the error is logged by its type and
     // code only (an error object may quote a request value), never with a body
-    if (SENSITIVE_BODY.test(req.url)) req.log.error({ err: { type: (err as Error).name, code: (err as { code?: unknown }).code } }, 'unhandled error');
+    // matched against the route pattern (the path as Fastify decoded and routed it: `/%61uth/flow/…` is `/auth/flow/…`), never the raw
+    // url; a request without a route is treated as sensitive too
+    const route = req.routeOptions.url;
+    if (route === undefined || SENSITIVE_BODY.test(route)) req.log.error({ err: { type: (err as Error).name, code: (err as { code?: unknown }).code } }, 'unhandled error');
     else req.log.error({ err }, 'unhandled error');
     if (process.env.DEBUG_TEST) console.error(err);
     return reply.code(500).send({ error: 'internal' });
@@ -170,18 +191,12 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
     return reply.code(503).send({ error: 'setup_required' });
   });
 
-  // CSRF: every state-changing /api request must carry the per-session token.
+  // CSRF: every state-changing /api request must carry the per-session token. Decided by the route pattern (the path as Fastify decoded
+  // and routed it); a request that matched no route gets the strictest branch (checked).
   app.addHook('preHandler', async (req, reply) => {
-    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) || !req.url.startsWith('/api/')) return;
-    if (req.url.startsWith('/api/invite/')) return; // anonymous, token-protected
-    if (req.url.startsWith('/api/client-errors')) return; // browser error beacon: sendBeacon cannot send the csrf header; no ambient authority, rate limited
-    if (req.url.startsWith('/api/tv/code') || req.url.startsWith('/api/tv/claim')) return; // anonymous, protected by the TV's own poll secret (no ambient authority)
-    // /restore acts on the account named by the signed ff_restore cookie, never on a session: another account's live session in
-    // the same browser must not make it demand that session's token. JSON-only + SameSite + HMAC cookie protect it (routes/auth.ts)
-    if (req.url === '/api/restore' || req.url.startsWith('/api/restore?')) return;
-    // /api/setup/* never acts on an account session: requireSetupSession checks its own token (x-ff-setup-csrf against the setup session
-    // and the ff_setup_csrf cookie). An admin's ff_sid next to an old ff_setup cookie must get 409 setup_complete, never this hook's 403.
-    if (req.url.startsWith('/api/setup/')) return;
+    if (!MUTATING.has(req.method)) return;
+    const route = req.routeOptions.url;
+    if (route !== undefined && (!route.startsWith('/api/') || CSRF_EXEMPT.has(route) || CSRF_EXEMPT_PREFIX.test(route))) return;
     const sid = req.cookies.ff_sid;
     const raw = sid ? await ctx.kv.get(`sess:${sid}`) : null;
     if (!raw) return; // unauthenticated -> route handler answers 401
@@ -205,7 +220,10 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   });
 
   authRoutes(app, ctx);
+  authFlowRoutes(app, ctx);
+  publicArtRoutes(app, ctx);
   accountRoutes(app, ctx);
+  accountSecurityRoutes(app, ctx);
   mediaRoutes(app, ctx);
   castRoutes(app, ctx);
   internalRoutes(app, ctx);
@@ -225,6 +243,7 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   sceneRoutes(app, ctx);
   tvRoutes(app, ctx);
   clientErrorRoutes(app, ctx);
+  recoRoutes(app, ctx);
   playbackTimingRoutes(app, ctx);
   reminderRoutes(app, ctx);
   listRoutes(app, ctx);

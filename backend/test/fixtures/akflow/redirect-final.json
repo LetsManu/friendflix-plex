@@ -1,0 +1,5 @@
+{
+  "component": "xak-flow-redirect",
+  "to": "/",
+  "final_redirect": true
+}

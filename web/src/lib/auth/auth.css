@@ -1,0 +1,40 @@
+/* SPDX-FileCopyrightText: 2026 Manuel Weißböck */
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The sign-in screens (lib/auth/*): shared by the step components, so they look the same on /login and inside a dialog (T11). */
+.af-form { display: grid; gap: 12px; }
+.af-form h1 { margin: 0 0 4px; font-size: 1.35rem; line-height: 1.25; }
+.af-form h1:focus { outline: none; }
+.af-sub { margin: -8px 0 4px; color: var(--mut); font-size: .9rem; }
+.af-field { display: grid; gap: 6px; min-width: 0; }
+.af-field label { font-size: .82rem; color: var(--mut); }
+.af-field input { width: 100%; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 13px; font-size: 1rem; }
+.af-field input:focus { outline: none; border-color: var(--acc); box-shadow: 0 0 0 3px rgba(255, 79, 109, .25); }
+.af-secret { position: relative; }
+.af-secret input { padding-right: 52px; }
+.af-secret .icon-btn { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); color: var(--mut); border-radius: 8px; }
+.af-secret .icon-btn:active:not(:disabled) { transform: translateY(-50%) scale(.97); }
+.af-pri, .af-sec { width: 100%; border-radius: 10px; padding: 12px; font-weight: 700; }
+.af-sec, .af-sec:hover:not(:disabled) { background: transparent; color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
+.af-sec:hover:not(:disabled) { background: rgba(255, 255, 255, .06); }
+.af-link { background: none; border: 0; padding: 0; min-height: 44px; color: var(--acc); font: inherit; font-size: .88rem; font-weight: 500; cursor: pointer; text-align: center; justify-self: center; display: inline-flex; align-items: center; justify-content: center; }
+.af-link:hover:not(:disabled) { background: none; text-decoration: underline; }
+a.af-link { text-decoration: none; }
+.af-or { display: flex; gap: 8px; align-items: center; color: var(--mut); font-size: .8rem; }
+.af-or::before, .af-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+/* the live region stays rendered (an empty one is moved out of the layout), so a new error is announced */
+.af-errs:not(.has) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.af-errs.has { display: grid; gap: 4px; justify-items: start; padding: 10px 12px; border-radius: 10px; background: var(--tone-err); color: var(--fg); font-size: .88rem; overflow-wrap: anywhere; }
+.af-errs p { margin: 0; }
+.af-errs .af-link { min-height: 32px; justify-self: start; }
+.af-hint { margin: 0; color: var(--mut); font-size: .88rem; text-align: center; overflow-wrap: anywhere; }
+.af-pill { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border-radius: 999px; padding: 5px 6px 5px 5px; font-size: .88rem; min-width: 0; max-width: 100%; justify-self: start; }
+.af-pill .av { flex: none; width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #ff6b81, #e23c5b); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: .8rem; }
+.af-pill .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.af-pill .af-link { min-height: 32px; padding: 0 8px; }
+.af-code { display: flex; gap: 7px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.af-code label { flex: 1; min-width: 0; }
+.af-code input { width: 100%; height: 52px; min-height: 0; padding: 0; text-align: center; font-size: 1.35rem; font-variant-numeric: tabular-nums; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
+.af-code input:focus { outline: none; border-color: var(--acc); box-shadow: 0 0 0 3px rgba(255, 79, 109, .25); }
+.af-big { width: 62px; height: 62px; border-radius: 18px; background: rgba(255, 79, 109, .14); color: var(--acc); display: grid; place-items: center; margin: 0 auto 4px; }
+.af-center { text-align: center; }
+.af-center .af-sub { margin-top: 0; }

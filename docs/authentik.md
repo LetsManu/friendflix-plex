@@ -22,6 +22,7 @@ The full FriendFlix installation (Jellyfin, request service, Nginx Proxy Manager
 8. [Service account and API token](#8-service-account-and-api-token)
 9. [FriendFlix `.env` values](#9-friendflix-env-values)
 10. [Password recovery by e-mail](#10-password-recovery-by-e-mail)
+    - 10a. [In-app sign-in](#10a-in-app-sign-in)
 11. [Optional: passwordless sign-in with passkeys](#11-optional-passwordless-sign-in-with-passkeys)
 12. [Optional: branding](#12-optional-branding)
 13. [Sessions and logout](#13-sessions-and-logout)
@@ -230,7 +231,7 @@ Variants:
 - [`friendflix-service-account.yaml`](../deploy/authentik/friendflix-service-account.yaml): only the service account and token, if you already have an enrollment flow.
 - [`friendflix-prompt-fix.yaml`](../deploy/authentik/friendflix-prompt-fix.yaml): a prompt stage without placeholder expressions for an existing enrollment flow that fails with `'AnonymousUser' object has no attribute 'group_attributes'` (bind `friendflix-prompt-fixed` instead of the old prompt stage, same order).
 
-The blueprint does **not** create the groups, the provider/application, MFA in the authentication flow or recovery. [`friendflix-setup.yaml`](../deploy/authentik/friendflix-setup.yaml) creates the groups, the provider and the application, but needs the context `{"public_url": "https://portal.example.com", "admin_group": "friendflix-admins"}`, which the *Flows → Import* dialog cannot pass: import it under *Customization → Blueprints → Create* with that context *(unverified)*, or do [§4](#4-groups) and [§5](#5-oauth2openid-provider-and-application) by hand. Then [§6](#6-authentication-flow-with-mandatory-mfa) and [§8.3](#83-copy-the-token) (copy the token). Sections 7 and 8 describe what the blueprint builds, in case you prefer to click it together or need to adapt it.
+The blueprint does **not** create the groups, the provider/application, MFA in the authentication flow or recovery. [`friendflix-setup.yaml`](../deploy/authentik/friendflix-setup.yaml) creates the groups, the provider and the application, but needs the context `{"public_url": "https://friend.example.com", "admin_group": "friendflix-admins"}`, which the *Flows → Import* dialog cannot pass: import it under *Customization → Blueprints → Create* with that context *(unverified)*, or do [§4](#4-groups) and [§5](#5-oauth2openid-provider-and-application) by hand. Then [§6](#6-authentication-flow-with-mandatory-mfa) and [§8.3](#83-copy-the-token) (copy the token). Sections 7 and 8 describe what the blueprint builds, in case you prefer to click it together or need to adapt it.
 
 ## 4. Groups
 
@@ -262,7 +263,7 @@ How FriendFlix uses groups (from `backend/src/routes/auth.ts`):
 | Client type | **Confidential** | the backend authenticates with the client secret (and additionally uses PKCE S256) |
 | Client ID | generated – copy | → `OIDC_CLIENT_ID` |
 | Client Secret | generated – copy | → `OIDC_CLIENT_SECRET` (or the Docker secret `oidc_client_secret`) |
-| Redirect URIs/Origins | matching mode **Strict**, URL `https://portal.example.com/auth/callback` | must match `${PUBLIC_URL}/auth/callback` character for character (see note) |
+| Redirect URIs/Origins | matching mode **Strict**, URL `https://friend.example.com/auth/callback` | must match `${PUBLIC_URL}/auth/callback` character for character (see note) |
 | Signing Key | `authentik Self-signed Certificate` | ID tokens signed with RS256; without a key Authentik signs with HS256 and the client secret |
 | Encryption Key | **empty** | FriendFlix cannot decrypt encrypted (JWE) ID tokens |
 | *Advanced protocol settings* | | |
@@ -279,8 +280,8 @@ How FriendFlix uses groups (from `backend/src/routes/auth.ts`):
 
 **Redirect URI.** The backend builds it as `new URL('/auth/callback', PUBLIC_URL)` (`backend/src/oidc.ts`). Consequences:
 
-- Scheme and host come from `PUBLIC_URL`; any path in `PUBLIC_URL` is dropped. FriendFlix must run at the root of its own host name (`https://portal.example.com`, not `https://example.com/friendflix`).
-- No trailing slash after `callback`. `https://portal.example.com/auth/callback/` or `http://…` will not match.
+- Scheme and host come from `PUBLIC_URL`; any path in `PUBLIC_URL` is dropped. FriendFlix must run at the root of its own host name (`https://friend.example.com`, not `https://example.com/friendflix`).
+- No trailing slash after `callback`. `https://friend.example.com/auth/callback/` or `http://…` will not match.
 - One entry is enough. Add a second one only if you really serve the portal under a second host name (and then that host must also be `PUBLIC_URL` for that instance).
 
 **Scopes the backend requests:** `openid profile email groups`. Authentik has no `groups` scope by default and silently drops unknown scopes, so you do **not** need a custom `groups` mapping: the default `profile` mapping already returns `groups`. (A custom scope mapping named `groups` would also work, but is unnecessary.) `email_verified` is not evaluated.
@@ -292,7 +293,7 @@ How FriendFlix uses groups (from `backend/src/routes/auth.ts`):
 | Name | `FriendFlix` |
 | Slug | `friendflix` → part of `OIDC_ISSUER` (reserved slugs `authorize`, `token`, `device`, `userinfo`, `introspect`, `revoke` are not allowed) |
 | Provider | `FriendFlix` |
-| Launch URL | `https://portal.example.com/` (the tile in Authentik's user library) |
+| Launch URL | `https://friend.example.com/` (the tile in Authentik's user library) |
 | Policy engine mode | `any` |
 | Icon | optional, without third-party brand marks (e.g. `docs/images/logo.svg`) |
 
@@ -403,7 +404,7 @@ Leave `AUTHENTIK_URL`, `AUTHENTIK_API_TOKEN` and `AUTHENTIK_ENROLL_FLOW` empty. 
 
 ## 8. Service account and API token
 
-The backend calls the Authentik API with `Authorization: Bearer <AUTHENTIK_API_TOKEN>` for invitations, for the admin user page (*Admin → Users →* a person: Authentik user, two-factor state, *Send password link*), for the account page (*My space → Account*: name, two-factor state) and for account deletion (the Authentik user is deactivated). Give it the least privileges that work.
+The backend calls the Authentik API with `Authorization: Bearer <AUTHENTIK_API_TOKEN>` for invitations, for the admin user page (*Admin → Users →* a person: Authentik user, two-factor state, *Send password link*), for the account page (*My space → Account*: name, two-factor state, and in *Security* the list and removal of the person's own devices and the e-mail change) and for account deletion (the Authentik user is deactivated). Give it the least privileges that work.
 
 ### 8.1 Service account
 
@@ -419,10 +420,15 @@ Since 2025.12 Authentik permissions are assigned to **roles** only. *Directory �
 | Can add Invitation | `authentik_stages_invitation.add_invitation` | `POST /api/v3/stages/invitation/invitations/` |
 | Can view Invitation | `authentik_stages_invitation.view_invitation` | reading invitations (granted by the blueprint; not strictly needed by the current code) |
 | Can delete Invitation | `authentik_stages_invitation.delete_invitation` | `DELETE /api/v3/stages/invitation/invitations/<pk>/` after redemption/revocation |
-| Can view User | `authentik_core.view_user` | `GET /api/v3/core/users/?…` (finds the Authentik user of a portal account by its `sub`) and the user in the password-link call |
+| Can view User | `authentik_core.view_user` | `GET /api/v3/core/users/?…` (finds the Authentik user of a portal account by its `sub`; the username for the in-app re-authentication; whether a new e-mail address already belongs to another Authentik user) and the user in the password-link call |
 | Can view TOTP Device | `authentik_stages_authenticator_totp.view_totpdevice` | two-factor state: authenticator app (`GET /api/v3/authenticators/admin/all/?user=<pk>`) |
 | Can view WebAuthn Device | `authentik_stages_authenticator_webauthn.view_webauthndevice` | two-factor state: passkey / security key (same call) |
 | Can view Static Device | `authentik_stages_authenticator_static.view_staticdevice` | two-factor state: recovery codes (same call) |
+| Can delete TOTP Device | `authentik_stages_authenticator_totp.delete_totpdevice` | *Security → Remove* on the account page: `DELETE /api/v3/authenticators/admin/totp/<pk>/` |
+| Can delete WebAuthn Device | `authentik_stages_authenticator_webauthn.delete_webauthndevice` | the same for a passkey (`…/admin/webauthn/<pk>/`) |
+| Can delete Static Device | `authentik_stages_authenticator_static.delete_staticdevice` | the same for recovery codes, and the old codes after new ones are confirmed (`…/admin/static/<pk>/`) |
+| Can view Authenticator Validation Stage | `authentik_stages_authenticator_validate.view_authenticatorvalidatestage` | `GET /api/v3/stages/authenticator/validate/<pk>/`: whether the login flow denies people without a second factor (the account page then refuses to remove the last one). The bindings list does not carry this setting. Without it the setting is unknown, removal is allowed and the status card warns. |
+| Can view OAuth2/OpenID Provider | `authentik_providers_oauth2.view_oauth2provider` | `GET /api/v3/providers/oauth2/?client_id=`: the status card's consent and grant-type checks. Without it Authentik answers 403 and the card shows a permission warning instead of those checks. |
 | Can view Flow Stage Binding | `authentik_flows.view_flowstagebinding` | `GET /api/v3/flows/bindings/?target=<flow pk>` (finds the e-mail stage of the recovery flow) |
 | Can view Email Stage | `authentik_stages_email.view_emailstage` | checked by Authentik when it sends the password link (without it: "Email stage not found") |
 | Reset Password | `authentik_core.reset_user_password` | `POST /api/v3/core/users/<pk>/recovery_email/` (*Send password link*) |
@@ -433,6 +439,8 @@ Assign the role to the service account (user → *Roles* → *Assign*, see [Auth
 > **"Can change User" is global.** Authentik grants it for every user, not only for the people who use FriendFlix: a leaked token could rename or deactivate any Authentik account, admins included. FriendFlix itself only ever sends `name` and `is_active` for the Authentik user of the account in question, but the scope is wider than that. If you do not want this, leave the permission out (narrow the role, or remove the line from the blueprint before importing it). Then a name change on the account page answers "The sign-in page did not accept the change", and an account deletion stops at cleanup step 6 until you deactivate the Authentik user by hand: FriendFlix sees on its next try (within a minute) that the user is already inactive and finishes the step without changing anything in Authentik. That check needs *Can view User*. See [§8.4](#84-account-page-and-account-deletion).
 
 Without *Can view Flow* the backend logs `Authentik flow lookup failed` and creates the invitation without a flow binding (still works, less strict). Without *Can delete Invitation* used invitations stay until they expire.
+
+> **The device permissions are global too.** Like *Can change User*, the three *Can delete … Device* permissions cover every Authentik user's devices. FriendFlix only deletes a device that it found in the signed-in person's own list (`admin/all/?user=<pk>`) right before, after a re-authentication of at most 10 minutes; a leaked token could delete anybody's devices. Without them, *Remove* on the account page fails and *New recovery codes* leaves the old codes working (the step is logged with a code only).
 
 > **Two-factor state needs the three device permissions.** Authentik answers the device list with only the devices the token may view, and with no error. A token without *Can view TOTP / WebAuthn / Static Device* gets an empty list, so every person silently shows **"No two-factor sign-in"** on the admin user page, even when they use 2FA. Without *Can view User* the Authentik user is not found at all: the page shows "2FA unknown" and offers no *Send password link*. After you fix the permissions, FriendFlix may keep showing the old answer until its cache expires: up to 10 minutes for the two-factor state, up to 1 hour for the user lookup.
 
@@ -458,10 +466,11 @@ Then click the copy icon in the token's row and put the key into `AUTHENTIK_API_
 Each person manages their own account under *My space → Account* (`/me/account`, main profile only). What it needs from Authentik:
 
 - **Name:** with the API token, a new name is written to Authentik first (`name`, needs *Can change User*), then to FriendFlix. Without the token the change stays in FriendFlix; the sign-in never copies the name back, so nothing overwrites it.
-- **E-mail is read-only for now** (a later release may change that). The account page shows the address FriendFlix stored at the first sign-in and links to Authentik ("Manage e-mail on the sign-in page"). An address changed there is neither copied into FriendFlix nor re-verified by FriendFlix. Whether people may change their name or e-mail in Authentik at all is an Authentik setting (*System → Settings*: *Allow users to change name*, on by default, and *Allow users to change email*, off by default).
-- **The user-settings link** ("Manage on the sign-in page", next to the two-factor state and the e-mail) is the origin of `OIDC_ISSUER` plus `/if/user/#/settings`, e.g. `https://auth.example.com/if/user/#/settings`. It needs no API token. It is hidden when `OIDC_ISSUER` is not an Authentik provider URL (no `/application/o/` in its path). Until a later release brings these screens into FriendFlix, people change their password, authenticator app, passkeys and recovery codes there.
+- **E-mail:** the profile shows the address read-only and points to the *E-mail address* row of *Security*, where *Change* runs the e-mail change flow ([§10a, step 7](#10a-in-app-sign-in)): a re-authentication, the new address, a confirmation link to that address. Without the flow in Authentik the row has no *Change* button (admins see a note). An address changed on Authentik's own pages is neither copied into FriendFlix nor re-verified by FriendFlix. Whether people may change their name or e-mail in Authentik's user settings at all is an Authentik setting (*System → Settings*: *Allow users to change name*, on by default, and *Allow users to change email*, off by default).
+- **Security** (password, authenticator app, passkeys, recovery codes): each action first asks for the password and second factor again in a dialog (the in-app re-authentication, [§10a](#10a-in-app-sign-in)), then runs Authentik's setup or password-change flow in the same dialog. Removing a device uses the device permissions of [§8.2](#82-role-with-exactly-these-global-permissions). When passkeys cannot run on FriendFlix's own page, *Add passkey* links to Authentik's passkey setup instead.
+- **The user-settings link** ("Manage on the sign-in page") is the origin of `OIDC_ISSUER` plus `/if/user/#/settings`, e.g. `https://auth.example.com/if/user/#/settings`. It needs no API token. It is hidden when `OIDC_ISSUER` is not an Authentik provider URL (no `/application/o/` in its path). It stays as the way to Authentik's own user settings (for example its sessions or connected sources).
 - **Two-factor state:** as on the admin user page (three device permissions, [§8.2](#82-role-with-exactly-these-global-permissions)); without the API token the page shows "Not available".
-- **Re-authentication:** deleting the account asks the person to sign in again first. FriendFlix starts a login with `prompt=login` and `max_age=0`, so Authentik asks for the password (and MFA) even when a session exists. The confirmation is valid for 10 minutes ([§13](#13-sessions-and-logout)).
+- **Re-authentication:** deleting the account, removing a device, the *Security* actions and the e-mail change ask the person to sign in again first. The *Security* actions and the device removal use a dialog that asks for the password (and second factor) through the login flow. Account deletion (and the dialog's *Confirm with a passkey instead*) starts a login with `prompt=login` and `max_age=0` instead, so Authentik asks even when a session exists. The confirmation is valid for 10 minutes ([§13](#13-sessions-and-logout)).
 - **Account deletion** deactivates the Authentik user (`is_active: false`) as the last of six cleanup steps, 7 days after the request ([security.md](security.md#account-deletion)). During those 7 days the Authentik user stays active, because signing in is how the person restores the account. FriendFlix never deletes the Authentik user.
   - **Without the API token**, or when the Authentik user is not found, the deletion still finishes (the audit entry `user.deleted` says `authentik: not_configured` or `not_found`), but the Authentik user stays active. The person can then sign in again and lands in the approval queue (*Waiting for approval*) as a new person; a member of `ADMIN_GROUP` gets a new admin account instead. Deactivate or delete them in Authentik yourself.
   - **Without *Can change User*** step 6 fails with `authentik_token_rejected` and is retried once a minute; *Admin → Users*, filter *Deletion pending*, shows the cleanup row with the error. It ends when you add the permission, or when you deactivate the Authentik user by hand: step 6 looks the user up first (*Can view User*) and finishes without a change when it is already inactive. Until then the cleanup record keeps the person's name, e-mail and Authentik `sub`.
@@ -519,9 +528,68 @@ One recovery flow serves two things: *Forgot username or password?* on the Authe
 5. Give the service account the password-link permissions from [§8.2](#82-role-with-exactly-these-global-permissions) (re-importing the blueprint does it).
 6. Test both ways with a test user that has an e-mail address: *Forgot username or password?* in a private browser window, and *Send password link* on that user's admin page. The link in the e-mail leads to `https://auth.example.com/if/flow/default-recovery-flow/?flow_token=…`: Authentik takes host and brand from the request, so `AUTHENTIK_URL` must be the public Authentik address.
 
-If you use a different recovery flow, put its slug into `AUTHENTIK_RECOVERY_FLOW`; it needs an e-mail stage (`ak-stage-email`) bound to it.
+If you use a different recovery flow, put its slug into `AUTHENTIK_RECOVERY_FLOW`; it needs an e-mail stage bound to it.
+
+Optional: send the reset link into FriendFlix instead of Authentik's page. That belongs to the in-app sign-in: [§10a](#10a-in-app-sign-in), step 4.
 
 Lost MFA device: there is no self-service reset. As admin open *Directory → Users* → the user → *MFA Devices*, delete the device; on the next login the user is forced to enrol a new one. Alternatively let users create recovery codes (bind `default-authenticator-static-setup` as an additional configuration stage and add *Static Tokens* to the device classes).
+
+## 10a. In-app sign-in
+
+By default FriendFlix shows its own sign-in screens over a wall of covers (`/login`) and plays the sign-in through Authentik's flow executor behind the scenes: password, second factor, "Forgot password?", invite sign-up and passkeys never leave the FriendFlix page. Authentik stays the identity provider and still enforces every stage of its flows. Nothing about this changes the OIDC setup of [§5](#5-oauth2openid-provider-and-application); the classic Authentik pages always remain reachable as a fallback (`/auth/login?classic=1`, linked from every screen).
+
+**Admin → Settings → Sign-in** (and the status card below) controls it:
+
+| Setting | Meaning |
+|---|---|
+| `LOGIN_UI` | `app` (FriendFlix's own screens) or `authentik` (the classic redirect). Unset = automatic: `app` as soon as `AUTHENTIK_URL` and `AUTHENTIK_API_TOKEN` are set. Changing it needs a recent re-authentication. |
+| `AUTHENTIK_LOGIN_FLOW` | Slug of the login flow the app drives (default `default-authentication-flow`). |
+| `AUTHENTIK_INVALIDATION_FLOW` | Slug of the flow that runs at sign-out (default `default-invalidation-flow`). |
+| `AUTHENTIK_RECOVERY_FLOW`, `AUTHENTIK_ENROLL_FLOW` | As before ([§10](#10-password-recovery-by-e-mail), [§7](#7-enrollment-flow-for-invitations)); the app drives them too. |
+| `AUTHENTIK_TOTP_SETUP_FLOW`, `AUTHENTIK_STATIC_SETUP_FLOW`, `AUTHENTIK_WEBAUTHN_SETUP_FLOW`, `AUTHENTIK_PASSWORD_CHANGE_FLOW` | The setup flows the account page's *Security* section runs after a re-authentication (step 1). |
+| `AUTHENTIK_EMAIL_CHANGE_FLOW` | Slug of the e-mail change flow (default `friendflix-email-change`, step 7). Set it only if you imported the flow under another slug. |
+| `PASSKEYS_IN_APP` | `auto` (default) or `off`, see step 5. Changing it needs a recent re-authentication. |
+| `LOGIN_COVER_WALL` | The cover wall behind the sign-in (Admin → Settings → General, or the switch on the status card). See [security.md](security.md#in-app-sign-in). |
+
+**Admin → Status → Sign-in** checks the Authentik side and lists what to fix. A warning never switches the mode; the classic page stays available.
+
+1. **Flows and slugs.** The app drives the login, recovery, enrollment and invalidation flows plus the setup flows for the authenticator app, recovery codes and passkeys, and password change. The stock flows of Authentik 2026.8 work unchanged. A flow may contain these stages: identification, password, authenticator validation, TOTP / static / WebAuthn authenticator setup, e-mail, prompt, user login, user write, invitation, deny and user logout. Any other stage (captcha, consent, a source redirect) cannot be shown; the person is sent on to Authentik's sign-in page at that step, and the check lists the flow as *Not supported*.
+2. **Implicit consent.** The provider's *Authorization flow* must not ask for consent (the stock `default-provider-authorization-implicit-consent`): FriendFlix runs authorize silently at the end of the flow and cannot answer a consent screen. The check reads the authorization flow's stages.
+3. **Grant types.** The provider needs the grant type **`authorization_code`** ticked (*Applications → Providers →* the provider → *Edit* → *Advanced protocol settings*). Providers created on 2026.8 start with **none**, and authorize then fails with `invalid_request`; sign-in fails for everybody. The check shows a warning naming this.
+4. **The reset link into FriendFlix** (optional). With the template [`deploy/authentik/templates/friendflix-recovery.html`](../deploy/authentik/templates/friendflix-recovery.html) the e-mail link leads to `https://friend.example.com/reset?token=…` instead of Authentik's page. FriendFlix's page removes the token from the address bar on load and does nothing until the person clicks **Weiter**/**Continue**, so a mail scanner that opens the link does not use it up. Then it continues Authentik's own recovery flow (MFA check and new password included) and asks the person to sign in with the new password.
+   1. Replace `friend.example.com` in the template's link with your FriendFlix address (its first line names the value; this is the one edited line).
+   2. Authentik reads custom templates only from `/templates`, which the image does not create (the `/templates` mount is not part of the stock stack): mount a folder with the file there on **server and worker** (e.g. `./authentik/templates:/templates:ro`) and recreate both containers.
+   3. *Flows and Stages → Stages* → `default-recovery-email` → *Edit* → **Template**: `friendflix-recovery.html`. The admin's *Send password link* uses the same stage, so its mails lead to FriendFlix as well.
+
+   > **Before you set the template:** it applies to the shared stage `default-recovery-email`, so **every** recovery mail links to FriendFlix's `/reset`: the ones from *Forgot username or password?* on Authentik's own page and the admin's *Send password link* too.
+   > - **Only while the in-app sign-in is on** (`LOGIN_UI=app`, or `LOGIN_UI` unset with `AUTHENTIK_URL` and `AUTHENTIK_API_TOKEN` set). With `LOGIN_UI=authentik` the `/reset` page forwards the token nowhere and only offers Authentik's sign-in page, so recovery mails stop working. Switch the template back to Authentik's default before you change `LOGIN_UI` to `authentik`.
+   > - **Accounts whose only second factor is a passkey (WebAuthn) cannot reset their password themselves:** FriendFlix runs recovery without the app host, so the passkey check cannot happen in the app, and the click has already used up the link. The page says so and asks the person to add a TOTP app or ask an admin. As admin: *Directory → Users →* the user → *MFA Devices* → delete the passkey, then *Send password link* on the FriendFlix admin user page. With the example flow (its MFA check skips accounts without a device) the reset then works in FriendFlix, and the next sign-in makes the person enrol a second factor again ([§6](#6-authentication-flow-with-mandatory-mfa)).
+5. **Passkeys in the app.** WebAuthn binds a passkey to the host of the page that asks for it. For passkeys to work on FriendFlix's own page, the backend forwards the FriendFlix host (`X-Forwarded-Host`) to Authentik when it plays the login, so Authentik issues the challenge for `friend.example.com`. This works when **all** of these hold:
+   - `PUBLIC_URL` is `https` (a `localhost` address is fine for tests);
+   - Authentik trusts the backend as a proxy: set `AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS` on **server** (and worker) to a range containing the backend's address (e.g. `172.18.0.0/16` for the compose network), otherwise Authentik ignores the forwarded host;
+   - the backend reaches Authentik **directly** (`AUTHENTIK_URL` points to Authentik, not through the public reverse proxy): the proxy would overwrite the forwarded host, and Authentik would see the proxy's address as the client IP instead of the person's;
+   - `PASSKEYS_IN_APP` is not `off`.
+
+   The status card probes this (an anonymous discovery request with the forwarded host) and shows *Passkeys: in FriendFlix* or *on the sign-in page* with the reason. The browser still binds every assertion to the app origin; only the backend sends the forwarded host, and only for sign-in, re-authentication and passkey setup. **Trade-off:** a passkey is bound to one host. Passkeys created in FriendFlix work only there; passkeys created earlier on Authentik's pages work only on Authentik's sign-in page (and the other way round). With `PASSKEYS_IN_APP=off` (or a failing precondition) people keep using passkeys on Authentik's page; the sign-in screen links there.
+6. **`?classic=1`.** `https://friend.example.com/auth/login?classic=1` always goes straight to Authentik's own sign-in page, whatever `LOGIN_UI` says; it is the way back in when the Authentik side is mis-configured, and the first-admin setup (`?setup=1`) uses the classic flow too.
+7. **The e-mail change flow** (*Security → E-mail address → Change* on the account page). It is **not** part of the wizard's blueprints (`AK_EXTRA_BLUEPRINTS` stays empty): import it by hand once.
+   1. Put [`deploy/authentik/friendflix-email-change.yaml`](../deploy/authentik/friendflix-email-change.yaml) into a folder mounted at `/blueprints/custom/` on Authentik's **server and worker** (e.g. `./authentik/blueprints:/blueprints/custom:ro`) and recreate both containers. Authentik discovers the file; apply it under *Customization → Blueprints* (*FriendFlix - change e-mail with confirmation* → *Apply*). It creates the flow `friendflix-email-change`: a prompt for the new address, an e-mail stage with a link valid for 30 minutes, and a user write stage.
+   2. Put [`deploy/authentik/templates/friendflix-email-change.html`](../deploy/authentik/templates/friendflix-email-change.html) into the `/templates` folder of step 4 and replace `friend.example.com` in its link with your FriendFlix address (its first line names the value; this is the one edited line). The link opens `/confirm-email`, which, like `/reset`, takes the token out of the address bar and continues only after a click.
+   3. Check *Admin → Status → Sign-in* (a flow that was missing is looked up again within a minute): the row *Change e-mail address* must say *OK*; while the flow is not imported it says *Missing*, without a warning. The account page then shows the *Change* button. A custom slug goes into `AUTHENTIK_EMAIL_CHANGE_FLOW`.
+
+   **Why the policy sets `pending_user` and `email`.** The flow's expression policy (bound to the e-mail stage, evaluated when the stage is reached) puts the signed-in person into `pending_user` and the typed address into the plan's `email`. Authentik's e-mail stage sends to the plan's `email` when it is set, so the mail goes **only to the new address**: whoever receives it proves they own that address. `pending_user` is the account the link continues for; the person's own address is not touched yet. **Nothing changes until the link is clicked:** the user write stage, which stores the new address in Authentik, comes after the e-mail stage. After the click FriendFlix copies Authentik's address into its own account record. The audit log names the field (`account.email_requested`, `account.email`, `{ fields: ['email'] }`), never an address. An address that belongs to another FriendFlix or Authentik account is refused before any mail goes out.
+
+**Setup flows and stage bindings (step 1).** After a re-authentication in the same Authentik session, the account page runs these flows; the stock flows of Authentik 2026.8 work unchanged:
+
+| Action on the account page | Setting | Default slug | Stages bound (by model) |
+|---|---|---|---|
+| Add authenticator app | `AUTHENTIK_TOTP_SETUP_FLOW` | `default-authenticator-totp-setup` | TOTP authenticator setup |
+| New recovery codes | `AUTHENTIK_STATIC_SETUP_FLOW` | `default-authenticator-static-setup` | static authenticator setup (after the new codes are confirmed, FriendFlix removes exactly the old code sets it listed before) |
+| Add passkey | `AUTHENTIK_WEBAUTHN_SETUP_FLOW` | `default-authenticator-webauthn-setup` | WebAuthn authenticator setup (in-app only when passkeys run in FriendFlix, step 5) |
+| Change password | `AUTHENTIK_PASSWORD_CHANGE_FLOW` | `default-password-change` | prompt (password ×2), user write |
+| Change e-mail address | `AUTHENTIK_EMAIL_CHANGE_FLOW` | `friendflix-email-change` | prompt, e-mail, user write (step 7) |
+
+**MFA mandatory and removing the last factor.** The account page refuses to remove a person's last confirmed second factor ("last factor") only when the login flow's authenticator validation stage has *Not configured action* **Deny** (read from the stage itself, which needs *Can view Authenticator Validation Stage*, [§8.2](#82-role-with-exactly-these-global-permissions)). With **Force the user to configure an authenticator** ([§6](#6-authentication-flow-with-mandatory-mfa)) the removal is allowed, and the next sign-in makes the person set up a new factor. When the login flow cannot be read, removal is allowed. The login flow is read through the same 10-minute cache as the status card, so a change in Authentik shows after up to 10 minutes.
 
 ## 11. Optional: passwordless sign-in with passkeys
 
@@ -550,7 +618,7 @@ Use your own name and artwork. Do not copy logos, colours or wording of commerci
 - **Authentik session:** independent. When the portal session ends, `/auth/login` sends the browser to Authentik; if the Authentik session is still valid, the person is back in without typing anything. How long that is depends on the *Session duration* of the User Login stage (`default-authentication-login`, default `seconds=0` = until the browser closes) and on the MFA *Last validation threshold*.
 - **Portal logout** (`POST /auth/logout`) only deletes the portal session (plus that device's push subscriptions and cast tokens). It does **not** call Authentik's end-session endpoint. On a shared computer also sign out of Authentik (`https://auth.example.com/if/user/` → sign out), or keep the Authentik session at `seconds=0`.
 - **Forgotten profile PIN:** the portal starts a login with `prompt=login` and `max_age=0`, which makes Authentik ask for the credentials again even if a session exists.
-- **Re-authentication for account deletion:** the same kind of login (`prompt=login`, `max_age=0`, `GET /auth/reauth`). Afterwards the portal session carries a re-authentication stamp for 10 minutes; Authentik's `auth_time` may be at most 2 minutes old. In a later release an in-app password screen will produce the same stamp.
+- **Re-authentication** (account deletion, the account page's *Security* actions, the e-mail change, sensitive settings): the account page's *Security* section uses a dialog that runs the login flow ([§10a](#10a-in-app-sign-in)); elsewhere the same kind of login (`prompt=login`, `max_age=0`, `GET /auth/reauth`). Afterwards the portal session carries a re-authentication stamp for 10 minutes; Authentik's `auth_time` may be at most 2 minutes old.
 - End-session endpoint, if you want to link it somewhere: `https://auth.example.com/application/o/friendflix/end-session/`.
 
 ## 14. Verification

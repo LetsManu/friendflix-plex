@@ -7,18 +7,20 @@ import { describeActivity } from '../activity';
 import { activeItem } from '../nav';
 import { fieldErrors, generate, importEnv, loadSettings, probeFailure, saveSettings, testGroup, type SettingView } from './api';
 import {
-  changedValues, clearPending, errorText, isChange, keepable, keyHelp, keyLabel, moveHint, probeText, redactedKeys, shownDraft, stashPending, stillRedacted,
+  changedValues, clearPending, enumOptions, errorText, isChange, keepable, keyHelp, keyLabel, moveHint, probeText, redactedKeys, shownDraft, stashPending, stillRedacted,
   submitValue, takePending,
 } from './form';
 
-/** every visible setting of the registry (spec Part A: 48) */
+/** every visible setting of the registry (spec Part A: 48, plus the nine of phase 3) */
 const KEYS = ['PUBLIC_URL', 'WEBHOOK_SECRET', 'API_COMPRESSION', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'ADMIN_GROUP', 'AUTHENTIK_URL',
   'AUTHENTIK_API_TOKEN', 'AUTHENTIK_ENROLL_FLOW', 'AUTHENTIK_RECOVERY_FLOW', 'AUTHENTIK_TOTP_SETUP_FLOW', 'JELLYFIN_URL', 'JELLYFIN_ADMIN_API_KEY', 'REQUESTS_URL',
   'REQUESTS_API_KEY', 'NTFY_URL', 'NTFY_BASE_URL', 'DISCORD_WEBHOOK_URL', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT', 'TMDB_API_KEY', 'OMDB_API_KEY',
   'DOWNLOADS_ENABLED', 'DIRECT_PLAY_REQUIRES_DOWNLOAD', 'DOWNLOAD_CACHE_MAX_GB', 'DOWNLOAD_MIN_FREE_GB', 'DOWNLOAD_PREP_CONCURRENCY', 'DOWNLOAD_PAUSE_STREAMS',
   'DOWNLOAD_FILE_TTL_HOURS', 'DOWNLOAD_OFFLINE_GRACE_DAYS', 'DOWNLOAD_CREATE_PER_HOUR', 'CAST_ENABLED', 'PREVIEW_WARM', 'HOME_NETWORKS', 'GITHUB_TOKEN',
   'PORTAINER_WEBHOOK_URL', 'PORTAINER_URL', 'PORTAINER_API_KEY', 'PORTAINER_STACK_ID', 'PORTAINER_ENDPOINT_ID', 'PLAYBACK_CHECK_HOUR', 'HEALTH_DISK_WARN_PCT',
-  'HEALTH_DISK_CRIT_PCT', 'HEALTH_DB_WARN_GB', 'SESSION_TTL_SECONDS', 'SESSION_IDLE_SECONDS'];
+  'HEALTH_DISK_CRIT_PCT', 'HEALTH_DB_WARN_GB', 'SESSION_TTL_SECONDS', 'SESSION_IDLE_SECONDS',
+  'LOGIN_UI', 'AUTHENTIK_LOGIN_FLOW', 'AUTHENTIK_INVALIDATION_FLOW', 'PASSKEYS_IN_APP', 'LOGIN_COVER_WALL',
+  'AUTHENTIK_STATIC_SETUP_FLOW', 'AUTHENTIK_WEBAUTHN_SETUP_FLOW', 'AUTHENTIK_PASSWORD_CHANGE_FLOW', 'AUTHENTIK_EMAIL_CHANGE_FLOW'];
 
 const view = (over: Partial<SettingView> & Pick<SettingView, 'key' | 'kind'>): SettingView => ({
   source: 'db', value: null, set: false, apply: 'live', restartPending: false, invalid: false, envNames: [over.key, `${over.key}_FILE`], updatedAt: null, ...over,
@@ -28,7 +30,7 @@ afterEach(async () => { vi.unstubAllGlobals(); await setLocale('de'); });
 
 describe('settings texts', () => {
   it('every visible setting has a label and a help text; the request service is never named after a product', async () => {
-    expect(KEYS).toHaveLength(48);
+    expect(KEYS).toHaveLength(57);
     for (const k of KEYS) {
       expect(hasKey(`settings.keys.${k}.label`), k).toBe(true);
       expect(hasKey(`settings.keys.${k}.help`), k).toBe(true);
@@ -289,5 +291,30 @@ describe('settings API', () => {
     expect(probeFailure(new ApiError(400, { error: 'invalid_settings', errors: {} }))).toBeNull();
     expect(probeFailure(new ApiError(400, null))).toBeNull();
     expect(probeFailure(new ApiError(401, { error: 'reauth_required' }))).toBeNull();
+  });
+});
+
+describe('enum settings (preflight D7)', () => {
+  it('an enum without a default starts with "Automatisch" (value \'\' = unset → null); option labels come from the locale', () => {
+    const ui = view({ key: 'LOGIN_UI', kind: 'enum', options: ['app', 'authentik'], optional: true });
+    expect(enumOptions(ui)).toEqual([{ value: '', label: 'Automatisch' }, { value: 'app', label: 'FriendFlix' }, { value: 'authentik', label: 'Authentik' }]);
+    expect(submitValue(ui, '')).toBeNull();
+    expect(isChange(ui, '')).toBe(false);
+    expect(isChange(ui, 'app')).toBe(true);
+  });
+  it('an enum with a default has no blank choice; an option without a label shows its value', () => {
+    expect(enumOptions(view({ key: 'PASSKEYS_IN_APP', kind: 'enum', options: ['auto', 'off'], value: 'auto' }))).toEqual([{ value: 'auto', label: 'Automatisch' }, { value: 'off', label: 'Aus' }]);
+    expect(enumOptions(view({ key: 'SOMETHING', kind: 'enum', options: ['x'] }))).toEqual([{ value: 'x', label: 'x' }]);
+    expect(enumOptions(view({ key: 'NOOPTIONS', kind: 'enum' }))).toEqual([]);
+  });
+  it('the nine phase-3 labels exist in every language and never name a product look-alike', async () => {
+    for (const l of ['de', 'en', 'es', 'fr', 'it', 'pl', 'tr']) {
+      await setLocale(l);
+      for (const k of ['LOGIN_UI', 'AUTHENTIK_LOGIN_FLOW', 'AUTHENTIK_INVALIDATION_FLOW', 'PASSKEYS_IN_APP', 'LOGIN_COVER_WALL',
+        'AUTHENTIK_STATIC_SETUP_FLOW', 'AUTHENTIK_WEBAUTHN_SETUP_FLOW', 'AUTHENTIK_PASSWORD_CHANGE_FLOW', 'AUTHENTIK_EMAIL_CHANGE_FLOW']) {
+        expect(keyLabel(k).length, `${l} ${k}`).toBeGreaterThan(0);
+        expect(keyHelp(k), `${l} ${k}`).not.toMatch(/seerr/i);
+      }
+    }
   });
 });

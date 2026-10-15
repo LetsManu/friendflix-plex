@@ -8,7 +8,7 @@ This guide takes you from an empty server to a running FriendFlix with your firs
 
 A new install needs **no `.env` file**: you start the stack, read a one-time setup code from the backend log and do the rest in the browser. The setup wizard sets the public address, connects Jellyfin and Authentik (automatically or by hand) and makes your first sign-in the admin. Configuring everything through `.env` still works ([section 15](#15-advanced-configure-by-environment)).
 
-Placeholders used throughout: `portal.example.com` (FriendFlix), `auth.example.com` (Authentik), `/opt/friendflix` (your clone). Replace them with your own values. Never paste real secrets into issues, chats or commits.
+Placeholders used throughout: `friend.example.com` (FriendFlix), `auth.example.com` (Authentik), `/opt/friendflix` (your clone). Replace them with your own values. Never paste real secrets into issues, chats or commits.
 
 ## Contents
 
@@ -20,8 +20,8 @@ Placeholders used throughout: `portal.example.com` (FriendFlix), `auth.example.c
 6. [Nginx Proxy Manager: portal proxy host](#6-nginx-proxy-manager-portal-proxy-host)
 7. [Start the stack](#7-start-the-stack)
 8. [The setup wizard](#8-the-setup-wizard)
-9. [First steps as admin](#9-first-steps-as-admin)
-10. [Invite friends](#10-invite-friends)
+9. [First steps as admin](#9-first-steps-as-admin) (incl. [Harden Authentik](#harden-authentik))
+10. [Invite friends](#10-invite-friends) (incl. [What a friend sees](#what-a-friend-sees))
 11. [Optional features](#11-optional-features)
 12. [Verification checklist](#12-verification-checklist)
 13. [Troubleshooting](#13-troubleshooting)
@@ -33,7 +33,7 @@ Placeholders used throughout: `portal.example.com` (FriendFlix), `auth.example.c
 ```mermaid
 flowchart LR
   user["Browser · phone · TV"] -->|HTTPS| npm["Nginx Proxy Manager"]
-  npm -->|"portal.example.com"| ff["FriendFlix<br/>web :3080 · backend :3081 · gateway :3082"]
+  npm -->|"friend.example.com"| ff["FriendFlix<br/>web :3080 · backend :3081 · gateway :3082"]
   npm -->|"auth.example.com"| ak["Authentik :9000"]
   ff -.->|"OIDC + invitation API (via the public URL)"| npm
   ff -->|"internal network media"| jf["Jellyfin"]
@@ -42,17 +42,7 @@ flowchart LR
 
 For the full picture of containers, networks and ports see [architecture.md](architecture.md#containers-and-networks).
 
-The short version:
-
-```bash
-git clone https://github.com/LetsManu/friendflix.git /opt/friendflix && cd /opt/friendflix
-docker compose -f compose.prod.yaml up -d
-docker compose -f compose.prod.yaml logs backend | grep "setup code"
-```
-
-No output yet? `up -d` returns before the backend has started: wait a few seconds and run the last command again; the line appears once the backend is up.
-
-Then open `https://portal.example.com` and follow the wizard. Before that, the services the wizard connects must exist:
+The path: **install** Authentik and Jellyfin (steps 3–4), **start** the stack ([step 7](#7-start-the-stack)), read the **setup code** from the backend log ([step 7](#7-start-the-stack), [the setup code](#the-setup-code)) and work through the **wizard** in the browser ([step 8](#8-the-setup-wizard)). The services the wizard connects must exist first:
 
 | Step | What you do | What the wizard needs from it |
 |---|---|---|
@@ -62,7 +52,7 @@ Then open `https://portal.example.com` and follow the wizard. Before that, the s
 | 5. Request service (optional) | finish its setup wizard | its address and API key (wizard extras, or later) |
 | 6.–7. NPM proxy host, stack | the running portal, no `.env` | – |
 | 8. Setup wizard | setup code, public address, Jellyfin, Authentik, first admin | – |
-| 9.–10. first steps, invites | admin account, friends | – |
+| 9.–10. first steps, invites | harden Authentik, invite friends | – |
 
 ## 2. Prerequisites
 
@@ -75,7 +65,7 @@ Then open `https://portal.example.com` and follow the wizard. Before that, the s
 
 **Domains and DNS.** Two host names that point to your public IP (A/AAAA records or a DynDNS name with CNAMEs):
 
-- `portal.example.com` → FriendFlix
+- `friend.example.com` → FriendFlix
 - `auth.example.com` → Authentik
 
 Ports 80 and 443 forwarded from the router to NPM. The FriendFlix backend fetches `https://auth.example.com/…` itself; if your router cannot reach its own public IP from inside (no NAT loopback), add local DNS entries (router, Pi-hole, AdGuard) so both names resolve to the NPM host inside the LAN too.
@@ -99,7 +89,7 @@ Install Authentik and create its admin account: **[docs/authentik.md §2](authen
 
 That is all you need before the wizard. In the wizard's sign-in step FriendFlix sets up the rest **automatically** with a one-time superuser API token: the groups, the OAuth2/OpenID provider and the application, the service account for invitations, the enrollment and recovery flows. What it creates, how to get the token and how to revoke it afterwards: [authentik.md §3](authentik.md#3-automatic-setup-from-friendflix).
 
-Two things stay manual in Authentik: make **MFA mandatory** in the authentication flow ([authentik.md §6](authentik.md#6-authentication-flow-with-mandatory-mfa)) and set up SMTP for invitation and password e-mails ([authentik.md §2.5](authentik.md#25-e-mail-smtp)).
+MFA and SMTP stay manual: see [Harden Authentik](#harden-authentik) after the wizard.
 
 Prefer to click everything together yourself? Follow [authentik.md §4–§8](authentik.md#4-groups) and enter the values in the wizard's *By hand* mode.
 
@@ -162,7 +152,7 @@ The request service is **optional**. Without `REQUESTS_URL` and `REQUESTS_API_KE
 
 | Tab | Field | Value |
 |---|---|---|
-| Details | Domain Names | `portal.example.com` |
+| Details | Domain Names | `friend.example.com` |
 | | Scheme | `http` |
 | | Forward Hostname / IP | `127.0.0.1` (or your `BIND_ADDR`) |
 | | Forward Port | `3080` (`WEB_PORT`, the SvelteKit UI) |
@@ -203,10 +193,10 @@ FriendFlix setup: open the portal in your browser and enter the setup code K7QM-
 
 ## 8. The setup wizard
 
-Open `https://portal.example.com`. While setup is incomplete every page leads to `/setup`. Every step can be changed later under *Admin → Settings*; a step whose values come from the environment shows them locked (*From environment*) and can be skipped.
+Open `https://friend.example.com`. While setup is incomplete every page leads to `/setup`. Every step can be changed later under *Admin → Settings*; a step whose values come from the environment shows them locked (*From environment*) and can be skipped.
 
 1. **Setup code.** Paste the code from the log. Case, spaces and dashes do not matter (`O` counts as `0`, `I` and `L` as `1`).
-2. **Public address.** The address everybody uses, without a path: `https://portal.example.com`. The wizard suggests the one your browser used. FriendFlix then fetches a test page from that address; if that fails it only warns (common without NAT loopback), it does not block. `http://` works for tests but turns off secure cookies, Chromecast and passkeys.
+2. **Public address.** The address everybody uses, without a path: `https://friend.example.com`. The wizard suggests the one your browser used. FriendFlix then fetches a test page from that address; if that fails it only warns (common without NAT loopback), it does not block. `http://` works for tests but turns off secure cookies, Chromecast and passkeys.
 3. **Media server.** *Automatic*: the Jellyfin address as the backend reaches it (`http://jellyfin:8096` or your container name, never the public URL) plus the username and password of a Jellyfin **administrator** → *Create API key automatically*. *By hand*: address and an API key from Jellyfin. Both are tested before they are saved.
 4. **Sign-in.** *Automatic*: the Authentik address as the browser reaches it (`https://auth.example.com`; the backend must reach the same address) and a superuser API token → *Show plan* lists what will be created or adjusted, nothing changes yet → *Apply* (about 30 seconds). Leave *Add me to the admin group* ticked to put the token's owner into `friendflix-admins`. The result lists what is still to do by hand (SMTP, MFA, e-mail templates). Details: [authentik.md §3](authentik.md#3-automatic-setup-from-friendflix). *By hand*: issuer, client ID, client secret and admin group from your own provider, with a checklist of how the provider must be set up; optionally the Authentik API values for invitations.
 5. **First admin.** *Sign in with Authentik*. Sign in with the account that should run FriendFlix (it needs MFA set up once MFA is mandatory). **This sign-in becomes the admin and completes the setup**, whatever groups the account has; FriendFlix creates its Jellyfin user and owner profile as for any first login. Exactly one account becomes admin this way, even with several backends.
@@ -223,18 +213,34 @@ Open `https://portal.example.com`. While setup is incomplete every page leads to
 
 ### What the wizard never keeps
 
-The Authentik superuser token and the Jellyfin administrator's password are used for that one request and then forgotten: never stored, never logged, never shown in an error. What is saved is what an `.env` would hold: the Jellyfin API key `FriendFlix`, and the client ID and secret of the provider plus the token of the service account `friendflix-invites` (with only the permissions FriendFlix needs). **Revoke the superuser token in Authentik afterwards** ([authentik.md §3](authentik.md#3-automatic-setup-from-friendflix)).
+The Authentik superuser token and the Jellyfin administrator's password are used for that one request and then forgotten: never stored, never logged, never shown in an error. What is saved is what an `.env` would hold: the Jellyfin API key `FriendFlix`, and the client ID and secret of the provider plus the token of the service account `friendflix-invites` (with only the permissions FriendFlix needs). **Revoke the superuser token in Authentik afterwards** ([Harden Authentik](#harden-authentik)).
 
 ## 9. First steps as admin
 
 1. **Instance language:** FriendFlix asks the first admin once which language the whole instance should use by default (English, German, French, Spanish, Italian, Turkish, Polish). Every profile can pick its own language later; new profiles are asked on their first login, with the browser language suggested.
 2. Your first device is approved automatically; further devices have to be approved under *Devices*. Further admins: put them into the Authentik group `friendflix-admins` (`ADMIN_GROUP`); on their first login FriendFlix makes them admin without an invite.
-3. Revoke the Authentik superuser token if you used the automatic sign-in setup, and make MFA mandatory in Authentik if you have not yet ([authentik.md §6](authentik.md#6-authentication-flow-with-mandatory-mfa)).
+3. Harden Authentik, see below.
 4. Look around *Admin*: the **overview** (health of the media server and the request service, what waits for your decision, recent activity), roles and limits, the weekly digest. Under *Content* you can add **brand hubs**, pin themed lists to the home page and set "leaving soon" dates; the owner profile can create kids profiles under *Profiles*.
+
+### Harden Authentik
+
+Right after the wizard, in Authentik:
+
+1. **Revoke the one-time superuser token** (only if you used *Automatic*): *Directory → Tokens and App passwords*, tick the token, *Delete*. A bootstrap token (`authentik-bootstrap-token`) goes the same way, and `AUTHENTIK_BOOTSTRAP_TOKEN` leaves Authentik's environment. FriendFlix keeps only the token of the service account `friendflix-invites`. [authentik.md §3.2](authentik.md#32-the-one-time-superuser-token).
+2. **Make MFA mandatory** in the authentication flow, so every friend sets up an authenticator app or security key at sign-up: [authentik.md §6](authentik.md#6-authentication-flow-with-mandatory-mfa). The wizard does not change how people sign in to Authentik.
+3. **Set up SMTP** for invitation and password e-mails: [authentik.md §2.5](authentik.md#25-e-mail-smtp).
+4. **Prepare the in-app sign-in.** FriendFlix shows its own sign-in screens as soon as Authentik is connected (`LOGIN_UI`, [authentik.md §10a](authentik.md#10a-in-app-sign-in)). Open *Admin → Status → Sign-in*: it checks the flows, implicit consent, the `authorization_code` grant type and whether passkeys can run on FriendFlix's own page, and names what to fix. Two things stay manual:
+   - **The e-mail change flow** (the *E-mail address → Change* row of *Security* on the account page) is **not** imported by the wizard: import `deploy/authentik/friendflix-email-change.yaml` and mount its mail template under `/templates` ([authentik.md §10a, step 7](authentik.md#10a-in-app-sign-in)). Until then the row shows the address without a *Change* button, and admins see a note.
+   - **Optional:** let password-reset mails open in FriendFlix (`/reset`) with the recovery template ([authentik.md §10a, step 4](authentik.md#10a-in-app-sign-in)).
+
+   Upgrading an install from before the in-app sign-in? Re-import `deploy/authentik/friendflix-service-account.yaml` (or `friendflix-blueprint.yaml`): the service account needs the new device-delete permissions for *Remove* on the account page, and read permissions for the validation stage and the OAuth2 provider (the last-factor rule and the status card's consent and grant-type checks) ([authentik.md §8.2](authentik.md#82-role-with-exactly-these-global-permissions)).
+5. Check the result with [authentik.md §14](authentik.md#14-verification) and tick the checklist in [section 12](#12-verification-checklist).
 
 ### Settings in the database
 
 *Admin → Settings* shows every setting with its source: **From environment** (`.env`, a `_FILE` secret or an older variable name; locked, the field cannot be edited), **Saved** (the database) or **Default**. The generated values of the *Server* group (`DATABASE_URL`, `REDIS_URL`, `APP_ENC_KEY`, `INTERNAL_SECRET`) show **From startup file**: the `bootstrap` service created them in its volume; they are read-only here. The environment wins over the database, the database over the default.
+
+The in-app sign-in has its own settings under *Admin → Settings → Sign-in* (`LOGIN_UI`, the login and sign-out flow slugs, the slugs of the account page's flows for recovery codes, passkeys, password change and e-mail change, `PASSKEYS_IN_APP`) and *General* (`LOGIN_COVER_WALL`); no `.env` lines are needed. *Admin → Status* shows a Sign-in card that checks the Authentik side. See [authentik.md §10a](authentik.md#10a-in-app-sign-in).
 
 - **Live:** most settings apply at once on every backend; a save bumps a revision, other instances and the gateway reload within seconds (at the latest after 30 s). `API_COMPRESSION` applies to the next response. Settings marked *Restart needed* (`DOWNLOAD_CREATE_PER_HOUR`) take effect after `docker compose -f compose.prod.yaml restart backend`; a banner lists them.
 - **Secrets are write-only:** the page shows *Set* or *Not set* and the date of the last change (data-source keys also their last four characters), with *Replace* and *Remove*. No secret ever comes back from the server, and the audit log records key names only.
@@ -250,11 +256,22 @@ The Authentik superuser token and the Jellyfin administrator's password are used
 1. Choose the role (`friend`, `family` or `guest`; limits are editable under *Admin*), how long the link is valid (default 48 h, max. 14 days), an optional note, **Max. uses** (how many accounts the link can create, 1 – 50, default 1) and **Access (days)** (each new account's access ends after that many days; empty = unlimited).
 2. Leave **already has an Authentik account** unticked for new people. Create.
 3. The link is shown only now (also as a QR code). The text below it must read *The link guides through account creation (including two-factor) and grants access directly.* Otherwise the Authentik invitation is not configured; see [authentik.md §15](authentik.md#15-troubleshooting).
-4. Send the link. The friend opens it, clicks **Create account & get started**, signs up in Authentik (including MFA) and lands logged in on the portal.
+4. Send the link. The friend opens it, clicks **Create account & get started**, creates the account on FriendFlix's sign-in screens (Authentik runs its enrollment flow behind them, including MFA) and lands logged in on the portal. With `LOGIN_UI=authentik` the sign-up runs on Authentik's own pages instead.
 
 For someone who already has an Authentik account, tick **already has an Authentik account**: the link then offers **Sign in & unlock**. Unused invites can be revoked in the list; that also deletes the Authentik invitation. The list shows the uses as "1/3" and, expanded, the accounts made from each invite.
 
 **Without an invite:** someone who signs in through Authentik without an invite (and is not in `friendflix-admins`) is not refused. They see *Request sent* (`/pending`), you get a notification, and the request waits under *Admin → Users → Waiting for approval*. Approve it with a role and an optional access-until date, or reject it with an optional message; the page updates by itself, and after an approval the person signs in again. Details: [operations.md](operations.md#nutzerverwaltung-zugang-bis-freigaben-einladungen) (German).
+
+### What a friend sees
+
+1. **The invite page** (`/invite/…`): the account type (role) and the validity, plus a button **Create account & get started**. For someone with an Authentik account it reads **Sign in & unlock**. A used or expired link says *Invalid invitation*: send a new one.
+2. **Sign-up** on FriendFlix's sign-in page, over the cover wall: username and password, then the authenticator app (QR code, or the key to type in, and the first 6-digit code) and recovery codes to copy or download. Authentik runs the enrollment flow behind these screens; a step FriendFlix cannot show continues on Authentik's page. Afterwards the friend is signed in on the portal and unlocked.
+3. **First visit** (once per profile): a language picker (the browser language suggested), then **Welcome** in three steps: check the profile name and colour, pick 3 titles they like (these feed the recommendations; *Skip* is possible), *Let's go*. A kids profile gets a simpler version.
+4. **Later:** the first device is trusted automatically; every further device waits under *Devices* until you approve it. With several profiles on an account, the profile picker appears once per browser session. Jellyfin and the request service stay invisible: friends only ever open `https://friend.example.com`.
+5. **Signing in again** happens on the same page: name, password, then the 6-digit code (or a recovery code, or a passkey). *Forgot your password?* shows a "check your inbox" screen; the link in the mail opens Authentik's reset page, or FriendFlix's `/reset` page if you set the template. After too many wrong attempts the page links to Authentik's own sign-in.
+6. **My space → Account → Security:** the friend changes the password, adds or removes an authenticator app or passkey, makes new recovery codes and changes the e-mail address. Each action asks for the password (and second factor) once more in a small dialog first; a new e-mail address only counts once the friend clicks the link sent to it.
+
+Next: what you get to see and configure as admin is in [section 9](#9-first-steps-as-admin).
 
 ## 11. Optional features
 
@@ -264,7 +281,7 @@ For someone who already has an Authentik account, tick **already has an Authenti
 | **Web push** | *Admin → Settings → Push notifications → Generate key pair* (or `node scripts/gen-vapid.mjs` → `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` in `.env`), optional `VAPID_SUBJECT=mailto:you@example.com`. Keep the pair stable. Needs HTTPS; on iOS the site must be added to the home screen. | [integrations.md](integrations.md#web-push-browser-notifications) |
 | **ntfy / Discord** | `NTFY_URL=https://ntfy.example.com/friendflix` and/or `DISCORD_WEBHOOK_URL=…` for the shared channel; `NTFY_BASE_URL` for personal topics. | [integrations.md](integrations.md#ntfy--discord) |
 | **Chromecast** | On by default (`CAST_ENABLED=true`). Needs an https `PUBLIC_URL` with a publicly valid certificate that the Chromecast can reach, and the `/media/c/` block from `portal.advanced.conf`. | [cast.md](cast.md) |
-| **TV mode** | Nothing to configure: open `https://portal.example.com/tv` on the TV and pair it with the phone. | [tv-mode.md](tv-mode.md) |
+| **TV mode** | Nothing to configure: open `https://friend.example.com/tv` on the TV and pair it with the phone. | [tv-mode.md](tv-mode.md) |
 | **Database backups** | `mkdir -p backups && sudo chown 70 backups`, then `docker compose -f compose.prod.yaml --profile backup up -d backup` (`BACKUP_HOUR`, `BACKUP_KEEP_DAYS`, `BACKUP_PATH`). Back up the `bootstrap` volume once with `./scripts/backup-bootstrap.sh` and keep it apart from the dumps; back up Authentik separately ([authentik.md §2.6](authentik.md#26-backups-and-updates)). | [operations.md](operations.md#backups--wiederherstellung) |
 | **One-click updates** | *Admin → Update* redeploys through **Portainer**: either `PORTAINER_WEBHOOK_URL` (stack webhook), or `PORTAINER_URL` + `PORTAINER_API_KEY` + `PORTAINER_STACK_ID` (+ `PORTAINER_ENDPOINT_ID`, default `1`). Use a Portainer user that can only redeploy this one stack. FriendFlix deliberately never gets the Docker socket: **do not mount `/var/run/docker.sock` into any FriendFlix container**, the web app must not be able to control Docker. | [operations.md](operations.md#updates-aus-dem-portal) |
 | **Monitoring** | `METRICS_TOKEN`, Prometheus/Icinga examples; optional Prometheus + Grafana stack: set `GRAFANA_ADMIN_PASSWORD` (no default) and add `-f compose.monitoring.yaml`. | [monitoring.md](monitoring.md) |
@@ -278,12 +295,13 @@ Values in the table can also be set in *Admin → Settings*. After changing `.en
 - [ ] The Authentik superuser token used by the wizard is deleted.
 - [ ] `docker compose -f compose.prod.yaml ps`: all services up, `postgres`/`redis` (and `backup`) healthy.
 - [ ] `curl -s http://127.0.0.1:3081/health/ready` reports Postgres, Redis and Jellyfin OK.
-- [ ] `curl -sI https://portal.example.com` → `200`, valid certificate, `strict-transport-security` header.
-- [ ] `curl -s -o /dev/null -w '%{http_code}\n' https://portal.example.com/internal/x` → `404`; same for `/metrics`.
+- [ ] `curl -sI https://friend.example.com` → `200`, valid certificate, `strict-transport-security` header.
+- [ ] `curl -s -o /dev/null -w '%{http_code}\n' https://friend.example.com/internal/x` → `404`; same for `/metrics`.
 - [ ] From outside your network: `nmap -p 3080-3082,8096,5055,9000 <public-ip>` → all filtered/closed.
 - [ ] `curl -s https://auth.example.com/application/o/friendflix/.well-known/openid-configuration | jq -r .issuer` equals `OIDC_ISSUER`.
 - [ ] Admin login works, MFA is requested, *Admin* is visible.
 - [ ] A test invite in a private window ends logged in on the portal; the user appears in *Admin → Users* and in Jellyfin.
+- [ ] *Admin → Status → Sign-in* shows no warning (the e-mail change flow shows *Missing* until you import it, without a warning; see [Harden Authentik](#harden-authentik)).
 - [ ] A movie plays (direct play and a forced lower quality → transcoding), subtitles work, seeking works.
 - [ ] Optional: push test notification, a download, casting, a backup file in `backups/`.
 
@@ -336,7 +354,7 @@ An existing install upgrades like any update (`docker compose -f compose.prod.ya
 
 2. **Keep those four in `.env` until that log says `from environment` for each of them.** Removing one earlier makes the service generate a new value: a new database password does not match `pgdata` (Postgres keeps the password it was created with) and a new `APP_ENC_KEY` makes every encrypted value unreadable. Once the log line is there you may remove them, run `up -d` again and check that the log now says `kept`. Then back up the volume (`./scripts/backup-bootstrap.sh`). Leaving them in `.env` works too: `.env` then stays the source and the volume a copy.
 3. **Settings show as locked.** Every setting from `.env` appears in *Admin → Settings* as *From environment* and cannot be edited there. **Move** (per row) or **Move all** copies the values into the database; the row then says which names (also `_FILE` and older names) you can remove from `.env`. The environment keeps winning until you remove them and run `up -d`. The values of the *Server* group stay in `.env`.
-4. **`PUBLIC_URL` with a path or query** (e.g. `https://portal.example.com/ff`) starts with its origin (`https://portal.example.com`) and logs one warning: FriendFlix runs at the root of its host name only. A value saved in *Admin → Settings* must be an origin.
+4. **`PUBLIC_URL` with a path or query** (e.g. `https://friend.example.com/ff`) starts with its origin (`https://friend.example.com`) and logs one warning: FriendFlix runs at the root of its host name only. A value saved in *Admin → Settings* must be an origin.
 5. **The request service is optional now.** Without `REQUESTS_URL` and `REQUESTS_API_KEY` the request menus are hidden; reminders still work.
 6. **Keys from *Admin → Data sources*** move into the settings unchanged (same encryption); the page keeps working.
 7. **Docker secrets** (`compose.secrets.yaml`) keep winning; the generated copies in the volume stay unused.
@@ -357,7 +375,7 @@ chmod 600 .env
 
 | Variable | Wizard step | Value |
 |---|---|---|
-| `PUBLIC_URL` | 2 | `https://portal.example.com`, no path. Must be exactly the URL people use (cookies, redirect URI, WebSocket origin check). |
+| `PUBLIC_URL` | 2 | `https://friend.example.com`, no path. Must be exactly the URL people use (cookies, redirect URI, WebSocket origin check). |
 | `JELLYFIN_URL`, `JELLYFIN_ADMIN_API_KEY` | 3 | `http://jellyfin:8096` (internal name, never the public URL) and an API key from *Dashboard → API Keys* |
 | `OIDC_ISSUER` | 4 | `https://auth.example.com/application/o/friendflix/` **with trailing slash** |
 | `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | 4 | from the Authentik provider |
@@ -371,6 +389,6 @@ chmod 600 .env
 | `OIDC_ALLOW_INSECURE` | – | `false`; `true` only for tests against an `http://` Authentik, never in production |
 | `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `APP_ENC_KEY`, `INTERNAL_SECRET` | – | **leave out** on a new install (generated). An existing install keeps them until the volume holds them ([section 14](#14-upgrading-to-settings-in-the-database)) |
 
-Everything else (request service, sessions, downloads, push, ntfy, Portainer) is listed in the [README configuration table](../README.md#configuration) and in [.env.example](../.env.example). The webhook secret is generated in *Admin → Settings → General → Webhook secret → Generate new* (or in the wizard's extras) and shown once. Until it is set, the webhooks of Jellyfin and the request service answer 403. After changing `.env`: `docker compose -f compose.prod.yaml up -d` (recreates only what changed).
+Everything else (request service, sessions, downloads, push, ntfy, Portainer) is listed in the [README table](../README.md#advanced-configure-by-environment) and in [.env.example](../.env.example). The webhook secret is generated in *Admin → Settings → General → Webhook secret → Generate new* (or in the wizard's extras) and shown once. Until it is set, the webhooks of Jellyfin and the request service answer 403. After changing `.env`: `docker compose -f compose.prod.yaml up -d` (recreates only what changed).
 
 **Docker secrets instead of `.env`** (optional): [`compose.secrets.yaml`](../compose.secrets.yaml) reads `APP_ENC_KEY`, `INTERNAL_SECRET`, `WEBHOOK_SECRET`, `OIDC_CLIENT_SECRET`, `JELLYFIN_ADMIN_API_KEY`, `REQUESTS_API_KEY` (file `secrets/requests_api_key`) and `VAPID_PRIVATE_KEY` from files in `secrets/` (all must exist; `touch secrets/vapid_private_key` if you have no push). Start with `docker compose -f compose.prod.yaml -f compose.secrets.yaml up -d`. The files win like environment values (locked in *Admin → Settings*); the copies of `APP_ENC_KEY` and `INTERNAL_SECRET` that the `bootstrap` service generates then stay unused, so back up `secrets/` instead.

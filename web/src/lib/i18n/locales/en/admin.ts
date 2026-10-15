@@ -397,6 +397,9 @@ const en: Translation<typeof de> = {
     account: {
       export: '{actor} downloaded their data',
       profile: '{actor} changed their own account name or colour',
+      email: '{actor} changed their e-mail address',
+      email_requested: '{actor} asked to change their e-mail address',
+      mfa_removed: '{actor} removed a second factor',
     },
     tv: {
       pair: '{actor} paired a TV',

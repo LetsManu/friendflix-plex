@@ -105,7 +105,9 @@
 
   $: path = $page.url.pathname;
   // /setup: the wizard of a new install (no account yet); /setup/extras is not public (the first admin is signed in there)
-  $: publicPage = path.startsWith('/invite/') || path === '/tv' || path === '/offline' || path === '/pending' || path === '/restore' || path === '/setup';
+  // /login, /reset, /confirm-email: the in-app sign-in, the recovery link and the e-mail change link (Block 23 phase 3); they never ask
+  // /api/me (a 401 there would loop back to /auth/login → /login)
+  $: publicPage = path.startsWith('/invite/') || path === '/tv' || path === '/offline' || path === '/pending' || path === '/restore' || path === '/setup' || path === '/login' || path === '/reset' || path === '/confirm-email';
   $: watchPage = path.startsWith('/watch/') || /^\/party\/[^/]+/.test(path); // immersive player pages: no navigation
   $: profilesPage = path === '/profiles' || path === '/welcome'; // full-screen pages without navigation (picker, onboarding)
   $: heroPage = path === '/' || path.startsWith('/item/');

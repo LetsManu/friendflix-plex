@@ -163,3 +163,12 @@ export function probeText(r: ProbeResult): string {
   const detail = r.detail && /^[a-z_]+$/.test(r.detail) && hasKey(`settings.probeDetail.${r.detail}`) ? trDynamic(`settings.probeDetail.${r.detail}`) : '';
   return detail ? `${code} ${detail}` : code;
 }
+
+/**
+ * The choices of an enum setting: the option labels come from `settings.options.<KEY>.<option>` (else the value itself); an enum without
+ * a default starts with "Automatic" (value '' = unset, which a save sends as null and the server answers with its own choice).
+ */
+export function enumOptions(v: SettingView): Array<{ value: string; label: string }> {
+  const list = (v.options ?? []).map((o) => ({ value: o, label: hasKey(`settings.options.${v.key}.${o}`) ? trDynamic(`settings.options.${v.key}.${o}`) : o }));
+  return v.optional ? [{ value: '', label: tr('settings.options.auto') }, ...list] : list;
+}

@@ -104,7 +104,13 @@ Not in scope:
 - Pending users cannot reach any API besides `/api/me` (status) and logout.
 
 ## Part B – Self-service (account page `/me` → "Account")
-- **Profile:** name, avatar, e-mail. The change goes through the Authentik API (the user's own attributes). An e-mail change sends a confirmation through Authentik's e-mail stage if the flow has one.
+- **Profile:** name and avatar. The change goes through the Authentik API (the user's own attributes). The e-mail address is shown read-only in phase 2.
+- **E-mail change (owner decision 2026-10-14, moved to phase 3b):**
+  - "Change e-mail" with confirmation of the **new** address, in FriendFlix screens under `/me` → Account, behind recent re-authentication (≤ 10 min).
+  - It runs through an Authentik flow (Part C): a prompt for the new address, then an e-mail stage that sends a link **only to the new address**, then user write. The address changes only after the link is opened and confirmed with a click in FriendFlix (`/confirm-email?token=…`).
+  - FriendFlix refuses an address another user already has.
+  - Audited as `account.email` with `{ fields: ['email'] }` only (no addresses). 7 languages.
+  - The flow is shipped as an Authentik blueprint plus a mail template, like the recovery template.
 - **Security:**
   - Change password.
   - 2FA state.
@@ -135,7 +141,7 @@ Authentik's own UI is a client of `GET/POST /api/v3/flows/executor/<flow-slug>/`
 
 FriendFlix runs the flow **from the backend**, acting as the browser, and renders each challenge with its own Svelte components:
 
-1. `POST /auth/flow/start { kind: 'login' | 'recovery' | 'enroll' | 'setup-totp' | 'setup-webauthn' | 'change-password', invite? }`
+1. `POST /auth/flow/start { kind: 'login' | 'recovery' | 'enroll' | 'setup-totp' | 'setup-webauthn' | 'change-password' | 'change-email', invite? }` (setup and change kinds only after re-authentication, see the plan)
    - The backend opens the flow (the slug comes from config) and keeps the Authentik cookie jar for this attempt in Redis.
    - The jar is encrypted with the existing crypto helper, has a 10-minute TTL, and is keyed by a random flow id in an httpOnly cookie.
    - The backend returns the first challenge, sanitised. FriendFlix passes on only the fields the components need, never Authentik URLs or tokens.
@@ -147,6 +153,8 @@ FriendFlix runs the flow **from the backend**, acting as the browser, and render
    - The provider must allow implicit consent; the setup checker verifies this.
 4. **Recovery, setup and change flows** end in a FriendFlix success screen.
    - Recovery: the e-mail link from Authentik points to `https://<app>/reset?token=…`. That needs a custom e-mail template in the recovery flow, documented and shipped as a template file. FriendFlix continues the flow with the token.
+   - E-mail change: the link points to `https://<app>/confirm-email?token=…` (blueprint plus template file).
+   - Both link pages call Authentik only after a click. Authentik (2026.8) puts a confirm step in front of every e-mail link so that mail scanners do not use up the token, and FriendFlix keeps that protection.
 
 ### Screens
 New Svelte components in `web/src/lib/auth/`, one per supported stage, in FriendFlix's look and in 7 languages:
@@ -162,13 +170,34 @@ New Svelte components in `web/src/lib/auth/`, one per supported stage, in Friend
 
 An **unknown stage** falls back to "Continue on the sign-in page" (today's redirect flow), so a custom Authentik flow never locks anyone out.
 
-### Passkeys
-- WebAuthn challenges carry Authentik's RP ID.
-- They work in FriendFlix only when the app's host is the RP ID or a subdomain of it. Example: app `tv.example.com`, Authentik `auth.example.com`, WebAuthn stage RP ID `example.com`.
-- The setup checker detects a mismatch:
-  - FriendFlix then hides the passkey option in its own screens.
-  - It offers "Set up passkey on the sign-in page" (Authentik popup) instead.
-  - This is documented in docs/authentik.md.
+**Owner decision (2026-10-14): login background and screen copy.**
+- **Cover wall:** behind the card, a slowly scrolling wall of covers: 5 tilted columns, alternating up and down, dimmed toward the card. It stands still under `prefers-reduced-motion`. Low data: small images, loaded lazily.
+- **Source:** the server's own library, **all libraries** (owner decision 2026-10-14). A public, unauthenticated endpoint (`GET /api/public/login-art`) returns 30–40 random covers:
+  - downscaled (≤ 200 px wide), with no titles and no item ids (nothing beyond the image itself)
+  - media-server URLs and tokens never reach the client: the backend fetches and caches the images, and talks to the media server only through `ctx.jf` (the media seam)
+  - cached (1 h) and rate limited
+- **Admin setting** "Show covers on the sign-in page" (default on). When it is off, or there are no images, the page shows generated colour art instead.
+- **Restricted content** (owner decision 2026-10-14, replaces the library exclusion):
+  - Titles come from all libraries; what counts is each item's own age rating.
+  - Only items rated **up to FSK 12 or an equivalent** (for example FSK 0/6/12, G, PG, TV-PG, U, 12A) are used, from an exact allow-list of rating values that the plan documents.
+  - **Unrated items stay excluded** (controller ruling: unrated can include adult content), and so does any rating value not on the list.
+  - Movies and series only, cover image only, no titles.
+- **Screens and German copy** (owner's mockup; the other 6 languages are translations of it):
+  1. Identification: "Willkommen zurück" / "Melde dich an, um weiterzuschauen.", field "E-Mail oder Benutzername", "Weiter", divider "oder", "Mit Passkey anmelden", link "Noch kein Konto? Einladung einlösen".
+  2. Password: an identity pill with the chosen name and "ändern", "Passwort" / "Gib dein Passwort ein.", show-password toggle, "Anmelden", link "Passwort vergessen?".
+  3. TOTP: "Bestätigungscode" / "Öffne deine Authenticator-App und gib den 6-stelligen Code ein.", 6 single-digit boxes, "Bestätigen", links "Stattdessen Wiederherstellungscode nutzen" and "Passkey verwenden".
+  4. E-mail sent: "Schau in dein Postfach" / "Wir haben einen Link an a•••@example.com geschickt.", "Erneut senden (0:42)" with a countdown, link "Zurück zur Anmeldung".
+  5. Pending approval: "Fast geschafft" / "Dein Konto wartet auf Freigabe durch einen Admin. Du bekommst Bescheid, sobald es losgehen kann.", "Diese Seite aktualisiert sich von selbst."
+- **Layout:** on desktop the same card sits centred over the background, at most ~420 px wide.
+
+### Passkeys (revised 2026-10-14 after verification on Authentik 2026.8.3)
+- Authentik takes the WebAuthn RP ID and the expected origin from the request host. There is no setting for either, so a "parent domain" RP ID is not possible.
+- From a trusted proxy (`AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS`), Authentik uses the forwarded host. When the FriendFlix backend forwards the app's host, Authentik issues and checks passkeys for the app itself: RP ID = app host, origin = `https://<app host>`. The browser runs the passkey prompt on the FriendFlix page.
+- So passkeys work **in-app**, for sign-in, as a second factor, for re-authentication and for setup. Verified with a software authenticator against Authentik 2026.8.3.
+- **Conditions:** the app runs on HTTPS; FriendFlix is a trusted proxy for Authentik and reaches it directly; `PASSKEYS_IN_APP` is not `off`.
+- **Fallback:** when Authentik does not honour the forwarded host, FriendFlix keeps the classic sign-in page for passkeys. The setup checker detects this with an anonymous probe, and each challenge is checked again.
+- **Trade-off (documented in docs/authentik.md):** a passkey belongs to one host. Passkeys created in FriendFlix work only in FriendFlix. Passkeys created on Authentik's own pages (for other apps) work only there, so the classic link stays available as a secondary option.
+- Rejected: WebAuthn Related Origin Requests (Authentik derives RP ID and origin from the same host, so they cannot differ), and an Authentik iframe.
 
 ### Security
 - Rate limits per IP and per username, on top of Authentik's own.
@@ -181,6 +210,7 @@ An **unknown stage** falls back to "Continue on the sign-in page" (today's redir
 New variables, all optional; the defaults are Authentik's default slugs:
 - `AUTHENTIK_LOGIN_FLOW`, `AUTHENTIK_RECOVERY_FLOW`
 - `AUTHENTIK_TOTP_SETUP_FLOW`, `AUTHENTIK_WEBAUTHN_SETUP_FLOW`, `AUTHENTIK_PASSWORD_CHANGE_FLOW`
+- `AUTHENTIK_EMAIL_CHANGE_FLOW` (default `friendflix-email-change`, the shipped blueprint) and `PASSKEYS_IN_APP=auto|off`
 - the existing `AUTHENTIK_ENROLL_FLOW`
 
 Admin → Status gets a check for each flow: it exists, its stages are supported, and the provider has implicit consent.
@@ -230,14 +260,15 @@ Admin → Status gets a check for each flow: it exists, its stages are supported
   - login with password + TOTP
   - recovery e-mail link into the app
   - TOTP setup
-  - passkey (only with a matching RP ID)
+  - passkey in-app (FriendFlix as a trusted proxy) and the classic fallback
+  - e-mail change: mail to the new address only, change after the click
 
 ## Phases
 1. **Admin side:** data changes, user list, detail page, limits, expiry, approval queue, invites tab.
-2. **Self-service:** account page, export, deletion with grace.
+2. **Self-service:** account page, export, deletion with grace. The e-mail address is read-only here.
 3. **In-app login:**
    - the flow executor client and the login and recovery screens
-   - setup flows (TOTP, passkey, password change)
-   - status checks and docs for Authentik settings (templates, trusted proxy, RP ID, implicit consent)
+   - setup flows (TOTP, passkey, password change) and the e-mail change with confirmation (3b)
+   - status checks and docs for Authentik settings (templates, blueprint, trusted proxy and forwarded host, grant types, implicit consent)
 
 Each phase is its own PR.

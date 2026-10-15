@@ -81,6 +81,8 @@
   {:else if name === 'alert'}<path d="M12 3l10 18H2zM12 10v4M12 17.5h.01" />
   {:else if name === 'hard-drive'}<path d="M3 13h18v6H3zM5.5 5h13L21 13H3zM7 16h.01M11 16h.01" />
   {:else if name === 'key'}<circle cx="8" cy="15" r="4" /><path d="M11 12l9-9M17 6l3 3M14 9l2 2" />
+  {:else if name === 'eye'}<path d="M2 12s3.600-7 10-7 10 7 10 7-3.600 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" />
+  {:else if name === 'eye-off'}<path d="M10.600 5.100A10 10 0 0112 5c6.400 0 10 7 10 7a17 17 0 01-2.600 3.500M6.600 6.600C3.800 8.400 2 12 2 12s3.600 7 10 7a9.600 9.600 0 005.400-1.600M3 3l18 18M9.900 9.900a3 3 0 004.200 4.200" />
   {:else if name === 'arrow-up'}<path d="M12 19V5M5 12l7-7 7 7" />
   {:else if name === 'arrow-down'}<path d="M12 5v14M5 12l7 7 7-7" />
   {:else if name === 'sort'}<path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4" />

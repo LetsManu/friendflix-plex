@@ -1,0 +1,89 @@
+{
+  "flow_info": {
+    "title": "Sign up",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-prompt",
+  "fields": [
+    {
+      "field_key": "username",
+      "label": "Username",
+      "type": "username",
+      "required": true,
+      "placeholder": "Username",
+      "initial_value": "",
+      "order": 0,
+      "sub_text": "",
+      "choices": null
+    },
+    {
+      "field_key": "name",
+      "label": "Name",
+      "type": "text",
+      "required": true,
+      "placeholder": "Name",
+      "initial_value": "",
+      "order": 1,
+      "sub_text": "",
+      "choices": null
+    },
+    {
+      "field_key": "email",
+      "label": "Email",
+      "type": "email",
+      "required": true,
+      "placeholder": "Email",
+      "initial_value": "",
+      "order": 2,
+      "sub_text": "",
+      "choices": null
+    },
+    {
+      "field_key": "notice",
+      "label": "<b>Read the rules</b> at https://auth.example.com/rules",
+      "type": "static",
+      "required": false,
+      "placeholder": "",
+      "initial_value": "",
+      "order": 3,
+      "sub_text": "",
+      "choices": null
+    },
+    {
+      "field_key": "sep",
+      "label": "",
+      "type": "separator",
+      "required": false,
+      "placeholder": "",
+      "initial_value": "",
+      "order": 4,
+      "sub_text": "",
+      "choices": null
+    },
+    {
+      "field_key": "password",
+      "label": "Password",
+      "type": "password",
+      "required": true,
+      "placeholder": "Password",
+      "initial_value": "",
+      "order": 300,
+      "sub_text": "",
+      "choices": null
+    },
+    {
+      "field_key": "password_repeat",
+      "label": "Password (repeat)",
+      "type": "password",
+      "required": true,
+      "placeholder": "Password (repeat)",
+      "initial_value": "",
+      "order": 301,
+      "sub_text": "",
+      "choices": null
+    }
+  ]
+}

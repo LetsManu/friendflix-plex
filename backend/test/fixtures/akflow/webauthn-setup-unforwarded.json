@@ -1,0 +1,46 @@
+{
+  "flow_info": {
+    "title": "Setup WebAuthn",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-authenticator-webauthn",
+  "pending_user": "anna",
+  "pending_user_avatar": "data:image/svg+xml;base64,PHN2Zy8+",
+  "registration": {
+    "rp": {
+      "name": "authentik",
+      "id": "auth.example.com"
+    },
+    "user": {
+      "id": "fake-id-0009",
+      "name": "anna",
+      "displayName": "Anna Beispiel"
+    },
+    "challenge": "fake-challenge-0010",
+    "pubKeyCredParams": [
+      {
+        "type": "public-key",
+        "alg": -8
+      },
+      {
+        "type": "public-key",
+        "alg": -7
+      },
+      {
+        "type": "public-key",
+        "alg": -257
+      }
+    ],
+    "timeout": 60000,
+    "excludeCredentials": [],
+    "authenticatorSelection": {
+      "residentKey": "preferred",
+      "requireResidentKey": false,
+      "userVerification": "preferred"
+    },
+    "attestation": "direct"
+  }
+}

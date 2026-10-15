@@ -6,6 +6,9 @@ import { mediaSettings } from '../src/media/index.js';
 import { BOOTSTRAP_KEYS, BUILD_KEYS, ENV_ONLY_KEYS, SETTINGS, parseEnvValue, publicUrlSchema, settingDef } from '../src/settings/registry.js';
 import { cfg, makeEnv, type TestEnv } from './helpers.js';
 
+/** the nine keys of phase 3, all shown: T9 the first five, Task 12 the account-security flows (D1) */
+const VISIBLE3 = ['LOGIN_UI', 'AUTHENTIK_LOGIN_FLOW', 'AUTHENTIK_INVALIDATION_FLOW', 'PASSKEYS_IN_APP', 'LOGIN_COVER_WALL'];
+const SECURITY3 = ['AUTHENTIK_STATIC_SETUP_FLOW', 'AUTHENTIK_WEBAUTHN_SETUP_FLOW', 'AUTHENTIK_PASSWORD_CHANGE_FLOW', 'AUTHENTIK_EMAIL_CHANGE_FLOW'];
 const PHASE3 = ['LOGIN_UI', 'AUTHENTIK_LOGIN_FLOW', 'AUTHENTIK_STATIC_SETUP_FLOW', 'AUTHENTIK_WEBAUTHN_SETUP_FLOW', 'AUTHENTIK_PASSWORD_CHANGE_FLOW',
   'AUTHENTIK_INVALIDATION_FLOW', 'AUTHENTIK_EMAIL_CHANGE_FLOW', 'PASSKEYS_IN_APP', 'LOGIN_COVER_WALL'];
 const BOOT = { DATABASE_URL: 'postgres://x', REDIS_URL: 'redis://x', APP_ENC_KEY: 'k'.repeat(44), INTERNAL_SECRET: 'i'.repeat(20) };
@@ -22,9 +25,9 @@ describe('key classification', () => {
     const classes = [SETTINGS.map((s) => s.key), ENV_ONLY_KEYS, BOOTSTRAP_KEYS, BUILD_KEYS];
     for (const k of keys) expect(classes.filter((c) => c.includes(k)), k).toHaveLength(1);
     expect(classes.flat().sort()).toEqual([...keys].sort()); // nothing outside the schema, no duplicates
-    expect([BOOTSTRAP_KEYS.length, ENV_ONLY_KEYS.length, BUILD_KEYS.length, SETTINGS.length]).toEqual([4, 12, 4, 59]);
-    expect(SETTINGS.filter((s) => s.visible !== false)).toHaveLength(50);
-    expect(SETTINGS.filter((s) => s.visible === false).map((s) => s.key).sort()).toEqual([...PHASE3].sort());
+    expect([BOOTSTRAP_KEYS.length, ENV_ONLY_KEYS.length, BUILD_KEYS.length, SETTINGS.length]).toEqual([4, 12, 4, 59]); // fork: + PLEX_URL, PLEX_TOKEN
+    expect(SETTINGS.filter((s) => s.visible !== false)).toHaveLength(59);
+    expect(SETTINGS.filter((s) => s.visible === false).map((s) => s.key)).toEqual([]);
   });
   it('each setting parses with the config schema field of the same key', () => {
     for (const s of SETTINGS) expect(s.schema, s.key).toBe(configSchema.shape[s.key as keyof typeof configSchema.shape]);
@@ -55,8 +58,13 @@ describe('key classification', () => {
     expect(def('REQUESTS_API_KEY').legacyEnv).toEqual(['SEERR_API_KEY']);
     expect(SETTINGS.filter((s) => s.legacyEnv).map((s) => s.key).sort()).toEqual(['REQUESTS_API_KEY', 'REQUESTS_URL']);
   });
-  it('phase-3 keys are hidden settings with the spec defaults', () => {
-    for (const k of PHASE3) expect(def(k).visible, k).toBe(false);
+  it('phase-3 keys: all nine shown (the four account-security flows in group signin with the Authentik probe); the spec defaults', () => {
+    for (const k of [...VISIBLE3, ...SECURITY3]) expect(def(k).visible, k).not.toBe(false);
+    expect(SECURITY3.map((k) => [def(k).group, def(k).probe])).toEqual(Array(4).fill(['signin', 'authentik']));
+    // the cover wall is no sign-in credential: group general (a signin save clears the wizard's SIGNIN_VIA note)
+    expect(def('LOGIN_COVER_WALL').group).toBe('general');
+    expect(['LOGIN_UI', 'PASSKEYS_IN_APP', 'AUTHENTIK_LOGIN_FLOW', 'AUTHENTIK_INVALIDATION_FLOW'].map((k) => [k, def(k).group, def(k).probe])).toEqual([
+      ['LOGIN_UI', 'signin', undefined], ['PASSKEYS_IN_APP', 'signin', undefined], ['AUTHENTIK_LOGIN_FLOW', 'signin', 'authentik'], ['AUTHENTIK_INVALIDATION_FLOW', 'signin', 'authentik']]);
     expect(Object.fromEntries(PHASE3.map((k) => [k, def(k).default]))).toEqual({
       LOGIN_UI: undefined, AUTHENTIK_LOGIN_FLOW: 'default-authentication-flow', AUTHENTIK_STATIC_SETUP_FLOW: 'default-authenticator-static-setup',
       AUTHENTIK_WEBAUTHN_SETUP_FLOW: 'default-authenticator-webauthn-setup', AUTHENTIK_PASSWORD_CHANGE_FLOW: 'default-password-change',

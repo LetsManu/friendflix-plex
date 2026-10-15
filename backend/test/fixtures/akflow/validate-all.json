@@ -1,0 +1,44 @@
+{
+  "flow_info": {
+    "title": "Welcome to authentik!",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/?next=%2F",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-authenticator-validate",
+  "pending_user": "anna",
+  "pending_user_avatar": "data:image/svg+xml;base64,PHN2Zy8+",
+  "device_challenges": [
+    {
+      "device_class": "static",
+      "device_uid": "2",
+      "challenge": {},
+      "last_used": "2026-10-15T07:12:39.015842Z"
+    },
+    {
+      "device_class": "totp",
+      "device_uid": "3",
+      "challenge": {},
+      "last_used": null
+    },
+    {
+      "device_class": "webauthn",
+      "device_uid": "1",
+      "challenge": {
+        "challenge": "fake-challenge-0001",
+        "timeout": 60000,
+        "rpId": "auth.example.com",
+        "allowCredentials": [
+          {
+            "id": "fake-id-0002",
+            "type": "public-key"
+          }
+        ],
+        "userVerification": "preferred"
+      },
+      "last_used": null
+    }
+  ],
+  "configuration_stages": []
+}

@@ -18,7 +18,7 @@ test.describe('waiting page (/pending)', () => {
     await expect(page.getByRole('status').filter({ hasText: 'Prüfe Anfrage …' })).toBeVisible();
     await expect.poll(() => calls).toBe(1);
     await page.clock.runFor(31_000);
-    await expect(page.getByRole('heading', { level: 1, name: 'Anfrage gesendet' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Fast geschafft' })).toBeVisible();
     expect(calls).toBe(2);
   });
 });

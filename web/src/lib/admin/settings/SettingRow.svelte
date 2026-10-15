@@ -16,7 +16,7 @@
   import Toggle from '#lib/ui/Toggle.svelte';
   import { uid } from '#lib/ui/ids';
   import type { SettingView, Source } from './api';
-  import { keyHelp, keyLabel, shownDraft, type Draft } from './form';
+  import { enumOptions, keyHelp, keyLabel, shownDraft, type Draft } from './form';
 
   export let item: SettingView;
   export let draft: Draft | undefined = undefined;
@@ -103,7 +103,7 @@
     <Toggle label={label} hideLabel hint={help} {checked} disabled={locked} on:change={(e) => dispatch('edit', e.detail)} />
     {#if error}<p class="error" role="alert">{error}</p>{/if}
   {:else if item.kind === 'enum' && item.options}
-    <Select label={label} hideLabel hint={help} {error} disabled={locked} value={text} options={item.options.map((o) => ({ value: o, label: o }))}
+    <Select label={label} hideLabel hint={help} {error} disabled={locked} value={text} options={enumOptions(item)}
       on:change={(e) => dispatch('edit', (e.target as HTMLSelectElement).value)} />
   {:else}
     <Field label={label} hideLabel hint={help} {error} let:id={fid} let:describedby let:invalid>

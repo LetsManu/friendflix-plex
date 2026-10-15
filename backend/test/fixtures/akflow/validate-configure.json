@@ -1,0 +1,21 @@
+{
+  "flow_info": {
+    "title": "Welcome to authentik!",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/?next=%2F",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-authenticator-validate",
+  "pending_user": "anna",
+  "pending_user_avatar": "data:image/svg+xml;base64,PHN2Zy8+",
+  "device_challenges": [],
+  "configuration_stages": [
+    {
+      "pk": "00000000-0000-4000-8000-0000000000a1",
+      "name": "default-authenticator-totp-setup",
+      "verbose_name": "TOTP Authenticator Setup Stage",
+      "meta_model_name": "authentik_stages_authenticator_totp.authenticatortotpstage"
+    }
+  ]
+}

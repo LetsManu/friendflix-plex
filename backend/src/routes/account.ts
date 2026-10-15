@@ -15,6 +15,7 @@ import type { Ctx } from '../ctx.js';
 import { scheduleDeletion } from '../deletion.js';
 import { recordError } from '../errorlog.js';
 import { exportUserData } from '../export.js';
+import { emailChangePending } from './accountSecurity.js';
 import { recentlyAuthenticated, REAUTH_WINDOW_S, requireRecentAuth } from '../reauth.js';
 import { COOKIE, requireOwner } from '../session.js';
 import { accountSerial, assertNotLastAdmin } from '../users.js';
@@ -42,6 +43,8 @@ export function accountRoutes(app: FastifyInstance, ctx: Ctx) {
       avatar: req.profile!.avatar,
       mfa: await akMfaState(ctx, u.authentik_sub).catch(() => null), // Authentik down: shown like "no Authentik API"
       manageUrl: akUserSettingsUrl(ctx.cfg),
+      /** the masked new address of an e-mail change whose link was not followed yet */
+      emailChangePending: await emailChangePending(ctx, req.user!.id),
       /** epoch ms until which sensitive actions need no new sign-in */
       reauthUntil: recentlyAuthenticated(s) ? s.reauthAt! + REAUTH_WINDOW_S * 1000 : null,
     };

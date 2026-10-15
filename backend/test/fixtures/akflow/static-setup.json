@@ -1,0 +1,20 @@
+{
+  "flow_info": {
+    "title": "Setup Static OTP Tokens",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-authenticator-static",
+  "pending_user": "anna",
+  "pending_user_avatar": "data:image/svg+xml;base64,PHN2Zy8+",
+  "codes": [
+    "fakecode0001",
+    "fakecode0002",
+    "fakecode0003",
+    "fakecode0004",
+    "fakecode0005",
+    "fakecode0006"
+  ]
+}

@@ -17,6 +17,14 @@ const partyRooms = new Gauge({ name: 'friendflix_party_rooms', help: 'Open watch
 const pendingRequests = new Gauge({ name: 'friendflix_pending_polls', help: 'Polls waiting for admin approval', registers: [registry] });
 export const authzNginx = new Counter({ name: 'friendflix_authz_nginx_total', help: 'Plan B auth_request decisions', labelNames: ['result'], registers: [registry] });
 export const clientErrorsTotal = new Counter({ name: 'friendflix_client_errors_total', help: 'Browser errors reported via POST /api/client-errors', labelNames: ['kind'], registers: [registry] });
+/**
+ * Recommendation telemetry (spec 4.7). Labels are bounded by RECO_ROWS / RECO_ENGINES (routes/reco.ts) and never carry an item, a title or a user.
+ * Impressions, clicks and dismisses come from the browser (POST /api/reco/events); plays are counted server side by the engine step (R4).
+ */
+export const recoImpressions = new Counter({ name: 'friendflix_reco_impressions_total', help: 'Recommendation rows shown, by row and engine', labelNames: ['row', 'engine'], registers: [registry] });
+export const recoClicks = new Counter({ name: 'friendflix_reco_clicks_total', help: 'Recommended titles opened, by row and engine', labelNames: ['row', 'engine'], registers: [registry] });
+export const recoPlays = new Counter({ name: 'friendflix_reco_plays_total', help: 'Plays started from a recommendation, by row and engine', labelNames: ['row', 'engine'], registers: [registry] });
+export const recoDismiss = new Counter({ name: 'friendflix_reco_dismiss_total', help: 'Recommendations dismissed, by row and engine', labelNames: ['row', 'engine'], registers: [registry] });
 const downloadJobs = new Gauge({ name: 'friendflix_download_jobs', help: 'Offline download jobs by status', labelNames: ['status'], registers: [registry] });
 const downloadDisk = new Gauge({ name: 'friendflix_download_disk_bytes', help: 'Bytes of prepared download files', registers: [registry] });
 const up = new Gauge({ name: 'friendflix_dependency_up', help: '1 if dependency reachable', labelNames: ['dependency'], registers: [registry] });
