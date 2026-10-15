@@ -40,3 +40,8 @@ dae644181e1532bd6f73fe7de5332de9bcfeb6a8:backend/test/settings-store.test.ts:gen
 dae644181e1532bd6f73fe7de5332de9bcfeb6a8:backend/test/settings-store.test.ts:generic-api-key:204
 # Block 25 Task 12: test placeholder password (backend/test/jellyfin-setup.test.ts), not a credential
 4d4c0e6aefedd326740939633b715da1b18dcd88:backend/test/jellyfin-setup.test.ts:generic-api-key:10
+55f1d6e357c914bf3e0d09ac9240c4e5454cf669:backend/test/client-errors.test.ts:generic-api-key:32
+49049e9fd8b67ba816c22cf06dc7e20fb2acffc4:backend/test/improvements.test.ts:generic-api-key:40
+4a3d2c2322807c48a50c14f978dde99f39c60d28:backend/test/core.test.ts:generic-api-key:146
+4a3d2c2322807c48a50c14f978dde99f39c60d28:backend/test/core.test.ts:generic-api-key:149
+4a3d2c2322807c48a50c14f978dde99f39c60d28:backend/test/helpers.ts:generic-api-key:19
