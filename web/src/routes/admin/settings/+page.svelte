@@ -213,7 +213,8 @@
         </svelte:fragment>
         <form novalidate on:submit|preventDefault={() => save(g.id)}>
           {#each g.items as item (item.key)}
-            <SettingRow {item} draft={edits[item.key]} error={errors[item.key] ? errorText(errors[item.key]) : ''}
+            <!-- fork: errorText(code, item.key): a key's own error text (settings.keyErrors, PLEX_URL invalid_url) -->
+            <SettingRow {item} draft={edits[item.key]} error={errors[item.key] ? errorText(errors[item.key], item.key) : ''}
               movedHint={moved.has(item.key) ? moveHint(item.envNames) : ''} moving={$busyKeys.has(`set:move:${item.key}`)}
               generating={$busyKeys.has(`set:gen:${item.key}`)} generated={generated[item.key] ?? ''}
               on:edit={(e) => edit(item.key, e.detail)} on:move={() => move([item.key])} on:generate={() => regenerate(item)} />

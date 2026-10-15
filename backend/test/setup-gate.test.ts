@@ -391,6 +391,7 @@ describe('fork: the setup wizard on Plex', () => {
   const SHARED = 'plex-shared-account-token-placeholder'; // a test placeholder, never a real token
   const URL_ = 'http://plex.example.com:32400';
   const probed: string[] = [];
+  const logs: string[] = []; // fork: every log line of this app, checked for tokens at the end
   let env: TestEnv;
   let s: SetupSess;
   beforeAll(async () => {
@@ -398,6 +399,7 @@ describe('fork: the setup wizard on Plex', () => {
     env = await makeEnv({}, {
       setupComplete: false, server: 'plex', plexFake: fake,
       ctxPatch: (c) => { c.fetchImpl = (async (i: RequestInfo | URL, init?: RequestInit) => { probed.push(String(i)); return fake.fetch(i, init); }) as typeof fetch; },
+      logger: { stream: { write: (m: string) => { logs.push(m); } }, level: 'trace' },
     });
     s = await unlock(env);
   });
@@ -451,5 +453,30 @@ describe('fork: the setup wizard on Plex', () => {
     const st = await env.app.inject('/api/setup/state');
     expect(st.json().steps.media).toBe('done');
     noToken(st.body);
+  });
+
+  it('fork: a PLEX_URL with a query (a pasted ?X-Plex-Token=…), fragment or userinfo -> invalid_url on Test and save; nothing saved or sent', async () => {
+    const canary = 'url-token-canary-placeholder'; // a test placeholder, never a real token
+    const rev = env.ctx.settings.rev();
+    probed.length = 0;
+    for (const url of [`${URL_}/?X-Plex-Token=${canary}`, `${URL_}/#${canary}`, `http://friendflix:${canary}@plex.example.com:32400`]) {
+      const t = await test({ PLEX_URL: url, PLEX_TOKEN });
+      expect(t.statusCode, url).toBe(400);
+      expect(t.json()).toEqual({ error: 'invalid_settings', errors: { PLEX_URL: 'invalid_url' } });
+      const r = await put({ PLEX_URL: url, PLEX_TOKEN });
+      expect(r.statusCode, url).toBe(400);
+      expect(r.json()).toEqual({ error: 'invalid_settings', errors: { PLEX_URL: 'invalid_url' } });
+      for (const b of [t.body, r.body]) expect(b).not.toContain(canary);
+    }
+    expect(probed).toEqual([]);
+    expect(env.ctx.settings.rev()).toBe(rev);
+    expect(env.ctx.cfg.PLEX_URL).toBe(URL_);
+    expect(JSON.stringify((await env.pool.query('select * from settings')).rows)).not.toContain(canary);
+    for (const line of logs) expect(line).not.toContain(canary);
+  });
+
+  it('fork: no log line carries a Plex token (Test, save, refusals)', () => {
+    expect(logs.length).toBeGreaterThan(0);
+    for (const line of logs) noToken(line);
   });
 });

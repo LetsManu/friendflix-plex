@@ -54,6 +54,23 @@ describe('settings texts', () => {
     }
   });
 
+  it('fork: PLEX_URL has its own invalid_url text in every language (only the address, the token in its own field); other keys keep the general one', async () => {
+    for (const l of ['de', 'en', 'es', 'fr', 'it', 'pl', 'tr']) {
+      await setLocale(l);
+      const own = errorText('invalid_url', 'PLEX_URL');
+      expect(own, l).not.toBe(errorText('invalid_url'));
+      expect(own, l).toMatch(/\?/);
+      expect(own, l).toMatch(/#/);
+      expect(own, l).not.toMatch(/seerr|plex\.tv|X-Plex-Token/i);
+      expect(errorText('invalid_url', 'JELLYFIN_URL'), l).toBe(errorText('invalid_url'));
+      expect(errorText('locked', 'PLEX_URL'), l).toBe(errorText('locked'));
+    }
+    await setLocale('de');
+    expect(errorText('invalid_url', 'PLEX_URL')).toContain('Bitte nur die Serveradresse eingeben');
+    expect(errorText('invalid_url', 'plex_url')).toBe(errorText('invalid_url'));
+    expect(errorText('<b>', 'PLEX_URL')).toBe('Ungültiger Wert.');
+  });
+
   it('moveHint names KEY and KEY_FILE and only summarises legacy names', () => {
     expect(moveHint(['PUBLIC_URL', 'PUBLIC_URL_FILE'])).toContain('PUBLIC_URL und PUBLIC_URL_FILE aus der .env');
     const legacy = moveHint(['REQUESTS_URL', 'REQUESTS_URL_FILE', 'SEERR_URL', 'SEERR_URL_FILE']);

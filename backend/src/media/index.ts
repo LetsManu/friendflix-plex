@@ -8,6 +8,7 @@ import { JellyfinService } from '../jellyfin/service.js';
 import type { KV } from '../kv.js';
 import { createPlexMediaServer } from '../plex/index.js';
 import type { SettingDef } from '../settings/registry.js';
+import { isBareHttpUrl } from './address.js';
 import { MEDIA_SETUP } from './setup.js';
 import type { MediaServer } from './types.js';
 
@@ -27,7 +28,10 @@ export const MEDIA_FIELDS = {
   JELLYFIN_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()), // compose passes '' when unset
   JELLYFIN_ADMIN_API_KEY: z.string().optional().transform((v) => (v ? v : undefined)),
   /** FriendFlix for Plex: base URL of the existing Plex Media Server and its admin token (backend + gateway only) */
-  PLEX_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
+  // fork: the address only: a query (Plex's "View XML" links carry ?X-Plex-Token=…), a fragment or user:pass@ is invalid_url (media/address.ts)
+  PLEX_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url()
+    .refine(isBareHttpUrl, { message: 'PLEX_URL must be the server address only (no ?query, #fragment or user:pass@; the token goes in PLEX_TOKEN)', params: { code: 'invalid_url' } })
+    .optional()),
   PLEX_TOKEN: z.string().optional().transform((v) => (v ? v : undefined)),
 };
 

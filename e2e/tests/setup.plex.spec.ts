@@ -82,6 +82,20 @@ test.describe('setup wizard: Plex media step', () => {
     expect(await page.content()).not.toContain(TOKEN);
   });
 
+  test('fork: an address with ?X-Plex-Token=… is refused with its own hint; nothing is saved, the step stays', async ({ page, api }) => {
+    const CANARY = 'url-token-canary-placeholder';
+    await toMediaStep(page);
+    await page.getByLabel('Plex-Adresse').fill(`http://plex.example.com:32400/?X-Plex-Token=${CANARY}`);
+    await page.getByLabel('Plex-Token').fill(TOKEN);
+    await page.getByRole('button', { name: 'Speichern und weiter' }).click();
+    await expect(page.getByText('Bitte nur die Serveradresse eingeben')).toBeVisible();
+    await expect(page.getByLabel('Plex-Adresse')).toHaveAttribute('aria-invalid', 'true');
+    await expect(h2(page, 'Medienserver')).toBeVisible();
+    expect(api.setup!.steps.media).not.toBe('done');
+    expect(await storage(page)).not.toContain(CANARY);
+    expect(await storage(page)).not.toContain(TOKEN);
+  });
+
   test('the Test button shows the not_admin note too', async ({ page, api }) => {
     api.setup!.testResults.media = { ok: true, code: 'warning', detail: 'not_admin' };
     await toMediaStep(page);

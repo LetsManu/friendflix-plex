@@ -610,6 +610,11 @@ describe('fork: the media probe on Plex', () => {
     expect(r.statusCode).toBe(200);
     expect(JSON.stringify(r.json())).toContain('PLEX_TOKEN');
     noToken(r.body);
+    // fork: the database row (encrypted) shows as set, never its value or a last4 hint
+    const items = new Map<string, any>(r.json().groups.flatMap((g: any) => g.items.map((i: any) => [i.key, i])));
+    expect(items.get('PLEX_TOKEN')).toMatchObject({ source: 'db', set: true, value: null, kind: 'secret' });
+    expect(items.get('PLEX_TOKEN').last4).toBeUndefined();
+    expect(items.get('PLEX_URL')).toMatchObject({ source: 'db', set: true, value: PLEX_URL });
   });
 
   it('Test runs the Plex probe with the saved values: ok; the token only in the X-Plex-Token header', async () => {
@@ -685,8 +690,58 @@ describe('fork: the media probe on Plex', () => {
     expect(typed.json()).toEqual({ ok: false, code: 'unauthorized', probe: 'media' });
   });
 
+  // fork (final review C1): Plex's "View XML" links carry the token as ?X-Plex-Token=…; pasted into PLEX_URL it must never be saved
+  // (PLEX_URL is stored unencrypted), shown or passed on
+  const URL_CANARY = 'url-token-canary-placeholder'; // a test placeholder, never a real token
+  const withQuery = [`http://plex.example.com:32400/?X-Plex-Token=${URL_CANARY}`, `http://plex.example.com:32400/library?x-plex-token=${URL_CANARY}`,
+    `http://plex.example.com:32400/#${URL_CANARY}`, `http://friendflix:${URL_CANARY}@plex.example.com:32400`];
+
+  it('fork: PUT and Test of a PLEX_URL with a query, fragment or userinfo -> 400 invalid_url; nothing saved, no call out, never echoed', async () => {
+    await reauth();
+    const rev = env.ctx.settings.rev();
+    seen.length = 0;
+    for (const url of withQuery) {
+      for (const values of [{ PLEX_URL: url }, { PLEX_URL: url, PLEX_TOKEN }]) {
+        const p = await put(values, true);
+        expect(p.statusCode, url).toBe(400);
+        expect(p.json()).toEqual({ error: 'invalid_settings', errors: { PLEX_URL: 'invalid_url' } });
+        const t = await test(values);
+        expect(t.statusCode, url).toBe(400);
+        expect(t.json()).toEqual({ error: 'invalid_settings', errors: { PLEX_URL: 'invalid_url' } });
+        for (const b of [p.body, t.body]) expect(b).not.toContain(URL_CANARY);
+      }
+    }
+    expect(seen).toEqual([]);
+    expect(env.ctx.settings.rev()).toBe(rev);
+    expect(env.ctx.cfg.PLEX_URL).toBe(PLEX_URL);
+    expect(JSON.stringify((await env.pool.query('select * from settings')).rows)).not.toContain(URL_CANARY);
+  });
+
+  it('fork: an env-pinned PLEX_URL with a query shows as origin + path in GET and goes to the gateway without it', async () => {
+    const saved = env.ctx.cfg;
+    try {
+      // the override bypasses the schema (startup refuses such an env pin, see plex/config.test.ts): the layers behind it still hold
+      env.ctx.cfg = { ...saved, PLEX_URL: `http://plex.example.com:32400/plex/?X-Plex-Token=${URL_CANARY}#${URL_CANARY}` };
+      expect(env.ctx.settings.sources().PLEX_URL).toBe('env');
+      const r = await as('GET', '/api/admin/settings');
+      expect(r.statusCode).toBe(200);
+      expect(r.body).not.toContain(URL_CANARY);
+      const item = r.json().groups.flatMap((g: any) => g.items).find((i: any) => i.key === 'PLEX_URL');
+      expect(item).toMatchObject({ source: 'env', set: true, value: 'http://plex.example.com:32400/plex/' });
+      const gw = await env.app.inject({ method: 'GET', url: '/internal/gateway-config', headers: { 'x-internal-secret': env.ctx.cfg.INTERNAL_SECRET } });
+      expect(gw.statusCode).toBe(200);
+      expect(gw.json().upstreamUrl).toBe('http://plex.example.com:32400/plex/');
+      expect(gw.body).not.toContain(URL_CANARY);
+      env.ctx.cfg = { ...saved, PLEX_URL: `http://friendflix:${URL_CANARY}@plex.example.com:32400` };
+      expect((await as('GET', '/api/admin/settings')).body).not.toContain(URL_CANARY);
+    } finally {
+      env.ctx.cfg = saved;
+    }
+  });
+
   it('no log line carries a Plex token', () => {
     expect(logs.length).toBeGreaterThan(0);
     for (const line of logs) noToken(line);
+    for (const line of logs) expect(line).not.toContain(URL_CANARY); // fork: nor a token pasted into PLEX_URL
   });
 });

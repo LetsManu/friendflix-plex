@@ -103,6 +103,10 @@ const settings: Translation<typeof de> = {
     failed: 'Generowanie nie powiodło się.',
     a11y: '{label}: {action}',
   },
+  // fork: a key's own field error text (errorText(code, key)): PLEX_URL refuses ?…, #… and user:pass@ (a pasted ?X-Plex-Token=…)
+  keyErrors: {
+    PLEX_URL: { invalid_url: 'Wpisz tylko adres serwera: zaczynający się od http:// lub https://, bez nazwy użytkownika i hasła i bez niczego po ? lub #. Token wpisz w pole Token Plex.' },
+  },
   keys: {
     PUBLIC_URL: { label: 'Adres publiczny', help: 'Adres, pod którym wszyscy otwierają FriendFlix, np. https://friend.example.com. Opierają się na nim linki, logowanie i streaming.' },
     WEBHOOK_SECRET: { label: 'Sekret webhooka', help: 'Wspólny sekret dla webhooków serwera multimediów i usługi próśb.' },

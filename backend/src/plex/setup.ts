@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { isBareHttpUrl } from '../media/address.js';
 import type { MediaSetupProvider } from '../media/setup.js';
 import { byCode, fail, join, plainHttpUrl, smallJson, type ProbeResult } from '../settings/probeKit.js';
 import { PLEX_CLIENT_HEADERS } from './client.js';
@@ -31,7 +32,7 @@ const cancel = (r: Response) => void r.body?.cancel().catch(() => undefined);
 async function probe(values: Record<string, string | undefined>, { fetchImpl }: { fetchImpl: typeof fetch }): Promise<ProbeResult> {
   const { PLEX_URL: url, PLEX_TOKEN: token } = values;
   if (!url || !token) return fail('invalid', 'incomplete');
-  const base = plainHttpUrl(url);
+  const base = isBareHttpUrl(url) ? plainHttpUrl(url) : undefined; // no query (a pasted ?X-Plex-Token=…), fragment or userinfo
   if (!base) return fail('invalid', 'invalid_url');
 
   const get = (path: string, withToken: boolean) => fetchImpl(join(base, path), {

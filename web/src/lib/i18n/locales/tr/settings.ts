@@ -101,6 +101,10 @@ const settings: Translation<typeof de> = {
     failed: 'Oluşturulamadı.',
     a11y: '{label}: {action}',
   },
+  // fork: a key's own field error text (errorText(code, key)): PLEX_URL refuses ?…, #… and user:pass@ (a pasted ?X-Plex-Token=…)
+  keyErrors: {
+    PLEX_URL: { invalid_url: 'Lütfen yalnızca sunucu adresini gir: http:// veya https:// ile başlayan, kullanıcı adı ve parola içermeyen, ? veya # işaretinden sonra hiçbir şey olmayan bir adres. Token, Plex token’ı alanına girilir.' },
+  },
   keys: {
     PUBLIC_URL: { label: 'Genel adres', help: 'Herkesin FriendFlix’e ulaştığı adres, ör. https://friend.example.com. Bağlantılar, oturum açma ve yayın buna dayanır.' },
     WEBHOOK_SECRET: { label: 'Webhook sırrı', help: 'Medya sunucusu ve istek hizmetinin webhook’ları için ortak sır.' },

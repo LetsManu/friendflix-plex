@@ -149,9 +149,13 @@ export function moveHint(names: readonly string[]): string {
   return tr('settings.moveHint', { keys: own.length < names.length ? tr('settings.moveHintOlder', { keys: list }) : list });
 }
 
-/** Text of a field error code (400 invalid_settings). */
-export const errorText = (code: string): string =>
-  (/^[a-z_]+$/.test(code) && hasKey(`settings.errors.${code}`) ? trDynamic(`settings.errors.${code}`) : tr('settings.errors.invalid'));
+/**
+ * Text of a field error code (400 invalid_settings).
+ * fork: with the setting's key, a key's own text wins (settings.keyErrors.<KEY>.<code>, e.g. PLEX_URL's invalid_url: no ?X-Plex-Token=…).
+ */
+export const errorText = (code: string, key?: string): string =>
+  (key && /^[A-Z][A-Z0-9_]*$/.test(key) && /^[a-z_]+$/.test(code) && hasKey(`settings.keyErrors.${key}.${code}`) ? trDynamic(`settings.keyErrors.${key}.${code}`) // fork
+    : /^[a-z_]+$/.test(code) && hasKey(`settings.errors.${code}`) ? trDynamic(`settings.errors.${code}`) : tr('settings.errors.invalid'));
 
 /** Text of a probe result: the code's sentence plus the detail's, when there is one. */
 export function probeText(r: ProbeResult): string {

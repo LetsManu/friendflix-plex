@@ -8,6 +8,7 @@ import type { Ctx } from '../ctx.js';
 import { authorizeDownload } from '../downloads.js';
 import { setLive } from '../live.js';
 import { dispatchMediaEvent } from '../media/events.js';
+import { addressOnly } from '../media/address.js'; // fork
 import { mediaGatewayKeys, mediaUrlKey } from '../media/index.js';
 import { MediaError, type ExternalSession } from '../media/types.js';
 import { effectiveLimits } from '../limits.js';
@@ -242,7 +243,8 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
       if (typeof v !== 'string' || !v) return reply.code(503).send({ error: 'setup_required' });
       upstreamAuth[k] = v;
     }
-    return { rev, upstreamUrl: url, upstreamAuth };
+    // fork: origin + path only: a query (a pasted ?X-Plex-Token=…) never travels in the URL, the token goes only in upstreamAuth
+    return { rev, upstreamUrl: addressOnly(url), upstreamAuth };
   });
 
   // Webhooks of the configured server (Jellyfin: /internal/webhook/jellyfin), translated into neutral events by the implementation.

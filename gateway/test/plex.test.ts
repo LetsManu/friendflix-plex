@@ -390,6 +390,21 @@ describe('Plex adapter hooks', () => {
     expect(() => checkUpstreamConfig(selectUpstream('plex'), { MEDIA_SERVER: 'plex', PLEX_URL: 'nope' })).toThrow(/PLEX_URL/);
   });
 
+  it('fork: validateConfig refuses a PLEX_URL with a query, a fragment or userinfo (a pasted ?X-Plex-Token=…) and never echoes it', () => {
+    const v = up.validateConfig!;
+    const canary = 'url-token-canary-placeholder'; // a test placeholder, never a real token
+    const only = 'PLEX_URL must be the server address only (no ?query, #fragment or user:pass@; the token goes in PLEX_TOKEN on the backend)';
+    for (const url of [`http://plex.example.com:32400/?X-Plex-Token=${canary}`, `http://plex.example.com:32400/?x-plex-token=${canary}`,
+      `http://plex.example.com:32400/#${canary}`, `http://user:${canary}@plex.example.com:32400`, 'http://plex.example.com:32400/?']) {
+      expect(v({ PLEX_URL: url }), url).toEqual([only]);
+      let msg = '';
+      try { checkUpstreamConfig(selectUpstream('plex'), { MEDIA_SERVER: 'plex', PLEX_URL: url }); } catch (e) { msg = (e as Error).message; }
+      expect(msg).toContain('PLEX_URL must be the server address only');
+      expect(msg).not.toContain(canary);
+    }
+    expect(v({ PLEX_URL: 'http://plex.example.com:32400/plex' })).toEqual([]); // a reverse-proxy path stays fine
+  });
+
   it('playlist: credentials stripped from every URI, URIs outside the session refused', () => {
     const p = (b: string) => up.playlist!(b, { path: '', query: new URLSearchParams(), requestPath: '', cast: false });
     const body = '#EXTM3U\n#EXT-X-MAP:URI="init.mp4?X-Plex-Token=SECRET&x=1"\n#EXTINF:8,\n00000.ts?X-Plex-Token=SECRET&X-Plex-Client-Identifier=c\n#EXTINF:8,\n00001.ts\n';

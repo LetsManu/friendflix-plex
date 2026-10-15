@@ -5,6 +5,7 @@
  * ff_setup + ff_setup_csrf), saves mark the steps done. Every write must carry x-ff-setup-csrf equal to the cookie, like the backend.
  * While `complete` is false, /api/me answers 503 setup_required (mocks/api.ts).
  */
+import { plexUrlErrors } from './settings.js'; // fork
 
 type Step = 'todo' | 'done' | 'env';
 export interface ProbeMock { ok: boolean; code: string; detail?: string }
@@ -101,6 +102,8 @@ export function setupRoute(st: SetupMock, m: string, p: string, body: any, heade
     const values: Record<string, unknown> = body.values ?? {};
     st.puts.push(body.force === undefined ? { values } : { values, force: body.force });
     if (st.saveError) { const e = st.saveError; st.saveError = null; return J(e.body, e.status); }
+    const badUrl = plexUrlErrors(values); // fork
+    if (Object.keys(badUrl).length) return J({ error: 'invalid_settings', errors: badUrl }, 400);
     if (st.saveProbeFail && !body.force) { const probe = st.saveProbeFail; st.saveProbeFail = null; return J({ error: 'probe_failed', group: 'media', probe }, 400); }
     const keys = Object.keys(values);
     if (keys.includes('PUBLIC_URL')) st.steps.publicUrl = 'done';
@@ -110,6 +113,8 @@ export function setupRoute(st: SetupMock, m: string, p: string, body: any, heade
   }
   if (p === '/api/setup/test' && m === 'POST') {
     st.tests.push(body);
+    const badUrl = plexUrlErrors(body.values ?? {}); // fork
+    if (Object.keys(badUrl).length) return J({ error: 'invalid_settings', errors: badUrl }, 400);
     return J(st.testResults[body.group] ?? { ok: true, code: 'ok' });
   }
   if (p === '/api/setup/media/auto' && m === 'POST') {

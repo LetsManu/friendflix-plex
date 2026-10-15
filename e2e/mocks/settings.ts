@@ -160,6 +160,18 @@ const view = (st: SettingsMock) => ({
 
 type Reply = (b: unknown, status?: number) => Promise<void>;
 
+/**
+ * fork: like the backend's PLEX_URL schema (media/address.ts): an address with a query (a pasted ?X-Plex-Token=…), a fragment or
+ * user:pass@ is invalid_url on PUT and Test (the setup mock uses it too)
+ */
+export function plexUrlErrors(values: Record<string, unknown>): Record<string, string> {
+  const v = values.PLEX_URL;
+  if (typeof v !== 'string' || !v) return {};
+  let bad = /[?#]/.test(v);
+  try { const u = new URL(v); bad ||= !/^https?:$/.test(u.protocol) || Boolean(u.username || u.password); } catch { bad = true; }
+  return bad ? { PLEX_URL: 'invalid_url' } : {};
+}
+
 export function settingsRoute(st: SettingsMock, m: string, p: string, body: any, J: Reply): Promise<void> | null {
   if (p === '/api/admin/settings' && m === 'GET') return J(view(st));
   if (p === '/api/admin/settings' && m === 'PUT') {
@@ -178,6 +190,7 @@ export function settingsRoute(st: SettingsMock, m: string, p: string, body: any,
       else if (f.item.source === 'env') errors[k] = 'locked';
     }
     for (const [k, v] of Object.entries(values)) if (typeof v === 'string' && /[?&]auth=redacted\b/.test(v)) errors[k] = 'redacted';
+    Object.assign(errors, plexUrlErrors(values)); // fork
     if (Object.keys(errors).length) return J({ error: 'invalid_settings', errors }, 400);
     if (st.probeFail && !body.force) return J({ error: 'probe_failed', group: find(Object.keys(values)[0]!)!.group, probe: st.probeFail }, 400);
     for (const [k, v] of Object.entries(values)) {
@@ -197,6 +210,8 @@ export function settingsRoute(st: SettingsMock, m: string, p: string, body: any,
     // the real rule: a saved credential would go to a changed destination
     if (st.reauthRequired && Object.keys(body.values ?? {}).some((k) => REAUTH.test(k))) return J({ error: 'reauth_required' }, 401);
     st.tests.push(body);
+    const bad = plexUrlErrors(body.values ?? {}); // fork
+    if (Object.keys(bad).length) return J({ error: 'invalid_settings', errors: bad }, 400);
     return J(st.testResult);
   }
   if (p === '/api/admin/settings/import-env' && m === 'POST') {

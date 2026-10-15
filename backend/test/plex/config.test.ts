@@ -103,6 +103,24 @@ describe('MEDIA_SERVER=plex config', () => {
       await pool.end();
     }
   });
+  it('fork: an env PLEX_URL with a query (a pasted ?X-Plex-Token=…), fragment or userinfo stops the start; the error never echoes it', () => {
+    const canary = 'url-token-canary-placeholder'; // a test placeholder, never a real token
+    const bad = [`http://plex.example.com:32400/?X-Plex-Token=${canary}`, `http://plex.example.com:32400/#${canary}`, `http://u:${canary}@plex.example.com:32400`];
+    for (const url of bad) {
+      // the boot config (server.ts loadConfig) and the settings store (resolveConfig) both refuse it, by key and code only
+      let boot = '';
+      try { loadConfig({ ...BASE, MEDIA_SERVER: 'plex', PLEX_URL: url, PLEX_TOKEN: 't' }); } catch (e) { boot = (e as Error).message; }
+      expect(boot, url).toContain('PLEX_URL must be the server address only');
+      expect(boot).not.toContain(canary);
+      expect(() => resolveConfig({ env: { ...BASE_DB, MEDIA_SERVER: 'plex', PLEX_URL: url }, rows: [], encKey: keyFromBase64(ENC_KEY) })).toThrow(/^PLEX_URL is invalid \(invalid_url\)$/);
+    }
+    // a stored row with a query (written before this check) is ignored and listed invalid, never used or passed on
+    const rows = [{ key: 'PLEX_URL', value: bad[0], enc: null, last4: null, updatedAt: new Date().toISOString(), updatedBy: null }];
+    const r = resolveConfig({ env: { ...BASE_DB, MEDIA_SERVER: 'plex' }, rows, encKey: keyFromBase64(ENC_KEY) });
+    expect([r.cfg.PLEX_URL, r.invalid]).toEqual([undefined, ['PLEX_URL']]);
+    // a reverse-proxy path is an address too
+    expect(loadConfig({ ...BASE, MEDIA_SERVER: 'plex', PLEX_URL: 'http://plex.example.com:32400/plex' }).PLEX_URL).toBe('http://plex.example.com:32400/plex');
+  });
   it('the Jellyfin default is unaffected by empty PLEX_* lines in .env', () => {
     const c = loadConfig({ ...BASE, JELLYFIN_URL: 'http://j', JELLYFIN_ADMIN_API_KEY: 'k', PLEX_URL: '', PLEX_TOKEN: '' });
     expect([c.MEDIA_SERVER, c.PLEX_URL, c.PLEX_TOKEN]).toEqual(['jellyfin', undefined, undefined]);

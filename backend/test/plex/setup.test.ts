@@ -127,6 +127,18 @@ describe('plexSetup provider', () => {
     expect(w.seen).toEqual([]);
   });
 
+  it('fork: a URL with a query (a pasted ?X-Plex-Token=…), a fragment or userinfo is invalid_url: no request, nothing of it echoed', async () => {
+    const w = world();
+    const canary = 'url-token-canary-placeholder'; // a test placeholder, never a real token
+    for (const url of [`${URL_}/?X-Plex-Token=${canary}`, `${URL_}/library/sections?x-plex-token=${canary}`, `${URL_}/#${canary}`, `${URL_}/?`,
+      `http://user:${canary}@plex.example.com:32400`]) {
+      const r = await plexSetup.probe(values(PLEX_TOKEN, url), { fetchImpl: w.fetchImpl });
+      expect(r, url).toEqual({ ok: false, code: 'invalid', detail: 'invalid_url' });
+      expect(JSON.stringify(r)).not.toContain(canary);
+    }
+    expect(w.seen).toEqual([]);
+  });
+
   it('the token is never in a URL, a query, a result or a console line, whatever happens', async () => {
     const lines: string[] = [];
     for (const m of ['log', 'info', 'warn', 'error', 'debug'] as const) vi.spyOn(console, m).mockImplementation((...a: unknown[]) => { lines.push(a.map(String).join(' ')); });

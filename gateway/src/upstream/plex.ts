@@ -113,7 +113,8 @@ export function plexPlaylist(body: string, _ctx?: PlaylistContext): string {
 }
 
 /**
- * Startup check (Upstream.validateConfig): a PLEX_URL that is set must be an http(s) URL, a PLEX_TOKEN_FILE that is set must be readable
+ * Startup check (Upstream.validateConfig): a PLEX_URL that is set must be an http(s) URL without query, fragment or userinfo (fork: a
+ * pasted ?X-Plex-Token=… is refused, never echoed), a PLEX_TOKEN_FILE that is set must be readable
  * and non-empty. Neither set is fine (remote mode, settings in the database): the gateway takes them from the backend and answers
  * /media with 503 until the setup saved them.
  */
@@ -122,7 +123,11 @@ export function validatePlexEnv(env: NodeJS.ProcessEnv): string[] {
   const url = (env.PLEX_URL ?? '').trim();
   if (url) {
     try {
-      if (!/^https?:$/.test(new URL(url).protocol)) problems.push('PLEX_URL must be an http(s) URL');
+      const u = new URL(url);
+      if (!/^https?:$/.test(u.protocol)) problems.push('PLEX_URL must be an http(s) URL');
+      // fork: the address only, like the backend's setting: a query (Plex's "View XML" links carry ?X-Plex-Token=…), a fragment or
+      // user:pass@ stops the start; the message never echoes the value. The token goes in PLEX_TOKEN (backend), never in the URL.
+      else if (/[?#]/.test(url) || u.username || u.password) problems.push('PLEX_URL must be the server address only (no ?query, #fragment or user:pass@; the token goes in PLEX_TOKEN on the backend)');
     } catch {
       problems.push('PLEX_URL is not a valid URL');
     }

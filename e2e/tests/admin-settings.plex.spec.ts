@@ -55,6 +55,24 @@ test.describe('admin: settings (Plex)', () => {
     await expect(media.getByRole('button', { name: 'Trotzdem speichern' })).toHaveCount(0);
   });
 
+  test('fork: an address with ?X-Plex-Token=… is refused with its own hint on Test and Save; nothing is saved, the token never comes back', async ({ page, api }) => {
+    const CANARY = 'url-token-canary-placeholder';
+    await page.goto('/admin/settings');
+    const media = card(page, 'Mediaserver');
+    const address = setting(page, 'Plex-Adresse');
+    await address.getByRole('textbox').fill(`http://plex.example.com:32400/?X-Plex-Token=${CANARY}`);
+    await media.getByRole('button', { name: 'Testen' }).click();
+    await expect(address.getByText('Bitte nur die Serveradresse eingeben')).toBeVisible();
+    await media.getByRole('button', { name: 'Speichern' }).click();
+    await expect(address.getByText('Der Token gehört in das Feld Plex-Token.')).toBeVisible();
+    await expect(address.getByRole('textbox')).toHaveAttribute('aria-invalid', 'true');
+    expect(api.settings.puts.map((p) => p.values)).toEqual([{ PLEX_URL: `http://plex.example.com:32400/?X-Plex-Token=${CANARY}` }]);
+    // nothing was saved: after a reload the saved address shows, and the pasted token is nowhere on the page
+    await page.reload();
+    await expect(setting(page, 'Plex-Adresse').getByRole('textbox')).toHaveValue('http://plex.example.com:32400');
+    expect(await page.content()).not.toContain(CANARY);
+  });
+
   test('the Test button shows the same note', async ({ page, api }) => {
     api.settings.testResult = { ok: true, code: 'warning', detail: 'not_admin' };
     await page.goto('/admin/settings');

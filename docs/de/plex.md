@@ -127,6 +127,8 @@ FriendFlix braucht einen **geclaimten** Server und ein Token. Ein ungeclaimter P
 
 Folge dem Plex-Supportartikel **„Finding an authentication token / X-Plex-Token“** (diesen Titel auf support.plex.tv suchen). Das Token wird als `X-Plex-Token` gesendet.
 
+Der Artikel liest das Token aus einem *View XML*-Link, der es in der Adresse trägt (`…?X-Plex-Token=…`). Kopiere nur den Token-Wert in das Feld **Token** und nur `http://<server>:32400` in das Feld **Adresse**: FriendFlix lehnt eine Adresse mit `?…`, `#…` oder `benutzer:passwort@` ab (`invalid_url`), weil eine Adresse unverschlüsselt gespeichert und angezeigt wird. Ein in der `.env` festgeschriebenes `PLEX_URL` mit so einem Teil stoppt Backend und Gateway beim Start (die Meldung nennt `PLEX_URL` und dass nur die Serveradresse erlaubt ist; der Wert wird nie ausgegeben).
+
 Empfehlungen:
 
 - Nimm ein **eigenes Plex-Konto** (mindestens ein eigenes Token) für FriendFlix, nicht dein Alltagskonto. Plex speichert die gewählte Tonspur pro Plex-Konto, und FriendFlix muss sie ändern, wenn jemand eine Sprache wählt (siehe [Tonspuren](#tonspuren)). Nutzen andere Plex-Apps dasselbe Konto, sehen sie diese Änderungen.
@@ -175,7 +177,7 @@ Der erste Admin sieht nach der ersten Anmeldung eine Weile eine leere Bibliothek
 | Variable | Pflicht | Zweck |
 |---|---|---|
 | `MEDIA_SERVER` | setzt `compose.plex.yaml` auf `plex` | wählt die Plex-Implementierung in Backend und Gateway |
-| `PLEX_URL` | nein (fest vorgeben) | Plex-Adresse aus Sicht der Container (LAN-IP, `http://host.docker.internal:32400` für Plex auf dem Docker-Host, oder ein Containername in einem gemeinsamen Netz). `compose.plex.yaml` gibt sie an Backend **und** Gateway weiter: für beide setzen oder für keins, nie bei nur einem entfernen |
+| `PLEX_URL` | nein (fest vorgeben) | Plex-Adresse aus Sicht der Container (LAN-IP, `http://host.docker.internal:32400` für Plex auf dem Docker-Host, oder ein Containername in einem gemeinsamen Netz). Nur die Adresse: kein `?…` (nie `?X-Plex-Token=…`), `#…` oder `benutzer:passwort@`, sonst starten Backend und Gateway nicht. `compose.plex.yaml` gibt sie an Backend **und** Gateway weiter: für beide setzen oder für keins, nie bei nur einem entfernen |
 | `PLEX_TOKEN` / `PLEX_TOKEN_FILE` | nein (fest vorgeben) | das Plex-Token, das FriendFlix für alle nutzt. Dieser Wert gilt **nur im Backend**: das Gateway hat kein `PLEX_TOKEN` in seiner Umgebung |
 
 **Wie das Gateway das Token bekommt.** Das Gateway hat keine Datenbank. Es fragt das Backend im internen Netz nach Plex-Adresse und Token (`/internal/gateway-config`), geschützt durch das gemeinsame Geheimnis aus dem Bootstrap-Volume, und hält sie nur im Speicher. Eine Änderung unter *Admin → Einstellungen* erreicht das Gateway spätestens nach 30 Sekunden (sein Aktualisierungsintervall; früher, wenn eine Medienanfrage die neue Einstellungsrevision bemerkt). Das Token wird nie geloggt und nie an einen Browser geschickt.

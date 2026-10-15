@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { audit } from '../audit.js';
 import type { Config } from '../config.js';
 import type { Ctx } from '../ctx.js';
+import { addressOnly } from '../media/address.js'; // fork
 import { mediaSettings, mediaSetupKeys } from '../media/index.js'; // fork
 import { REAUTH_WINDOW_S, recentlyAuthenticated } from '../reauth.js';
 import { requireAdmin } from '../session.js';
@@ -63,7 +64,8 @@ const holdsRedaction = (v: unknown) => {
   }
 };
 /** a URL value as shown: without userinfo, and ntfy's `auth` query token replaced (they are credentials inside a non-secret value) */
-function shownUrl(v: string): string {
+function shownUrl(v: string, key?: string): string {
+  if (key === 'PLEX_URL') return addressOnly(v); // fork: origin + path only (a pasted ?X-Plex-Token=… never shows, also from an env pin)
   try {
     const u = new URL(v);
     if (!u.username && !u.password && !u.searchParams.has('auth')) return v;
@@ -94,7 +96,7 @@ export async function settingsView(ctx: Ctx): Promise<{ rev: number; pendingRest
     const set = isSet(v);
     const row = rows.get(d.key);
     const view: SettingView = {
-      key: d.key, kind: d.kind, source: sources[d.key] ?? 'unset', value: d.secret || !set ? null : d.kind === 'url' ? shownUrl(String(v)) : toStored(d, v), set, apply: d.apply,
+      key: d.key, kind: d.kind, source: sources[d.key] ?? 'unset', value: d.secret || !set ? null : d.kind === 'url' ? shownUrl(String(v), d.key) : toStored(d, v), set, apply: d.apply,
       restartPending: pending.includes(d.key), invalid: invalid.has(d.key), envNames: envNames(d.key, d.legacyEnv), updatedAt: row?.updatedAt ?? null,
     };
     if (d.hint === 'last4' && set) {

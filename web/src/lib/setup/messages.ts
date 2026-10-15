@@ -88,4 +88,4 @@ export const isSecretKey = (key: string): boolean => /(_KEY|_TOKEN|_SECRET|_PASS
 
 /** Field errors for keys the form does not show (locked, not allowed …), as "Label: reason" lines: they would be invisible otherwise. */
 export const otherFieldErrors = (fields: Readonly<Record<string, string>> | undefined, shown: readonly string[]): string[] =>
-  Object.entries(fields ?? {}).filter(([k]) => !shown.includes(k)).map(([k, code]) => `${keyLabel(k)}: ${fieldText(code)}`);
+  Object.entries(fields ?? {}).filter(([k]) => !shown.includes(k)).map(([k, code]) => `${keyLabel(k)}: ${fieldText(code, k)}`); // fork: + k

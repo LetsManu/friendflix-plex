@@ -34,7 +34,7 @@
   $: autoReady = autoFields.every((f) => auto[f].trim() || f === 'password');
   $: manualValues = filled(manual);
   $: others = otherFieldErrors(msg?.fields, mode === 'manual' ? state.media.keys : []);
-  $: fieldErr = (key: string) => (msg?.fields?.[key] ? fieldText(msg.fields[key]!) : '');
+  $: fieldErr = (key: string) => (msg?.fields?.[key] ? fieldText(msg.fields[key]!, key) : ''); // fork: + key (PLEX_URL's own invalid_url text)
 
   function setMode(m: 'auto' | 'manual') { mode = m; msg = null; ok = ''; }
 
