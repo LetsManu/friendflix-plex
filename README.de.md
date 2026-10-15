@@ -11,7 +11,7 @@
   <a href="README.md">English</a> · <a href="README.de.md">Deutsch</a>
   <br><br>
   <a href="https://github.com/LetsManu/friendflix/actions/workflows/ci.yml"><img src="https://github.com/LetsManu/friendflix-plex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/status-in%20Entwicklung%20%7C%20Preview-orange" alt="Status: in Entwicklung / Preview">
+  <img src="https://img.shields.io/badge/status-ver%C3%B6ffentlicht%20%7C%20fr%C3%BCh-yellowgreen" alt="Status: veröffentlicht, früh">
   <img src="https://img.shields.io/badge/self--hosted-Docker-2496ED" alt="Selbst gehostet mit Docker">
   <img src="https://img.shields.io/badge/Sprachen-7-ff4f6d" alt="7 Sprachen">
   <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-AGPL--3.0-blue" alt="Lizenz: AGPL-3.0"></a>
@@ -21,7 +21,7 @@
 
 **FriendFlix for Plex** ist ein privates Streaming-Portal vor deinem **Plex Media Server** (deine Medien) und einem optionalen Wunsch-Dienst. Deine Freunde bekommen ein schickes, vertrautes Streaming-Erlebnis auf Laptop, Handy und Fernseher – mit Profilen, Downloads, Watch-Partys und Empfehlungen untereinander. Plex und den Wunsch-Dienst sehen sie nie direkt, und du bestimmst, wer hineinkommt. Niemand braucht ein plex.tv-Konto.
 
-> **Status: Preview, nicht veröffentlicht.** Die Plex-Unterstützung ist im Entwicklungszweig umgesetzt und gegen einen Fake-Plex-Server aus echten Antworten von Plex Media Server 1.43 getestet, aber **nicht released** und kaum an echten Servern erprobt – Images gibt es erst mit dem ersten Preview-Release (siehe [Releases](https://github.com/LetsManu/friendflix-plex/releases) und [CHANGELOG.md](CHANGELOG.md)). Freiwillige: [mit einem echten Plex-Server testen](docs/de/plex.md#mit-einem-echten-plex-server-testen).
+> **Status: veröffentlicht, früh.** Mit jedem Release werden Images veröffentlicht (siehe [Releases](https://github.com/LetsManu/friendflix-plex/releases) und [CHANGELOG.md](CHANGELOG.md)). Die Plex-Unterstützung ist gegen einen Fake-Plex-Server aus echten Antworten von Plex Media Server 1.43 getestet und lief bisher erst an wenigen echten Servern. Freiwillige: [mit einem echten Plex-Server testen](docs/de/plex.md#mit-einem-echten-plex-server-testen).
 >
 > **Das ist ein Fork.** FriendFlix for Plex ist ein Fork von [FriendFlix](https://github.com/LetsManu/friendflix), der statt Jellyfin mit Plex spricht. **Du nutzt Jellyfin? Dann nimm das Originalprojekt: [LetsManu/friendflix](https://github.com/LetsManu/friendflix).** Die Funktionsübersicht unten ist die des Originals, auf Plex umformuliert; die [Vergleichstabelle](#plex-und-jellyfin-im-vergleich) zeigt, was Plex nicht liefern kann.
 
