@@ -30,13 +30,13 @@ config:
 ---
 flowchart TB
   accTitle: FriendFlix for Plex trust boundaries
-  accDescr: Viewers on the internet only hold a session cookie and signed media URLs. The Plex admin token lives only in the backend and gateway environment on the Docker host. The backend decides access from its Postgres mirror of the Plex library; the gateway asks it before every media request. Plex is on your own network and never reachable by a browser.
+  accDescr: Viewers on the internet only hold a session cookie and signed media URLs. The Plex admin token lives only in the backend (database, encrypted, or its environment); the gateway gets it from the backend over the internal network and keeps it in memory. The backend decides access from its Postgres mirror of the Plex library; the gateway asks it before every media request. Plex is on your own network and never reachable by a browser.
   subgraph PUB["Internet · untrusted"]
     V("📺 <b>Viewers</b><br/><small>session cookie<br/>signed /media URLs</small>"):::ext
     P("🛡️ <b>Reverse proxy</b><br/><small>TLS</small>"):::edge
   end
   subgraph HOST["Docker host · FriendFlix"]
-    GW("📡 <b>gateway</b><br/><small>PLEX_TOKEN_FILE<br/>INTERNAL_SECRET</small>"):::app
+    GW("📡 <b>gateway</b><br/><small>INTERNAL_SECRET<br/>token from the backend</small>"):::app
     BE("⚙️ <b>backend</b><br/><small>PLEX_TOKEN_FILE<br/>INTERNAL_SECRET</small>"):::app
     PG[("🗄️ <b>Postgres</b><br/><small>library mirror<br/>profiles · watch state</small>")]:::store
   end
@@ -178,7 +178,7 @@ The first admin sees an empty library for a short while after the first sign-in,
 | `PLEX_URL` | no (pin) | Plex base URL as seen from the containers (LAN IP, `http://host.docker.internal:32400` for Plex on the Docker host, or a container name on a shared network). `compose.plex.yaml` passes it to backend **and** gateway: set it for both or for neither, never remove it from only one of them |
 | `PLEX_TOKEN` / `PLEX_TOKEN_FILE` | no (pin) | the Plex token FriendFlix uses for everybody. A pin is **backend-only**: the gateway has no `PLEX_TOKEN` in its environment |
 
-**How the gateway gets the token.** The gateway has no database. It asks the backend for the Plex address and token over the internal network (`/internal/gateway-config`), protected by the shared secret from the bootstrap volume, and keeps them in memory only. A change in *Admin → Settings* reaches the gateway within seconds. The token is never logged and never sent to a browser.
+**How the gateway gets the token.** The gateway has no database. It asks the backend for the Plex address and token over the internal network (`/internal/gateway-config`), protected by the shared secret from the bootstrap volume, and keeps them in memory only. A change in *Admin → Settings* reaches the gateway at the latest after 30 seconds (its refresh interval; sooner when a media request notices the new settings revision). The token is never logged and never sent to a browser.
 
 **Token as a Docker secret.** `compose.secrets.yaml` has no `plex_token` entry. Create the secret file and add `plex_token` to the **backend** list yourself, as described at the end of `compose.plex.yaml`; set `PLEX_TOKEN_FILE=/run/secrets/plex_token` and leave `PLEX_TOKEN` empty. A `_FILE` value locks the field in the wizard.
 
@@ -195,7 +195,7 @@ More on moving settings: [setup.md, section 14](setup.md#14-upgrading-to-setting
 
 ### Changing the Plex server
 
-If the address points to a **different Plex server** (another `machineIdentifier`), FriendFlix rebuilds its library mirror from scratch with one log warning. While it rebuilds, the library can look empty or only partly filled for a while. The same server under a new address keeps the mirror.
+If the address points to a **different Plex server** (another `machineIdentifier`), FriendFlix rebuilds its library mirror from scratch with one log warning. While it rebuilds, the library can look empty or only partly filled for a while. The same server under a new address keeps the mirror. Changing the address while a token is saved also needs a recent re-authentication, because the saved token would then go to the new address.
 
 Limits:
 
@@ -204,7 +204,7 @@ Limits:
 
 ### Rotating or revoking the token
 
-If the token leaks or you want a new one: revoke it on the Plex side first (Plex account → *Authorized Devices*, or sign out of all devices; the exact name changes, see Plex's support pages), create a new token as in [section 2](#2-get-the-admin-token) and enter it under *Admin → Settings*. The gateway picks it up within seconds. If the token is pinned in `.env` or as a `_FILE` secret, change it there and recreate the backend.
+If the token leaks or you want a new one: revoke it on the Plex side first (Plex account → *Authorized Devices*, or sign out of all devices; the exact name changes, see Plex's support pages), create a new token as in [section 2](#2-get-the-admin-token) and enter it under *Admin → Settings*. The gateway picks it up at the latest after 30 seconds. Saving a token needs a recent re-authentication (sign in again when asked). If the token is pinned in `.env` or as a `_FILE` secret, change it there and recreate the backend.
 
 Until you enter the new token, FriendFlix keeps using the old one (which fails once revoked). **Clearing the token field does not remove it**: on a Plex instance the token is required, the save is refused ("required") and the last good token stays; an empty field means "unchanged".
 

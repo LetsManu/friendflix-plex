@@ -130,8 +130,8 @@ flowchart TB
 | Service | Networks | Host port (127.0.0.1) | Holds |
 |---|---|---|---|
 | web | front | 3080 | nothing secret |
-| backend | front, db, media, egress | 3081 | `PLEX_TOKEN` (or `PLEX_TOKEN_FILE`), `APP_ENC_KEY`, `INTERNAL_SECRET`, OIDC client secret; sessions (cookie `ff_sid`) in Redis; profiles, watch state and the Plex library mirror in Postgres |
-| gateway | front, media | 3082 | `PLEX_TOKEN` (or `PLEX_TOKEN_FILE`), `INTERNAL_SECRET`; asks the backend per request which items and sessions are allowed (cached 5 s) |
+| backend | front, db, media, egress | 3081 | Plex token (database, encrypted; or the pin `PLEX_TOKEN` / `PLEX_TOKEN_FILE`), `APP_ENC_KEY`, `INTERNAL_SECRET`, OIDC client secret; sessions (cookie `ff_sid`) in Redis; profiles, watch state and the Plex library mirror in Postgres |
+| gateway | front, media | 3082 | `INTERNAL_SECRET` (environment, `_FILE` or bootstrap volume); gets the Plex address and token from the backend over `/internal/gateway-config` and keeps them in memory only; asks the backend per request which items and sessions are allowed (cached 5 s) |
 | postgres, redis | db (internal) | none | accounts, profiles, watch state, library mirror and id maps (`plex_*` tables); sessions |
 | request service (profile `bundled`) | media (+egress) | none | request data |
 | Plex Media Server | outside compose, reached at `PLEX_URL` (:32400) | none of ours | media; one server-wide admin token for all friends |
@@ -236,13 +236,13 @@ config:
 ---
 flowchart TB
   accTitle: FriendFlix for Plex trust boundaries
-  accDescr: Viewers on the internet only hold a session cookie and signed media URLs. The Plex admin token lives only in the backend and gateway environment on the Docker host. The backend decides access from its Postgres mirror of the Plex library; the gateway asks it before every media request. Plex is on your own network and never reachable by a browser.
+  accDescr: Viewers on the internet only hold a session cookie and signed media URLs. The Plex admin token lives only in the backend (database, encrypted, or its environment); the gateway gets it from the backend over the internal network and keeps it in memory. The backend decides access from its Postgres mirror of the Plex library; the gateway asks it before every media request. Plex is on your own network and never reachable by a browser.
   subgraph PUB["Internet · untrusted"]
     V("📺 <b>Viewers</b><br/><small>session cookie<br/>signed /media URLs</small>"):::ext
     P("🛡️ <b>Reverse proxy</b><br/><small>TLS</small>"):::edge
   end
   subgraph HOST["Docker host · FriendFlix"]
-    GW("📡 <b>gateway</b><br/><small>PLEX_TOKEN_FILE<br/>INTERNAL_SECRET</small>"):::app
+    GW("📡 <b>gateway</b><br/><small>INTERNAL_SECRET<br/>token from the backend</small>"):::app
     BE("⚙️ <b>backend</b><br/><small>PLEX_TOKEN_FILE<br/>INTERNAL_SECRET</small>"):::app
     PG[("🗄️ <b>Postgres</b><br/><small>library mirror<br/>profiles · watch state</small>")]:::store
   end
@@ -271,7 +271,7 @@ flowchart TB
 
 > 🟥 FriendFlix · 🟩 media server · 🟦 other service · 🟪 reverse proxy · 🟨 data store · ⬛ viewers / outside · dashed frame = network or boundary · thick line = video stream · dotted = optional / via public URL
 
-- **The token** (`PLEX_TOKEN` or `PLEX_TOKEN_FILE`) is read by the backend and the gateway from their own environment. It is sent to Plex as the `X-Plex-Token` header only: never in a URL, never in a playlist, never to a browser, never in a log.
+- **The token** is stored by the backend (database, encrypted; or pinned with `PLEX_TOKEN` / `PLEX_TOKEN_FILE` in the backend's environment). The gateway gets it from the backend over `/internal/gateway-config` (internal secret) and holds it in memory only. It is sent to Plex as the `X-Plex-Token` header only: never in a URL, never in a playlist, never to a browser, never in a log.
 - **Access** is enforced by FriendFlix on every list, search, title and media request (role libraries, profile age limits, kids profiles). Unknown age ratings are blocked for capped profiles. The mirror in Postgres is what the backend reads; Plex is only asked for streams, images and sync.
 - **Signed paths:** the gateway asks the backend (`/internal/authz/item`) whether the session's profile may see the item. Plex part ids, transcode sessions and chapter stills are not tied to an item by Plex, so FriendFlix binds them with an HMAC (key derived from `INTERNAL_SECRET`); a visible item combined with a foreign part, session or chapter never passes. Playlists are rewritten so segments stay relative and carry no credentials.
 - **Wishes** work with local users: every FriendFlix account gets its own local user in the request service (request permission only), created on the first wish.

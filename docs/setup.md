@@ -1,6 +1,6 @@
 # Setup guide
 
-> **FriendFlix for Plex (preview):** In FriendFlix for Plex, replace the Jellyfin steps (Jellyfin API key, webhook plugin, `JELLYFIN_*` variables) with [plex.md](plex.md) (`MEDIA_SERVER=plex`, `PLEX_URL`, `PLEX_TOKEN`, `compose.plex.yaml`). Everything else (Authentik, proxy, `.env` basics) applies unchanged.
+> **FriendFlix for Plex (preview):** In FriendFlix for Plex, replace the Jellyfin steps (Jellyfin API key, webhook plugin, `JELLYFIN_*` variables) with [plex.md](plex.md) (`MEDIA_SERVER=plex`, `compose.plex.yaml`; Plex address and token go into the setup wizard, `PLEX_URL` / `PLEX_TOKEN` are optional pins). Everything else (Authentik, proxy, `.env` basics) applies unchanged.
 
 **English** · [Deutsch](de/setup.md)
 
