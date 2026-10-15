@@ -1,0 +1,32 @@
+{
+  "flow_info": {
+    "title": "Welcome to authentik!",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/?next=%2F",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-identification",
+  "user_fields": [
+    "email",
+    "username"
+  ],
+  "pending_user_identifier": null,
+  "password_fields": true,
+  "allow_show_password": false,
+  "flow_designation": "authentication",
+  "captcha_stage": null,
+  "primary_action": "Log in",
+  "sources": [],
+  "show_source_labels": false,
+  "enable_remember_me": false,
+  "passkey_challenge": {
+    "challenge": "fake-challenge-0011",
+    "timeout": 60000,
+    "rpId": "friend.example.com",
+    "allowCredentials": [],
+    "userVerification": "preferred"
+  },
+  "recovery_url": "/flows/-/default/recovery/?next=%2F",
+  "enroll_url": "/if/flow/default-enrollment-flow/?next=%2F"
+}

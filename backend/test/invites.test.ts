@@ -50,7 +50,8 @@ const adm = (method: string, url: string, body?: unknown) => env.app.inject({ me
 
 async function inviteLogin(token: string | undefined, sub: string, headers: Record<string, string> = {}, cookies: Record<string, string> = {}) {
   env.claims.current = { sub, email: `${sub}@x.de`, name: `Freund ${sub}`, groups: [] };
-  const l = await env.app.inject(`/auth/login${token ? `?invite=${token}` : ''}`);
+  // the classic redirect login (the Authentik API is configured here, so plain /auth/login leads to the in-app /login)
+  const l = await env.app.inject(`/auth/login?classic=1${token ? `&invite=${token}` : ''}`);
   if (l.statusCode !== 302) return l;
   const st = l.cookies.find((x) => x.name === 'ff_oidc')!.value;
   return env.app.inject({ url: `/auth/callback?state=${st}&code=c`, headers, cookies: { ...cookies, ff_oidc: st } });
@@ -127,10 +128,20 @@ describe('invites', () => {
 
   it('enrollment link: portal login -> Authentik enrollment -> authorize -> callback, one pass', async () => {
     const token = (await adm('POST', '/api/admin/invites', { role: 'family', ttlHours: 24 })).json().link.split('/').pop();
-    expect((await env.app.inject(`/api/invite/${token}`)).json().enrollUrl).toBe(`/auth/enroll?invite=${token}`);
+    // in-app sign-in (LOGIN_UI app): the invite page links to the app's own sign-up; otherwise to /auth/enroll (preflight T8-a)
+    expect((await env.app.inject(`/api/invite/${token}`)).json().enrollUrl).toBe(`/login?invite=${token}&enroll=1`);
+    const before = env.ctx.cfg;
+    env.ctx.cfg = { ...before, LOGIN_UI: 'authentik' };
+    try {
+      expect((await env.app.inject(`/api/invite/${token}`)).json().enrollUrl).toBe(`/auth/enroll?invite=${token}`);
+    } finally {
+      env.ctx.cfg = before;
+    }
 
-    // 1. invite page button -> portal starts the OIDC login and hands over to the enrollment flow
-    const e = await env.app.inject(`/auth/enroll?invite=${token}`);
+    // in-app sign-in (LOGIN_UI app): the button leads to the app's own enrolment screens
+    expect((await env.app.inject(`/auth/enroll?invite=${token}`)).headers.location).toBe(`/login?invite=${token}&enroll=1`);
+    // 1. invite page button (classic) -> portal starts the OIDC login and hands over to the enrollment flow
+    const e = await env.app.inject(`/auth/enroll?invite=${token}&classic=1`);
     expect(e.statusCode).toBe(302);
     const loc = new URL(e.headers.location as string);
     expect(`${loc.origin}${loc.pathname}`).toBe('https://auth.example.com/if/flow/enroll/');

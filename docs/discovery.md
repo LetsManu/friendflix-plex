@@ -128,6 +128,54 @@ Jeder Treffer trägt `planned`: die Zahl der Teilnehmer (Konten), die den Titel 
 - **`GET /api/items/:id/story`** („Die Geschichte bisher“ auf der Serienseite): `{ story: null }` für Filme und wenn nichts zutrifft, sonst `{ reason: 'newSeason' | 'longBreak', weeks?, season?, episode, next }`. Sie erscheint, wenn die nächste ungesehene Folge die erste einer neuen Staffel ist oder die letzte Wiedergabe mindestens 6 Wochen (`STORY_BREAK_WEEKS`) zurückliegt, und besteht nur aus Metadaten: der Beschreibung der zuletzt vollständig gesehenen Staffel und der Beschreibung der zuletzt gesehenen Folge – nie Folgen, die du noch nicht gesehen hast. Ausgeblendet wird die Karte im Browser (`localStorage`).
 - **Klang im Player** und **Ruhiger Modus** sind Profil-Einstellungen und stehen in [personal.md](personal.md).
 
+## Empfehlungen messen: `scripts/reco-eval.mjs` und `POST /api/reco/events`
+
+Schritt R0 der Empfehlungs-Engine v2 (Spezifikation 4.7): erst messen, dann bauen. Der Auswertungslauf ist offline und ändert nichts.
+
+**Aufruf**
+
+```
+node scripts/reco-eval.mjs                  # mitgelieferte Testdaten (scripts/fixtures/reco-eval.json)
+node scripts/reco-eval.mjs --data x.json    # eigener Datensatz
+DATABASE_URL=… node scripts/reco-eval.mjs --db [--items items.json] [--similar similar.json]
+```
+
+Weitere Schalter: `--engines popularity,v1,cooccurrence`, `--exclude-seen` (schon gesehene Titel bei allen Engines entfernen), `--json`, `--min-profiles N` (Standard 5: weniger ausgewertete Profile werden nicht ausgegeben, ein Mittelwert über eine Person wäre keiner), `--plugin datei.mjs` (Modul mit `export const engines = { name: fabrik }`, so kommt v2 später dazu). Der Test läuft mit `npm run test:scripts`.
+
+**Verfahren (leave-last-out).** Je Profil mit mindestens 10 Interaktionen wird die letzte zurückgehalten; jede Engine sieht die früheren und liefert bis zu 50 Titel, die Kennzahlen betrachten die ersten 10. Kinderprofile bleiben ganz draußen (auch beim Training: sie speisen keine profilübergreifenden Signale). Gedruckt werden nur Aggregate, nie ein Titel, eine ID oder ein Profil.
+
+| Kennzahl | Bedeutung |
+|---|---|
+| HitRate@10, NDCG@10, MRR | Treffer in den ersten 10; NDCG mit einem gesuchten Titel = 1/log2(Rang+1); MRR über die ersten 50 |
+| Coverage | verschiedene empfohlene Titel / Katalog |
+| Diversity (ILD) | mittlere Genre-Unähnlichkeit (1 − Jaccard) der Titel einer Liste; leer ohne Genre-Daten |
+| Already seen | Anteil schon gesehener Titel in den Listen |
+| Mid-pop. share of hits | Anteil der Treffer auf Titel der mittleren Beliebtheitsstufe (nach Trainingsdaten: oberste 20 % Kopf, unterste 50 % Rest, dazwischen Mitte) |
+| New-title hit rate | Trefferquote, wenn der gesuchte Titel sonst niemand gesehen hat (Kaltstart) |
+| Transition accuracy | der echte nächste Titel nach dem zuletzt gesehenen steht in den ersten 10 der Fläche „was kommt danach“ |
+
+**Engines hinter einer Schnittstelle** `{ name, fit(train, daten), recommend({ surface: 'home' | 'next', history, seed, k, disliked }) }`:
+
+- `popularity`: meistgesehene Titel (mindestens 2 Profile), ohne schon Gesehenes.
+- `v1`: bildet `libraryBecause` nach: Seed ist die letzte Daumen-hoch-Bewertung, sonst der zuletzt gesehene Titel; Kandidaten sind die `similar()`-Antwort des Medienservers in deren Reihenfolge, ohne Daumen-runter, gesehene Titel bleiben drin (wie heute). Offline gibt es keinen Medienserver. Es gilt: steht der Seed im Datensatz unter `similar` (aufgezeichnete Antworten, 30 Titel), wird diese Liste genommen; sonst eine Nachbildung über die Titelmerkmale (Genre-Überlappung, dann Nähe im Erscheinungsjahr, 30 Titel). Aus der Datenbank allein gibt es weder Merkmale noch `similar()`; dafür `--items` (`[{id, genres, year}]`) und `--similar` (`{seedId: [ids]}`, einmal aus dem laufenden System aufgezeichnet) übergeben, sonst bleibt v1 leer und die Diversität `n/a`.
+- `cooccurrence`: Item-Item-Kosinus über „vom selben Profil gesehen“, nur Paare aus mindestens 2 Profilen (Aggregat-Regel aus 4.8). `home`: gesamter Verlauf, neuere Titel zählen mehr; `next`: Titel, die in anderen Profilen direkt auf den Seed folgten, danach Co-Occurrence.
+
+**Datenbank (`--db`).** Eine einzige Transaktion `READ ONLY`, nur Lesen, die Verbindung wird nie ausgegeben. Positive Interaktionen: `play_seconds` (mindestens 120 s je Titel, `--min-seconds`), Daumen hoch/geliebt, Bewertungen ab 4 Sternen; Daumen runter zählt nicht als Interaktion. Grenzen: `play_seconds` kennt nur das Konto, nicht das Profil (die Wiedergaben zählen für das Hauptprofil), und nur den Tag, nicht die Uhrzeit; Folgen sind eigene Titel. Der Katalog ist die Menge aller Titel mit Interaktionen. Der Wiedergabe-Verlauf des Medienservers wird nicht gelesen.
+
+**Offene Punkte aus der Spezifikation.** Matrixfaktorisierung (ALS) und Replay mit Propensities kommen mit der Exploration (R3b); `shadow` mit R4.
+
+### Online-Zähler
+
+`POST /api/reco/events` (Anmeldung und CSRF-Token nötig, 60 Aufrufe pro Minute, auch für Kinderprofile, weil nur Zahlen ankommen):
+
+```json
+{ "events": [{ "row": "because", "engine": "v1", "impressions": 1, "clicks": 2, "dismisses": 0 }] }
+```
+
+Antwort `204`. `row` ist eine feste Liste (`because`, `because_more`, `top_picks`, `popular`, `friends`, `postplay`), `engine` ist `v1` oder `v2`; alles andere wird mit `400` abgelehnt, die Labels bleiben also begrenzt. Es werden weder Titel noch IDs, Positionen oder Profile übertragen oder gespeichert. Prometheus: `friendflix_reco_impressions_total`, `friendflix_reco_clicks_total`, `friendflix_reco_dismiss_total` und `friendflix_reco_plays_total`, jeweils `{row,engine}`. Click-through-Rate: `sum(increase(friendflix_reco_clicks_total[7d])) by (engine) / sum(increase(friendflix_reco_impressions_total[7d])) by (engine)`.
+
+Die Startseite meldet je „Weil du … geschaut hast“-Zeile (`because`, `because_more`, Engine `v1`) eine Einblendung, sobald die Hälfte der Zeile zu sehen ist, und jeden Klick auf einen Titel; die Zahlen werden gesammelt und alle 4 Sekunden oder beim Verlassen der Seite gesendet. `plays` zählt der Server selbst, sobald eine Wiedergabe einer Empfehlung zugeordnet werden kann, und `dismisses` kommen mit den Schaltflächen „nicht interessiert“: beides gehört zu R4.
+
 ## Kinderprofile
 
 Ein Kinderprofil (`kids`, Altersgrenze 0/6/12 als Jellyfin-`MaxParentalRating`, Titel ohne Freigabe ausgeblendet) erhält auf alle sozialen und kontoweiten Routen `403 kids_profile` (`requireGrownUp` in `backend/src/kids.ts`): Reaktionen, Freunde-Leiste, Bewertungen, Listen, Abstimmungen, Kommentare, Watch-Party (REST und WebSocket, Schließcode 4403), Freunde/Matcher/Empfehlungen, „Freunde haben bewertet“, „Läuft gerade“, Wünsche (Wunsch-Dienst), Statistiken, Wochenrückblick, Benachrichtigungen, Web-Push, Erinnerungen, „Diese Woche bei uns“ und Geräteliste. Inhalte (Titel, Suche, Wiedergabe, Hubs, Extras, Downloads, Simulcast, Serien-Sprachwahl) bleiben erlaubt. Ein Fernseher, der aus einem Kinderprofil gekoppelt wird, ist fest an dieses Profil gebunden (`devices.kids_profile_id`); auf solchen Geräten wird „PIN vergessen?“ abgelehnt. Ändert der Inhaber Kinder-Flag oder Altersgrenze, verwirft der Server die Caches dieses Profils (`policyChanged` in `backend/src/hooks.ts`).

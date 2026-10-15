@@ -137,13 +137,13 @@
   {#if leaving?.length}<Row title={$t('fresh.row.leaving')} items={leaving} />{/if}
   <Row title={$t('home.rows.recs')} items={recs} priority={firstRow === 'recs'} />
   <Row title={$t('home.rows.friendsRated')} items={friendsRated} priority={firstRow === 'friends'} />
-  {#if because}<Row title={$t('home.rows.because', { name: because.name })} items={becauseItems} />{/if}
+  {#if because}<Row title={$t('home.rows.because', { name: because.name })} items={becauseItems} reco={{ row: 'because', engine: 'v1' }} />{/if}
   <Row title={$t('home.rows.latest')} items={latest} href="/new" />
   <Row title={$t('home.rows.trending')} items={trending} ranked />
-  {#if more[0]}<Row title={$t('together.because', { name: more[0].because.name })} items={more[0].items} />{/if}
+  {#if more[0]}<Row title={$t('together.because', { name: more[0].because.name })} items={more[0].items} reco={{ row: 'because_more', engine: 'v1' }} />{/if}
   {#each featured as f (f.id)}<Row title={$t('home.rows.featured', { name: f.name, owner: f.owner.name })} items={f.items} href="/lists/{f.id}" />{/each}
   <Row title={$t('home.rows.myList')} items={mine} href="/watchlist" />
-  {#if more[1]}<Row title={$t('together.because', { name: more[1].because.name })} items={more[1].items} />{/if}
+  {#if more[1]}<Row title={$t('together.because', { name: more[1].because.name })} items={more[1].items} reco={{ row: 'because_more', engine: 'v1' }} />{/if}
   <UpcomingRow type="movie" title={$t('home.rows.upcomingWish')} />
   <!-- the second ranked row never directly follows the first one -->
   {#each views as v, i (v.id)}
@@ -153,7 +153,7 @@
   {#if !views.length}<Row title={$t('home.rows.top10')} items={top} ranked />{/if}
   {#each genres as g, i (g)}
     <LazyRow title={g} href="/browse/movies?genre={encodeURIComponent(g)}" cacheKey="genre:{g}" load={genreLoader(g)} />
-    {#if i === 0 && more[2]}<Row title={$t('together.because', { name: more[2].because.name })} items={more[2].items} />{/if}
+    {#if i === 0 && more[2]}<Row title={$t('together.because', { name: more[2].because.name })} items={more[2].items} reco={{ row: 'because_more', engine: 'v1' }} />{/if}
   {/each}
 </div>
 

@@ -284,8 +284,6 @@ const fr: Translation<typeof de> = {
   /** /pending: a login without an invite waits for an admin */
   pending: {
     pageTitle: 'Demande d’accès',
-    title: 'Demande envoyée',
-    sent: 'Ta demande d’accès a été envoyée. Un administrateur va bientôt l’approuver.',
     autoUpdate: 'Cette page se met à jour toute seule.',
     approvedTitle: 'C’est bon, tu as accès',
     approvedText: 'Un administrateur a approuvé ton accès. Connecte-toi maintenant.',
@@ -354,8 +352,8 @@ const fr: Translation<typeof de> = {
       avatar: 'Couleur',
       email: 'E-mail',
       noEmail: 'Aucune adresse e-mail enregistrée',
-      emailHint: 'L’adresse e-mail ne peut pas encore être modifiée ici.',
-      emailManage: 'Gérer l’e-mail sur la page de connexion',
+      emailHint: 'L’adresse e-mail se modifie sous « Sécurité ».',
+      emailManage: 'Aller à l’adresse e-mail',
       save: 'Enregistrer',
       saved: 'Profil enregistré.',
       nameInvalid: 'Le nom doit compter de 1 à 60 caractères, sans caractères de contrôle.',
@@ -372,7 +370,6 @@ const fr: Translation<typeof de> = {
       notAvailableHint: 'L’état ne peut pas être vérifié pour le moment.',
       manage: 'Gérer sur la page de connexion',
       newTab: '(s’ouvre dans un nouvel onglet)',
-      coming: 'La modification du mot de passe et de la 2FA dans FriendFlix arrive bientôt.',
     },
     sessions: {
       title: 'Sessions et appareils',

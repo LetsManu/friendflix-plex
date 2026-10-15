@@ -15,6 +15,21 @@ let ip = 0;
 const post = (url: string, body: unknown) => env.app.inject({ method: 'POST', url, payload: body as object, remoteAddress: `10.8.0.${++ip}` });
 
 describe('MemoryKV', () => {
+  it('decr gives a reservation back: keeps the ttl, never goes below 0, never creates a key', async () => {
+    const kv = new MemoryKV();
+    expect(await kv.decr('c')).toBe(0);
+    expect(await kv.get('c')).toBeNull();
+    await kv.incr('c', 60);
+    await kv.incr('c', 60);
+    expect(await kv.decr('c')).toBe(1);
+    expect(await kv.decr('c')).toBe(0);
+    expect(await kv.decr('c')).toBe(0);
+    expect(await kv.get('c')).toBe('0');
+    await kv.set('x', 'abc', 60);
+    expect(await kv.decr('x')).toBe(0);
+    expect(await kv.get('x')).toBe('abc');
+  });
+
   it('replace only writes existing keys', async () => {
     const kv = new MemoryKV();
     expect(await kv.replace('a', '1', 10)).toBe(false);

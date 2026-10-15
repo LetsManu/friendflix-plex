@@ -100,6 +100,8 @@ export default {
   keyErrors: {
     PLEX_URL: { invalid_url: 'Bitte nur die Serveradresse eingeben: mit http:// oder https://, ohne Benutzername und Passwort und ohne etwas nach ? oder #. Der Token gehört in das Feld Plex-Token.' },
   },
+  /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
+  options: { auto: 'Automatisch', LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatisch', off: 'Aus' } },
   keys: {
     PUBLIC_URL: { label: 'Öffentliche Adresse', help: 'Unter dieser Adresse erreichen alle FriendFlix, z. B. https://friend.example.com. Links, Anmeldung und Streaming bauen darauf auf.' },
     WEBHOOK_SECRET: { label: 'Webhook-Geheimnis', help: 'Gemeinsames Geheimnis für die Webhooks von Mediaserver und Anfragen-Dienst.' },
@@ -113,6 +115,15 @@ export default {
     AUTHENTIK_ENROLL_FLOW: { label: 'Registrierungsablauf', help: 'Slug des Ablaufs, über den Eingeladene ihr Konto anlegen.' },
     AUTHENTIK_RECOVERY_FLOW: { label: 'Ablauf zum Zurücksetzen', help: 'Slug des Ablaufs, der die Mail zum Zurücksetzen des Passworts verschickt.' },
     AUTHENTIK_TOTP_SETUP_FLOW: { label: 'Ablauf für Zwei-Faktor-Einrichtung', help: 'Slug des Ablaufs zum Einrichten einer Authenticator-App.' },
+    LOGIN_UI: { label: 'Anmeldeseite', help: 'Wer die Anmeldung zeigt: FriendFlix mit eigenen Bildschirmen oder die Seite von Authentik. „Automatisch“ nimmt FriendFlix, sobald Authentik angebunden ist.' },
+    AUTHENTIK_LOGIN_FLOW: { label: 'Anmelde-Ablauf', help: 'Slug des Ablaufs, den die Anmeldung in FriendFlix bei Authentik durchläuft.' },
+    AUTHENTIK_INVALIDATION_FLOW: { label: 'Abmelde-Ablauf', help: 'Slug des Ablaufs, der beim Abmelden bei Authentik läuft.' },
+    AUTHENTIK_STATIC_SETUP_FLOW: { label: 'Ablauf für Wiederherstellungscodes', help: 'Slug des Ablaufs, der neue Wiederherstellungscodes erzeugt.' },
+    AUTHENTIK_WEBAUTHN_SETUP_FLOW: { label: 'Ablauf für Passkeys', help: 'Slug des Ablaufs zum Hinzufügen eines Passkeys.' },
+    AUTHENTIK_PASSWORD_CHANGE_FLOW: { label: 'Ablauf für Passwortänderung', help: 'Slug des Ablaufs, mit dem man im Konto das Passwort ändert.' },
+    AUTHENTIK_EMAIL_CHANGE_FLOW: { label: 'Ablauf für E-Mail-Änderung', help: 'Slug des Ablaufs, der eine neue E-Mail-Adresse per Bestätigungslink übernimmt (Vorlage: friendflix-email-change).' },
+    PASSKEYS_IN_APP: { label: 'Passkeys in FriendFlix', help: 'Automatisch: Passkeys direkt in FriendFlix, wenn Authentik das zulässt. Aus: Passkeys nur auf der Anmeldeseite von Authentik.' },
+    LOGIN_COVER_WALL: { label: 'Titelbilder hinter der Anmeldung', help: 'Zeigt Cover aus der Bibliothek (nur Altersfreigaben bis 12, nichts ohne Einstufung) hinter der Anmeldung. Die Bilder sind ohne Anmeldung abrufbar.' },
     JELLYFIN_URL: { label: 'Jellyfin-Adresse', help: 'Interne Adresse des Mediaservers, z. B. http://jellyfin:8096.' },
     JELLYFIN_ADMIN_API_KEY: { label: 'Jellyfin-API-Schlüssel (Admin)', help: 'API-Schlüssel mit Admin-Rechten (Jellyfin → Dashboard → API-Schlüssel).' },
     PLEX_URL: { label: 'Plex-Adresse', help: 'Interne Adresse des Plex-Servers, über die Backend und Medien-Gateway ihn erreichen. Nur die Adresse: Der Token gehört in sein eigenes Feld, nie in die Adresse.' },

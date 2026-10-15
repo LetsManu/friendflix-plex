@@ -5,7 +5,7 @@
  * (`playstats.ts`) and the aggregated error log (`errorlog.ts`), plus the pure helpers the page and the overview use.
  */
 import { api } from '#lib/api';
-import { tr, type TKey } from '#lib/i18n';
+import { hasKey, tr, trDynamic, type TKey } from '#lib/i18n';
 import type { Tone } from '#lib/ui/StatusPill.svelte';
 
 export type Level = 'ok' | 'warn' | 'err' | 'off';
@@ -89,3 +89,30 @@ export const isEmptyMediaError = (error: string | null | undefined): boolean =>
 /** every checked title failed and at least one with empty video: the hint is shown once above the list instead of under each row */
 export const emptyHintOnTop = (results: ReadonlyArray<{ ok: boolean; error: string | null }>): boolean =>
   results.length > 0 && results.every((r) => !r.ok) && results.some((r) => isEmptyMediaError(r.error));
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Block 23 phase 3: the sign-in card (mirror of backend/src/flowCheck.ts `LoginCheck`)
+
+export type CheckedKind = 'login' | 'recovery' | 'enroll' | 'invalidation' | 'setup-totp' | 'setup-static' | 'setup-webauthn' | 'change-password' | 'change-email';
+export interface FlowCheckRow { kind: CheckedKind; slug: string; state: 'ok' | 'missing' | 'unsupported'; stages: string[] }
+export interface LoginCheck {
+  mode: 'app' | 'authentik';
+  flows: FlowCheckRow[];
+  implicitConsent: boolean | null;
+  authCodeGrant: boolean | null;
+  issuerMatches: boolean;
+  passkeys: 'in-app' | 'sign-in page';
+  passkeysReason: string;
+  unreachable: boolean;
+  /** codes: `unreachable`, `flow_missing:<kind>`, `flow_unsupported:<kind>`, `consent`, `auth_code_grant`, `issuer`, `passkeys:<reason>`,
+   *  `permission:provider|validate_stage` (the service account lacks a read permission) */
+  warnings: string[];
+}
+export const loadLoginCheck = (): Promise<LoginCheck> => api<LoginCheck>('/api/admin/health/login');
+
+/** The text of a check warning code (unknown codes get no text: the card shows nothing rather than a raw code). */
+export function loginWarningText(code: string, flowName: (kind: string) => string): string {
+  const [head, arg = ''] = code.split(':');
+  const key = head === 'passkeys' || head === 'permission' ? `adminContent.login.warn.${head}_${arg}` : `adminContent.login.warn.${head}`;
+  return hasKey(key) ? trDynamic(key, { flow: flowName(arg) }) : '';
+}

@@ -1,0 +1,13 @@
+{
+  "flow_info": {
+    "title": "Change password",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-access-denied",
+  "pending_user": "",
+  "pending_user_avatar": "/static/dist/assets/images/user_default.png",
+  "error_message": "Flow does not apply to current user."
+}

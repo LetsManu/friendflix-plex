@@ -56,7 +56,7 @@ async function doomed(opts: { due?: boolean } = {}): Promise<{ id: string; claim
 /** runs /auth/login + /auth/callback for `claims`; answers the callback's status and body */
 async function loginAttempt(claims: OidcClaims) {
   env.claims.current = claims;
-  const l = await env.app.inject('/auth/login');
+  const l = await env.app.inject('/auth/login?classic=1'); // the IdP redirect (the Authentik API is configured here)
   const state = l.cookies.find((x) => x.name === 'ff_oidc')!.value;
   return env.app.inject({ url: `/auth/callback?state=${state}&code=c`, cookies: { ff_oidc: state } });
 }

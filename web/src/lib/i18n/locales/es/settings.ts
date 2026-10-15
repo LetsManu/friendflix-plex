@@ -106,6 +106,8 @@ const settings: Translation<typeof de> = {
   keyErrors: {
     PLEX_URL: { invalid_url: 'Introduce solo la dirección del servidor: que empiece por http:// o https://, sin usuario ni contraseña y sin nada después de ? o #. El token va en el campo Token de Plex.' },
   },
+  /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
+  options: { auto: 'Automático', LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automático', off: 'Desactivado' } },
   keys: {
     PUBLIC_URL: { label: 'Dirección pública', help: 'La dirección con la que todos acceden a FriendFlix, p. ej. https://friend.example.com. Enlaces, inicio de sesión y streaming dependen de ella.' },
     WEBHOOK_SECRET: { label: 'Secreto de webhook', help: 'Secreto compartido para los webhooks del servidor multimedia y del servicio de peticiones.' },
@@ -119,6 +121,15 @@ const settings: Translation<typeof de> = {
     AUTHENTIK_ENROLL_FLOW: { label: 'Flujo de registro', help: 'Slug del flujo con el que las personas invitadas crean su cuenta.' },
     AUTHENTIK_RECOVERY_FLOW: { label: 'Flujo de recuperación', help: 'Slug del flujo que envía el correo para restablecer la contraseña.' },
     AUTHENTIK_TOTP_SETUP_FLOW: { label: 'Flujo de configuración de dos factores', help: 'Slug del flujo para configurar una app de autenticación.' },
+    LOGIN_UI: { label: 'Página de inicio de sesión', help: 'Quién muestra el inicio de sesión: FriendFlix con pantallas propias o la página de Authentik. Automático usa FriendFlix en cuanto Authentik está conectado.' },
+    AUTHENTIK_LOGIN_FLOW: { label: 'Flujo de inicio de sesión', help: 'Slug del flujo que recorre el inicio de sesión de FriendFlix en Authentik.' },
+    AUTHENTIK_INVALIDATION_FLOW: { label: 'Flujo de cierre de sesión', help: 'Slug del flujo que se ejecuta en Authentik al cerrar sesión.' },
+    AUTHENTIK_STATIC_SETUP_FLOW: { label: 'Flujo de códigos de recuperación', help: 'Slug del flujo que crea nuevos códigos de recuperación.' },
+    AUTHENTIK_WEBAUTHN_SETUP_FLOW: { label: 'Flujo de passkeys', help: 'Slug del flujo para añadir una passkey.' },
+    AUTHENTIK_PASSWORD_CHANGE_FLOW: { label: 'Flujo de cambio de contraseña', help: 'Slug del flujo para cambiar la contraseña en la cuenta.' },
+    AUTHENTIK_EMAIL_CHANGE_FLOW: { label: 'Flujo de cambio de correo', help: 'Slug del flujo que adopta una nueva dirección de correo tras un enlace de confirmación (plantilla: friendflix-email-change).' },
+    PASSKEYS_IN_APP: { label: 'Passkeys en FriendFlix', help: 'Automático: passkeys dentro de FriendFlix si Authentik lo permite. Desactivado: passkeys solo en la página de Authentik.' },
+    LOGIN_COVER_WALL: { label: 'Portadas tras el inicio de sesión', help: 'Muestra portadas de la biblioteca (solo clasificaciones hasta 12, nada sin clasificar) tras el inicio de sesión. Las imágenes se pueden obtener sin iniciar sesión.' },
     JELLYFIN_URL: { label: 'Dirección de Jellyfin', help: 'Dirección interna del servidor multimedia, p. ej. http://jellyfin:8096.' },
     JELLYFIN_ADMIN_API_KEY: { label: 'Clave de API de Jellyfin (admin)', help: 'Clave de API con permisos de administrador (Jellyfin → Panel → Claves de API).' },
     PLEX_URL: { label: 'Dirección de Plex', help: 'Dirección interna con la que el backend y la pasarela multimedia llegan al servidor Plex. Solo la dirección: el token va en su propio campo, nunca en la dirección.' },

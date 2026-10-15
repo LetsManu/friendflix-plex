@@ -284,8 +284,6 @@ const es: Translation<typeof de> = {
   /** /pending: a login without an invite waits for an admin */
   pending: {
     pageTitle: 'Solicitud de acceso',
-    title: 'Solicitud enviada',
-    sent: 'Tu solicitud de acceso se ha enviado. Un administrador la aprobará pronto.',
     autoUpdate: 'Esta página se actualiza sola.',
     approvedTitle: 'Ya tienes acceso',
     approvedText: 'Un administrador ha aprobado tu acceso. Inicia sesión ahora.',
@@ -354,8 +352,8 @@ const es: Translation<typeof de> = {
       avatar: 'Color',
       email: 'Correo electrónico',
       noEmail: 'No hay ninguna dirección de correo registrada',
-      emailHint: 'La dirección de correo todavía no se puede cambiar aquí.',
-      emailManage: 'Gestionar el correo en la página de inicio de sesión',
+      emailHint: 'La dirección de correo se cambia en «Seguridad».',
+      emailManage: 'Ir a la dirección de correo',
       save: 'Guardar',
       saved: 'Perfil guardado.',
       nameInvalid: 'El nombre debe tener entre 1 y 60 caracteres y no puede contener caracteres de control.',
@@ -372,7 +370,6 @@ const es: Translation<typeof de> = {
       notAvailableHint: 'Ahora mismo no se puede consultar el estado.',
       manage: 'Gestionar en la página de inicio de sesión',
       newTab: '(se abre en una pestaña nueva)',
-      coming: 'Pronto podrás cambiar tu contraseña y la 2FA en FriendFlix.',
     },
     sessions: {
       title: 'Sesiones y dispositivos',

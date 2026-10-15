@@ -6,6 +6,7 @@ import { audit } from '../audit.js';
 import { Where, likePattern, orderBy, pageQuery } from '../adminlist.js';
 import type { Ctx } from '../ctx.js';
 import { revokeSessions } from '../devices.js';
+import { loginUi } from '../akflow.js';
 import { adminOverview, revokeLicense } from '../downloads.js';
 import { checkState, startPlaybackCheck } from '../healthcheck.js';
 import { ERROR_SOURCES, listErrors } from '../errorlog.js';
@@ -453,13 +454,14 @@ export function inviteRoutes(app: FastifyInstance, ctx: Ctx) {
     const token = (req.params as { token: string }).token;
     const inv = await lookupInvite(ctx, token);
     if (!inv) return reply.code(404).send({ error: 'invalid_or_expired' });
-    // Relative portal URL: /auth/enroll starts the OIDC login and hands over to the Authentik enrollment flow.
+    // Relative portal URL: in app mode the in-app sign-up (/login, preflight T8-a), else /auth/enroll, which starts the OIDC login and
+    // hands over to the Authentik enrollment flow.
     const enroll = Boolean(inv.authentik_invite && ctx.cfg.AUTHENTIK_URL && ctx.cfg.AUTHENTIK_ENROLL_FLOW);
     // anonymous page: the language the page shows (?lang=, from the browser's stored UI language) → instance default → German
     const q = (req.query as { lang?: unknown } | undefined)?.lang;
     const defaultLanguage = (await instanceLanguage(ctx)) ?? FALLBACK_LANGUAGE;
     const lang = isLanguage(q) ? q : defaultLanguage;
     // defaultLanguage: a new invitee without a stored UI language sees the page in the instance language (or the browser's)
-    return { defaultLanguage, role: inv.role, roleLabel: roleLabel(lang, inv.role, ctx.roles[inv.role]?.label, DEFAULT_ROLES[inv.role]?.label), expiresAt: inv.expires_at, enrollUrl: enroll ? `/auth/enroll?invite=${encodeURIComponent(token)}` : undefined };
+    return { defaultLanguage, role: inv.role, roleLabel: roleLabel(lang, inv.role, ctx.roles[inv.role]?.label, DEFAULT_ROLES[inv.role]?.label), expiresAt: inv.expires_at, enrollUrl: enroll ? (loginUi(ctx.cfg) === 'app' ? `/login?invite=${encodeURIComponent(token)}&enroll=1` : `/auth/enroll?invite=${encodeURIComponent(token)}`) : undefined };
   });
 }

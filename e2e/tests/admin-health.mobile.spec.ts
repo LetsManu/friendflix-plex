@@ -26,4 +26,18 @@ test.describe('admin health page (phone)', () => {
     const media = await page.getByRole('region', { name: 'Systemzustand' }).getByRole('link', { name: /Medienserver/ }).boundingBox();
     expect(media!.height).toBeGreaterThanOrEqual(44);
   });
+  test('sign-in card fits: long warnings wrap, the switch is at least 44 px', async ({ page, api }) => {
+    api.admin.loginCheck = {
+      mode: 'app', implicitConsent: false, authCodeGrant: false, issuerMatches: false, passkeys: 'sign-in page', passkeysReason: 'forwarded_host_ignored', unreachable: false,
+      warnings: ['flow_unsupported:login', 'consent', 'auth_code_grant', 'issuer', 'passkeys:forwarded_host_ignored'],
+      flows: [{ kind: 'login', slug: 'a-very-long-custom-authentication-flow-slug-that-must-wrap-on-a-phone', state: 'unsupported', stages: [] }],
+    };
+    await page.goto('/admin/status');
+    const card = page.getByRole('region', { name: 'Anmeldung', exact: true });
+    await expect(card.getByText(/Grant-Typ/)).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expect.poll(() => noHorizontalOverflow(page)).toBe(true);
+    const box = await card.getByRole('switch').boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  });
 });

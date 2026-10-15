@@ -41,7 +41,7 @@ export async function expiryTick(ctx: Ctx, now = new Date()): Promise<{ warned: 
   let failure: unknown;
   for (const u of ended.rows) {
     try {
-      if (await accountSerial(() => expire(ctx, u.id, now))) locked++;
+      if (await accountSerial(() => expireAccess(ctx, u.id, now))) locked++;
     } catch (e) {
       failure ??= e; // one failing account (e.g. media server error) must not block the others; retried next tick
     }
@@ -53,9 +53,10 @@ export async function expiryTick(ctx: Ctx, now = new Date()): Promise<{ warned: 
 /**
  * Locks one account whose access ended. Runs in the account serial queue and reads the account again there, so an
  * extension or lock made since the tick's select is respected. Returns false when nothing was locked (no longer ended,
- * or the last active admin, who stays unlocked).
+ * or the last active admin, who stays unlocked). Also used by a sign-in whose access has ended (loginFinish.ts): callers run it in
+ * accountSerial.
  */
-async function expire(ctx: Ctx, id: string, now: Date): Promise<boolean> {
+export async function expireAccess(ctx: Ctx, id: string, now: Date): Promise<boolean> {
   const u = (await ctx.db.query<Due>('select id, name, access_until from users where id=$1 and access_until <= $2 and not disabled', [id, now])).rows[0];
   if (!u) return false;
   const iso = u.access_until.toISOString();

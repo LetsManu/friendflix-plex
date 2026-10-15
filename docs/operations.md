@@ -60,7 +60,7 @@ ufw deny 8096,8920,5055/tcp
 Prüfung von außen: `nmap -p 8096,8920,5055 <öffentliche-IP>` → alle `filtered/closed`.
 
 ## Updates
-`git pull && docker compose build --pull && docker compose up -d`. Migrationen laufen beim Start (Advisory-Lock, transaktional). Umstieg einer älteren Installation auf Einstellungen in der Datenbank und das Volume `bootstrap`: [de/setup.md §14](de/setup.md#14-umstieg-auf-einstellungen-in-der-datenbank).
+Produktions-Stack (`compose.prod.yaml`): `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`; die `.env` bleibt unverändert gültig. Selbst gebauter Stack (`compose.yaml`): `git pull && docker compose build --pull && docker compose up -d`. Migrationen laufen beim Start (Advisory-Lock, transaktional). Umstieg einer älteren Installation auf Einstellungen in der Datenbank und das Volume `bootstrap`: [de/setup.md §14](de/setup.md#14-umstieg-auf-einstellungen-in-der-datenbank).
 Nach Jellyfin-Updates: `JELLYFIN_URL=… ./scripts/gen-jellyfin-client.sh` und Diff prüfen (Pfade ändern sich zwischen Versionen; der Client probiert alte/neue Pfade für Views/Resume/Item/Favoriten/Gesehen).
 
 ## Updates aus dem Portal
@@ -69,7 +69,7 @@ Nach Jellyfin-Updates: `JELLYFIN_URL=… ./scripts/gen-jellyfin-client.sh` und D
 - **Webhook (einfach):** In Portainer → Stacks → *dein Stack* → *Stack-Webhook* aktivieren, URL kopieren und als `PORTAINER_WEBHOOK_URL` setzen. Die URL enthält ein Token und ist ein Secret (auch als `PORTAINER_WEBHOOK_URL_FILE` möglich).
 - **API:** In Portainer → *My account* → *Access tokens* ein Token anlegen (`PORTAINER_API_KEY`), `PORTAINER_URL` (intern erreichbar vom Backend), `PORTAINER_STACK_ID` (steht in der URL des Stacks, `…/stacks/<id>`) und ggf. `PORTAINER_ENDPOINT_ID` (Default 1) setzen. Das Portal liest den Stack (Git- oder Datei-Stack), behält dessen Umgebungsvariablen unverändert und löst ein Redeploy mit Image-Pull aus.
 
-Sicherheit: Webhook-URL und Token können den Stack neu deployen. Am besten einen eigenen Portainer-Benutzer nur mit Zugriff auf dieses eine Stack verwenden (kein Admin) und das Token ausschließlich in der `.env`/den Docker-Secrets ablegen. Beide Werte erscheinen weder in Antworten noch in Logs. Pro 2 Minuten ist ein Update möglich; jeder Auslöser steht als `system.update` im Audit-Log. Optional senkt `GITHUB_TOKEN` (ohne Rechte) das GitHub-Limit-Risiko; Ergebnisse werden 10 Minuten gecacht.
+Sicherheit: Webhook-URL und Token können den Stack neu deployen. Am besten einen eigenen Portainer-Benutzer nur mit Zugriff auf dieses eine Stack verwenden (kein Admin) und das Token ausschließlich unter *Admin → Einstellungen* (nur schreibbar) oder in der `.env`/den Docker-Secrets ablegen. Beide Werte erscheinen weder in Antworten noch in Logs. Pro 2 Minuten ist ein Update möglich; jeder Auslöser steht als `system.update` im Audit-Log. Optional senkt `GITHUB_TOKEN` (ohne Rechte) das GitHub-Limit-Risiko; Ergebnisse werden 10 Minuten gecacht.
 
 ## Warnband und Status-Seite
 Admins sehen im Hauptprofil ein schmales **Warnband** unter der Kopfzeile, sobald auf der Status-Seite etwas gelb oder rot ist (Grenzwerte: [monitoring.md](monitoring.md#zustand-im-portal-admin--status)). Rot steht vor Gelb, jede Meldung ist ein ganzer Satz, „Ansehen“ führt zur Status-Seite (bei offenen Freigaben zur Warteschlange unter *Admin → Nutzer*). „Ausblenden“ gilt pro Admin und Meldung, bis sie sich ändert (andere Stufe oder anderer Grund; nur eine andere Zahl, etwa 86 statt 85 %, blendet sie nicht wieder ein); Ausblendungen werden nach 30 Tagen vergessen. Im Player, in der Watch-Party, im TV-Modus, auf öffentlichen Seiten, in Kinder- und Nebenprofilen erscheint das Band nie.
@@ -271,7 +271,7 @@ Standard ist das Node-Gateway. Wird es bei vielen parallelen Streams zum Engpass
    ```
    Den Inhalt von `plan-b.local.conf` in NPM einfügen und die Datei danach löschen (`rm plan-b.local.conf`; nie committen).
 3. Gateway-Container kann gestoppt werden (`docker compose stop gateway`).
-4. Testen: `curl -I https://portal.example.com/media/Videos/<id>/master.m3u8` ohne Cookie → **401**; im Browser abspielen → läuft.
+4. Testen: `curl -I https://friend.example.com/media/Videos/<id>/master.m3u8` ohne Cookie → **401**; im Browser abspielen → läuft.
 
 **Sicherheitsmerkmale (automatisiert geprüft mit `scripts/test-plan-b.sh` gegen echtes nginx):** 401 ohne/mit falscher Session, 403 außerhalb der Allowlist und bei Traversal, nur GET/HEAD, `/internal/` öffentlich 404, Client-`Authorization`/`X-Emby-*` erreichen Jellyfin nie, `api_key` wird entfernt, Bitrate wird auf das Rollenlimit gekappt, Token nur serverseitig, kein `Set-Cookie`/Token in Antworten, Range → 206.
 Backend-Tests prüfen dieselben Pfad-Vektoren wie das Gateway (`test-vectors/media-paths.json`), damit beide Allowlists nicht auseinanderlaufen. Entscheidungen werden als `friendflix_authz_nginx_total{result}` gezählt.

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { akMfaState, akSendMfaSetup, akSendRecovery, akSetActive, akUpdateUser, akUserBySub, akUserSettingsUrl } from '../src/authentik.js';
+import { akFlowExists, akFlowStages, akMfaState, akSendMfaSetup, akSendRecovery, akSetActive, akUpdateUser, akUserBySub, akUserSettingsUrl } from '../src/authentik.js';
 import type { Ctx } from '../src/ctx.js';
 import { MemoryKV } from '../src/kv.js';
 import { HttpError } from '../src/users.js';
@@ -41,9 +41,9 @@ const recoveryRoutes = (slug = 'default-recovery-flow'): Record<string, Handler>
   'GET /api/v3/flows/bindings/': (u) => ({
     json: u.searchParams.get('target') === 'flow-pk-1'
       ? { pagination: { next: 0 }, results: [
-        { order: 30, stage: 'later-email-stage', stage_obj: { component: 'ak-stage-email' } },
-        { order: 10, stage: 'ident-stage', stage_obj: { component: 'ak-stage-identification' } },
-        { order: 20, stage: 'email-stage-uuid', stage_obj: { component: 'ak-stage-email' } },
+        { order: 30, stage: 'later-email-stage', stage_obj: { component: 'ak-stage-email-form', meta_model_name: 'authentik_stages_email.emailstage' } },
+        { order: 10, stage: 'ident-stage', stage_obj: { component: 'ak-stage-identification-form', meta_model_name: 'authentik_stages_identification.identificationstage' } },
+        { order: 20, stage: 'email-stage-uuid', stage_obj: { component: 'ak-stage-email-form', meta_model_name: 'authentik_stages_email.emailstage' } },
       ] }
       : { pagination: { next: 0 }, results: [] },
   }),
@@ -140,6 +140,40 @@ describe('akSendRecovery', () => {
     expect(new URLSearchParams(calls.find((c) => c.path === '/api/v3/flows/bindings/')!.search).get('target')).toBe('flow-pk-1');
   });
 
+  it('classifies the e-mail stage by meta_model_name: 2026.8.3 answers the component ak-stage-email-form, never ak-stage-email', async () => {
+    const routes = { ...recoveryRoutes(), 'GET /api/v3/flows/bindings/': () => ({ json: { pagination: { next: 0 }, results: [
+      { order: 10, stage: 'mail-2026', stage_obj: { component: 'ak-stage-email-form', meta_model_name: 'authentik_stages_email.emailstage' } },
+    ] } }) } as Record<string, Handler>;
+    const { ctx, calls } = mk(routes);
+    await akSendRecovery(ctx, SUB);
+    expect(new URLSearchParams(calls.find((c) => c.method === 'POST')!.search).get('email_stage')).toBe('mail-2026');
+    // a binding that only carries the old component name is not an e-mail stage any more
+    const old = { ...recoveryRoutes(), 'GET /api/v3/flows/bindings/': () => ({ json: { pagination: { next: 0 }, results: [{ order: 10, stage: 'x', stage_obj: { component: 'ak-stage-email' } }] } }) } as Record<string, Handler>;
+    expect(await codeOf(akSendRecovery(mk(old).ctx, SUB))).toMatchObject({ status: 409, code: 'recovery_not_configured' });
+  });
+
+  it('flow lookups share one input-keyed cache: existence and stages come from one read (preflight P27)', async () => {
+    const { ctx, calls } = mk(recoveryRoutes());
+    expect(await akFlowExists(ctx, 'default-recovery-flow')).toBe(true);
+    expect((await akFlowStages(ctx, 'default-recovery-flow')).stages.map((b) => b.model)).toEqual([
+      'authentik_stages_identification.identificationstage', 'authentik_stages_email.emailstage', 'authentik_stages_email.emailstage']);
+    await akSendRecovery(ctx, SUB);
+    expect(calls.filter((c) => c.path === '/api/v3/flows/instances/default-recovery-flow/')).toHaveLength(1);
+    expect(calls.filter((c) => c.path === '/api/v3/flows/bindings/')).toHaveLength(1);
+    // another token or slug is another cache entry
+    ctx.cfg = { ...ctx.cfg, AUTHENTIK_API_TOKEN: 'other-token-value' };
+    await akFlowStages(ctx, 'default-recovery-flow');
+    expect(calls.filter((c) => c.path === '/api/v3/flows/instances/default-recovery-flow/')).toHaveLength(2);
+  });
+
+  it('akFlowStages: a missing flow is not found, an unreachable Authentik is failed and remembered only briefly', async () => {
+    const miss = mk(recoveryRoutes());
+    expect(await akFlowStages(miss.ctx, 'nope')).toEqual({ exists: false, failed: false, stages: [] });
+    const down = mk({}, { throwWith: 'boom' });
+    expect(await akFlowStages(down.ctx, 'x')).toMatchObject({ exists: false, failed: true });
+    expect(await akFlowStages(mk(recoveryRoutes(), { configured: false }).ctx, 'x')).toEqual({ exists: false, failed: false, stages: [] });
+  });
+
   it('uses AUTHENTIK_RECOVERY_FLOW', async () => {
     const { ctx, calls } = mk(recoveryRoutes('my-recovery'), { flow: 'my-recovery' });
     await akSendRecovery(ctx, SUB);
@@ -147,7 +181,7 @@ describe('akSendRecovery', () => {
   });
 
   it('a flow without an e-mail stage or a missing flow -> 409 recovery_not_configured', async () => {
-    const noEmail = { ...recoveryRoutes(), 'GET /api/v3/flows/bindings/': () => ({ json: { pagination: { next: 0 }, results: [{ order: 10, stage: 'x', stage_obj: { component: 'ak-stage-identification' } }] } }) } as Record<string, Handler>;
+    const noEmail = { ...recoveryRoutes(), 'GET /api/v3/flows/bindings/': () => ({ json: { pagination: { next: 0 }, results: [{ order: 10, stage: 'x', stage_obj: { component: 'ak-stage-identification-form', meta_model_name: 'authentik_stages_identification.identificationstage' } }] } }) } as Record<string, Handler>;
     expect(await codeOf(akSendRecovery(mk(noEmail).ctx, SUB))).toMatchObject({ status: 409, code: 'recovery_not_configured' });
     expect(await codeOf(akSendRecovery(mk(recoveryRoutes(), { flow: 'nope' }).ctx, SUB))).toMatchObject({ status: 409, code: 'recovery_not_configured' });
   });

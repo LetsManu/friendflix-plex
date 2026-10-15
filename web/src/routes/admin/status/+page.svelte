@@ -16,6 +16,7 @@
   import DiskCard from '#lib/admin/DiskCard.svelte';
   import StreamsCard from '#lib/admin/StreamsCard.svelte';
   import ErrorsCard from '#lib/admin/ErrorsCard.svelte';
+  import LoginCard from '#lib/admin/LoginCard.svelte';
   import { errorText } from '#lib/ui/action';
   import Button from '#lib/ui/Button.svelte';
   import StatTile from '#lib/ui/StatTile.svelte';
@@ -79,6 +80,8 @@
   <StreamsCard view={streams} error={streamsErr} on:retry={loadStr} />
   <ErrorsCard list={errors} recent={snap?.errors ?? null} error={errorsErr} on:retry={loadErr} />
 </div>
+
+<LoginCard />
 
 <section aria-labelledby="st-num">
   <h2 id="st-num">{$t('adminContent.status.numbers')}</h2>

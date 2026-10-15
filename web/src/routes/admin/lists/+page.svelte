@@ -55,7 +55,7 @@
 <div class="slots"><Progress value={featuredCount} max={max} tone={featuredCount >= max ? 'warn' : 'acc'} label={$t('adminContent.lists.slots', { count: featuredCount, max })} /></div>
 
 <DataTable
-  caption={$t('admin.tabs.lists')} {rows} {columns} key={(l) => l.id} {error} pageSize={PAGE} bind:page bind:q total={rows === null ? null : total}
+  caption={$t('admin.tabs.lists')} {rows} {columns} key={(l) => l.id} {error} pageSize={PAGE} bind:page bind:q {total}
   filterable filterPlaceholder={$t('adminContent.lists.search')} emptyText={$t('admin.lists.empty')} busyKey={(l) => `list:${l.id}`}
   on:query={onQuery} on:retry={() => load(0)}>
   <svelte:fragment slot="cell" let:row let:col>

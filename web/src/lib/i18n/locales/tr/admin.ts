@@ -397,6 +397,9 @@ const tr: Translation<typeof de> = {
     account: {
       export: '{actor} kendi verilerini indirdi',
       profile: '{actor} kendi hesabının adını veya rengini değiştirdi',
+      email: '{actor} e-posta adresini değiştirdi',
+      email_requested: '{actor} e-posta adresini değiştirmeyi istedi',
+      mfa_removed: '{actor} bir ikinci doğrulama yöntemini kaldırdı',
     },
     tv: {
       pair: '{actor} bir TV eşleştirdi',

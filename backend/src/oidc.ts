@@ -29,8 +29,11 @@ export interface LoginStart {
 
 /** Abstraction over the OIDC provider (Authentik) so routes are testable. */
 export interface OidcProvider {
-  /** forceLogin: re-authentication (prompt=login, max_age=0), used by the forgotten-PIN reset */
-  start(opts?: { forceLogin?: boolean }): Promise<LoginStart>;
+  /**
+   * forceLogin: re-authentication (prompt=login, max_age=0), used by the forgotten-PIN reset and /auth/reauth.
+   * silent: prompt=none, the in-app sign-in's authorize through the flow executor's Authentik session (never shown to a browser).
+   */
+  start(opts?: { forceLogin?: boolean; silent?: boolean }): Promise<LoginStart>;
   /** maxAge: the id_token must carry an auth_time at most that many seconds old (validated by openid-client) */
   finish(currentUrl: URL, saved: Omit<LoginStart, 'url'>, opts?: { maxAge?: number }): Promise<OidcClaims>;
   /** drops a cached discovery (createLazyOidc); called when PUBLIC_URL or an OIDC_* setting changes */
@@ -102,7 +105,7 @@ export async function createAuthentikProvider(cfg: Config): Promise<OidcProvider
         code_challenge_method: 'S256',
         state,
         nonce,
-        ...(opts?.forceLogin ? { prompt: 'login', max_age: '0' } : {}),
+        ...(opts?.forceLogin ? { prompt: 'login', max_age: '0' } : opts?.silent ? { prompt: 'none' } : {}),
       });
       return { url: url.toString(), state, nonce, codeVerifier };
     },

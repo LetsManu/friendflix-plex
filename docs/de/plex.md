@@ -309,6 +309,11 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | Mein Konto löschen (7 Tage Frist, Wiederherstellen) | Funktioniert | Nach der Frist werden die Plex-Identitäten des Kontos, ihre Limits und ihr Wiedergabestand in FriendFlix entfernt. Innerhalb der 7 Tage aktiviert eine Wiederherstellung jede Identität wieder. In Plex selbst existiert nichts, also wird dort nichts gelöscht |
 | Admin → Nutzer: Freigaben, Sperren, Zugang bis, Limits je Nutzer, Sammelaktionen | Funktioniert | Eine Freigabe legt die Identität des Kontos in FriendFlix an; Rolle und Limit-Überschreibungen gelten für jedes Profil des Kontos. Der Reiter *Aktivität* zeigt den Plex-Verlauf jedes Profils. Ein aktives Konto, dessen Plex-Identität verloren ging, zeigt seine Verknüpfung als **Gestört**, bis du *Verknüpfungen reparieren* nutzt |
 | Admin → Einstellungen und Einrichtungsassistent | Funktioniert | Plex-Adresse und Token, siehe [Einrichtungsassistent mit Plex](#einrichtungsassistent-mit-plex). Das Token ist verschlüsselt und nur schreibbar; Umgebungswerte stehen gesperrt. Kein automatisches Token (Begründung dort) |
+| Anmeldung in der App (FriendFlix' eigene Anmeldeseite, Authentik dahinter) | Funktioniert | Nichts davon berührt Plex: Authentik prüft Passwort und zweiten Faktor, FriendFlix schließt die Anmeldung ab. Eine Einladung legt bei der ersten Anmeldung die Plex-Identität des Kontos an (eine Zeile in FriendFlix, kein Plex-Konto); ein Konto, dessen *Zugang bis* abgelaufen ist, wird bei der Anmeldung samt seiner Plex-Identitäten gesperrt. Siehe [Anmeldung und Kontosicherheit unter Plex](#anmeldung-und-kontosicherheit-unter-plex) |
+| Cover-Wand hinter der Anmeldung | Funktioniert | Poster aus FriendFlix' Spiegel der Plex-Bibliothek, nur von Titeln, deren eigene Plex-`contentRating` auf der Erlaubt-Liste steht (bis 12 Jahre, nichts ohne Freigabe), von Plex' Foto-Transcoder auf 200 px verkleinert. Siehe [die Freigabe-Tabelle](#anmeldung-und-kontosicherheit-unter-plex). Abschalten unter *Admin → Einstellungen → Allgemein* |
+| Passwort-Wiederherstellung (*Passwort vergessen?*, der `/reset`-Link) | Funktioniert | Nur der Wiederherstellungs-Flow von Authentik; Plex ist nicht beteiligt |
+| Kontosicherheit (Passwort, Authenticator-App, Passkeys, Wiederherstellungscodes, E-Mail-Wechsel) | Funktioniert | Nur Authentik-Flows; Plex und plex.tv sind nicht beteiligt, und nichts davon berührt das Plex-Token |
+| Empfehlungs-Messung (`scripts/reco-eval.mjs`) | Eingeschränkt | Liest nur FriendFlix' Tabellen und läuft daher auf einer Plex-Datenbank; die Titel-Merkmale kommen aus dem Spiegel (SQL unter [Empfehlungs-Messung unter Plex](#empfehlungs-messung-unter-plex)). Die `v1`-Basis bildet Jellyfins ähnliche Titel nach und entspricht nicht Plex' „Mehr davon“ |
 | Wünsche (Request-Dienst) | Funktioniert | Jedes FriendFlix-Konto bekommt beim ersten Wunsch einen eigenen lokalen Wunsch-Dienst-Nutzer (nur Wunsch-Recht) |
 | „Aktuell läuft“ anderer Plex-Apps | Nicht verfügbar | Zuschauer sehen nur FriendFlix' eigene Sitzungen (Admins sehen alle unter „Live-Streams“) |
 | nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt: `/internal/authz-nginx` antwortet `501 plan_b_unsupported` |
@@ -328,6 +333,38 @@ Plex kennt nur ein Token, also setzt FriendFlix die Rolleneinstellungen selbst d
 - **Limit unterwegs** (Block 20, `HOME_NETWORKS`): Außerhalb des Heimnetzes ist das Limit unterwegs der Rolle die Grenze von `POST /api/playback/info` und damit Teil des Transcode-Starts (`maxVideoBitrate` = Grenze − 192 kbit/s für den Ton, `videoResolution` = Höhe der Stufe: 1080p ab 8 Mbit/s, 720p ab 4, 480p ab 1,5, sonst 360p; nie über dem Höhenlimit der Rolle). Das Gateway kann einen laufenden Plex-Transcode nicht ändern und braucht dafür keine Bitrate-Regel: Es reicht nie Parameter des Clients an Plex weiter. Eine zu Hause gestartete Sitzung behält ihr Limit, wenn man das Heimnetz verlässt, bis zum nächsten Qualitätswechsel oder Wiedergabestart.
 - **Transcoding aus** (Rollenvorlage oder *Admin → Rollen*): nur Direct Play. Titel, die den Transcoder bräuchten, antworten mit `403 transcoding_not_allowed`; Plex startet keinen Transcode. Casten und transkodierte Downloads werden genauso abgelehnt.
 - **Max. Streams**: pro Konto (wie im Original) und pro Profil-Identität gezählt, auf dem Server: Jeder Plex-Transcode, den FriendFlix für das Profil gestartet hat, zählt, solange Plex ihn noch ausführt (`/transcode/sessions`; Plex beendet Transcodes, die niemand mehr abruft), dazu Direct-Play-Sitzungen mit Fortschrittsmeldung in den letzten 60 s. Ein Titel über der Grenze antwortet mit `429 max_streams`, bevor ein Transcode startet. Qualitäts- oder Tonspurwechsel beim selben Titel zählt nie doppelt. Eine Stopp-Meldung beendet den Plex-Transcode sofort.
+
+### Anmeldung und Kontosicherheit unter Plex
+
+Die Anmeldung in der App, die Passwort-Wiederherstellung, der Abschnitt *Sicherheit* der Kontoseite und der E-Mail-Wechsel laufen zwischen FriendFlix und Authentik ([docs/de/authentik.md §10a](authentik.md#10a-anmeldung-in-der-app)); das Plex-Token spielt dabei keine Rolle. Was Plex berührt:
+
+- **Erste Anmeldung über eine Einladung:** Konto und Plex-Identität entstehen wie bei einer Freigabe (eine Zeile in FriendFlix mit den Limits der Rolle; Plex bekommt keinen Nutzer).
+- **Zugang bis:** Ein Konto, dessen Datum vorbei ist, wird bei der Anmeldung gesperrt (in der App und klassisch), seine Plex-Identitäten werden wie vom Ablauf-Job geschlossen. Der letzte aktive Admin wird nie gesperrt.
+- **Cover-Wand:** FriendFlix wählt bis zu 36 zufällige Filme und Serien mit Poster aus seinem Spiegel der Plex-Bibliothek und holt jedes Poster über Plex' Foto-Transcoder in 200 px (Token im Request-Header, nie in einer URL oder Antwort; Poster über 2 MB werden übersprungen). Der Browser sieht nur FriendFlix-Pfade: keine Item-IDs, keine Plex-Adresse, keine Titel. Ein Titel kommt nur über seine **eigene** `contentRating` auf die Wand, verglichen **exakt und mit Groß-/Kleinschreibung** mit der Erlaubt-Liste aus `backend/src/loginArt.ts`:
+
+  | Plex speichert | Verglichen als | Auf der Wand |
+  |---|---|---|
+  | einfacher Wert, z. B. `G`, `PG`, `TV-G`, `TV-PG`, `TV-Y`, `TV-Y7`, `TV-Y7-FV`, `12A`, `0`, `6`, `12`, `FSK 12` | er selbst | ja |
+  | `de/0`, `de/6`, `de/12` | `DE-0`, `DE-6`, `DE-12` | ja |
+  | `gb/U`, `gb/PG`, `gb/12`, `gb/12A` | `GB-U`, `GB-PG`, `GB-12`, `GB-12A` | ja |
+  | `us/G`, `us/PG`, `us/TV-PG` … | der einfache US-Wert | ja |
+  | `PG-13`, `TV-14`, `R`, `de/16`, `gb/15`, jeder andere höhere Wert | – | nein |
+  | `fr/12`, `at/6`, `au/PG`, `nl/AL`, `de/FSK 12` und andere Länder oder Schreibweisen | `FR-12`, … (nicht auf der Liste) | nein |
+  | `pg`, `tv-pg`, `gb/u` (andere Schreibung) | er selbst (nicht auf der Liste) | nein |
+  | leer, `NR`, `Not Rated`, `Unrated` | – | nein, nie |
+
+  Als zweite Prüfung muss FriendFlix' eigene Freigabe-Tabelle ([Altersfreigaben](#5-altersfreigaben)) den Wert bei 0 bis 12 Jahren einordnen, deshalb erscheint auch ein einfaches `U` (ohne Land) nicht. Folgen und Staffeln kommen nie auf die Wand, eine Serie zählt mit ihrer eigenen Freigabe. Eine in Plex geänderte Freigabe gilt nach dem nächsten Abgleich. Ist der Spiegel leer (direkt nach der Einrichtung) oder passt kein Titel, zeigt die Anmeldung stattdessen erzeugte Grafiken.
+
+### Empfehlungs-Messung unter Plex
+
+`scripts/reco-eval.mjs --db` (Schritt R0 im Original) liest FriendFlix' eigene Tabellen nur lesend (`profiles`, `play_seconds`, `thumbs`, `ratings`); sie halten Plex-Titel unter ihren FriendFlix-IDs, also läuft es unverändert auf einer Plex-Datenbank. Titel-Merkmale (Jahr, Genres) stehen nicht in diesen Tabellen; exportiere sie aus dem Spiegel und übergib sie mit `--items`:
+
+```bash
+psql "$DATABASE_URL" -Atc "select coalesce(json_agg(json_build_object(   'id', '9f1e0' || lpad(to_hex(i.rating_key), 27, '0'),   'year', i.year,   'genres', coalesce((select json_agg(t.tag order by t.tag) from plex_tags t where t.rating_key = i.rating_key and t.kind = 'genre'), '[]'::json) )), '[]'::json) as items from plex_items i where i.type in ('movie', 'show')" > items.json
+DATABASE_URL=... node scripts/reco-eval.mjs --db --items items.json
+```
+
+Die Verfahren `popularity` und `cooccurrence` und alle Kennzahlen gelten wie im Original. **Die `v1`-Basis nicht**: Offline bildet sie Jellyfins ähnliche Titel nach (Genre-Überschneidung, dann Jahr), während „Weil du … geschaut hast“ und „Mehr davon“ unter Plex FriendFlix' eigene ähnliche Titel aus gemeinsamen Genres **und Besetzung** nutzen. Lies `v1` unter Plex nur als grobe Genre-Basis; die v1-Zahlen des Originals sind keine Plex-Basis. Die Empfehlungs-Zähler (`friendflix_reco_impressions_total`, `…_clicks_total`, `…_plays_total`, `…_dismiss_total`, je Zeile und Verfahren) funktionieren unter Plex gleich.
 
 ## Fehlersuche
 

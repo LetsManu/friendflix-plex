@@ -11,7 +11,7 @@
   <a href="README.md">English</a> · <a href="README.de.md">Deutsch</a>
   <br><br>
   <a href="https://github.com/LetsManu/friendflix/actions/workflows/ci.yml"><img src="https://github.com/LetsManu/friendflix-plex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/status-in%20Entwicklung%20%7C%20Preview-orange" alt="Status: in Entwicklung / Preview">
+  <img src="https://img.shields.io/badge/status-ver%C3%B6ffentlicht%20%7C%20fr%C3%BCh-yellowgreen" alt="Status: veröffentlicht, früh">
   <img src="https://img.shields.io/badge/self--hosted-Docker-2496ED" alt="Selbst gehostet mit Docker">
   <img src="https://img.shields.io/badge/Sprachen-7-ff4f6d" alt="7 Sprachen">
   <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-AGPL--3.0-blue" alt="Lizenz: AGPL-3.0"></a>
@@ -21,7 +21,7 @@
 
 **FriendFlix for Plex** ist ein privates Streaming-Portal vor deinem **Plex Media Server** (deine Medien) und einem optionalen Wunsch-Dienst. Deine Freunde bekommen ein schickes, vertrautes Streaming-Erlebnis auf Laptop, Handy und Fernseher – mit Profilen, Downloads, Watch-Partys und Empfehlungen untereinander. Plex und den Wunsch-Dienst sehen sie nie direkt, und du bestimmst, wer hineinkommt. Niemand braucht ein plex.tv-Konto.
 
-> **Status: Preview, nicht veröffentlicht.** Die Plex-Unterstützung ist im Entwicklungszweig umgesetzt und gegen einen Fake-Plex-Server aus echten Antworten von Plex Media Server 1.43 getestet, aber **nicht released** und kaum an echten Servern erprobt – Images gibt es erst mit dem ersten Preview-Release (siehe [Releases](https://github.com/LetsManu/friendflix-plex/releases) und [CHANGELOG.md](CHANGELOG.md)). Freiwillige: [mit einem echten Plex-Server testen](docs/de/plex.md#mit-einem-echten-plex-server-testen).
+> **Status: veröffentlicht, früh.** Mit jedem Release werden Images veröffentlicht (siehe [Releases](https://github.com/LetsManu/friendflix-plex/releases) und [CHANGELOG.md](CHANGELOG.md)). Die Plex-Unterstützung ist gegen einen Fake-Plex-Server aus echten Antworten von Plex Media Server 1.43 getestet und lief bisher erst an wenigen echten Servern. Freiwillige: [mit einem echten Plex-Server testen](docs/de/plex.md#mit-einem-echten-plex-server-testen).
 >
 > **Das ist ein Fork.** FriendFlix for Plex ist ein Fork von [FriendFlix](https://github.com/LetsManu/friendflix), der statt Jellyfin mit Plex spricht. **Du nutzt Jellyfin? Dann nimm das Originalprojekt: [LetsManu/friendflix](https://github.com/LetsManu/friendflix).** Die Funktionsübersicht unten ist die des Originals, auf Plex umformuliert; die [Vergleichstabelle](#plex-und-jellyfin-im-vergleich) zeigt, was Plex nicht liefern kann.
 
@@ -30,10 +30,59 @@
 
 ## Inhalt
 
+- [Loslegen](#loslegen)
+- [Freunde einladen](#freunde-einladen)
 - [Das bekommst du](#das-bekommst-du)
 - [Datenschutz und Sicherheit](#datenschutz-und-sicherheit)
 - [Plex und Jellyfin im Vergleich](#plex-und-jellyfin-im-vergleich)
 - [Für Admins: Einrichtung und Betrieb](#für-admins-einrichtung-und-betrieb)
+
+## Loslegen
+
+**Du brauchst:**
+
+- Einen Linux-Server oder ein NAS mit **Docker** und dem **Compose-v2**-Plugin.
+- Eine Domain mit HTTPS und einen Reverse Proxy, z. B. **Nginx Proxy Manager**: ein Proxy-Host `friend.example.com` → `127.0.0.1:3080`, Websockets an, dazu [deploy/npm/portal.advanced.conf](deploy/npm/portal.advanced.conf) im Reiter *Advanced* (den Block `/media/c/` nicht entfernen: Er verhindert, dass Cast-Tokens in Logs landen).
+- **Authentik** für die Anmeldung, installiert mit Admin-Konto, z. B. unter `auth.example.com` ([docs/de/authentik.md §2](docs/de/authentik.md#2-authentik-installieren)).
+- Einen **Plex Media Server** (getestet gegen 1.43) mit deinen Bibliotheken, **beansprucht („claimed“)** (einmal mit einem Konto angemeldet) und von Backend und Gateway erreichbar. FriendFlix verbindet sich mit einem vorhandenen Server und startet keinen. Ein Plex-Server pro FriendFlix-Instanz.
+- Ein **Plex-Token** (`X-Plex-Token`) des Server-Besitzers, am besten eines eigenen Plex-Kontos für FriendFlix: siehe [docs/de/plex.md](docs/de/plex.md). Plex Pass ist optional (Intro-/Abspann-Marker, Hardware-Transcoding). Ein Wunsch-Dienst ist optional (FriendFlix legt je Konto einen lokalen Wunsch-Nutzer an, ohne Plex- oder Jellyfin-Konto).
+
+**Schnellstart.** Eine neue Installation braucht keine `.env`; der Produktions-Stack zieht fertige Images von `ghcr.io/letsmanu/friendflix-plex-{backend,web,gateway}`.
+
+1. **Starten** (`compose.plex.yaml` verbindet nur mit deinem vorhandenen Plex-Server):
+
+   ```bash
+   git clone https://github.com/LetsManu/friendflix-plex.git && cd friendflix-plex
+   docker compose -f compose.prod.yaml -f compose.plex.yaml up -d
+   ```
+
+2. **Den einmaligen Einrichtungscode** aus dem Backend-Log lesen (die Zeile erscheint, sobald das Backend läuft; bei leerer Ausgabe nach ein paar Sekunden wiederholen):
+
+   ```bash
+   docker compose -f compose.prod.yaml -f compose.plex.yaml logs backend | grep "setup code"
+   ```
+
+3. **`https://friend.example.com` öffnen und den Einrichtungsassistenten durcharbeiten:** Code, öffentliche Adresse, Medienserver (die reine Adresse deines Plex-Servers und sein Token, siehe [docs/de/plex.md](docs/de/plex.md)), Anmeldung (er richtet Authentik mit einem einmaligen Admin-Token ein: Provider, Gruppen, Einladungen, Wiederherstellung), dann wird deine erste Anmeldung Admin. Optionale Extras (Wunsch-Dienst, Push, Webhooks, Datenquellen) kommen zuletzt. Weder das Authentik-Admin-Token noch ein Passwort wird gespeichert; das Plex-Token liegt verschlüsselt in der Datenbank und nur Backend und Gateway nutzen es.
+
+<p align="center"><img src="docs/images/de/setup-code.jpg" alt="Einrichtungsassistent, Schritt 1: Eingabe des Einrichtungscodes" width="600"></p>
+
+<p align="center"><img src="docs/images/de/setup-signin.jpg" alt="Einrichtungsassistent, Schritt Anmeldung: Plan, was in Authentik angelegt wird" width="600"></p>
+
+Danach in Authentik den einmaligen Token widerrufen und MFA zur Pflicht machen ([docs/de/setup.md, Authentik absichern](docs/de/setup.md#authentik-absichern)). Ab dann melden sich alle auf der eigenen Anmeldeseite von FriendFlix an, über einer Wand aus Covern deiner Plex-Bibliothek (`LOGIN_UI`, automatisch, sobald Authentik verbunden ist; die Cover unter Plex: [docs/de/plex.md](docs/de/plex.md#anmeldung-und-kontosicherheit-unter-plex)); Authentik prüft dahinter weiter jedes Passwort und jeden zweiten Faktor, und *Admin → Status → Anmeldung* sagt dir, wenn ein Ablauf eine Korrektur braucht. Jede Einstellung lässt sich später unter *Admin → Einstellungen* ändern, und jede Änderung wird vor dem Speichern getestet. Außerdem sinnvoll: `./scripts/backup-bootstrap.sh` sichert die erzeugten Secrets (der Dienst `bootstrap` legt die Passwörter für Datenbank und Redis, `APP_ENC_KEY` und `INTERNAL_SECRET` im Docker-Volume `friendflix_bootstrap` an), und `docker compose -f compose.prod.yaml -f compose.plex.yaml --profile backup up -d backup` ergänzt nächtliche Datenbank-Backups. Die ganze Anleitung vom leeren Server aus, mit den typischen Fehlern jedes Assistenten-Schritts: **[docs/de/setup.md](docs/de/setup.md)** (Jellyfin-Schritte dort: stattdessen [docs/de/plex.md](docs/de/plex.md); die Jellyfin-Schritte in [docs/integrations.md](docs/integrations.md) gelten nicht).
+
+Bestehende Installation? Deine `.env` bleibt erhalten; sie sieht den Assistenten nie, und `PLEX_URL` / `PLEX_TOKEN` aus der `.env` gelten weiter (gesperrt angezeigt) ([docs/de/setup.md §14](docs/de/setup.md#14-umstieg-auf-einstellungen-in-der-datenbank)). `.env` und Docker-Secrets bleiben außerdem eine fortgeschrittene Option, um Werte festzunageln ([unten](#fortgeschritten-konfiguration-über-die-umgebung)). Läuft der Wunsch-Dienst schon in einem eigenen Stack: `docker network connect friendflix_media <container>` und dessen öffentliche Ports entfernen.
+
+*Die Screenshots zeigen die deutsche Oberfläche mit erfundenen Beispieldaten und Platzhalter-Hosts.*
+
+## Freunde einladen
+
+Unter *Admin → Nutzer → Einladungen* eine Rolle wählen und einen Einladungslink erstellen; den Link an deinen Freund schicken ([docs/de/setup.md §10](docs/de/setup.md#10-freunde-einladen)). Dein Freund:
+
+1. öffnet den Link und klickt **Konto anlegen & loslegen**;
+2. legt das Konto auf den Anmeldebildschirmen von FriendFlix an (Passwort, Authenticator-App, Wiederherstellungscodes; Authentik führt die Registrierung dahinter aus) und landet angemeldet im Portal;
+3. wählt beim ersten Besuch eine Sprache, prüft Profilname und Farbe und wählt 3 Titel, die ihm gefallen, damit die Empfehlungen von Anfang an passen (**Willkommen**, ein paar Klicks, überspringbar).
+
+Was Freunde Schritt für Schritt sehen: [docs/de/setup.md, Was ein Freund sieht](docs/de/setup.md#was-ein-freund-sieht).
 
 ## Das bekommst du
 
@@ -151,8 +200,8 @@ Außerdem im Admin-Bereich: Einladungen und Rollen, **Marken-Hubs**, hervorgehob
 ## Datenschutz und Sicherheit
 
 - **Selbst gehostet.** Alles läuft auf deinem eigenen Server. FriendFlix hat keine Werbung und keine Analyse-Dienste von Dritten.
-- **Nur mit Einladung oder Freigabe.** Neue Leute kommen über Einladungslinks (einmalig oder mit begrenzten Nutzungen) dazu oder melden sich an und warten, bis ein Admin sie freigibt. Die Anmeldung läuft über dein Authentik mit **verpflichtender Zwei-Faktor-Authentifizierung**, neue Geräte können eine Freigabe brauchen.
-- **Deine Daten, dein Konto.** Alle verwalten ihr Konto selbst in der App (Name, Farbe, Geräte, Zwei-Faktor-Stand), können alles, was FriendFlix über sie speichert, als eine JSON-Datei herunterladen und ihr Konto selbst löschen. Das Löschen braucht eine erneute Anmeldung, lässt sich 7 Tage lang rückgängig machen und entfernt das Konto dann aus FriendFlix, dem Medienserver und dem Wunsch-Dienst; das Audit-Log behält ein Pseudonym statt des Namens.
+- **Nur mit Einladung oder Freigabe.** Neue Leute kommen über Einladungslinks (einmalig oder mit begrenzten Nutzungen) dazu oder melden sich an und warten, bis ein Admin sie freigibt. Die Anmeldung läuft über dein Authentik mit **verpflichtender Zwei-Faktor-Authentifizierung**, auf der eigenen Anmeldeseite von FriendFlix über einer Wand aus Covern (Passwort, Authenticator-Code, Wiederherstellung per E-Mail und Passkeys, ohne die App zu verlassen; die Seite von Authentik bleibt als Ausweg), neue Geräte können eine Freigabe brauchen.
+- **Deine Daten, dein Konto.** Alle verwalten ihr Konto selbst in der App (Name, Farbe, Geräte) und unter *Sicherheit* Passwort, Authenticator-App, Passkeys, Wiederherstellungscodes und E-Mail-Adresse (vorher eine frische Anmeldung; eine neue Adresse gilt erst, wenn ihr Bestätigungslink geklickt ist). *Passwort vergessen?* auf der Anmeldeseite schickt einen Link zum Zurücksetzen per E-Mail. Alle können alles, was FriendFlix über sie speichert, als eine JSON-Datei herunterladen und ihr Konto selbst löschen. Das Löschen braucht eine erneute Anmeldung, lässt sich 7 Tage lang rückgängig machen und entfernt das Konto dann aus FriendFlix, dem Medienserver und dem Wunsch-Dienst; das Audit-Log behält ein Pseudonym statt des Namens.
 - **Plex und der Wunsch-Dienst bleiben unsichtbar.** Freunde sprechen nur mit dem Portal. Das Plex-Token liegt nur im Backend und im Gateway und geht nie an einen Browser; Videos und Bilder laufen über ein Gateway, das jede Anfrage prüft.
 - **Keine plex.tv-Konten für deine Freunde.** FriendFlix verwaltet seine Nutzer selbst und setzt Rollen, Profile und Altersgrenzen selbst durch; Plex sieht nur ein serverseitiges Token. Es läuft ohne Plex Pass.
 - **Du bestimmst, was Freunde sehen.** „Verlauf teilen“ (standardmäßig aus) und „Bewertungen teilen“ stellt jede Person in den Einstellungen ein; „Diese Woche bei uns“ zeigt nur Zahlen, nie wer geschaut hat. Reaktionen zu einem Titel erscheinen erst, wenn du ihn gesehen hast, und der optionale Spoilerschutz blendet Bilder und Beschreibungen ungesehener Folgen aus.
@@ -192,6 +241,7 @@ Die FriendFlix-Oberfläche ist dieselbe; unterschiedlich ist, was Plex liefern k
 | Chromecast | Funktioniert | Inklusive Text-Untertiteln (signierte FriendFlix-Untertitel-URLs) |
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen | Funktioniert | FriendFlix-Funktionen, unabhängig vom Medienserver |
 | „Demnächst erscheinende Folgen“ | Nicht verfügbar | Plex bietet das nicht |
+| Anmeldung in der App, Passwort-Wiederherstellung, Kontosicherheit, Cover-Wand | Funktioniert | Zwischen FriendFlix und Authentik; Plex ist nicht beteiligt. Die Cover-Wand zeigt Plex-Poster nur von Titeln, deren eigene Plex-Altersfreigabe auf der Erlaubt-Liste steht (bis 12, nichts ohne Freigabe), siehe [docs/de/plex.md](docs/de/plex.md#anmeldung-und-kontosicherheit-unter-plex) |
 | Wünsche / Wunsch-Dienst | Funktioniert | Jedes FriendFlix-Konto bekommt beim ersten Wunsch einen eigenen lokalen Wunsch-Dienst-Nutzer (nur Wunsch-Recht) |
 | nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt |
 
@@ -201,49 +251,16 @@ Details, Einrichtung und Fehlersuche: [docs/de/plex.md](docs/de/plex.md).
 
 ## Für Admins: Einrichtung und Betrieb
 
-Ab hier wird es technisch. Die Plex-Anleitung ist [docs/de/plex.md](docs/de/plex.md) ([English](docs/plex.md)); die ausführliche Betriebsdoku steht unter [Dokumentation](#dokumentation).
+Ab hier wird es technisch. Die Installation steht unter [Loslegen](#loslegen); die Plex-Anleitung ist [docs/de/plex.md](docs/de/plex.md) ([English](docs/plex.md)); die ausführliche Betriebsdoku steht unter [Dokumentation](#dokumentation).
 
-> **Preview:** Plex-Backend und `compose.plex.yaml` gibt es, aber kein Release, und die Images unten sind noch nicht veröffentlicht. Bis dahin die Images selbst bauen (`docker compose -f compose.yaml -f compose.plex.yaml build`) und eine Testinstanz nutzen.
+**Installationsanleitung:** vom leeren Server bis zum ersten eingeladenen Freund – [docs/de/setup.md](docs/de/setup.md); Authentik (Installation, Provider, Flows, Einladungen) – [docs/de/authentik.md](docs/de/authentik.md).
 
-**Installationsanleitung:** Schritt für Schritt vom leeren Server bis zum ersten eingeladenen Freund – [docs/de/setup.md](docs/de/setup.md); Authentik (Installation, Provider, Flows, Einladungen) – [docs/de/authentik.md](docs/de/authentik.md).
+### Fortgeschritten: Konfiguration über die Umgebung
 
-### Voraussetzungen
+Eine neue Installation braucht davon nichts: Einrichtungsassistent und *Admin → Einstellungen* speichern die Einstellungen in der Datenbank. `.env` und Docker-Secrets sind dazu da, Werte festzunageln: Was sie setzen, hat Vorrang und ist im Assistenten und unter *Admin → Einstellungen* gesperrt ([docs/de/setup.md §15](docs/de/setup.md#15-fortgeschritten-konfiguration-über-die-umgebung), [docs/de/setup.md, Einstellungen in der Datenbank](docs/de/setup.md#einstellungen-in-der-datenbank)). Vorlage: [.env.example](.env.example). Jede Variable kann mit der Endung `_FILE` auch aus einer Datei gelesen werden (Docker Secrets, siehe [compose.secrets.yaml](compose.secrets.yaml)). Die Standardwerte stammen aus [compose.prod.yaml](compose.prod.yaml). Die Plex-Variablen unten reicht `compose.plex.yaml` durch (es setzt auch `MEDIA_SERVER=plex`); bei einer aktualisierten Installation gelten `PLEX_URL` / `PLEX_TOKEN` aus der `.env` weiter und erscheinen gesperrt.
 
-- Ein Linux-Server mit **Docker** und **Docker Compose**.
-- Ein **Plex Media Server** (getestet gegen 1.43) mit deinen Bibliotheken, **beansprucht („claimed“)** (einmal mit einem Konto angemeldet) und vom FriendFlix-Gateway erreichbar. FriendFlix verbindet sich mit einem vorhandenen Server und startet keinen. Ein Plex-Server pro FriendFlix-Instanz.
-- Ein **Plex-Admin-Token** (`X-Plex-Token`): siehe Plex-Supportartikel „Finding an authentication token / X-Plex-Token“ und [docs/de/plex.md](docs/de/plex.md). Nimm dafür ein eigenes Plex-Konto bzw. Token für FriendFlix. Plex Pass ist optional (Intro-/Abspann-Marker, Hardware-Transcoding).
-- Optional ein Wunsch-Dienst (wie im Original; FriendFlix legt je Konto einen lokalen Wunsch-Nutzer an, ohne Plex- oder Jellyfin-Konto).
-- **Authentik** als Login (OIDC mit PKCE; MFA dort erzwingen).
-- Ein Reverse Proxy mit TLS, z. B. **Nginx Proxy Manager**, mit einem Proxy-Host für das Portal.
-- Optional: ntfy, ein Discord-Webhook, Portainer (Updates per Knopfdruck).
-
-### Schnellstart
-
-Installation in drei Zeilen. Der Produktions-Stack zieht fertige Images von `ghcr.io/letsmanu/friendflix-plex-{backend,web,gateway}`; auf dem Server wird nichts gebaut und keine `.env` geschrieben. Die Images erscheinen mit dem ersten Preview-Release – vorher kann `docker compose ... up` sie nicht ziehen.
-
-```bash
-git clone https://github.com/LetsManu/friendflix-plex.git && cd friendflix-plex
-docker compose -f compose.prod.yaml -f compose.plex.yaml up -d    # compose.plex.yaml verbindet nur mit deinem vorhandenen Plex-Server
-docker compose -f compose.prod.yaml -f compose.plex.yaml logs backend | grep "setup code"
-```
-
-Noch keine Ausgabe? `up -d` kehrt zurück, bevor das Backend gestartet ist: ein paar Sekunden warten und den letzten Befehl wiederholen; die Zeile erscheint, sobald das Backend läuft.
-
-Dann das Portal im Browser öffnen, den Einrichtungscode eingeben und dem **Einrichtungsassistenten** folgen: öffentliche Adresse, Medienserver (Adresse deines Plex-Servers und sein Token, siehe [docs/de/plex.md](docs/de/plex.md)), Anmeldung (er richtet Authentik mit einem einmaligen Admin-Token ein: Provider, Gruppen, Einladungen, Wiederherstellung), und deine erste Anmeldung wird Admin. Danach folgen optionale Extras (Wunsch-Dienst, Push, Webhooks, Datenquellen); alles lässt sich später unter *Admin → Einstellungen* ändern. Weder das Authentik-Admin-Token noch ein Passwort wird gespeichert; das Plex-Token liegt verschlüsselt in der Datenbank und nur Backend und Gateway nutzen es. Schritt für Schritt: [docs/de/setup.md](docs/de/setup.md) (Jellyfin-Schritte dort: stattdessen [docs/de/plex.md](docs/de/plex.md)).
-
-Vorher brauchst du:
-
-1. **Authentik**, installiert mit Admin-Konto – [docs/de/authentik.md §2](docs/de/authentik.md#2-authentik-installieren). Danach dort MFA zur Pflicht machen und den einmaligen Token widerrufen ([§3](docs/de/authentik.md#3-automatische-einrichtung-aus-friendflix)).
-2. **Plex:** Server geclaimt, ein Token für FriendFlix (am besten eines eigenen Plex-Kontos), Bibliotheksnamen, Altersfreigaben und Vorschaubilder geprüft – [docs/de/plex.md](docs/de/plex.md). Backend und Gateway müssen seine lokale Adresse erreichen (Details dort). Die Jellyfin-Schritte in [docs/integrations.md](docs/integrations.md) gelten nicht.
-3. **Nginx Proxy Manager:** ein Proxy-Host `portal.<domain>` → `127.0.0.1:3080`, Websockets an, Force SSL/HTTP2/HSTS; [deploy/npm/portal.advanced.conf](deploy/npm/portal.advanced.conf) in den Reiter *Advanced* einfügen (leitet `/api`, `/auth`, `/ws` an `:3081` und `/media/` an `:3082`). Den Block `/media/c/` nicht entfernen: Er verhindert, dass Cast-Tokens in Logs landen.
-
-Außerdem sinnvoll: `./scripts/backup-bootstrap.sh` sichert die erzeugten Secrets (der Dienst `bootstrap` legt die Passwörter für Datenbank und Redis, `APP_ENC_KEY` und `INTERNAL_SECRET` im Docker-Volume `friendflix_bootstrap` an), und `docker compose -f compose.prod.yaml -f compose.plex.yaml --profile backup up -d backup` ergänzt nächtliche Datenbank-Backups. Private Pakete: vorher `docker login ghcr.io -u <user>` (PAT mit read:packages). Läuft der Wunsch-Dienst schon in einem eigenen Stack: `docker network connect friendflix_media <container>` und dessen öffentliche Ports entfernen.
-
-Lieber Dateien? Jede Einstellung kann weiterhin aus der `.env` oder aus Docker-Secrets kommen und erscheint dann im Assistenten und unter *Admin → Einstellungen* gesperrt ([docs/de/setup.md §15](docs/de/setup.md#15-fortgeschritten-konfiguration-über-die-umgebung)). Bestehende Installation aktualisieren: [docs/de/setup.md §14](docs/de/setup.md#14-umstieg-auf-einstellungen-in-der-datenbank); sie sieht den Assistenten nie, und `PLEX_URL` / `PLEX_TOKEN` aus der `.env` gelten weiter (gesperrt angezeigt).
-
-### Konfiguration
-
-Eine neue Installation braucht keine davon: Einrichtungsassistent und *Admin → Einstellungen* speichern sie in der Datenbank. Vorlage, um Werte aus der Umgebung festzunageln: [.env.example](.env.example). Jede Variable kann mit der Endung `_FILE` auch aus einer Datei gelesen werden (Docker Secrets, siehe [compose.secrets.yaml](compose.secrets.yaml)). Die Standardwerte stammen aus [compose.prod.yaml](compose.prod.yaml). Einstellungen lassen sich stattdessen unter *Admin → Einstellungen* speichern; ein Wert aus `.env` oder Datei hat Vorrang und ist dort gesperrt ([docs/de/setup.md](docs/de/setup.md#einstellungen-in-der-datenbank)). Die Plex-Variablen unten reicht `compose.plex.yaml` durch (es setzt auch `MEDIA_SERVER=plex`).
+<details>
+<summary>Alle Variablen</summary>
 
 | Variable | Standard | Bedeutung |
 |---|---|---|
@@ -292,6 +309,8 @@ Eine neue Installation braucht keine davon: Einrichtungsassistent und *Admin →
 | `MEDIA_PATH` | `./media` | Medienordner für das mitgelieferte Jellyfin (Profil `bundled` im Original; mit Plex nicht verwendet) |
 
 Die vollständige Liste mit Erklärungen steht in [.env.example](.env.example).
+
+</details>
 
 ### Architektur
 

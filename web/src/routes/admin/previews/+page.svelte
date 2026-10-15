@@ -128,7 +128,7 @@
 </div>
 
 <DataTable
-  caption={$t('admin.tabs.previews')} {rows} {columns} key={(r) => r.itemId} {error} pageSize={PAGE} bind:page bind:q bind:sort total={rows === null ? null : total}
+  caption={$t('admin.tabs.previews')} {rows} {columns} key={(r) => r.itemId} {error} pageSize={PAGE} bind:page bind:q bind:sort {total}
   filterable filterPlaceholder={$t('adminContent.previews.search')} emptyText={$t('adminContent.previews.empty')} busyKey={(r) => `prev:${r.itemId}`}
   rowLabel={(r) => r.name} on:query={onQuery} on:retry={() => load(0)}
   actions={(r) => [

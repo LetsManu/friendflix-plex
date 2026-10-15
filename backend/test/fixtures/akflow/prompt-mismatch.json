@@ -1,0 +1,42 @@
+{
+  "flow_info": {
+    "title": "Change password",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-prompt",
+  "response_errors": {
+    "non_field_errors": [
+      {
+        "string": "Passwords don't match.",
+        "code": "invalid"
+      }
+    ]
+  },
+  "fields": [
+    {
+      "field_key": "password",
+      "label": "Password",
+      "type": "password",
+      "required": true,
+      "placeholder": "Password",
+      "initial_value": "",
+      "order": 300,
+      "sub_text": "",
+      "choices": null
+    },
+    {
+      "field_key": "password_repeat",
+      "label": "Password (repeat)",
+      "type": "password",
+      "required": true,
+      "placeholder": "Password (repeat)",
+      "initial_value": "",
+      "order": 301,
+      "sub_text": "",
+      "choices": null
+    }
+  ]
+}

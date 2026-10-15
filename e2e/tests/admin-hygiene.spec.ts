@@ -50,6 +50,23 @@ test.describe('admin library hygiene', () => {
     await expect(page.getByText('1–50 von 60')).toBeVisible();
   });
 
+  test('search typed while the list reloads is still sent to the server', async ({ page }) => {
+    const urls = listCalls(page);
+    await page.goto('/admin/hygiene');
+    await expect(table(page).getByRole('row')).toHaveCount(51);
+    let slow = true; // hold the reload after the tile click so the search is typed while rows is null
+    await page.route((u) => u.pathname === '/api/admin/hygiene', async (r) => {
+      if (slow) { slow = false; await new Promise((x) => setTimeout(x, 1500)); }
+      await r.fallback();
+    });
+    await page.getByRole('button', { name: /Sprache/ }).click();
+    await expect(table(page)).toHaveAttribute('aria-busy', 'true');
+    await page.getByRole('searchbox', { name: 'Tabelle filtern' }).fill('zephyr');
+    await expect.poll(() => urls.at(-1)?.searchParams.get('q')).toBe('zephyr');
+    expect(urls.at(-1)?.searchParams.get('category')).toBe('language');
+    await expect(table(page)).not.toHaveAttribute('aria-busy', 'true');
+  });
+
   test('row shows pills "Keine Untertitel" (warn) and "HEVC 10-Bit" (info); link goes to /item/<id>', async ({ page }) => {
     await page.goto('/admin/hygiene');
     const row = table(page).getByRole('row', { name: /Lantern Bay/ });
@@ -77,8 +94,9 @@ test.describe('admin library hygiene', () => {
     expect(api.admin.hygiene.ignored.has(`${OLD}|audio_codec`)).toBe(true);
     await toasts(page).getByRole('button', { name: 'Rückgängig' }).last().click();
     await expect(table(page).getByRole('row', { name: /Old Reel/ })).toHaveCount(1);
-    expect(api.log.some((l) => l.startsWith('DELETE /api/admin/hygiene/ignore') && l.includes('audio_codec'))).toBe(true);
-    expect(api.admin.hygiene.ignored.has(`${OLD}|audio_codec`)).toBe(false);
+    // Undo puts the row back at once (rollback) and sends the DELETE after it: poll the mock instead of reading it once
+    await expect.poll(() => api.log.some((l) => l.startsWith('DELETE /api/admin/hygiene/ignore') && l.includes('audio_codec'))).toBe(true);
+    await expect.poll(() => api.admin.hygiene.ignored.has(`${OLD}|audio_codec`)).toBe(false);
   });
 
   test('refresh metadata posts once and shows a toast; hidden when canRefresh false', async ({ page, api }) => {

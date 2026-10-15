@@ -41,7 +41,7 @@ export const cfg: Config = {
   AUTHENTIK_INVALIDATION_FLOW: 'default-invalidation-flow', AUTHENTIK_EMAIL_CHANGE_FLOW: 'friendflix-email-change', PASSKEYS_IN_APP: 'auto', LOGIN_COVER_WALL: 'true',
 };
 
-export type Handler = (url: URL, init: RequestInit, body: any) => { status?: number; json?: unknown; raw?: string | Uint8Array } | undefined;
+export type Handler = (url: URL, init: RequestInit, body: any) => { status?: number; json?: unknown; raw?: string | Uint8Array; type?: string } | undefined;
 export interface Call { method: string; host?: string; path: string; search: string; body: any; auth?: string }
 
 /** In-memory fake of the Jellyfin/Seerr HTTP APIs: routes are matched by "METHOD /path". */
@@ -57,7 +57,7 @@ export function fakeHttp(routes: Record<string, Handler>, calls: Call[] = []): t
     });
     const r = key ? routes[key]!(url, init, body) : undefined;
     const status = r?.status ?? (key ? 200 : 404);
-    if (r?.raw !== undefined) return new Response(r.raw as BodyInit, { status });
+    if (r?.raw !== undefined) return new Response(r.raw as BodyInit, { status, ...(r.type ? { headers: { 'content-type': r.type } } : {}) });
     return new Response(status === 204 || r?.json === undefined ? null : JSON.stringify(r.json), { status, headers: { 'content-type': 'application/json' } });
   }) as typeof fetch;
 }
@@ -177,7 +177,8 @@ export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extr
     media: (c) => createMediaServer({ cfg: c, kv, db: pool, encKey, fetchImpl: plexFake ? (extra.plexFetch?.(plexFake) ?? plexFake.fetch) : jfFetch }),
     requests: (c) => new SeerrClient(c.REQUESTS_URL, c.REQUESTS_API_KEY, seerrFetch),
     oidc: {
-      start: async () => ({ url: 'https://idp/authorize', state: 's' + Math.random().toString(36).slice(2), nonce: 'n', codeVerifier: 'v' }),
+      // silent (the in-app sign-in's authorize): prompt=none, as the real provider sends it
+      start: async (o) => ({ url: `https://idp/authorize${o?.silent ? '?prompt=none' : ''}`, state: 's' + Math.random().toString(36).slice(2), nonce: 'n', codeVerifier: 'v' }),
       finish: async () => ({ authTime: Math.floor(Date.now() / 1000), ...claims.current }), // a fresh IdP login unless a test sets authTime
     },
     overrideCfg: (c) => settings.override(c),
@@ -193,7 +194,7 @@ export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extr
   const dev: { v?: string } = {};
   const login = async (c: OidcClaims = claims.current) => {
     claims.current = c;
-    const l = await app.inject('/auth/login');
+    const l = await app.inject('/auth/login?classic=1'); // the IdP redirect, also when LOGIN_UI is app
     const state = l.cookies.find((x) => x.name === 'ff_oidc')!.value; // the login cookie carries the state
     const cb = await app.inject({ url: `/auth/callback?state=${state}&code=c`, cookies: { ...(dev.v ? { ff_dev: dev.v } : {}), ff_oidc: state } });
     dev.v = cb.cookies.find((x) => x.name === 'ff_dev')?.value ?? dev.v; // same browser -> same device

@@ -102,6 +102,8 @@ const settings: Translation<typeof de> = {
   keyErrors: {
     PLEX_URL: { invalid_url: 'Please enter only the server address: starting with http:// or https://, without user name and password, and nothing after ? or #. The token goes in the Plex token field.' },
   },
+  /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
+  options: { auto: 'Automatic', LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatic', off: 'Off' } },
   keys: {
     PUBLIC_URL: { label: 'Public address', help: 'The address everyone uses to reach FriendFlix, e.g. https://friend.example.com. Links, sign-in and streaming are built on it.' },
     WEBHOOK_SECRET: { label: 'Webhook secret', help: 'Shared secret for the webhooks of the media server and the request service.' },
@@ -115,6 +117,15 @@ const settings: Translation<typeof de> = {
     AUTHENTIK_ENROLL_FLOW: { label: 'Enrollment flow', help: 'Slug of the flow invited people use to create their account.' },
     AUTHENTIK_RECOVERY_FLOW: { label: 'Recovery flow', help: 'Slug of the flow that sends the password reset mail.' },
     AUTHENTIK_TOTP_SETUP_FLOW: { label: 'Two-factor setup flow', help: 'Slug of the flow for setting up an authenticator app.' },
+    LOGIN_UI: { label: 'Sign-in page', help: 'Who shows the sign-in: FriendFlix with its own screens, or Authentik\'s page. Automatic uses FriendFlix once Authentik is connected.' },
+    AUTHENTIK_LOGIN_FLOW: { label: 'Sign-in flow', help: 'Slug of the flow the sign-in inside FriendFlix runs at Authentik.' },
+    AUTHENTIK_INVALIDATION_FLOW: { label: 'Sign-out flow', help: 'Slug of the flow that runs at Authentik when someone signs out.' },
+    AUTHENTIK_STATIC_SETUP_FLOW: { label: 'Recovery codes flow', help: 'Slug of the flow that creates new recovery codes.' },
+    AUTHENTIK_WEBAUTHN_SETUP_FLOW: { label: 'Passkey flow', help: 'Slug of the flow for adding a passkey.' },
+    AUTHENTIK_PASSWORD_CHANGE_FLOW: { label: 'Password change flow', help: 'Slug of the flow for changing the password in the account.' },
+    AUTHENTIK_EMAIL_CHANGE_FLOW: { label: 'E-mail change flow', help: 'Slug of the flow that takes over a new e-mail address after a confirmation link (template: friendflix-email-change).' },
+    PASSKEYS_IN_APP: { label: 'Passkeys in FriendFlix', help: 'Automatic: passkeys inside FriendFlix when Authentik allows it. Off: passkeys only on Authentik\'s sign-in page.' },
+    LOGIN_COVER_WALL: { label: 'Cover wall behind the sign-in', help: 'Shows covers from the library (age ratings up to 12 only, nothing unrated) behind the sign-in. The images can be fetched without signing in.' },
     JELLYFIN_URL: { label: 'Jellyfin address', help: 'Internal address of the media server, e.g. http://jellyfin:8096.' },
     JELLYFIN_ADMIN_API_KEY: { label: 'Jellyfin API key (admin)', help: 'API key with admin rights (Jellyfin → Dashboard → API keys).' },
     PLEX_URL: { label: 'Plex address', help: 'Internal address at which the backend and the media gateway reach the Plex server. Only the address: the token goes in its own field, never into the address.' },

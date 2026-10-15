@@ -1,7 +1,10 @@
 <!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
-  /** /me/account, profile: name and colour (PATCH /api/account/profile, only the changed fields); the e-mail is read-only. */
+  /**
+   * /me/account, profile: name and colour (PATCH /api/account/profile, only the changed fields). The e-mail is shown read-only here;
+   * it is changed in the security section's e-mail row (re-authentication and a confirmation link to the new address).
+   */
   import { createEventDispatcher } from 'svelte';
   import { api, ApiError, type Account } from '#lib/api';
   import { AVATARS, avatarBg, initial } from '#lib/avatars';
@@ -63,9 +66,7 @@
     <span class="lbl">{$t('account.account.profile.email')}</span>
     {#if account.email}<span class="val">{account.email}</span>{:else}<span class="val muted">{$t('account.account.profile.noEmail')}</span>{/if}
     <p class="muted hint">{$t('account.account.profile.emailHint')}</p>
-    {#if account.manageUrl}
-      <a class="ext" href={account.manageUrl} target="_blank" rel="noopener noreferrer">{$t('account.account.profile.emailManage')}<span class="sr-only"> {$t('account.account.security.newTab')}</span><Icon name="link" size={16} /></a>
-    {/if}
+    <a class="ext" href="#sec-email">{$t('account.account.profile.emailManage')}</a>
   </div>
 </section>
 

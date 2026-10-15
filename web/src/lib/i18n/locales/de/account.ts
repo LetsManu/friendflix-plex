@@ -285,8 +285,6 @@ export default {
   /** /pending: a login without an invite waits for an admin */
   pending: {
     pageTitle: 'Zugangsanfrage',
-    title: 'Anfrage gesendet',
-    sent: 'Deine Zugangsanfrage wurde gesendet. Ein Admin wird sie bald freigeben.',
     autoUpdate: 'Diese Seite aktualisiert sich von selbst.',
     approvedTitle: 'Du bist freigeschaltet',
     approvedText: 'Ein Admin hat deinen Zugang freigegeben. Melde dich jetzt an.',
@@ -357,8 +355,8 @@ export default {
       avatar: 'Farbe',
       email: 'E-Mail',
       noEmail: 'Keine E-Mail-Adresse hinterlegt',
-      emailHint: 'Die E-Mail-Adresse lässt sich hier noch nicht ändern.',
-      emailManage: 'E-Mail auf der Anmeldeseite verwalten',
+      emailHint: 'Die E-Mail-Adresse änderst du unter „Sicherheit“.',
+      emailManage: 'Zur E-Mail-Adresse',
       save: 'Speichern',
       saved: 'Profil gespeichert.',
       nameInvalid: 'Der Name muss 1 bis 60 Zeichen lang sein und darf keine Steuerzeichen enthalten.',
@@ -375,7 +373,6 @@ export default {
       notAvailableHint: 'Der Stand lässt sich gerade nicht abfragen.',
       manage: 'Auf der Anmeldeseite verwalten',
       newTab: '(öffnet in einem neuen Tab)',
-      coming: 'Passwort und Zwei-Faktor-Anmeldung direkt in FriendFlix ändern – das kommt noch.',
     },
     sessions: {
       title: 'Sitzungen & Geräte',

@@ -3,6 +3,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
+import { checkLoginFlows } from '../flowCheck.js';
 import { getSnapshot, worstOf, type HealthIssue } from '../health.js';
 import { requireAdmin } from '../session.js';
 
@@ -35,6 +36,9 @@ export function healthRoutes(app: FastifyInstance, ctx: Ctx) {
       .sort((a, b) => (a.level === b.level ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.level === 'err' ? -1 : 1));
     return { issues, worst: worstOf(issues.map((i) => i.level)) };
   });
+
+  // Block 23 phase 3: the sign-in card on Admin → Status (cached 10 min; a failing check is a warning, never a mode switch)
+  app.get('/api/admin/health/login', admin, async () => checkLoginFlows(ctx));
 
   app.post('/api/admin/health/dismiss', admin, async (req) => {
     const b = dismissBody.parse(req.body);

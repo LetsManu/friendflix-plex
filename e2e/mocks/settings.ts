@@ -9,7 +9,7 @@ type Kind = 'string' | 'url' | 'secret' | 'int' | 'number' | 'bool' | 'enum' | '
 type Source = 'env' | 'db' | 'bootstrap' | 'default' | 'unset';
 export interface SettingViewMock {
   key: string; kind: Kind; source: Source; value: unknown | null; set: boolean; last4?: string; apply: 'live' | 'restart';
-  restartPending: boolean; invalid: boolean; envNames: string[]; updatedAt: string | null; options?: readonly string[]; min?: number; max?: number;
+  restartPending: boolean; invalid: boolean; envNames: string[]; updatedAt: string | null; options?: readonly string[]; optional?: boolean; min?: number; max?: number;
   generate?: 'webhookSecret' | 'vapidPair';
 }
 export interface ProbeResultMock { ok: boolean; code: string; detail?: string }
@@ -35,13 +35,14 @@ const UPDATED = '2026-10-01T09:30:00Z';
 export const LEAK = 'mock-leak-canary-9f3e';
 const env = (key: string, legacy: string[] = []) => [key, ...legacy].flatMap((n) => [n, `${n}_FILE`]);
 
-interface Spec { /** a value the backend would never send (secrets): the UI must ignore it */ leak?: string; kind: Kind; source?: Source; value?: unknown; set?: boolean; last4?: string; apply?: 'restart'; invalid?: boolean; legacy?: string[]; options?: string[]; min?: number; max?: number; generate?: 'webhookSecret' | 'vapidPair' }
-/** every visible setting of the registry, by group (spec Part A: 48) */
+interface Spec { /** a value the backend would never send (secrets): the UI must ignore it */ leak?: string; kind: Kind; source?: Source; value?: unknown; set?: boolean; last4?: string; apply?: 'restart'; invalid?: boolean; legacy?: string[]; options?: string[]; optional?: boolean; min?: number; max?: number; generate?: 'webhookSecret' | 'vapidPair' }
+/** every visible setting of the registry, by group (spec Part A: 48, plus the five of phase 3) */
 const GROUPS: Array<[string, Array<[string, Spec]>]> = [
   ['general', [
     ['PUBLIC_URL', { kind: 'url', source: 'env', value: 'https://friend.example.com' }],
     ['WEBHOOK_SECRET', { kind: 'secret', source: 'db', set: true, generate: 'webhookSecret' }],
     ['API_COMPRESSION', { kind: 'bool', source: 'default', value: true }],
+    ['LOGIN_COVER_WALL', { kind: 'bool', source: 'default', value: true }],
   ]],
   ['signin', [
     ['OIDC_ISSUER', { kind: 'url', source: 'db', value: 'https://auth.example.com/application/o/friendflix/' }],
@@ -53,6 +54,14 @@ const GROUPS: Array<[string, Array<[string, Spec]>]> = [
     ['AUTHENTIK_ENROLL_FLOW', { kind: 'string', source: 'unset' }],
     ['AUTHENTIK_RECOVERY_FLOW', { kind: 'string', source: 'default', value: 'default-recovery-flow' }],
     ['AUTHENTIK_TOTP_SETUP_FLOW', { kind: 'string', source: 'default', value: 'default-authenticator-totp-setup' }],
+    ['LOGIN_UI', { kind: 'enum', source: 'unset', options: ['app', 'authentik'], optional: true }],
+    ['AUTHENTIK_LOGIN_FLOW', { kind: 'string', source: 'default', value: 'default-authentication-flow' }],
+    ['AUTHENTIK_INVALIDATION_FLOW', { kind: 'string', source: 'default', value: 'default-invalidation-flow' }],
+    ['AUTHENTIK_STATIC_SETUP_FLOW', { kind: 'string', source: 'default', value: 'default-authenticator-static-setup' }],
+    ['AUTHENTIK_WEBAUTHN_SETUP_FLOW', { kind: 'string', source: 'default', value: 'default-authenticator-webauthn-setup' }],
+    ['AUTHENTIK_PASSWORD_CHANGE_FLOW', { kind: 'string', source: 'default', value: 'default-password-change' }],
+    ['AUTHENTIK_EMAIL_CHANGE_FLOW', { kind: 'string', source: 'default', value: 'friendflix-email-change' }],
+    ['PASSKEYS_IN_APP', { kind: 'enum', source: 'default', value: 'auto', options: ['auto', 'off'] }],
   ]],
   ['media', [
     ['JELLYFIN_URL', { kind: 'url', source: 'db', value: 'http://jellyfin:8096' }],
@@ -127,7 +136,7 @@ const PLEX_MEDIA: Array<[string, Spec]> = [
 ];
 
 /** non-secret keys whose save needs a recent sign-in (backend adminSettings.ts REAUTH_KEYS, OIDC_* / AUTHENTIK_*, credential destinations) */
-const REAUTH = /^(OIDC_|AUTHENTIK_)|^(ADMIN_GROUP|NTFY_URL|NTFY_BASE_URL|PUBLIC_URL|HOME_NETWORKS|JELLYFIN_URL|PLEX_URL|REQUESTS_URL|PORTAINER_URL)$/;
+const REAUTH = /^(OIDC_|AUTHENTIK_)|^(LOGIN_UI|ADMIN_GROUP|NTFY_URL|NTFY_BASE_URL|PUBLIC_URL|HOME_NETWORKS|JELLYFIN_URL|PLEX_URL|REQUESTS_URL|PORTAINER_URL)$/; // fork: + PLEX_URL
 
 export function settingsState(kind: 'jellyfin' | 'plex' = 'jellyfin'): SettingsMock {
   const groups = GROUPS.map(([id, rows]) => ({
@@ -137,7 +146,7 @@ export function settingsState(kind: 'jellyfin' | 'plex' = 'jellyfin'): SettingsM
       return {
         key, kind: s.kind, source: s.source ?? 'default', value: s.kind === 'secret' ? (s.leak ?? null) : (s.value ?? null), set, apply: s.apply ?? 'live',
         restartPending: false, invalid: s.invalid ?? false, envNames: env(key, s.legacy), updatedAt: s.source === 'db' ? UPDATED : null,
-        ...(s.last4 ? { last4: s.last4 } : {}), ...(s.options ? { options: s.options } : {}), ...(s.min !== undefined ? { min: s.min } : {}),
+        ...(s.last4 ? { last4: s.last4 } : {}), ...(s.options ? { options: s.options } : {}), ...(s.optional ? { optional: true } : {}), ...(s.min !== undefined ? { min: s.min } : {}),
         ...(s.max !== undefined ? { max: s.max } : {}), ...(s.generate ? { generate: s.generate } : {}),
       };
     }),

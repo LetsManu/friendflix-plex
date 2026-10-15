@@ -30,6 +30,8 @@ export interface SettingView {
   envNames: string[];
   updatedAt: string | null;
   options?: readonly string[];
+  /** an enum without a default: "unset" (automatic) is a choice of its own */
+  optional?: boolean;
   min?: number;
   max?: number;
   generate?: Generate;

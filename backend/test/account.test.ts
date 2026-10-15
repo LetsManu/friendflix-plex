@@ -46,7 +46,7 @@ describe('GET /api/account', () => {
     expect(r.statusCode).toBe(200);
     const row = (await env.pool.query('select id, authentik_sub, jellyfin_pw_enc, jellyfin_user_id from users where authentik_sub=$1', ['sub-admin'])).rows[0];
     for (const secret of [row.authentik_sub, row.jellyfin_pw_enc, row.jellyfin_user_id, TOKEN, '"pk"']) expect(r.body).not.toContain(secret);
-    expect(Object.keys(r.json()).sort()).toEqual(['avatar', 'email', 'manageUrl', 'mfa', 'name', 'reauthUntil']);
+    expect(Object.keys(r.json()).sort()).toEqual(['avatar', 'email', 'emailChangePending', 'manageUrl', 'mfa', 'name', 'reauthUntil']);
   });
 
   it('mfa state and manageUrl from fake Authentik', async () => {

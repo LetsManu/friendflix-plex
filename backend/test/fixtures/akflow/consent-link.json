@@ -1,0 +1,16 @@
+{
+  "flow_info": {
+    "title": "Reset your password",
+    "background": "/static/dist/assets/images/flow_background.jpg",
+    "background_themed_urls": null,
+    "cancel_url": "/flows/-/cancel/",
+    "layout": "stacked"
+  },
+  "component": "ak-stage-consent",
+  "pending_user": "anna",
+  "pending_user_avatar": "data:image/svg+xml;base64,PHN2Zy8+",
+  "header_text": "Continue to confirm this email address.",
+  "permissions": [],
+  "additional_permissions": [],
+  "token": "00000000-0000-4000-8000-000000000001"
+}

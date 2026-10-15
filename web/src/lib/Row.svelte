@@ -14,6 +14,7 @@
   import { mobile } from '#lib/viewport';
   import { pageCount, pageIndex, INITIAL_EXTRA } from '#lib/home';
   import { t } from '#lib/i18n';
+  import { recoTrack, type RecoTag } from '#lib/reco';
 
   export let title: string;
   /** null = loading (skeleton) */
@@ -27,6 +28,8 @@
   export let landscape = false;
   /** first visible row of the page: its images load eagerly with high priority (LCP) */
   export let priority = false;
+  /** recommendation row: reports one impression and its clicks as counts per row and engine (no titles) */
+  export let reco: RecoTag | undefined = undefined;
   let track: HTMLDivElement | undefined, section: HTMLElement | undefined;
   let canLeft = false, canRight = false, pages = 1, current = 0;
   // geometry cached by a ResizeObserver: the scroll handler only reads scrollLeft (in a rAF), never forces a layout
@@ -106,7 +109,7 @@
 </script>
 
 {#if items === null || items.length}
-  <section class="row" class:m={$mobile} class:land={landscape} class:near class:rk={ranked} bind:this={section} aria-label={title} aria-busy={items === null} on:pointerenter={() => !full && showAll()} on:focusin={() => !full && showAll()}>
+  <section class="row" class:m={$mobile} class:land={landscape} class:near class:rk={ranked} bind:this={section} aria-label={title} aria-busy={items === null} on:pointerenter={() => !full && showAll()} on:focusin={() => !full && showAll()} use:recoTrack={reco}>
     <div class="hd">
       <h2>{#if href}<a {href}>{title}<span class="more"> {$t('home.row.showAll')}</span><Icon name="chevron-right" size={18} /></a>{:else}{title}{/if}</h2>
       {#if pages > 1 && !$mobile}<ol class="dots" aria-hidden="true">{#each Array(pages) as _, i}<li class:on={i === current}></li>{/each}</ol>{/if}

@@ -855,6 +855,27 @@ export class JellyfinService implements MediaServer {
         if (!res.ok) throw new JellyfinError(res.status, `Jellyfin get user -> ${res.status}`);
         return true;
       },
+      // Block 23 phase 3: the cover wall. No userId and no ParentId: with the admin key every library is searched. The allow-list goes in
+      // the query ('|'-joined, encoded once; a comma list matches nothing) and is checked again on the returned OfficialRating.
+      loginArtIds: async (q) => {
+        const allowed = new Set(q.ratings);
+        const query = `Recursive=true&IncludeItemTypes=Movie,Series&ImageTypes=Primary&SortBy=Random&Fields=OfficialRating&EnableUserData=false&EnableImages=false&OfficialRatings=${encodeURIComponent(q.ratings.join('|'))}&Limit=${q.limit}`;
+        const r = await client.adminJson<{ Items?: Array<{ Id?: string; OfficialRating?: string }> }>(`/Items?${query}`);
+        return (r?.Items ?? [])
+          .filter((i) => typeof i?.Id === 'string' && /^[0-9a-f]{32}$/.test(i.Id) && typeof i.OfficialRating === 'string' && allowed.has(i.OfficialRating))
+          .map((i) => i.Id!);
+      },
+      posterThumb: async (id, maxWidth) => {
+        if (!/^[0-9a-f]{32}$/.test(id)) return null;
+        const res = await client.adminFetch(`/Items/${id}/Images/Primary?maxWidth=${Math.trunc(maxWidth)}&quality=70&format=Jpg`);
+        if (!res.ok) { await res.body?.cancel().catch(() => undefined); return null; }
+        const type = (res.headers.get('content-type') ?? '').split(';')[0]!.trim();
+        if (type !== 'image/jpeg' && type !== 'image/webp') { await res.body?.cancel().catch(() => undefined); return null; }
+        const MAX = 2 * 1024 * 1024; // one oversized image must not bloat the cache
+        if (Number(res.headers.get('content-length') ?? 0) > MAX) { await res.body?.cancel().catch(() => undefined); return null; }
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        return bytes.length > MAX ? null : { bytes, type };
+      },
       libraries: async () => (await client.mediaFolders()).map((f) => ({ id: f.Id, name: f.Name })),
       ping: () => client.ping(),
       /** sessions of other apps: FriendFlix' own devices ("ff-<id>") are tracked by the portal itself */

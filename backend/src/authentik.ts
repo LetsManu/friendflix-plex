@@ -10,6 +10,7 @@
  */
 import type { Config } from './config.js';
 import type { Ctx } from './ctx.js';
+import { secretTag } from './crypto.js';
 import { akBase } from './invites.js';
 import { HttpError } from './users.js';
 
@@ -60,7 +61,7 @@ async function json<T>(ctx: AkCtx, path: string, init?: RequestInit, expect?: Pa
 }
 
 /** Drops the cached lookup of a user Authentik no longer knows (deleted / re-created): looked up again next time. */
-async function forget(ctx: AkCtx, sub: string) {
+export async function akForget(ctx: AkCtx, sub: string) {
   await ctx.kv.del(`akuser:${sub}`);
   await ctx.kv.del(`akmfa:${sub}`);
 }
@@ -124,14 +125,216 @@ export async function akMfaState(ctx: AkCtx, sub: string): Promise<MfaState | nu
   return state;
 }
 
+/** An Authentik user with the OIDC subjects it can appear under (`uid` = hashed id, `uuid`), read fresh from the API. */
+export type AkUserSubs = AkUser & { subs: string[] };
+
+const subsOf = (u: RawUser) => [u.uid, u.uuid].filter((x): x is string => typeof x === 'string' && x.length > 0);
+
+/**
+ * The Authentik user with exactly this username (`GET /core/users/?username=`), uncached: the e-mail confirmation reads the address
+ * Authentik holds right now. Null when the API is not configured or no such user exists.
+ */
+export async function akUserByUsername(ctx: AkCtx, username: string): Promise<AkUserSubs | null> {
+  if (!configured(ctx)) return null;
+  const r = await json<Page<RawUser>>(ctx, `api/v3/core/users/?${new URLSearchParams({ include_groups: 'false', username })}`);
+  const found = r.results.find((u) => u.username === username);
+  return found ? { ...toUser(found), subs: subsOf(found) } : null;
+}
+
+/** The Authentik users whose e-mail equals `email` (case-insensitive; the API's filter is narrowed again here). */
+export async function akUsersByEmail(ctx: AkCtx, email: string): Promise<AkUser[]> {
+  if (!configured(ctx)) throw new HttpError(503, 'authentik_unavailable');
+  const r = await json<Page<RawUser>>(ctx, `api/v3/core/users/?${new URLSearchParams({ include_groups: 'false', email })}`);
+  return r.results.filter((u) => (u.email ?? '').toLowerCase() === email.toLowerCase()).map(toUser);
+}
+
+export type DeviceType = 'totp' | 'static' | 'webauthn';
+export interface AkDevice { id: string; type: DeviceType; name: string; lastUsed: string | null; confirmed: boolean }
+interface RawDevice { pk?: string | number; name?: string; type?: unknown; confirmed?: boolean; last_used?: string | null }
+
+/** 'totp' | 'static' | 'webauthn' from the device `type` ("authentik_stages_authenticator_totp.totpdevice", or an object naming app and model) */
+function deviceKind(type: unknown): DeviceType | null {
+  let t = '';
+  if (typeof type === 'string') t = type;
+  else if (type && typeof type === 'object') {
+    const o = type as { app?: unknown; model_name?: unknown; meta_model_name?: unknown };
+    t = typeof o.meta_model_name === 'string' ? o.meta_model_name : `${String(o.app ?? '')}.${String(o.model_name ?? '')}`;
+  }
+  t = t.toLowerCase();
+  for (const k of ['totp', 'static', 'webauthn'] as const) if (t.includes(`authenticator_${k}.`)) return k;
+  return null;
+}
+
+/** The user's TOTP, recovery-code and WebAuthn devices (`GET /authenticators/admin/all/?user=<pk>`, uncached); other device kinds are left out. */
+export async function akDevices(ctx: AkCtx, sub: string): Promise<AkDevice[] | null> {
+  if (!configured(ctx)) return null;
+  const user = await akUserBySub(ctx, sub);
+  if (!user) return null;
+  const r = await json<RawDevice[] | Page<RawDevice>>(ctx, `api/v3/authenticators/admin/all/?user=${user.pk}`);
+  const out: AkDevice[] = [];
+  for (const d of Array.isArray(r) ? r : r.results) {
+    const type = deviceKind(d.type);
+    if (!type || d.pk === undefined || d.pk === null) continue;
+    out.push({ id: String(d.pk), type, name: typeof d.name === 'string' ? d.name.slice(0, 100) : '', lastUsed: typeof d.last_used === 'string' ? d.last_used : null, confirmed: d.confirmed !== false });
+  }
+  return out;
+}
+
+/**
+ * Removes one of the user's own devices. The device must be in the user's own list (`admin/all/?user=<pk>`, pks compared as strings),
+ * else 404 `device_not_found`; then `DELETE authenticators/admin/<type>/<id>/` (204). The cached MFA state is dropped.
+ */
+export async function akDeleteDevice(ctx: AkCtx, sub: string, type: DeviceType, id: number): Promise<void> {
+  const devices = await akDevices(ctx, sub);
+  if (!devices) throw new HttpError(503, 'authentik_unavailable');
+  if (!devices.some((d) => d.type === type && d.id === String(id))) throw new HttpError(404, 'device_not_found');
+  try {
+    await call(ctx, `api/v3/authenticators/admin/${type}/${id}/`, { method: 'DELETE' }, { 404: new HttpError(404, 'device_not_found') });
+  } finally {
+    await ctx.kv.del(`akmfa:${sub}`);
+  }
+}
+
+/**
+ * a flow lookup is kept this long; a failed one (Authentik unreachable, token rejected), a missing flow (the admin may import it any
+ * minute) and a refused stage read (a permission the admin may grant) only briefly
+ */
+const FLOW_TTL = 600;
+const FLOW_FAILED_TTL = 60;
+const VALIDATE_MODEL = 'authentik_stages_authenticator_validate.authenticatorvalidatestage';
+
+/**
+ * one stage bound to a flow: the stage's pk, its model (`stage_obj.meta_model_name`, e.g. `authentik_stages_email.emailstage`) and, for
+ * an authenticator-validate stage, what it does with people without a device. The bindings' `stage_obj` (the base StageSerializer)
+ * never carries `not_configured_action`: it is read from the stage itself (`GET stages/authenticator/validate/<pk>/`).
+ */
+export interface FlowStage { pk: string; model: string; notConfiguredAction?: string }
+/**
+ * A flow as the checks need it. `stages` are in binding order and classified by `stage_obj.meta_model_name`: `stage_obj.component` is
+ * the admin form's name (`ak-stage-email-form` on 2026.8.3), not the challenge component. `failed`: Authentik did not answer (or
+ * rejected the token), so `exists` and `stages` are unknown.
+ */
+export interface FlowStages {
+  exists: boolean; failed: boolean; stages: FlowStage[];
+  /** a validate stage could not be read because the token lacks `view_authenticatorvalidatestage` (403): its settings are unknown */
+  stageDenied?: boolean;
+}
+const NO_FLOW: FlowStages = { exists: false, failed: false, stages: [] };
+
+/**
+ * The one reader of a flow (`GET /flows/instances/<slug>/`, then `GET /flows/bindings/?target=<pk>`): whether it exists (the login page
+ * offers "forgot password" only then, preflight P27), which stages it holds (the sign-in status check, the admin reset e-mail).
+ * Cached under a hash of its inputs (AUTHENTIK_URL, the token, the slug): 10 min, an unreachable Authentik 1 min. Never throws: any
+ * failure answers `failed: true`. Not configured -> not found.
+ */
+export async function akFlowStages(ctx: AkCtx, slug: string): Promise<FlowStages> {
+  if (!configured(ctx)) return NO_FLOW;
+  const key = akFlowCacheKey(ctx.cfg, slug);
+  const hit = await ctx.kv.get(key);
+  if (hit) {
+    try {
+      const v = JSON.parse(hit) as FlowStages;
+      if (typeof v.exists === 'boolean' && Array.isArray(v.stages)) return v;
+    } catch { /* a damaged entry: read again */ }
+  }
+  let out: FlowStages;
+  let ttl = FLOW_TTL;
+  try {
+    const flow = await json<{ pk?: string }>(ctx, `api/v3/flows/instances/${encodeURIComponent(slug)}/`, undefined, { 404: new HttpError(404, 'not_found') });
+    out = { exists: true, failed: false, stages: [] };
+    if (typeof flow.pk === 'string' && flow.pk) {
+      try {
+        const r = await json<Page<{ order: number; stage: string; stage_obj?: { meta_model_name?: string } }>>(
+          ctx, `api/v3/flows/bindings/?${new URLSearchParams({ target: flow.pk, ordering: 'order', page_size: '100' })}`);
+        out.stages = [...r.results].sort((a, b) => a.order - b.order).map((b) => ({ pk: String(b.stage), model: b.stage_obj?.meta_model_name ?? '' }));
+        for (const st of out.stages) {
+          if (st.model !== VALIDATE_MODEL) continue;
+          try {
+            const v = await json<{ not_configured_action?: unknown }>(ctx, `api/v3/stages/authenticator/validate/${encodeURIComponent(st.pk)}/`, undefined,
+              { 403: new HttpError(403, 'forbidden') });
+            if (typeof v.not_configured_action === 'string') st.notConfiguredAction = v.not_configured_action;
+          } catch (e) {
+            if (!(e instanceof HttpError && e.statusCode === 403)) throw e;
+            out.stageDenied = true; // the stage list is right; only this stage's settings are unknown
+            ttl = FLOW_FAILED_TTL;
+          }
+        }
+      } catch {
+        out.failed = true; // the flow exists, its stages are unknown
+        ttl = FLOW_FAILED_TTL;
+      }
+    }
+  } catch (e) {
+    out = e instanceof HttpError && e.statusCode === 404 ? NO_FLOW : { exists: false, failed: true, stages: [] };
+    ttl = FLOW_FAILED_TTL; // missing or failed: looked at again within a minute
+  }
+  await ctx.kv.set(key, JSON.stringify(out), ttl);
+  return out;
+}
+
+/** the kv key of a cached flow read (own prefix: the flow jars use `akflow:`) */
+export const akFlowCacheKey = (cfg: Pick<Config, 'AUTHENTIK_URL' | 'AUTHENTIK_API_TOKEN'>, slug: string): string =>
+  `akflowstages:${secretTag(cfg.AUTHENTIK_API_TOKEN)}:${encodeURIComponent(cfg.AUTHENTIK_URL ?? '')}:${encodeURIComponent(slug)}`;
+
+/** Whether Authentik has a flow with this slug (an unreachable Authentik answers false); see akFlowStages. */
+export async function akFlowExists(ctx: AkCtx, slug: string): Promise<boolean> {
+  return (await akFlowStages(ctx, slug)).exists;
+}
+
+/**
+ * The OAuth2 provider of an OIDC client id (`GET /providers/oauth2/?client_id=`) with its authorization flow's stages and grant types,
+ * for the sign-in status check. null: not found, not configured or Authentik did not answer. `'forbidden'`: the token lacks
+ * `view_oauth2provider` (Authentik answers 403), so the card can say so instead of showing nothing. Not cached (the check caches itself).
+ */
+export async function akOauthProvider(ctx: AkCtx, clientId: string): Promise<{ authorizationFlow: string | null; grantTypes: string[] | null } | 'forbidden' | null> {
+  if (!configured(ctx)) return null;
+  try {
+    const r = await json<Page<{ authorization_flow?: string; authorization_flow_obj?: { slug?: string }; grant_types?: unknown }>>(
+      ctx, `api/v3/providers/oauth2/?${new URLSearchParams({ client_id: clientId })}`, undefined, { 403: new HttpError(403, 'forbidden') });
+    const p = r.results[0];
+    if (!p) return null;
+    const slug = p.authorization_flow_obj?.slug;
+    return {
+      authorizationFlow: typeof slug === 'string' ? slug : null,
+      grantTypes: Array.isArray(p.grant_types) ? p.grant_types.map((g) => (typeof g === 'string' ? g : (g as { name?: string } | null)?.name ?? '')) : null,
+    };
+  } catch (e) {
+    return e instanceof HttpError && e.statusCode === 403 ? 'forbidden' : null;
+  }
+}
+
+/**
+ * Whether the login flow forces a second factor: its authenticator-validate stage denies people without a device
+ * (`not_configured_action === 'deny'`). Null when that cannot be told (no API, flow missing, Authentik down): callers then allow.
+ */
+export async function akMfaMandatory(ctx: AkCtx): Promise<boolean | null> {
+  if (!configured(ctx)) return null;
+  const flow = await akFlowStages(ctx, ctx.cfg.AUTHENTIK_LOGIN_FLOW || 'default-authentication-flow'); // the one reader and its cache (P27)
+  if (flow.failed || !flow.exists || flow.stageDenied) return null;
+  return flow.stages.some((s) => s.model.includes('authenticator_validate') && s.notConfiguredAction === 'deny');
+}
+
+/**
+ * The browser-facing address of an Authentik flow (`<issuer origin>/if/flow/<slug>/`; AUTHENTIK_URL may be an internal address).
+ * Null when the issuer is no Authentik provider URL.
+ */
+export function akFlowUrl(cfg: Pick<Config, 'OIDC_ISSUER'>, slug: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(cfg.OIDC_ISSUER);
+  } catch {
+    return null;
+  }
+  return u.pathname.includes('/application/o/') ? `${u.origin}/if/flow/${encodeURIComponent(slug)}/` : null;
+}
+
 const notConfigured = () => new HttpError(409, 'recovery_not_configured');
 
-/** The first `ak-stage-email` stage bound to the flow (by binding order). 409 `recovery_not_configured` without flow or stage. */
+/** The first e-mail stage bound to the flow (by binding order). 409 `recovery_not_configured` without flow or stage. */
 async function emailStageOf(ctx: AkCtx, slug: string): Promise<string> {
-  const flow = await json<{ pk: string }>(ctx, `api/v3/flows/instances/${encodeURIComponent(slug)}/`, undefined, { 404: notConfigured() });
-  const r = await json<Page<{ order: number; stage: string; stage_obj?: { component?: string } }>>(
-    ctx, `api/v3/flows/bindings/?${new URLSearchParams({ target: flow.pk, ordering: 'order', page_size: '100' })}`);
-  const stage = [...r.results].sort((a, b) => a.order - b.order).find((b) => b.stage_obj?.component === 'ak-stage-email')?.stage;
+  const flow = await akFlowStages(ctx, slug);
+  if (flow.failed) throw new HttpError(503, 'authentik_unavailable');
+  const stage = flow.stages.find((b) => b.model === 'authentik_stages_email.emailstage')?.pk;
   if (!stage) throw notConfigured();
   return stage;
 }
@@ -155,7 +358,7 @@ export async function akSendRecovery(ctx: AkCtx, sub: string): Promise<void> {
       { method: 'POST', body: JSON.stringify({ email_stage: stage }) },
       { 400: notConfigured(), 404: new HttpError(404, 'authentik_user_not_found'), 405: new HttpError(501, 'not_supported') });
   } catch (e) {
-    if (e instanceof HttpError && e.statusCode === 404) await forget(ctx, sub); // a stale pk (user deleted / re-created in Authentik)
+    if (e instanceof HttpError && e.statusCode === 404) await akForget(ctx, sub); // a stale pk (user deleted / re-created in Authentik)
     throw e;
   }
 }
@@ -168,7 +371,7 @@ async function patchUser(ctx: AkCtx, sub: string, body: Record<string, unknown>,
     await call(ctx, `api/v3/core/users/${user.pk}/`, { method: 'PATCH', body: JSON.stringify(body) },
       { ...expect, 404: new HttpError(404, 'authentik_user_not_found') });
   } catch (e) {
-    if (e instanceof HttpError && e.statusCode === 404) await forget(ctx, sub);
+    if (e instanceof HttpError && e.statusCode === 404) await akForget(ctx, sub);
     throw e;
   }
 }

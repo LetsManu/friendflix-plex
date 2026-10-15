@@ -8,7 +8,7 @@ Diese Anleitung führt vom leeren Server bis zu einem laufenden FriendFlix mit d
 
 Eine neue Installation braucht **keine `.env`-Datei**: Du startest den Stack, liest einen einmaligen Einrichtungscode aus dem Backend-Log und erledigst den Rest im Browser. Der Einrichtungsassistent setzt die öffentliche Adresse, verbindet Jellyfin und Authentik (automatisch oder von Hand) und macht deine erste Anmeldung zum Admin. Alles über die `.env` zu konfigurieren geht weiterhin ([Abschnitt 15](#15-fortgeschritten-konfiguration-über-die-umgebung)).
 
-Platzhalter in der ganzen Anleitung: `portal.example.com` (FriendFlix), `auth.example.com` (Authentik), `/opt/friendflix` (dein Klon). Durch eigene Werte ersetzen. Echte Secrets nie in Issues, Chats oder Commits einfügen.
+Platzhalter in der ganzen Anleitung: `friend.example.com` (FriendFlix), `auth.example.com` (Authentik), `/opt/friendflix` (dein Klon). Durch eigene Werte ersetzen. Echte Secrets nie in Issues, Chats oder Commits einfügen.
 
 ## Inhalt
 
@@ -20,8 +20,8 @@ Platzhalter in der ganzen Anleitung: `portal.example.com` (FriendFlix), `auth.ex
 6. [Nginx Proxy Manager: Proxy Host für das Portal](#6-nginx-proxy-manager-proxy-host-für-das-portal)
 7. [Stack starten](#7-stack-starten)
 8. [Der Einrichtungsassistent](#8-der-einrichtungsassistent)
-9. [Erste Schritte als Admin](#9-erste-schritte-als-admin)
-10. [Freunde einladen](#10-freunde-einladen)
+9. [Erste Schritte als Admin](#9-erste-schritte-als-admin) (mit [Authentik absichern](#authentik-absichern))
+10. [Freunde einladen](#10-freunde-einladen) (mit [Was ein Freund sieht](#was-ein-freund-sieht))
 11. [Optionale Funktionen](#11-optionale-funktionen)
 12. [Checkliste](#12-checkliste)
 13. [Fehlersuche](#13-fehlersuche)
@@ -33,7 +33,7 @@ Platzhalter in der ganzen Anleitung: `portal.example.com` (FriendFlix), `auth.ex
 ```mermaid
 flowchart LR
   user["Browser · Handy · TV"] -->|HTTPS| npm["Nginx Proxy Manager"]
-  npm -->|"portal.example.com"| ff["FriendFlix<br/>web :3080 · backend :3081 · gateway :3082"]
+  npm -->|"friend.example.com"| ff["FriendFlix<br/>web :3080 · backend :3081 · gateway :3082"]
   npm -->|"auth.example.com"| ak["Authentik :9000"]
   ff -.->|"OIDC + Einladungs-API (über die öffentliche URL)"| npm
   ff -->|"internes Netz media"| jf["Jellyfin"]
@@ -42,17 +42,7 @@ flowchart LR
 
 Das Gesamtbild aus Containern, Netzen und Ports steht in [architecture.md](../architecture.md#containers-and-networks) (englisch).
 
-Die Kurzfassung:
-
-```bash
-git clone https://github.com/LetsManu/friendflix.git /opt/friendflix && cd /opt/friendflix
-docker compose -f compose.prod.yaml up -d
-docker compose -f compose.prod.yaml logs backend | grep "setup code"
-```
-
-Noch keine Ausgabe? `up -d` kehrt zurück, bevor das Backend gestartet ist: ein paar Sekunden warten und den letzten Befehl wiederholen; die Zeile erscheint, sobald das Backend läuft.
-
-Dann `https://portal.example.com` öffnen und dem Assistenten folgen. Vorher müssen die Dienste existieren, die der Assistent verbindet:
+Der Weg: Authentik und Jellyfin **installieren** (Schritte 3–4), den Stack **starten** ([Schritt 7](#7-stack-starten)), den **Einrichtungscode** aus dem Backend-Log lesen ([Schritt 7](#7-stack-starten), [Der Einrichtungscode](#der-einrichtungscode)) und den **Assistenten** im Browser durcharbeiten ([Schritt 8](#8-der-einrichtungsassistent)). Die Dienste, die der Assistent verbindet, müssen vorher existieren:
 
 | Schritt | Was du tust | Was der Assistent davon braucht |
 |---|---|---|
@@ -62,7 +52,7 @@ Dann `https://portal.example.com` öffnen und dem Assistenten folgen. Vorher mü
 | 5. Wunsch-Dienst (optional) | seinen Einrichtungsassistenten abschließen | seine Adresse und seinen API-Schlüssel (Extras des Assistenten oder später) |
 | 6.–7. NPM-Proxy-Host, Stack | das laufende Portal, ohne `.env` | – |
 | 8. Einrichtungsassistent | Einrichtungscode, öffentliche Adresse, Jellyfin, Authentik, erster Admin | – |
-| 9.–10. erste Schritte, Einladungen | Admin-Konto, Freunde | – |
+| 9.–10. erste Schritte, Einladungen | Authentik absichern, Freunde einladen | – |
 
 ## 2. Voraussetzungen
 
@@ -75,7 +65,7 @@ Dann `https://portal.example.com` öffnen und dem Assistenten folgen. Vorher mü
 
 **Domains und DNS.** Zwei Hostnamen, die auf deine öffentliche IP zeigen (A/AAAA-Einträge oder ein DynDNS-Name mit CNAMEs):
 
-- `portal.example.com` → FriendFlix
+- `friend.example.com` → FriendFlix
 - `auth.example.com` → Authentik
 
 Ports 80 und 443 vom Router an NPM weitergeleitet. Das FriendFlix-Backend ruft `https://auth.example.com/…` selbst auf; erreicht dein Router seine eigene öffentliche IP nicht von innen (kein NAT-Loopback), lokale DNS-Einträge anlegen (Router, Pi-hole, AdGuard), damit beide Namen auch im Heimnetz auf den NPM-Host zeigen.
@@ -99,7 +89,7 @@ Authentik installieren und sein Admin-Konto anlegen: **[docs/de/authentik.md §2
 
 Mehr braucht es vor dem Assistenten nicht. Im Schritt *Anmeldung* des Assistenten richtet FriendFlix den Rest mit einem einmaligen Superuser-API-Token **automatisch** ein: die Gruppen, den OAuth2/OpenID-Provider und die Anwendung, den Service-Account für Einladungen, den Registrierungs- und den Wiederherstellungs-Flow. Was dabei entsteht, wie du den Token bekommst und wie du ihn danach widerrufst: [authentik.md §3](authentik.md#3-automatische-einrichtung-aus-friendflix).
 
-Zwei Dinge bleiben in Authentik Handarbeit: **MFA zur Pflicht machen** im Authentifizierungs-Flow ([authentik.md §6](authentik.md#6-authentifizierungs-flow-mit-pflicht-mfa)) und SMTP für Einladungs- und Passwort-Mails einrichten ([authentik.md §2.5](authentik.md#25-e-mail-smtp)).
+MFA und SMTP bleiben Handarbeit: siehe [Authentik absichern](#authentik-absichern) nach dem Assistenten.
 
 Lieber alles selbst zusammenklicken? [authentik.md §4–§8](authentik.md#4-gruppen) folgen und die Werte im Assistenten unter *Von Hand* eintragen.
 
@@ -162,7 +152,7 @@ Der Wunsch-Dienst ist **optional**. Ohne `REQUESTS_URL` und `REQUESTS_API_KEY` b
 
 | Reiter | Feld | Wert |
 |---|---|---|
-| Details | Domain Names | `portal.example.com` |
+| Details | Domain Names | `friend.example.com` |
 | | Scheme | `http` |
 | | Forward Hostname / IP | `127.0.0.1` (bzw. dein `BIND_ADDR`) |
 | | Forward Port | `3080` (`WEB_PORT`, die SvelteKit-Oberfläche) |
@@ -203,10 +193,10 @@ FriendFlix setup: open the portal in your browser and enter the setup code K7QM-
 
 ## 8. Der Einrichtungsassistent
 
-`https://portal.example.com` öffnen. Solange die Einrichtung nicht abgeschlossen ist, führt jede Seite zu `/setup`. Jeder Schritt lässt sich später unter *Admin → Einstellungen* ändern; ein Schritt, dessen Werte aus der Umgebung kommen, zeigt sie gesperrt (*Aus der Umgebung*) und lässt sich überspringen.
+`https://friend.example.com` öffnen. Solange die Einrichtung nicht abgeschlossen ist, führt jede Seite zu `/setup`. Jeder Schritt lässt sich später unter *Admin → Einstellungen* ändern; ein Schritt, dessen Werte aus der Umgebung kommen, zeigt sie gesperrt (*Aus der Umgebung*) und lässt sich überspringen.
 
 1. **Einrichtungscode.** Den Code aus dem Log einfügen. Groß- und Kleinschreibung, Leerzeichen und Bindestriche sind egal (`O` zählt als `0`, `I` und `L` als `1`).
-2. **Öffentliche Adresse.** Die Adresse, die alle benutzen, ohne Pfad: `https://portal.example.com`. Der Assistent schlägt die vor, die dein Browser benutzt hat. FriendFlix ruft dann eine Testseite unter dieser Adresse ab; klappt das nicht, gibt es nur eine Warnung (häufig ohne NAT-Loopback), keine Sperre. `http://` geht für Tests, schaltet aber sichere Cookies, Chromecast und Passkeys ab.
+2. **Öffentliche Adresse.** Die Adresse, die alle benutzen, ohne Pfad: `https://friend.example.com`. Der Assistent schlägt die vor, die dein Browser benutzt hat. FriendFlix ruft dann eine Testseite unter dieser Adresse ab; klappt das nicht, gibt es nur eine Warnung (häufig ohne NAT-Loopback), keine Sperre. `http://` geht für Tests, schaltet aber sichere Cookies, Chromecast und Passkeys ab.
 3. **Medienserver.** *Automatisch*: die Jellyfin-Adresse, wie das Backend sie erreicht (`http://jellyfin:8096` bzw. dein Containername, nie die öffentliche URL), dazu Benutzername und Passwort eines Jellyfin-**Administrators** → *API-Schlüssel automatisch anlegen*. *Von Hand*: Adresse und ein API-Schlüssel aus Jellyfin. Beides wird vor dem Speichern geprüft.
 4. **Anmeldung.** *Automatisch*: die Authentik-Adresse, wie der Browser sie erreicht (`https://auth.example.com`; das Backend muss dieselbe Adresse erreichen), und ein Superuser-API-Token → *Plan anzeigen* listet, was angelegt oder angepasst wird, noch ändert sich nichts → *Anwenden* (etwa 30 Sekunden). *Mich zur Admin-Gruppe hinzufügen* angehakt lassen, damit der Besitzer des Tokens in `friendflix-admins` kommt. Das Ergebnis listet, was noch von Hand zu tun ist (SMTP, MFA, E-Mail-Vorlagen). Details: [authentik.md §3](authentik.md#3-automatische-einrichtung-aus-friendflix). *Von Hand*: Issuer, Client-ID, Client-Secret und Admin-Gruppe aus deinem eigenen Provider, mit einer Checkliste, wie der Provider eingestellt sein muss; optional die Authentik-API-Werte für Einladungen.
 5. **Erster Admin.** *Mit Authentik anmelden*. Mit dem Konto anmelden, das FriendFlix verwalten soll (es braucht eingerichtetes MFA, sobald MFA Pflicht ist). **Diese Anmeldung wird Admin und schließt die Einrichtung ab**, egal in welchen Gruppen das Konto ist; FriendFlix legt seinen Jellyfin-Nutzer und das Hauptprofil an wie bei jeder ersten Anmeldung. Genau ein Konto wird so Admin, auch mit mehreren Backends.
@@ -223,18 +213,34 @@ FriendFlix setup: open the portal in your browser and enter the setup code K7QM-
 
 ### Was der Assistent nie behält
 
-Der Superuser-Token von Authentik und das Passwort des Jellyfin-Administrators werden für diese eine Anfrage benutzt und dann vergessen: nie gespeichert, nie geloggt, nie in einer Fehlermeldung. Gespeichert wird, was sonst in einer `.env` stünde: der Jellyfin-API-Schlüssel `FriendFlix`, Client-ID und Secret des Providers und der Token des Service-Accounts `friendflix-invites` (mit nur den Rechten, die FriendFlix braucht). **Den Superuser-Token danach in Authentik widerrufen** ([authentik.md §3](authentik.md#3-automatische-einrichtung-aus-friendflix)).
+Der Superuser-Token von Authentik und das Passwort des Jellyfin-Administrators werden für diese eine Anfrage benutzt und dann vergessen: nie gespeichert, nie geloggt, nie in einer Fehlermeldung. Gespeichert wird, was sonst in einer `.env` stünde: der Jellyfin-API-Schlüssel `FriendFlix`, Client-ID und Secret des Providers und der Token des Service-Accounts `friendflix-invites` (mit nur den Rechten, die FriendFlix braucht). **Den Superuser-Token danach in Authentik widerrufen** ([Authentik absichern](#authentik-absichern)).
 
 ## 9. Erste Schritte als Admin
 
 1. **Sprache der Instanz:** FriendFlix fragt den ersten Admin einmal, welche Sprache die ganze Instanz standardmäßig nutzt (Englisch, Deutsch, Französisch, Spanisch, Italienisch, Türkisch, Polnisch). Jedes Profil kann später seine eigene Sprache wählen; neue Profile werden bei der ersten Anmeldung gefragt, mit der Browsersprache als Vorschlag.
 2. Dein erstes Gerät ist automatisch freigegeben; weitere Geräte müssen unter *Geräte* freigegeben werden. Weitere Admins: in die Authentik-Gruppe `friendflix-admins` (`ADMIN_GROUP`) aufnehmen; bei ihrer ersten Anmeldung macht FriendFlix sie ohne Einladung zum Admin.
-3. Den Authentik-Superuser-Token widerrufen, wenn du die automatische Einrichtung der Anmeldung benutzt hast, und MFA in Authentik zur Pflicht machen, falls noch nicht geschehen ([authentik.md §6](authentik.md#6-authentifizierungs-flow-mit-pflicht-mfa)).
+3. Authentik absichern, siehe unten.
 4. Im *Admin*-Bereich umsehen: die **Übersicht** (Zustand von Medienserver und Wunsch-Dienst, offene Entscheidungen, letzte Aktivität), Rollen und Limits, Wochenrückblick. Unter *Inhalte* lassen sich **Marken-Hubs** anlegen, Themenlisten auf der Startseite anheften und Bald-weg-Termine setzen; das Hauptprofil legt Kinderprofile unter *Profile* an.
+
+### Authentik absichern
+
+Gleich nach dem Assistenten, in Authentik:
+
+1. **Den einmaligen Superuser-Token widerrufen** (nur wenn du *Automatisch* benutzt hast): *Directory → Tokens and App passwords*, Token anhaken, *Delete*. Ein Bootstrap-Token (`authentik-bootstrap-token`) wird genauso gelöscht, und `AUTHENTIK_BOOTSTRAP_TOKEN` verschwindet aus der Umgebung von Authentik. FriendFlix behält nur den Token des Service-Accounts `friendflix-invites`. [authentik.md §3.2](authentik.md#32-der-einmalige-superuser-token).
+2. **MFA zur Pflicht machen** im Authentifizierungs-Flow, damit jeder Freund bei der Registrierung eine Authenticator-App oder einen Sicherheitsschlüssel einrichtet: [authentik.md §6](authentik.md#6-authentifizierungs-flow-mit-pflicht-mfa). Der Assistent ändert nicht, wie man sich bei Authentik anmeldet.
+3. **SMTP einrichten** für Einladungs- und Passwort-Mails: [authentik.md §2.5](authentik.md#25-e-mail-smtp).
+4. **Die Anmeldung in der App vorbereiten.** FriendFlix zeigt eigene Anmeldebildschirme, sobald Authentik verbunden ist (`LOGIN_UI`, [authentik.md §10a](authentik.md#10a-anmeldung-in-der-app)). Öffne *Admin → Status → Anmeldung*: Die Karte prüft die Abläufe, die implizite Zustimmung, den Grant-Typ `authorization_code` und ob Passkeys auf der eigenen Seite von FriendFlix laufen können, und nennt, was zu korrigieren ist. Zwei Dinge bleiben Handarbeit:
+   - **Der Ablauf für die E-Mail-Änderung** (die Zeile *E-Mail-Adresse → Ändern* unter *Sicherheit* auf der Kontoseite) wird vom Assistenten **nicht** importiert: `deploy/authentik/friendflix-email-change.yaml` importieren und die Mail-Vorlage unter `/templates` einbinden ([authentik.md §10a, Schritt 7](authentik.md#10a-anmeldung-in-der-app)). Bis dahin zeigt die Zeile die Adresse ohne *Ändern*, und Admins sehen einen Hinweis.
+   - **Optional:** Passwort-Mails mit der Wiederherstellungs-Vorlage in FriendFlix öffnen lassen (`/reset`, [authentik.md §10a, Schritt 4](authentik.md#10a-anmeldung-in-der-app)).
+
+   Update einer Installation von vor der Anmeldung in der App? `deploy/authentik/friendflix-service-account.yaml` (oder `friendflix-blueprint.yaml`) neu importieren: Der Service-Account braucht die neuen Rechte zum Löschen von Geräten für *Entfernen* auf der Kontoseite und Leserechte für die Validation-Stage und den OAuth2-Provider (die Regel zum letzten Faktor und die Prüfung von Zustimmung und Grant-Typ auf der Status-Karte) ([authentik.md §8.2](authentik.md#82-rolle-mit-genau-diesen-globalen-berechtigungen)).
+5. Ergebnis mit [authentik.md §14](authentik.md#14-prüfen) prüfen und die Checkliste in [Abschnitt 12](#12-checkliste) abhaken.
 
 ### Einstellungen in der Datenbank
 
 *Admin → Einstellungen* zeigt jede Einstellung mit ihrer Quelle: **Aus der Umgebung** (`.env`, ein `_FILE`-Secret oder ein älterer Variablenname; gesperrt, das Feld ist nicht änderbar), **Gespeichert** (Datenbank) oder **Standard**. Die erzeugten Werte der Gruppe *Server* (`DATABASE_URL`, `REDIS_URL`, `APP_ENC_KEY`, `INTERNAL_SECRET`) zeigen **Aus der Startdatei**: Der Dienst `bootstrap` hat sie in seinem Volume angelegt; hier sind sie nur lesbar. Die Umgebung hat Vorrang vor der Datenbank, die Datenbank vor dem Standard.
+
+Die Anmeldung in der App hat eigene Einstellungen unter *Admin → Einstellungen → Anmeldung* (`LOGIN_UI`, die Slugs für Anmelde- und Abmelde-Flow, die Slugs der Abläufe der Kontoseite für Wiederherstellungscodes, Passkeys, Passwort- und E-Mail-Änderung, `PASSKEYS_IN_APP`) und *Allgemein* (`LOGIN_COVER_WALL`); `.env`-Zeilen sind dafür nicht nötig. *Admin → Status* zeigt eine Karte „Anmeldung“, die die Authentik-Seite prüft. Siehe [authentik.md §10a](authentik.md#10a-anmeldung-in-der-app).
 
 - **Sofort wirksam:** Die meisten Einstellungen gelten sofort auf jedem Backend; Speichern erhöht eine Revision, andere Instanzen und das Gateway laden binnen Sekunden nach (spätestens nach 30 s). `API_COMPRESSION` gilt ab der nächsten Antwort. Einstellungen mit *Neustart nötig* (`DOWNLOAD_CREATE_PER_HOUR`) wirken erst nach `docker compose -f compose.prod.yaml restart backend`; ein Hinweisband listet sie.
 - **Secrets nur schreibbar:** Die Seite zeigt *Gesetzt* oder *Nicht gesetzt* und das Datum der letzten Änderung (Schlüssel der Datenquellen zusätzlich die letzten vier Zeichen), dazu *Ersetzen* und *Entfernen*. Kein Secret kommt je vom Server zurück, das Audit-Log nennt nur die Namen.
@@ -250,11 +256,22 @@ Der Superuser-Token von Authentik und das Passwort des Jellyfin-Administrators w
 1. Rolle wählen (`friend`, `family` oder `guest`; die Limits sind unter *Admin* änderbar), Gültigkeit des Links (Standard 48 h, max. 14 Tage), optional eine Notiz, **Max. Nutzungen** (so viele Konten kann der Link anlegen, 1 – 50, Standard 1) und **Zugang (Tage)** (der Zugang jedes neuen Kontos endet nach so vielen Tagen; leer = unbegrenzt).
 2. **hat schon ein Authentik-Konto** für neue Leute nicht ankreuzen. Erstellen.
 3. Der Link wird nur jetzt angezeigt (auch als QR-Code). Darunter muss stehen: *Der Link führt durch die Konto-Erstellung (inkl. Zwei-Faktor) und schaltet den Zugang direkt frei.* Sonst ist die Authentik-Einladung nicht eingerichtet; siehe [authentik.md §15](authentik.md#15-fehlersuche).
-4. Link verschicken. Der Freund öffnet ihn, klickt **Konto anlegen & loslegen**, registriert sich in Authentik (inklusive MFA) und landet eingeloggt im Portal.
+4. Link verschicken. Der Freund öffnet ihn, klickt **Konto anlegen & loslegen**, legt das Konto auf den Anmeldebildschirmen von FriendFlix an (Authentik führt dahinter seinen Registrierungs-Flow aus, inklusive MFA) und landet eingeloggt im Portal. Mit `LOGIN_UI=authentik` läuft die Registrierung stattdessen auf den Seiten von Authentik.
 
 Für jemanden mit bestehendem Authentik-Konto **hat schon ein Authentik-Konto** ankreuzen: Der Link bietet dann **Anmelden & freischalten** an. Unbenutzte Einladungen lassen sich in der Liste widerrufen; das löscht auch die Authentik-Einladung. Die Liste zeigt die Nutzungen als „1/3“ und aufgeklappt die Konten, die über die Einladung entstanden sind.
 
 **Ohne Einladung:** Wer sich ohne Einladung über Authentik anmeldet (und nicht in `friendflix-admins` ist), wird nicht abgewiesen. Die Person sieht *Anfrage gesendet* (`/pending`), du bekommst eine Benachrichtigung, und die Anfrage wartet unter *Admin → Nutzer → Warten auf Freigabe*. Mit Rolle und optional einem „Zugang bis“-Datum freigeben oder mit optionaler Nachricht ablehnen; die Seite der Person aktualisiert sich von selbst, nach der Freigabe meldet sie sich erneut an. Details: [operations.md](../operations.md#nutzerverwaltung-zugang-bis-freigaben-einladungen).
+
+### Was ein Freund sieht
+
+1. **Die Einladungsseite** (`/invite/…`): Kontotyp (Rolle) und Gültigkeit, dazu die Schaltfläche **Konto anlegen & loslegen**. Wer schon ein Authentik-Konto hat, sieht **Anmelden & freischalten**. Ein benutzter oder abgelaufener Link zeigt *Einladung ungültig*: einen neuen schicken.
+2. **Registrierung** auf der Anmeldeseite von FriendFlix, über der Cover-Wand: Benutzername und Passwort, dann die Authenticator-App (QR-Code oder der Schlüssel zum Abtippen, und der erste 6-stellige Code) und Wiederherstellungscodes zum Kopieren oder Herunterladen. Authentik führt den Registrierungs-Flow hinter diesen Bildschirmen aus; einen Schritt, den FriendFlix nicht zeigen kann, setzt die Seite von Authentik fort. Danach ist der Freund im Portal angemeldet und freigeschaltet.
+3. **Erster Besuch** (einmal pro Profil): Sprachauswahl (die Browsersprache als Vorschlag), dann **Willkommen** in drei Schritten: Profilname und Farbe prüfen, 3 Titel wählen, die gefallen (sie speisen die Empfehlungen; *Überspringen* geht), *Los geht's*. Ein Kinderprofil bekommt eine einfachere Fassung.
+4. **Später:** Das erste Gerät ist automatisch vertraut; jedes weitere wartet unter *Geräte*, bis du es freigibst. Bei mehreren Profilen in einem Konto erscheint die Profilauswahl einmal pro Browser-Sitzung. Jellyfin und der Wunsch-Dienst bleiben unsichtbar: Freunde öffnen immer nur `https://friend.example.com`.
+5. **Wieder anmelden** geht auf derselben Seite: Name, Passwort, dann der 6-stellige Code (oder ein Wiederherstellungscode oder ein Passkey). *Passwort vergessen?* zeigt „Schau in dein Postfach“; der Link in der Mail öffnet die Seite von Authentik oder, wenn du die Vorlage gesetzt hast, die Seite `/reset` von FriendFlix. Nach zu vielen Fehlversuchen verlinkt die Seite die Anmeldeseite von Authentik.
+6. **Mein Bereich → Konto → Sicherheit:** Der Freund ändert das Passwort, fügt eine Authenticator-App oder einen Passkey hinzu oder entfernt sie, erzeugt neue Wiederherstellungscodes und ändert die E-Mail-Adresse. Jede Aktion fragt vorher in einem kleinen Dialog noch einmal nach Passwort (und zweitem Faktor); eine neue E-Mail-Adresse gilt erst, wenn der Freund den Link klickt, der an sie geht.
+
+Weiter: was du als Admin siehst und einstellst, steht in [Abschnitt 9](#9-erste-schritte-als-admin).
 
 ## 11. Optionale Funktionen
 
@@ -264,7 +281,7 @@ Für jemanden mit bestehendem Authentik-Konto **hat schon ein Authentik-Konto** 
 | **Web-Push** | *Admin → Einstellungen → Push-Mitteilungen → Schlüsselpaar erzeugen* (oder `node scripts/gen-vapid.mjs` → `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` in der `.env`), optional `VAPID_SUBJECT=mailto:du@example.com`. Das Schlüsselpaar stabil halten. Braucht HTTPS; unter iOS muss die Seite zum Home-Bildschirm hinzugefügt werden. | [integrations.md](../integrations.md#web-push-browser-notifications) |
 | **ntfy / Discord** | `NTFY_URL=https://ntfy.example.com/friendflix` und/oder `DISCORD_WEBHOOK_URL=…` für den gemeinsamen Kanal; `NTFY_BASE_URL` für persönliche Themen. | [integrations.md](../integrations.md#ntfy--discord) |
 | **Chromecast** | Standardmäßig an (`CAST_ENABLED=true`). Braucht eine https-`PUBLIC_URL` mit öffentlich gültigem Zertifikat, die der Chromecast erreicht, und den `/media/c/`-Block aus `portal.advanced.conf`. | [cast.md](../cast.md) |
-| **TV-Modus** | Nichts einzurichten: `https://portal.example.com/tv` am Fernseher öffnen und mit dem Handy koppeln. | [tv-mode.md](../tv-mode.md) |
+| **TV-Modus** | Nichts einzurichten: `https://friend.example.com/tv` am Fernseher öffnen und mit dem Handy koppeln. | [tv-mode.md](../tv-mode.md) |
 | **Datenbank-Backups** | `mkdir -p backups && sudo chown 70 backups`, dann `docker compose -f compose.prod.yaml --profile backup up -d backup` (`BACKUP_HOUR`, `BACKUP_KEEP_DAYS`, `BACKUP_PATH`). Das Volume `bootstrap` einmal mit `./scripts/backup-bootstrap.sh` sichern und getrennt von den Dumps aufbewahren; Authentik separat sichern ([authentik.md §2.6](authentik.md#26-backups-und-updates)). | [operations.md](../operations.md#backups--wiederherstellung) |
 | **Updates per Klick** | *Admin → Update* deployt über **Portainer** neu: entweder `PORTAINER_WEBHOOK_URL` (Stack-Webhook) oder `PORTAINER_URL` + `PORTAINER_API_KEY` + `PORTAINER_STACK_ID` (+ `PORTAINER_ENDPOINT_ID`, Standard `1`). Einen Portainer-Nutzer verwenden, der nur dieses eine Stack neu deployen darf. FriendFlix bekommt bewusst nie den Docker-Socket: **`/var/run/docker.sock` in keinen FriendFlix-Container einbinden**, die Web-App darf Docker nicht steuern können. | [operations.md](../operations.md#updates-aus-dem-portal) |
 | **Monitoring** | `METRICS_TOKEN`, Beispiele für Prometheus/Icinga; optionaler Prometheus-+-Grafana-Stack: `GRAFANA_ADMIN_PASSWORD` setzen (kein Standardpasswort) und `-f compose.monitoring.yaml` ergänzen. | [monitoring.md](../monitoring.md) |
@@ -278,12 +295,13 @@ Die Werte in der Tabelle lassen sich auch unter *Admin → Einstellungen* setzen
 - [ ] Der vom Assistenten benutzte Superuser-Token von Authentik ist gelöscht.
 - [ ] `docker compose -f compose.prod.yaml ps`: alle Dienste laufen, `postgres`/`redis` (und `backup`) healthy.
 - [ ] `curl -s http://127.0.0.1:3081/health/ready` meldet Postgres, Redis und Jellyfin OK.
-- [ ] `curl -sI https://portal.example.com` → `200`, gültiges Zertifikat, Header `strict-transport-security`.
-- [ ] `curl -s -o /dev/null -w '%{http_code}\n' https://portal.example.com/internal/x` → `404`; ebenso `/metrics`.
+- [ ] `curl -sI https://friend.example.com` → `200`, gültiges Zertifikat, Header `strict-transport-security`.
+- [ ] `curl -s -o /dev/null -w '%{http_code}\n' https://friend.example.com/internal/x` → `404`; ebenso `/metrics`.
 - [ ] Von außerhalb deines Netzes: `nmap -p 3080-3082,8096,5055,9000 <öffentliche-IP>` → alle filtered/closed.
 - [ ] `curl -s https://auth.example.com/application/o/friendflix/.well-known/openid-configuration | jq -r .issuer` entspricht `OIDC_ISSUER`.
 - [ ] Admin-Anmeldung klappt, MFA wird abgefragt, *Admin* ist sichtbar.
 - [ ] Eine Test-Einladung im privaten Fenster endet eingeloggt im Portal; der Nutzer erscheint unter *Admin → Nutzer* und in Jellyfin.
+- [ ] *Admin → Status → Anmeldung* zeigt keine Warnung (der Ablauf für die E-Mail-Änderung steht bis zum Import auf *Fehlt*, ohne Warnung; siehe [Authentik absichern](#authentik-absichern)).
 - [ ] Ein Film läuft (Direct Play und eine erzwungene niedrigere Qualität → Transkodierung), Untertitel und Spulen funktionieren.
 - [ ] Optional: Test-Push, ein Download, Casten, eine Backup-Datei in `backups/`.
 
@@ -336,7 +354,7 @@ Eine bestehende Installation aktualisiert wie jedes Update (`docker compose -f c
 
 2. **Die vier Werte in der `.env` lassen, bis dieses Log für jeden `from environment` zeigt.** Wer einen früher entfernt, bekommt einen neu erzeugten Wert: Ein neues Datenbank-Passwort passt nicht zu `pgdata` (Postgres behält das Passwort von der Ersteinrichtung), ein neuer `APP_ENC_KEY` macht alle verschlüsselten Werte unlesbar. Steht die Logzeile da, dürfen sie raus; danach erneut `up -d` und prüfen, dass das Log jetzt `kept` zeigt. Dann das Volume sichern (`./scripts/backup-bootstrap.sh`). Sie in der `.env` zu lassen geht auch: Dann bleibt die `.env` die Quelle und das Volume eine Kopie.
 3. **Einstellungen erscheinen gesperrt.** Jede Einstellung aus der `.env` steht unter *Admin → Einstellungen* als *Aus der Umgebung* und ist dort nicht änderbar. **Übernehmen** (je Zeile) oder **Alle übernehmen** kopiert die Werte in die Datenbank; die Zeile nennt dann die Namen (auch `_FILE` und ältere Namen), die aus der `.env` raus dürfen. Bis sie entfernt sind und `up -d` lief, gilt weiter die Umgebung. Die Werte der Gruppe *Server* bleiben in der `.env`.
-4. **`PUBLIC_URL` mit Pfad oder Query** (z. B. `https://portal.example.com/ff`) startet mit ihrem Origin (`https://portal.example.com`) und einer Warnung im Log: FriendFlix läuft nur an der Wurzel seines Hostnamens. Ein unter *Admin → Einstellungen* gespeicherter Wert muss ein Origin sein.
+4. **`PUBLIC_URL` mit Pfad oder Query** (z. B. `https://friend.example.com/ff`) startet mit ihrem Origin (`https://friend.example.com`) und einer Warnung im Log: FriendFlix läuft nur an der Wurzel seines Hostnamens. Ein unter *Admin → Einstellungen* gespeicherter Wert muss ein Origin sein.
 5. **Der Wunsch-Dienst ist jetzt optional.** Ohne `REQUESTS_URL` und `REQUESTS_API_KEY` sind die Wunsch-Menüs ausgeblendet; Erinnerungen funktionieren weiter.
 6. **Schlüssel aus *Admin → Datenquellen*** wandern unverändert in die Einstellungen (gleiche Verschlüsselung); die Seite funktioniert weiter.
 7. **Docker-Secrets** (`compose.secrets.yaml`) haben weiter Vorrang; die erzeugten Kopien im Volume bleiben ungenutzt.
@@ -357,7 +375,7 @@ chmod 600 .env
 
 | Variable | Schritt im Assistenten | Wert |
 |---|---|---|
-| `PUBLIC_URL` | 2 | `https://portal.example.com`, ohne Pfad. Muss genau die URL sein, die alle benutzen (Cookies, Redirect-URI, Origin-Prüfung der WebSockets). |
+| `PUBLIC_URL` | 2 | `https://friend.example.com`, ohne Pfad. Muss genau die URL sein, die alle benutzen (Cookies, Redirect-URI, Origin-Prüfung der WebSockets). |
 | `JELLYFIN_URL`, `JELLYFIN_ADMIN_API_KEY` | 3 | `http://jellyfin:8096` (interner Name, nie die öffentliche URL) und ein API-Schlüssel aus *Dashboard → API Keys* |
 | `OIDC_ISSUER` | 4 | `https://auth.example.com/application/o/friendflix/` **mit Schrägstrich am Ende** |
 | `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | 4 | aus dem Authentik-Provider |
@@ -371,6 +389,6 @@ chmod 600 .env
 | `OIDC_ALLOW_INSECURE` | – | `false`; `true` nur für Tests gegen ein `http://`-Authentik, nie im Betrieb |
 | `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `APP_ENC_KEY`, `INTERNAL_SECRET` | – | bei einer neuen Installation **weglassen** (werden erzeugt). Eine bestehende Installation behält sie, bis das Volume sie enthält ([Abschnitt 14](#14-umstieg-auf-einstellungen-in-der-datenbank)) |
 
-Alles andere (Wunsch-Dienst, Sitzungen, Downloads, Push, ntfy, Portainer) steht in der [Konfigurationstabelle der README](../../README.de.md#konfiguration) und in der [.env.example](../../.env.example). Das Webhook-Geheimnis entsteht unter *Admin → Einstellungen → Allgemein → Webhook-Geheimnis → Neu erzeugen* (oder in den Extras des Assistenten) und wird einmal angezeigt. Solange es fehlt, antworten die Webhooks von Jellyfin und Wunsch-Dienst mit 403. Nach Änderungen an der `.env`: `docker compose -f compose.prod.yaml up -d` (erstellt nur neu, was sich geändert hat).
+Alles andere (Wunsch-Dienst, Sitzungen, Downloads, Push, ntfy, Portainer) steht in der [Tabelle in der README](../../README.de.md#fortgeschritten-konfiguration-über-die-umgebung) und in der [.env.example](../../.env.example). Das Webhook-Geheimnis entsteht unter *Admin → Einstellungen → Allgemein → Webhook-Geheimnis → Neu erzeugen* (oder in den Extras des Assistenten) und wird einmal angezeigt. Solange es fehlt, antworten die Webhooks von Jellyfin und Wunsch-Dienst mit 403. Nach Änderungen an der `.env`: `docker compose -f compose.prod.yaml up -d` (erstellt nur neu, was sich geändert hat).
 
 **Docker-Secrets statt `.env`** (optional): [`compose.secrets.yaml`](../../compose.secrets.yaml) liest `APP_ENC_KEY`, `INTERNAL_SECRET`, `WEBHOOK_SECRET`, `OIDC_CLIENT_SECRET`, `JELLYFIN_ADMIN_API_KEY`, `REQUESTS_API_KEY` (Datei `secrets/requests_api_key`) und `VAPID_PRIVATE_KEY` aus Dateien in `secrets/` (alle müssen existieren; ohne Push `touch secrets/vapid_private_key`). Start mit `docker compose -f compose.prod.yaml -f compose.secrets.yaml up -d`. Die Dateien haben Vorrang wie Werte aus der Umgebung (gesperrt unter *Admin → Einstellungen*); die Kopien von `APP_ENC_KEY` und `INTERNAL_SECRET`, die der Dienst `bootstrap` erzeugt, bleiben dann ungenutzt. Dann `secrets/` sichern.

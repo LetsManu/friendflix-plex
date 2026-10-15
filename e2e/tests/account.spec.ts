@@ -15,15 +15,21 @@ test.describe('account page (/me/account)', () => {
     await expect(profile.getByRole('button', { name: 'Blau' })).toHaveAttribute('aria-pressed', 'true');
     await expect(profile.getByText('tester@example.com')).toBeVisible();
     await expect(profile.getByRole('textbox', { name: 'E-Mail' })).toHaveCount(0);
-    // security: three chips, the manage link, no password/2FA actions
+    // the e-mail is changed in the security section: the profile points to that row
+    await expect(profile.getByText('Die E-Mail-Adresse änderst du unter „Sicherheit“.')).toBeVisible();
+    await expect(profile.getByRole('link', { name: 'Zur E-Mail-Adresse' })).toHaveAttribute('href', '#sec-email');
+    await expect(page.locator('#sec-email')).toBeAttached();
+    // security: the rows (password, authenticator app, passkeys, recovery codes, e-mail) and the manage link
     const security = page.getByRole('region', { name: 'Sicherheit' });
-    await expect(security.getByRole('list', { name: 'Zwei-Faktor-Anmeldung' }).getByRole('listitem')).toHaveText(['Authenticator-App an', 'Passkey aus', 'Wiederherstellungscodes an']);
+    await expect(security.getByRole('button', { name: 'Passwort ändern' })).toBeVisible();
+    await expect(security.getByRole('list', { name: 'Authenticator-App' }).getByText('Pixel 8')).toBeVisible();
+    await expect(security.getByRole('link', { name: 'Auf der Anmeldeseite hinzufügen' })).toHaveAttribute('href', '/auth/flow/classic/webauthn-setup');
+    await expect(security.getByRole('button', { name: 'Neu erzeugen' })).toBeVisible();
+    await expect(security.getByText('tester@example.com')).toBeVisible();
     const manage = security.getByRole('link', { name: /Auf der Anmeldeseite verwalten/ });
     await expect(manage).toHaveAttribute('href', 'https://login.example.com/if/user/#/settings');
     await expect(manage).toHaveAttribute('target', '_blank');
     await expect(manage).toHaveAttribute('rel', /noopener/);
-    await expect(security.getByText('Passwort und Zwei-Faktor-Anmeldung direkt in FriendFlix ändern – das kommt noch.')).toBeVisible();
-    await expect(security.getByRole('button')).toHaveCount(0);
     // sessions: this device without a sign-out button, the other one with
     const sessions = page.getByRole('region', { name: 'Sitzungen & Geräte' });
     const rows = sessions.getByRole('listitem');
@@ -119,16 +125,16 @@ test.describe('account page (/me/account)', () => {
   test('manage link hidden when manageUrl is null', async ({ page, api }) => {
     api.account = { ...api.account, manageUrl: null };
     await page.goto('/me/account');
-    await expect(page.getByRole('region', { name: 'Sicherheit' }).getByRole('list', { name: 'Zwei-Faktor-Anmeldung' })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Anmeldeseite/ })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Sicherheit' }).getByRole('button', { name: 'Passwort ändern' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Auf der Anmeldeseite verwalten/ })).toHaveCount(0);
   });
 
-  test('mfa null shows not available', async ({ page, api }) => {
+  test('mfa null: the security rows stay usable', async ({ page, api }) => {
     api.account = { ...api.account, mfa: null };
     await page.goto('/me/account');
     const security = page.getByRole('region', { name: 'Sicherheit' });
-    await expect(security.getByText('Nicht verfügbar')).toBeVisible();
-    await expect(security.getByRole('list', { name: 'Zwei-Faktor-Anmeldung' })).toHaveCount(0);
+    // the rows do not depend on Authentik's 2FA state: they stay usable (the backend decides on each action)
+    await expect(security.getByRole('button', { name: 'Passwort ändern' })).toBeVisible();
     await expect(security.getByRole('link', { name: /Auf der Anmeldeseite verwalten/ })).toBeVisible();
   });
 

@@ -365,6 +365,13 @@ export interface MediaAdmin {
    * reasons, codecs and hardware flag. Absent: the admin's active streams show only what FriendFlix itself knows.
    */
   transcodeSessions?(): Promise<ServerSession[]>;
+  /**
+   * Block 23 phase 3 (optional): ids of random movies / series with a poster whose own rating is in `ratings`, from every library
+   * (admin key, no viewer). Items with another or no rating never come back. Absent: the login page shows no cover wall.
+   */
+  loginArtIds?(q: { ratings: readonly string[]; limit: number }): Promise<string[]>;
+  /** Block 23 phase 3 (optional): a downscaled poster of one item (admin key); null when it has none or cannot be read. */
+  posterThumb?(id: string, maxWidth: number): Promise<{ bytes: Uint8Array; type: 'image/jpeg' | 'image/webp' } | null>;
 }
 
 /** Everything routes and jobs use. Per-user calls act as that user on the server, so its access rules apply. */

@@ -1,0 +1,93 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/v3/flows/executor/default-authentication-flow/",
+    "status": 200,
+    "contentType": "application/json",
+    "location": null,
+    "setCookie": [
+      "authentik_session=<redacted>; HttpOnly; Path=/; SameSite=Lax"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v3/flows/executor/default-authentication-flow/",
+    "status": 302,
+    "contentType": "text/html; charset=utf-8",
+    "location": "/api/v3/flows/executor/default-authentication-flow/?query=next%3D%252F",
+    "setCookie": [
+      "authentik_session=<redacted>; HttpOnly; Path=/; SameSite=Lax"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v3/flows/executor/default-authentication-flow/",
+    "status": 200,
+    "contentType": "application/json",
+    "location": null,
+    "setCookie": [
+      "authentik_session=<redacted>; HttpOnly; Path=/; SameSite=Lax"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v3/flows/executor/default-authentication-flow/",
+    "status": 200,
+    "contentType": "application/json",
+    "location": null,
+    "setCookie": [
+      "authentik_session=<redacted>; HttpOnly; Path=/; SameSite=Lax"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v3/flows/executor/default-authentication-flow/",
+    "status": 302,
+    "contentType": "text/html; charset=utf-8",
+    "location": "/api/v3/flows/executor/default-authentication-flow/?query=next%3D%252F",
+    "setCookie": [
+      "authentik_session=<redacted>; HttpOnly; Path=/; SameSite=Lax"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v3/flows/executor/default-authentication-flow/",
+    "status": 302,
+    "contentType": "text/html; charset=utf-8",
+    "location": "/api/v3/flows/executor/default-authentication-flow/?query=next%3D%252F",
+    "setCookie": [
+      "authentik_session=<redacted>; HttpOnly; Path=/; SameSite=Lax"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v3/flows/executor/default-authentication-flow/",
+    "status": 200,
+    "contentType": "application/json",
+    "location": null,
+    "setCookie": [
+      "authentik_device=<redacted>; expires=Sat, 14 Nov 2026 07:11:37 GMT; Max-Age=2592000; Path=/; SameSite=Lax",
+      "authentik_csrf=<redacted>; expires=Thu, 14 Oct 2027 07:11:37 GMT; Max-Age=31449600; Path=/; SameSite=Lax",
+      "authentik_session=<redacted>; HttpOnly; Path=/; SameSite=Lax",
+      "authentik_user_switching=<redacted>; expires=Fri, 15 Oct 2027 07:11:37 GMT; Max-Age=31536000; Path=/; SameSite=Lax"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v3/flows/executor/default-password-change/",
+    "status": 500,
+    "contentType": "text/html; charset=utf-8",
+    "location": null,
+    "setCookie": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v3/flows/executor/default-invalidation-flow/",
+    "status": 200,
+    "contentType": "application/json",
+    "location": null,
+    "setCookie": [
+      "authentik_session=<redacted>; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=/; SameSite=Lax"
+    ]
+  }
+]
