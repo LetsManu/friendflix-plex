@@ -1046,6 +1046,8 @@ export class PlexMediaServer implements MediaServer {
            on conflict (identity_id) do update set disabled = excluded.disabled, updated_at = now()`, [id, disabled]);
         this.dropAccess(id);
       },
+      /** Block 23: a synthetic identity exists while its plex_identities row does (locked ones included); read-only, never creates it. */
+      identityExists: async (id) => (await this.q('select 1 from plex_identities where id = $1', [id])).length > 0,
       libraries: async () => {
         try {
           const secs = await this.client.sections();
