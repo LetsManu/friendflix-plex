@@ -166,6 +166,7 @@ jobs:
           docker compose -f compose.yaml --profile backup --profile bundled config -q
           docker compose -f compose.prod.yaml config -q
           docker compose -f compose.prod.yaml --profile backup --profile bundled config -q
+          docker compose -f compose.prod.yaml -f compose.plex.yaml config -q # fork:
       - name: Compose config with .env.example
         run: |
           cp .env.example .env
@@ -173,6 +174,7 @@ jobs:
           docker compose -f compose.yaml --profile backup --profile bundled config -q
           docker compose -f compose.prod.yaml config -q
           docker compose -f compose.prod.yaml --profile backup --profile bundled config -q
+          docker compose -f compose.prod.yaml -f compose.plex.yaml config -q # fork:
           rm .env
   docker:
     runs-on: ubuntu-latest
