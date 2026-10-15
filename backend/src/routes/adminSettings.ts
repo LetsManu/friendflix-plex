@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { audit } from '../audit.js';
 import type { Config } from '../config.js';
 import type { Ctx } from '../ctx.js';
+import { mediaSettings, mediaSetupKeys } from '../media/index.js'; // fork
 import { REAUTH_WINDOW_S, recentlyAuthenticated } from '../reauth.js';
 import { requireAdmin } from '../session.js';
 import { resetSourceState } from '../sources/keys.js';
@@ -75,6 +76,10 @@ function shownUrl(v: string): string {
   }
 }
 const envNames = (key: string, legacy: readonly string[] = []) => [key, ...legacy].flatMap((n) => [n, `${n}_FILE`]);
+// fork: the media group lists and accepts only the configured kind's settings (MEDIA_SETUP / mediaSettings via mediaSetupKeys): on Plex
+// no JELLYFIN_* rows, on Jellyfin no PLEX_* rows; another kind's key is `unknown` like a hidden one (MEDIA_SERVER is env-only)
+const MEDIA_KEYS: ReadonlySet<string> = new Set(mediaSettings().map((d) => d.key));
+const otherMediaKind = (cfg: Config, key: string) => MEDIA_KEYS.has(key) && !mediaSetupKeys(cfg).includes(key);
 
 export async function settingsView(ctx: Ctx): Promise<{ rev: number; pendingRestart: string[]; groups: Array<{ id: SettingGroup | 'server'; items: SettingView[] }> }> {
   const cfg = ctx.cfg as Record<string, unknown>;
@@ -101,7 +106,7 @@ export async function settingsView(ctx: Ctx): Promise<{ rev: number; pendingRest
     if (d.generate) view.generate = d.generate;
     return view;
   };
-  const visible = SETTINGS.filter((d) => d.visible !== false);
+  const visible = SETTINGS.filter((d) => d.visible !== false && !otherMediaKind(ctx.cfg, d.key)); // fork: otherMediaKind
   const groups: Array<{ id: SettingGroup | 'server'; items: SettingView[] }> = SETTING_GROUPS
     .map((id) => ({ id, items: visible.filter((d) => d.group === id).map(item) }))
     .filter((g) => g.items.length);
@@ -200,7 +205,7 @@ function candidate(ctx: Ctx, values: Record<string, unknown>, opts: { allowedKey
     }
     const def = settingDef(key);
     // env-only, bootstrap and build keys and the hidden (phase 3) entries are not settings of this page
-    if (!def || def.visible === false) {
+    if (!def || def.visible === false || otherMediaKind(ctx.cfg, key)) { // fork: otherMediaKind
       errors[key] = 'unknown';
       continue;
     }
