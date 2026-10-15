@@ -52,6 +52,8 @@ export class PlexFake {
    * the sessions answer 401 or 403 (setup probe: a warning, not a refusal). Any other token than PLEX_TOKEN or these gets 401 everywhere.
    */
   sharedTokens = new Map<string, 401 | 403>();
+  /** fork: GET /photo/:/transcode answer (Block 23 phase 3 cover wall); default a small JPEG */
+  photo: { status?: number; type?: string; bytes?: Uint8Array; length?: string } = {};
   private nextKey = 100;
 
   constructor() {
@@ -218,7 +220,7 @@ export class PlexFake {
     return { MediaContainer: { size: slice.length, totalSize: list.length, offset: s, ...extra, ...(slice.length ? { Metadata: slice } : {}) } };
   }
 
-  handle(method: string, url: URL, headers: Record<string, string>): { status: number; json?: unknown; text?: string } {
+  handle(method: string, url: URL, headers: Record<string, string>): { status: number; json?: unknown; text?: string; raw?: Uint8Array; type?: string; length?: string } {
     const path = url.pathname;
     const q = url.searchParams;
     if (this.fail && this.fail.re.test(path)) return { status: this.fail.status };
@@ -234,6 +236,10 @@ export class PlexFake {
     }
     if (method !== 'GET') return { status: 404 };
     if (path === '/status/sessions') return { status: 200, json: this.statusSessions };
+    if (path === '/photo/:/transcode') { // fork: the photo transcoder (only an item's own poster path is ever asked for)
+      if (!/^\/library\/metadata\/(\d+)\/thumb/.test(q.get('url') ?? '')) return { status: 400 };
+      return { status: this.photo.status ?? 200, raw: this.photo.bytes ?? new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]), type: this.photo.type ?? 'image/jpeg', ...(this.photo.length ? { length: this.photo.length } : {}) };
+    }
     if (path === '/library/sections') return { status: 200, json: { MediaContainer: { size: this.sections.length, Directory: this.sections } } };
     let m = /^\/library\/sections\/(\d+)\/all$/.exec(path);
     if (m) {
@@ -276,6 +282,7 @@ export class PlexFake {
     this.calls.push({ method, path: url.pathname, search: url.search, token: headers['X-Plex-Token'], headers });
     const r = this.handle(method, url, headers);
     if (r.json !== undefined) return new Response(JSON.stringify(r.json), { status: r.status, headers: { 'content-type': 'application/json' } });
+    if (r.raw) return new Response(Buffer.from(r.raw), { status: r.status, headers: { 'content-type': r.type ?? 'application/octet-stream', ...(r.length ? { 'content-length': r.length } : {}) } });
     return new Response(r.text ?? null, { status: r.status, headers: { 'content-type': 'text/html' } });
   }) as typeof fetch;
 }

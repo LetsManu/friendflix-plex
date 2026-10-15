@@ -29,6 +29,7 @@ import { chapterDtos, plexTraits, type MirrorChapter } from './depth.js';
 import { plexTypes, sectionDto, toItemDto, type ItemRow } from './dto.js';
 import { decodePlexId, encodePlexId, plexKey } from './ids.js';
 import { sessionIdentities } from './limits.js';
+import { plexLoginArtIds, plexPosterThumb } from './loginart.js'; // fork: Block 23 phase 3 cover wall
 import { PlexSync } from './sync.js';
 import * as ud from './userdata.js';
 
@@ -1063,6 +1064,16 @@ export class PlexMediaServer implements MediaServer {
       transcodeSessions: async (): Promise<ServerSession[]> => {
         const ids = await sessionIdentities(this.kv).catch(() => new Map<string, string>());
         return plexServerSessions(this.client, (s) => ids.get(s));
+      },
+      // fork: Block 23 phase 3 cover wall. Candidates from the mirror, the allow-list checked against Plex's own contentRating
+      // spellings in loginart.ts (exact, case-sensitive; unrated items never); posters through the photo transcoder, token in the header only.
+      loginArtIds: async (q) => {
+        await this.ready();
+        return plexLoginArtIds(this.db, q);
+      },
+      posterThumb: async (id, maxWidth) => {
+        await this.ready();
+        return plexPosterThumb(this.db, this.client, id, maxWidth);
       },
     };
   }
