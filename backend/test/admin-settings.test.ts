@@ -568,6 +568,36 @@ describe('fork: import-env on Plex never moves a JELLYFIN_* key', () => {
   });
 });
 
+// fork (T2 minor): the dummy-token trick on Plex: a typed PLEX_TOKEN does not unlock a new PLEX_URL while the real token is an env pin
+describe('fork: a typed dummy for an env-pinned PLEX_TOKEN does not unlock a new PLEX_URL (Test and PUT)', () => {
+  const fake = new PlexFake();
+  const hosts: string[] = [];
+  let env: TestEnv;
+  let admin: Sess;
+  beforeAll(async () => {
+    env = await makeEnv({}, {
+      server: 'plex', plexFake: fake, settingsEnv: { PLEX_TOKEN },
+      ctxPatch: (c) => { c.fetchImpl = (async (i: RequestInfo | URL, init?: RequestInit) => { hosts.push(new URL(String(i)).host); return fake.fetch(i, init); }) as typeof fetch; },
+    });
+    admin = await env.login(ADMIN);
+  });
+  afterAll(() => env.close());
+
+  it('stale session: 401 reauth_required on Test and PUT, nothing sent to the new host', async () => {
+    expect(env.ctx.settings.sources().PLEX_TOKEN).toBe('env');
+    const key = `sess:${admin.cookies.ff_sid}`;
+    await env.kv.set(key, JSON.stringify({ ...JSON.parse((await env.kv.get(key))!), reauthAt: Date.now() - 20 * 60_000 }), 600);
+    const values = { PLEX_URL: 'http://evil.example.com:32400', PLEX_TOKEN: 'dummy' };
+    const as = (method: string, url: string, payload: unknown) => env.app.inject({ method: method as 'PUT', url, cookies: admin.cookies, headers: { 'x-csrf-token': admin.csrf }, payload: payload as object });
+    const t = await as('POST', '/api/admin/settings/test', { group: 'media', values });
+    expect(t.statusCode).toBe(401);
+    expect(t.json()).toEqual({ error: 'reauth_required' });
+    expect((await as('PUT', '/api/admin/settings', { values })).statusCode).toBe(401);
+    expect(hosts).not.toContain('evil.example.com:32400');
+    expect(env.ctx.cfg.PLEX_URL).toBe(PLEX_URL);
+  });
+});
+
 // fork: Admin -> Settings on Plex (MEDIA_SERVER=plex): Test and PUT run MEDIA_SETUP.plex's probe with the candidate values; a shared
 // account's token is a warning that saves, a wrong token or a redirect is refused (force does not help); the token never shows.
 describe('fork: the media probe on Plex', () => {

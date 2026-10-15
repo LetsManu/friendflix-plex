@@ -308,5 +308,10 @@ describe('server guard (machineIdentifier)', () => {
     await ms.sync.run();
     expect(await stored(env.pool)).toBe('another-plex-server-0000000000000000000');
     expect((await env.pool.query('select title from plex_sections')).rows.map((x) => x.title)).toEqual(['TV']);
+    // fork (T8 minor): a good identity read resets the once-only warning, so a later outage is logged again (once)
+    other.fail = { re: /^\/identity$/, status: 503 };
+    await ms.sync.run();
+    await ms.sync.run();
+    expect(warns.filter(([, m]) => /identity unknown/.test(m))).toHaveLength(2);
   });
 });

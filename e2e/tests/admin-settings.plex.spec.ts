@@ -81,3 +81,27 @@ test.describe('admin: settings (Plex)', () => {
     await expect(media.getByRole('status')).toContainText('nicht dem Besitzer des Plex-Servers');
   });
 });
+
+// fork (T9 minor): when the pre-check before Save fails (network or a refusal result), the save still goes through and decides itself
+test.describe('admin: settings (Plex), the pre-check fails', () => {
+  test.use({ allowedConsole: /status of (400|401)|net::ERR_FAILED/ });
+  test.beforeEach(({ api }) => { api.asAdmin = true; api.settings = settingsState('plex'); });
+
+  for (const [name, setup] of [
+    ['a network failure', async (page: Page) => { await page.route('**/api/admin/settings/test', (r) => r.abort('failed')); }],
+    ['an unreachable result', async (_page: Page, api: { settings: ReturnType<typeof settingsState> }) => { api.settings.testResult = { ok: false, code: 'unreachable' }; }],
+  ] as const) {
+    test(`${name} of the pre-check: the token is still saved, no note`, async ({ page, api }) => {
+      await setup(page, api as never);
+      await page.goto('/admin/settings');
+      const media = card(page, 'Mediaserver');
+      await setting(page, 'Plex-Token').getByRole('button', { name: 'Plex-Token ersetzen' }).click();
+      await setting(page, 'Plex-Token').getByLabel('Neuer Wert').fill(TOKEN);
+      await media.getByRole('button', { name: 'Speichern' }).click();
+      await expect(page.getByText('Einstellungen gespeichert.')).toBeVisible();
+      expect(api.settings.puts).toEqual([{ values: { PLEX_TOKEN: TOKEN } }]);
+      await expect(media.getByRole('status')).toHaveCount(0);
+      expect(await page.content()).not.toContain(TOKEN);
+    });
+  }
+});

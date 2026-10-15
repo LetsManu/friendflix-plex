@@ -438,7 +438,7 @@ describe('fork: the setup wizard on Plex', () => {
     noToken(ok.body + warn.body);
   });
 
-  it('the save runs the probe: a wrong token is refused (nothing saved), a shared token saves with the warning', async () => {
+  it('the save runs the probe: a wrong token is refused (nothing saved), a shared token saves (the warning is no blocker; the answer is { rev } only, the note shows on Test)', async () => {
     const bad = await put({ PLEX_URL: URL_, PLEX_TOKEN: 'wrong-token-placeholder' });
     expect(bad.statusCode).toBe(400);
     expect(bad.json()).toEqual({ error: 'probe_failed', group: 'media', probe: { ok: false, code: 'unauthorized' } });

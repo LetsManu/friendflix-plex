@@ -106,3 +106,32 @@ test.describe('setup wizard: Plex media step', () => {
     expect(api.setup!.puts).toEqual([]);
   });
 });
+
+// fork (T9 minor): the pre-check before Save only adds the not_admin note; when the check itself fails (network or a refusal result),
+// the save still goes through (it runs the same probe and decides)
+test.describe('setup wizard: Plex media step, the pre-check fails', () => {
+  test.use({ allowedConsole: /status of (400|401|403|409|410|429|503)|net::ERR_FAILED/ });
+  test.beforeEach(({ api }) => { api.setup = setupState('plex'); api.setup.steps.publicUrl = 'done'; });
+
+  test('a network failure of the pre-check: the save still goes through and the step goes on', async ({ page, api }) => {
+    await page.route('**/api/setup/test', (r) => r.abort('failed'));
+    await toMediaStep(page);
+    await page.getByLabel('Plex-Adresse').fill(VALUES.PLEX_URL);
+    await page.getByLabel('Plex-Token').fill(TOKEN);
+    await page.getByRole('button', { name: 'Speichern und weiter' }).click();
+    await expect(h2(page, 'Anmeldung')).toBeVisible();
+    expect(api.setup!.tests).toEqual([]);
+    expect(api.setup!.puts).toEqual([{ values: VALUES }]);
+  });
+
+  test('an unreachable result of the pre-check: the save still goes through and the step goes on', async ({ page, api }) => {
+    api.setup!.testResults.media = { ok: false, code: 'unreachable' };
+    await toMediaStep(page);
+    await page.getByLabel('Plex-Adresse').fill(VALUES.PLEX_URL);
+    await page.getByLabel('Plex-Token').fill(TOKEN);
+    await page.getByRole('button', { name: 'Speichern und weiter' }).click();
+    await expect(h2(page, 'Anmeldung')).toBeVisible();
+    expect(api.setup!.tests).toHaveLength(1);
+    expect(api.setup!.puts).toEqual([{ values: VALUES }]);
+  });
+});

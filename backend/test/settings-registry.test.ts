@@ -43,7 +43,7 @@ describe('key classification', () => {
   });
   it('secrets and last4 hints', () => {
     expect(SETTINGS.filter((s) => s.secret).map((s) => s.key).sort()).toEqual(['OIDC_CLIENT_SECRET', 'JELLYFIN_ADMIN_API_KEY', 'REQUESTS_API_KEY', 'DISCORD_WEBHOOK_URL',
-      'VAPID_PRIVATE_KEY', 'TMDB_API_KEY', 'OMDB_API_KEY', 'AUTHENTIK_API_TOKEN', 'GITHUB_TOKEN', 'PORTAINER_WEBHOOK_URL', 'PORTAINER_API_KEY', 'WEBHOOK_SECRET', 'PLEX_TOKEN'].sort());
+      'VAPID_PRIVATE_KEY', 'TMDB_API_KEY', 'OMDB_API_KEY', 'AUTHENTIK_API_TOKEN', 'GITHUB_TOKEN', 'PORTAINER_WEBHOOK_URL', 'PORTAINER_API_KEY', 'WEBHOOK_SECRET', 'PLEX_TOKEN'].sort()); // fork: PLEX_TOKEN
     expect(SETTINGS.filter((s) => s.hint === 'last4').map((s) => s.key).sort()).toEqual(['OMDB_API_KEY', 'TMDB_API_KEY']);
     for (const s of SETTINGS) expect(s.secret === true, s.key).toBe(s.kind === 'secret');
   });
@@ -70,7 +70,7 @@ describe('key classification', () => {
     expect(def('PUBLIC_URL')).toMatchObject({ kind: 'url', group: 'general', probe: 'publicUrl', runRequired: true, apply: 'live' });
     expect(['OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET'].map((k) => [def(k).group, def(k).runRequired, def(k).probe])).toEqual(Array(3).fill(['signin', true, 'oidc']));
     expect(SETTINGS.filter((s) => s.runRequired !== undefined).map((s) => s.key).sort())
-      .toEqual(['JELLYFIN_ADMIN_API_KEY', 'JELLYFIN_URL', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_ISSUER', 'PLEX_TOKEN', 'PLEX_URL', 'PUBLIC_URL']);
+      .toEqual(['JELLYFIN_ADMIN_API_KEY', 'JELLYFIN_URL', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_ISSUER', 'PLEX_TOKEN', 'PLEX_URL', 'PUBLIC_URL']); // fork: PLEX_*
     expect(def('WEBHOOK_SECRET').generate).toBe('webhookSecret');
     expect([def('VAPID_PUBLIC_KEY').generate, def('VAPID_PRIVATE_KEY').generate]).toEqual(['vapidPair', 'vapidPair']);
     expect(def('HOME_NETWORKS')).toMatchObject({ kind: 'cidrList', group: 'playback' });

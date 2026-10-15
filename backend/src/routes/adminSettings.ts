@@ -8,7 +8,7 @@ import { audit } from '../audit.js';
 import type { Config } from '../config.js';
 import type { Ctx } from '../ctx.js';
 import { addressOnly } from '../media/address.js'; // fork
-import { mediaSettings, mediaSetupKeys } from '../media/index.js'; // fork
+import { MEDIA_SERVERS, mediaSettings, mediaSetupKeys } from '../media/index.js'; // fork
 import { REAUTH_WINDOW_S, recentlyAuthenticated } from '../reauth.js';
 import { requireAdmin } from '../session.js';
 import { resetSourceState } from '../sources/keys.js';
@@ -146,10 +146,12 @@ const httpUrl = (v: unknown) => {
  * see NO_DESTINATION (a test checks that every secret of the registry is in exactly one of the two).
  */
 const mediaDefs = SETTINGS.filter((d) => d.group === 'media');
+// fork: whether a media setting belongs to a kind: its runRequired evaluated for MEDIA_SERVER=kind (true or absent: every kind)
+const forKind = (d: SettingDef, kind: Config['MEDIA_SERVER']) => (typeof d.runRequired === 'function' ? d.runRequired({ MEDIA_SERVER: kind } as Config) : d.runRequired !== false);
 export const CREDENTIAL_DESTINATIONS: Readonly<Record<string, readonly string[]>> = {
-  // fork: a media credential goes to the URL of its own kind only (the defs of one kind share their runRequired predicate): PLEX_TOKEN ->
-  // PLEX_URL, JELLYFIN_ADMIN_API_KEY -> JELLYFIN_URL; a cross-kind pair would demand re-auth for a key that is never sent there
-  ...Object.fromEntries(mediaDefs.filter((d) => d.secret).map((d) => [d.key, mediaDefs.filter((u) => u.kind === 'url' && u.runRequired === d.runRequired).map((u) => u.key)])),
+  // fork: a media credential goes to the URL of its own kind only (paired by the kinds their runRequired names, not by function
+  // identity): PLEX_TOKEN -> PLEX_URL, JELLYFIN_ADMIN_API_KEY -> JELLYFIN_URL; a cross-kind pair would demand re-auth for a key never sent there
+  ...Object.fromEntries(mediaDefs.filter((d) => d.secret).map((d) => [d.key, mediaDefs.filter((u) => u.kind === 'url' && MEDIA_SERVERS.some((k) => forKind(d, k) && forKind(u, k))).map((u) => u.key)])),
   REQUESTS_API_KEY: ['REQUESTS_URL'],
   AUTHENTIK_API_TOKEN: ['AUTHENTIK_URL'],
   PORTAINER_API_KEY: ['PORTAINER_URL'],

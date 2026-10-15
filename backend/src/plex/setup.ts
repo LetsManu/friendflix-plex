@@ -46,7 +46,8 @@ async function probe(values: Record<string, string | undefined>, { fetchImpl }: 
     const id = await get('/identity', false);
     if (id.status < 200 || id.status >= 300) {
       cancel(id);
-      return byCode(id.status);
+      // no token was sent: a 401/403 here is no verdict on the token (PMS answers /identity unauthenticated), so not `unauthorized`
+      return id.status === 401 || id.status === 403 ? fail('invalid', 'bad_response') : byCode(id.status);
     }
     const machine = obj(obj(await smallJson(id))?.MediaContainer)?.machineIdentifier;
     if (typeof machine !== 'string' || !machine) return fail('invalid', 'bad_response');

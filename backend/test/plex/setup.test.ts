@@ -88,6 +88,11 @@ describe('plexSetup provider', () => {
     expect(await plexSetup.probe(values(), { fetchImpl: boom(leaky) })).toEqual({ ok: false, code: 'unreachable' });
     const slow = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
     expect(await plexSetup.probe(values(), { fetchImpl: boom(slow) })).toEqual({ ok: false, code: 'timeout' });
+    // fork (T3 minor): the headers arrive, then the body stalls until the deadline aborts it -> timeout (the deadline covers the body read)
+    const stalled = world((p) => (p === '/identity'
+      ? new Response(new ReadableStream({ start(c) { c.error(Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })); } }), { status: 200 })
+      : undefined));
+    expect(await plexSetup.probe(values(), { fetchImpl: stalled.fetchImpl })).toEqual({ ok: false, code: 'timeout' });
     // an upstream error on any step
     for (const path of ['/identity', '/library/sections', '/status/sessions']) {
       const w = world((p) => (p === path ? new Response('oops', { status: 502 }) : undefined));
@@ -109,6 +114,12 @@ describe('plexSetup provider', () => {
   it('not a Plex server: /identity 404 -> invalid not_found; another body -> invalid bad_response; the token is never sent', async () => {
     const nf = world((p) => (p === '/identity' ? new Response(null, { status: 404 }) : undefined));
     expect(await plexSetup.probe(values(), { fetchImpl: nf.fetchImpl })).toEqual({ ok: false, code: 'invalid', detail: 'not_found' });
+    // fork (T3 minor): /identity goes without the token, so a 401/403 there says nothing about the token: bad_response, not unauthorized
+    for (const status of [401, 403]) {
+      const w = world((p) => (p === '/identity' ? new Response(null, { status }) : undefined));
+      expect(await plexSetup.probe(values(), { fetchImpl: w.fetchImpl }), String(status)).toEqual({ ok: false, code: 'invalid', detail: 'bad_response' });
+      expect(w.paths()).toEqual(['/identity']);
+    }
     for (const body of ['<html>hello</html>', JSON.stringify({ MediaContainer: { size: 0 } }), JSON.stringify([1]), 'x'.repeat(10_000)]) {
       const w = world((p) => (p === '/identity' ? new Response(body, { status: 200 }) : undefined));
       expect(await plexSetup.probe(values(), { fetchImpl: w.fetchImpl })).toEqual({ ok: false, code: 'invalid', detail: 'bad_response' });

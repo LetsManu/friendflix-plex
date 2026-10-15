@@ -210,6 +210,7 @@ export class PlexSync {
       return;
     }
     if (typeof machine !== 'string' || !machine) return;
+    this.identityWarned = false; // a later outage is logged again
     const r = await this.db.query<{ previous: string | null; items: number }>(
       `with old as (select v #>> '{}' as id from plex_sync_state where k = 'machine_identifier'),
        swap as (insert into plex_sync_state(k, v) values ('machine_identifier', to_jsonb($1::text))

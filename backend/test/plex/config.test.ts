@@ -61,17 +61,17 @@ describe('MEDIA_SERVER=plex config', () => {
       writeFileSync(join(dir, 'tok'), 'from-file\n');
       expect(loadConfig({ ...BASE, MEDIA_SERVER: 'plex', PLEX_URL: 'http://plex:32400', PLEX_TOKEN_FILE: join(dir, 'tok') }).PLEX_TOKEN).toBe('from-file');
       const env = { DATABASE_URL: 'postgres://x', REDIS_URL: 'redis://x', APP_ENC_KEY: ENC_KEY, INTERNAL_SECRET: 'i'.repeat(20), MEDIA_SERVER: 'plex',
-        PLEX_URL: 'http://plex-env:32400', PLEX_TOKEN_FILE: join(dir, 'tok') };
+        PLEX_URL: 'http://plex.example.com:32400', PLEX_TOKEN_FILE: join(dir, 'tok') };
       const rows = [
-        { key: 'PLEX_URL', value: 'http://plex-db:32400', enc: null, last4: null, updatedAt: new Date().toISOString(), updatedBy: null },
+        { key: 'PLEX_URL', value: 'http://plex-db.example.com:32400', enc: null, last4: null, updatedAt: new Date().toISOString(), updatedBy: null },
         { key: 'PLEX_TOKEN', value: null, enc: encrypt(keyFromBase64(ENC_KEY), 'db-token'), last4: null, updatedAt: new Date().toISOString(), updatedBy: null },
       ];
       const r = resolveConfig({ env, rows, encKey: keyFromBase64(ENC_KEY) });
-      expect([r.cfg.PLEX_URL, r.cfg.PLEX_TOKEN]).toEqual(['http://plex-env:32400', 'from-file']);
+      expect([r.cfg.PLEX_URL, r.cfg.PLEX_TOKEN]).toEqual(['http://plex.example.com:32400', 'from-file']);
       expect([r.sources.PLEX_URL, r.sources.PLEX_TOKEN]).toEqual(['env', 'env']);
       // without env the saved (decrypted) values apply
       const db = resolveConfig({ env: { ...env, PLEX_URL: undefined, PLEX_TOKEN_FILE: undefined }, rows, encKey: keyFromBase64(ENC_KEY) });
-      expect([db.cfg.PLEX_URL, db.cfg.PLEX_TOKEN, db.sources.PLEX_URL, db.sources.PLEX_TOKEN]).toEqual(['http://plex-db:32400', 'db-token', 'db', 'db']);
+      expect([db.cfg.PLEX_URL, db.cfg.PLEX_TOKEN, db.sources.PLEX_URL, db.sources.PLEX_TOKEN]).toEqual(['http://plex-db.example.com:32400', 'db-token', 'db', 'db']);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
