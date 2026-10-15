@@ -4,6 +4,8 @@ All notable changes, grouped by what you notice. Each release has its own sectio
 
 ## [Unreleased]
 
+## [1.0.0] – Arancini – 2026-10-15
+
 ### FriendFlix for Plex (this fork)
 - **Plex media server** behind the neutral interface: `MEDIA_SERVER=plex` selects `backend/src/plex/*` and the gateway adapter `gateway/src/upstream/plex.ts`; `compose.plex.yaml` connects the backend and gateway to an existing Plex server (address and token in the setup wizard or *Admin → Settings*; optional pins `PLEX_URL`, `PLEX_TOKEN` / `PLEX_TOKEN_FILE`). Preview: tested against a fake Plex server built from Plex Media Server 1.43 answers, not released.
 - **One server-side Plex token**, held by the backend (the gateway gets it from the backend over the internal network, in memory only), sent as a header and never to a client. FriendFlix enforces roles, profiles, age limits and kids profiles itself, from a Postgres mirror of the Plex library (sync every 5 minutes, notification websocket, nightly sweep). No plex.tv accounts for friends, no Plex Pass needed.
