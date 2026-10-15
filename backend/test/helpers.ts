@@ -6,9 +6,8 @@ import type { Config } from '../src/config.js';
 import { createLiveCtx, type Ctx } from '../src/ctx.js';
 import { keyFromBase64 } from '../src/crypto.js';
 import { migrate } from '../src/db.js';
-import { JellyfinClient } from '../src/jellyfin/client.js';
-import { JellyfinService } from '../src/jellyfin/service.js';
 import { MemoryKV } from '../src/kv.js';
+import { createMediaServer } from '../src/media/index.js';
 import { SeerrClient } from '../src/seerr/client.js';
 import type { OidcClaims } from '../src/oidc.js';
 import { DEFAULT_ROLES } from '../src/roles.js';
@@ -18,7 +17,7 @@ import { updateMeta, writeRows } from '../src/settings/repo.js';
 import { toStored } from '../src/settings/resolve.js';
 import { createSettingsStore, type SettingsStore } from '../src/settings/store.js';
 import { isSetupComplete } from '../src/setup/state.js';
-import { PLEX_TOKEN, PLEX_URL, PlexFake, plexServer } from './plexfake.js';
+import { PLEX_TOKEN, PLEX_URL, PlexFake } from './plexfake.js';
 import type { PlexMediaServer } from '../src/plex/service.js';
 
 export const TEST_DB = process.env.TEST_DATABASE_URL ?? 'postgres://postgres@localhost:5433/ff_test';
@@ -80,8 +79,8 @@ export interface TestEnv {
   kv: MemoryKV;
   login: (claims?: OidcClaims) => Promise<{ cookies: Record<string, string>; csrf: string }>;
   close: () => Promise<void>;
-  /** makeEnv(…, { server: 'plex' }): the Plex implementation (ctx.jf) and its fake server (already synced once) */
-  plex?: { ms: PlexMediaServer; fake: PlexFake };
+  /** makeEnv(…, { server: 'plex' }): the Plex implementation (the current ctx.jf, already synced once) and its fake server */
+  plex?: { readonly ms: PlexMediaServer; fake: PlexFake };
 }
 
 export const ADMIN: OidcClaims = { sub: 'sub-admin', email: 'admin@example.com', name: 'Admin', groups: ['friendflix-admins'] };
@@ -157,7 +156,7 @@ export async function testSettings(pool: pg.Pool, c: Config = cfg, extraEnv: Nod
  * A test app over a fresh database. Setup counts as complete unless `setupComplete: false` (the setup gate's own tests): most tests
  * exercise the running app, and a fresh database is otherwise in setup mode (spec Part E).
  */
-export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extra & { ctxPatch?: (c: Ctx) => void; seerr?: Record<string, Handler>; settingsEnv?: NodeJS.ProcessEnv; setupComplete?: boolean; server?: 'plex'; plexFake?: PlexFake; plexMedia?: (pool: pg.Pool, kv: MemoryKV) => PlexMediaServer } = {}): Promise<TestEnv> {
+export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extra & { ctxPatch?: (c: Ctx) => void; seerr?: Record<string, Handler>; settingsEnv?: NodeJS.ProcessEnv; setupComplete?: boolean; server?: 'plex'; plexFake?: PlexFake; plexFetch?: (fake: PlexFake) => typeof fetch } = {}): Promise<TestEnv> {
   const pool = await resetDb();
   if (extra.setupComplete !== false) await updateMeta(pool, { setupCompletedAt: new Date() });
   const kv = new MemoryKV();
@@ -167,15 +166,14 @@ export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extr
   const jfFetch = fakeHttp({ ...defaultJellyfin(), ...extraJf }, jfCalls);
   const seerrFetch = fakeHttp(extra.seerr ?? {}, seerrCalls);
   const encKey = keyFromBase64(ENC_KEY);
-  // FriendFlix for Plex: makeEnv(…, { server: 'plex' }) runs the Plex implementation against its fake (MEDIA_SERVER=plex, PLEX_* set)
-  // plexMedia: a test's own PlexMediaServer (a transcoder fake, a playback stub) instead of the default one over plexFake
-  const plex: TestEnv['plex'] = extra.server !== 'plex' ? undefined
-    : extra.plexMedia ? { ms: extra.plexMedia(pool, kv), fake: extra.plexFake ?? new PlexFake() } : plexServer(pool, kv, extra.plexFake);
-  const settings = await testSettings(pool, plex ? { ...cfg, MEDIA_SERVER: 'plex', PLEX_URL, PLEX_TOKEN } : cfg, extra.settingsEnv);
+  // FriendFlix for Plex: makeEnv(…, { server: 'plex' }) sets MEDIA_SERVER=plex and PLEX_URL/PLEX_TOKEN as settings; the media factory then
+  // builds the real PlexMediaServer over the fake (plexFetch: a wrapper around fake.fetch, e.g. a transcoder fake)
+  const plexFake = extra.server === 'plex' ? extra.plexFake ?? new PlexFake() : undefined;
+  const settings = await testSettings(pool, plexFake ? { ...cfg, MEDIA_SERVER: 'plex', PLEX_URL, PLEX_TOKEN } : cfg, extra.settingsEnv);
   const live = createLiveCtx({
     settings, kv, db: pool, encKey, fetchImpl: fetch,
     roles: DEFAULT_ROLES,
-    media: (c) => c.MEDIA_SERVER === 'plex' && plex ? plex.ms : new JellyfinService(new JellyfinClient(c.JELLYFIN_URL!, c.JELLYFIN_ADMIN_API_KEY!, jfFetch), kv, encKey),
+    media: (c) => createMediaServer({ cfg: c, kv, db: pool, encKey, fetchImpl: plexFake ? (extra.plexFetch?.(plexFake) ?? plexFake.fetch) : jfFetch }),
     requests: (c) => new SeerrClient(c.REQUESTS_URL, c.REQUESTS_API_KEY, seerrFetch),
     oidc: {
       start: async () => ({ url: 'https://idp/authorize', state: 's' + Math.random().toString(36).slice(2), nonce: 'n', codeVerifier: 'v' }),
@@ -185,7 +183,8 @@ export async function makeEnv(extraJf: Record<string, Handler> = {}, extra: Extr
     log: { warn: () => {} },
   });
   const { ctx } = live;
-  if (plex) await plex.ms.sync.run();
+  const plex: TestEnv['plex'] = plexFake ? { get ms() { return ctx.jf as PlexMediaServer; }, fake: plexFake } : undefined;
+  await plex?.ms.sync.run();
   extra.ctxPatch?.(ctx);
   await isSetupComplete(ctx); // warms the cache isOperational reads (server.ts does the same before the timers start)
   const app = await buildApp(ctx, extra);

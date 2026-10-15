@@ -77,20 +77,10 @@ describe('through the routes (makeEnv server: plex)', () => {
   const big = fake.addMovie({ title: 'Big Picture' });
   Object.assign(fake.items.get(big)!.Media[0], { bitrate: 30_000, height: 2160, width: 3840, container: 'mp4' });
   beforeAll(async () => {
-    let built: ReturnType<typeof build> | undefined;
-    env = await makeEnv({}, {
-      server: 'plex', plexFake: fake,
-      plexMedia: (pool, kv) => {
-        built = build(pool, kv, fake);
-        return built.ms;
-      },
-    });
-    tf = built!.tf;
-    await built!.ms.sync.run();
+    env = await makeEnv({}, { server: 'plex', plexFake: fake, plexFetch: (f) => (tf = new TranscoderFake(f.fetch)).fetch });
   });
   afterAll(async () => {
     for (const b of bodies) expect(b).not.toContain(PLEX_TOKEN);
-    await (env.ctx.jf as PlexMediaServer).stop();
     await env.close();
   });
 
