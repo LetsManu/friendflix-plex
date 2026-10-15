@@ -4,6 +4,8 @@ All notable changes, grouped by what you notice. Each release has its own sectio
 
 ## [Unreleased]
 
+## [1.0.1] – Arancini – 2026-10-15
+
 ### Releases
 - **Images for the first release:** the 1.0.0 tag build stopped in its secret scan (five old test placeholders that only a full-history scan sees) before publishing images. 1.0.1 is the same code with those placeholders on the scanner's ignore list, so its images are published.
 
