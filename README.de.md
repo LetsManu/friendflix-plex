@@ -133,7 +133,11 @@ App-artige Oberfläche mit Tab-Leiste unten, einer Vorschau beim Antippen eines 
 
 Ein aufgeräumter Admin-Bereich mit Seitenleiste (Personen, Inhalte, Betrieb) und einer **Übersicht**, die Systemzustand, offene Entscheidungen – einen Wunsch oder ein neues Gerät gleich dort freigeben oder ablehnen –, die letzte Aktivität in ganzen Sätzen, Zahlen und Speicher zeigt. Alles meldet sich zurück: keine Pop-up-Fenster, riskante Aktionen fragen vorher, kleine bieten **Rückgängig**. Auf dem Handy ist derselbe Bereich eine einfache Liste mit großen Tippflächen.
 
+**Einrichtung im Browser:** eine neue Installation beginnt mit einem Einrichtungsassistenten, den ein einmaliger Code aus dem Server-Log freischaltet; er verbindet deinen Plex-Server (Adresse und Token) und richtet Authentik automatisch ein, und jede Einstellung liegt danach unter *Admin → Einstellungen*, vor dem Speichern geprüft.
+
 Außerdem im Admin-Bereich: Einladungen und Rollen, **Marken-Hubs**, hervorgehobene und Themenlisten, **Bald-weg-Termine**, Vorschau-Clips, der nächtliche Wiedergabe-Check, der Wochenrückblick, ein Audit-Log und Updates per Knopfdruck.
+
+**Nutzerverwaltung:** eine Liste aller Konten mit Filtern und Sammelaktionen (Rolle, sperren, Zugang bis, überall abmelden), ein Reiter *Warten auf Freigabe* für Leute, die sich ohne Einladung angemeldet haben, Einladungen mit mehreren Nutzungen und Zugangstagen und eine Seite pro Person mit Nutzung, Profilen, Geräten, Downloads, Verlauf, eigenen Limits, Zwei-Faktor-Stand und Audit-Log. Der Zugang kann an einem Datum enden: FriendFlix erinnert drei Tage vorher und sperrt das Konto am Stichtag. Schon das Ansehen des Verlaufs einer Person landet im Audit-Log.
 
 **Admin-Pflege:** eine Status-Seite mit Ampeln für jeden Dienst, Speicherplatz, laufenden Streams (direkt oder umgewandelt, und warum) und den letzten Fehlern, dazu ein schmales Warnband, wenn etwas dich braucht; eine Seite **Bibliothekspflege**, die fehlende Bilder, Sprachlücken, Doppelte und Problemdateien findet; und eine Seite **Nutzung** mit Sehzeit, Streams und Geräten pro Konto (nur Summen, keine Titel).
 
@@ -147,7 +151,8 @@ Außerdem im Admin-Bereich: Einladungen und Rollen, **Marken-Hubs**, hervorgehob
 ## Datenschutz und Sicherheit
 
 - **Selbst gehostet.** Alles läuft auf deinem eigenen Server. FriendFlix hat keine Werbung und keine Analyse-Dienste von Dritten.
-- **Nur mit Einladung.** Neue Leute kommen über Einmal-Einladungslinks dazu. Die Anmeldung läuft über dein Authentik mit **verpflichtender Zwei-Faktor-Authentifizierung**, neue Geräte können eine Freigabe brauchen.
+- **Nur mit Einladung oder Freigabe.** Neue Leute kommen über Einladungslinks (einmalig oder mit begrenzten Nutzungen) dazu oder melden sich an und warten, bis ein Admin sie freigibt. Die Anmeldung läuft über dein Authentik mit **verpflichtender Zwei-Faktor-Authentifizierung**, neue Geräte können eine Freigabe brauchen.
+- **Deine Daten, dein Konto.** Alle verwalten ihr Konto selbst in der App (Name, Farbe, Geräte, Zwei-Faktor-Stand), können alles, was FriendFlix über sie speichert, als eine JSON-Datei herunterladen und ihr Konto selbst löschen. Das Löschen braucht eine erneute Anmeldung, lässt sich 7 Tage lang rückgängig machen und entfernt das Konto dann aus FriendFlix, dem Medienserver und dem Wunsch-Dienst; das Audit-Log behält ein Pseudonym statt des Namens.
 - **Plex und der Wunsch-Dienst bleiben unsichtbar.** Freunde sprechen nur mit dem Portal. Das Plex-Token liegt nur im Backend und im Gateway und geht nie an einen Browser; Videos und Bilder laufen über ein Gateway, das jede Anfrage prüft.
 - **Keine plex.tv-Konten für deine Freunde.** FriendFlix verwaltet seine Nutzer selbst und setzt Rollen, Profile und Altersgrenzen selbst durch; Plex sieht nur ein serverseitiges Token. Es läuft ohne Plex Pass.
 - **Du bestimmst, was Freunde sehen.** „Verlauf teilen“ (standardmäßig aus) und „Bewertungen teilen“ stellt jede Person in den Einstellungen ein; „Diese Woche bei uns“ zeigt nur Zahlen, nie wer geschaut hat. Reaktionen zu einem Titel erscheinen erst, wenn du ihn gesehen hast, und der optionale Spoilerschutz blendet Bilder und Beschreibungen ungesehener Folgen aus.
@@ -214,56 +219,54 @@ Ab hier wird es technisch. Die Plex-Anleitung ist [docs/de/plex.md](docs/de/plex
 
 ### Schnellstart
 
-Der Produktions-Stack zieht fertige Images von `ghcr.io/letsmanu/friendflix-plex-{backend,web,gateway}`; auf dem Server wird nichts gebaut. Die Images erscheinen mit dem ersten Preview-Release – vorher kann `docker compose ... up` sie nicht ziehen.
+Installation in drei Zeilen. Der Produktions-Stack zieht fertige Images von `ghcr.io/letsmanu/friendflix-plex-{backend,web,gateway}`; auf dem Server wird nichts gebaut und keine `.env` geschrieben. Die Images erscheinen mit dem ersten Preview-Release – vorher kann `docker compose ... up` sie nicht ziehen.
 
 ```bash
 git clone https://github.com/LetsManu/friendflix-plex.git && cd friendflix-plex
-cp .env.example .env
-openssl rand -base64 32    # -> APP_ENC_KEY
-openssl rand -hex 24       # -> INTERNAL_SECRET, WEBHOOK_SECRET, METRICS_TOKEN (je ein Wert)
-$EDITOR .env               # PUBLIC_URL, Passwörter, OIDC_*, PLEX_URL, PLEX_TOKEN, REQUESTS_*
-docker login ghcr.io -u <user>                                 # nur bei privaten Paketen (PAT mit read:packages)
-docker compose -f compose.prod.yaml -f compose.plex.yaml config --quiet   # prüfen
 docker compose -f compose.prod.yaml -f compose.plex.yaml up -d    # compose.plex.yaml verbindet nur mit deinem vorhandenen Plex-Server
-docker compose -f compose.prod.yaml -f compose.plex.yaml --profile backup up -d backup   # optional: nächtliche Datenbank-Backups
-docker compose -f compose.prod.yaml -f compose.plex.yaml ps                         # alles "healthy"
+docker compose -f compose.prod.yaml -f compose.plex.yaml logs backend | grep "setup code"
 ```
 
-Danach:
+Noch keine Ausgabe? `up -d` kehrt zurück, bevor das Backend gestartet ist: ein paar Sekunden warten und den letzten Befehl wiederholen; die Zeile erscheint, sobald das Backend läuft.
 
-1. **Authentik:** OIDC-Provider anlegen (Redirect-URI `${PUBLIC_URL}/auth/callback`) und MFA erzwingen – [docs/de/authentik.md](docs/de/authentik.md).
-2. **Nginx Proxy Manager:** ein Proxy-Host `portal.<domain>` → `127.0.0.1:3080`, Websockets an, Force SSL/HTTP2/HSTS; [deploy/npm/portal.advanced.conf](deploy/npm/portal.advanced.conf) in den Reiter *Advanced* einfügen (leitet `/api`, `/auth`, `/ws` an `:3081` und `/media/` an `:3082`). Den Block `/media/c/` nicht entfernen: Er verhindert, dass Cast-Tokens in Logs landen.
-3. **Plex:** Server claimen, Admin-Token holen, Bibliotheksnamen, Altersfreigaben und Vorschaubilder prüfen – [docs/de/plex.md](docs/de/plex.md). Die Jellyfin-Schritte in [docs/integrations.md](docs/integrations.md) gelten nicht.
-4. **Wunsch-Dienst (optional):** API-Key und Webhook – [docs/integrations.md](docs/integrations.md).
-5. **Web-Push (optional):** `node scripts/gen-vapid.mjs`, beide Schlüssel in `.env`, neu starten.
-6. **Erster Login** mit einem Mitglied der Authentik-Gruppe `friendflix-admins`: Du wirst Portal-Admin, wählst die Sprache der Instanz und lädst deine Freunde unter *Admin → Einladungen* ein.
+Dann das Portal im Browser öffnen, den Einrichtungscode eingeben und dem **Einrichtungsassistenten** folgen: öffentliche Adresse, Medienserver (Adresse deines Plex-Servers und sein Token, siehe [docs/de/plex.md](docs/de/plex.md)), Anmeldung (er richtet Authentik mit einem einmaligen Admin-Token ein: Provider, Gruppen, Einladungen, Wiederherstellung), und deine erste Anmeldung wird Admin. Danach folgen optionale Extras (Wunsch-Dienst, Push, Webhooks, Datenquellen); alles lässt sich später unter *Admin → Einstellungen* ändern. Weder das Authentik-Admin-Token noch ein Passwort wird gespeichert; das Plex-Token liegt verschlüsselt in der Datenbank und nur Backend und Gateway nutzen es. Schritt für Schritt: [docs/de/setup.md](docs/de/setup.md) (Jellyfin-Schritte dort: stattdessen [docs/de/plex.md](docs/de/plex.md)).
 
-Das Gateway muss `PLEX_URL` erreichen; nimm die lokale Adresse deines Plex-Servers (Details in [docs/de/plex.md](docs/de/plex.md)). Läuft der Wunsch-Dienst schon in einem eigenen Stack: `docker network connect friendflix_media <container>`, dessen öffentliche Ports entfernen und `REQUESTS_URL` setzen.
+Vorher brauchst du:
+
+1. **Authentik**, installiert mit Admin-Konto – [docs/de/authentik.md §2](docs/de/authentik.md#2-authentik-installieren). Danach dort MFA zur Pflicht machen und den einmaligen Token widerrufen ([§3](docs/de/authentik.md#3-automatische-einrichtung-aus-friendflix)).
+2. **Plex:** Server geclaimt, ein Token für FriendFlix (am besten eines eigenen Plex-Kontos), Bibliotheksnamen, Altersfreigaben und Vorschaubilder geprüft – [docs/de/plex.md](docs/de/plex.md). Backend und Gateway müssen seine lokale Adresse erreichen (Details dort). Die Jellyfin-Schritte in [docs/integrations.md](docs/integrations.md) gelten nicht.
+3. **Nginx Proxy Manager:** ein Proxy-Host `portal.<domain>` → `127.0.0.1:3080`, Websockets an, Force SSL/HTTP2/HSTS; [deploy/npm/portal.advanced.conf](deploy/npm/portal.advanced.conf) in den Reiter *Advanced* einfügen (leitet `/api`, `/auth`, `/ws` an `:3081` und `/media/` an `:3082`). Den Block `/media/c/` nicht entfernen: Er verhindert, dass Cast-Tokens in Logs landen.
+
+Außerdem sinnvoll: `./scripts/backup-bootstrap.sh` sichert die erzeugten Secrets (der Dienst `bootstrap` legt die Passwörter für Datenbank und Redis, `APP_ENC_KEY` und `INTERNAL_SECRET` im Docker-Volume `friendflix_bootstrap` an), und `docker compose -f compose.prod.yaml -f compose.plex.yaml --profile backup up -d backup` ergänzt nächtliche Datenbank-Backups. Private Pakete: vorher `docker login ghcr.io -u <user>` (PAT mit read:packages). Läuft der Wunsch-Dienst schon in einem eigenen Stack: `docker network connect friendflix_media <container>` und dessen öffentliche Ports entfernen.
+
+Lieber Dateien? Jede Einstellung kann weiterhin aus der `.env` oder aus Docker-Secrets kommen und erscheint dann im Assistenten und unter *Admin → Einstellungen* gesperrt ([docs/de/setup.md §15](docs/de/setup.md#15-fortgeschritten-konfiguration-über-die-umgebung)). Bestehende Installation aktualisieren: [docs/de/setup.md §14](docs/de/setup.md#14-umstieg-auf-einstellungen-in-der-datenbank); sie sieht den Assistenten nie, und `PLEX_URL` / `PLEX_TOKEN` aus der `.env` gelten weiter (gesperrt angezeigt).
 
 ### Konfiguration
 
-Vorlage: [.env.example](.env.example). Jede Variable kann mit der Endung `_FILE` auch aus einer Datei gelesen werden (Docker Secrets, siehe [compose.secrets.yaml](compose.secrets.yaml)). Die Standardwerte stammen aus [compose.prod.yaml](compose.prod.yaml). Die Plex-Variablen unten reicht `compose.plex.yaml` durch (es setzt auch `MEDIA_SERVER=plex`).
+Eine neue Installation braucht keine davon: Einrichtungsassistent und *Admin → Einstellungen* speichern sie in der Datenbank. Vorlage, um Werte aus der Umgebung festzunageln: [.env.example](.env.example). Jede Variable kann mit der Endung `_FILE` auch aus einer Datei gelesen werden (Docker Secrets, siehe [compose.secrets.yaml](compose.secrets.yaml)). Die Standardwerte stammen aus [compose.prod.yaml](compose.prod.yaml). Einstellungen lassen sich stattdessen unter *Admin → Einstellungen* speichern; ein Wert aus `.env` oder Datei hat Vorrang und ist dort gesperrt ([docs/de/setup.md](docs/de/setup.md#einstellungen-in-der-datenbank)). Die Plex-Variablen unten reicht `compose.plex.yaml` durch (es setzt auch `MEDIA_SERVER=plex`).
 
 | Variable | Standard | Bedeutung |
 |---|---|---|
-| `PUBLIC_URL` | – (Pflicht) | Öffentliche https-URL des Portals |
-| `POSTGRES_PASSWORD`, `REDIS_PASSWORD` | – (Pflicht) | Passwörter für Datenbank und Redis |
-| `APP_ENC_KEY` | – (Pflicht) | 32 Byte base64; verschlüsselt gespeicherte Zugangsdaten. **Getrennt sichern.** |
-| `INTERNAL_SECRET`, `WEBHOOK_SECRET` | – (Pflicht, ≥ 16 Zeichen) | Backend ↔ Gateway; Webhooks von Medienserver/Wunsch-Dienst |
-| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | – (Pflicht) | Authentik-OIDC-Provider |
+| `PUBLIC_URL` | – (Einrichtungsassistent) | Öffentliche https-URL des Portals |
+| `POSTGRES_PASSWORD`, `REDIS_PASSWORD` | erzeugt | Passwörter für Datenbank und Redis; nur bei Installationen setzen, die sie schon hatten (werden ins Volume `bootstrap` kopiert) |
+| `APP_ENC_KEY` | erzeugt | 32 Byte base64; verschlüsselt gespeicherte Zugangsdaten und geheime Einstellungen. **Volume `bootstrap` getrennt sichern** (`scripts/backup-bootstrap.sh`) |
+| `INTERNAL_SECRET` | erzeugt | Backend ↔ Gateway (≥ 16 Zeichen, wenn gesetzt) |
+| `WEBHOOK_SECRET` | – | Webhooks von Medienserver/Wunsch-Dienst (≥ 16 Zeichen); *Admin → Einstellungen → Allgemein → Neu erzeugen*. Ohne: Die Webhooks antworten mit 403 |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | – (Einrichtungsassistent) | Authentik-OIDC-Provider |
 | `TMDB_API_KEY`, `OMDB_API_KEY` (oder `…_FILE`) | leer | Optionale Zusatzdaten für die Detailseite (Links, Bewertungen); oder unter *Admin → Datenquellen* setzen. Siehe [docs/integrations.md](docs/integrations.md#tmdb--omdb-optional) |
 | `MEDIA_SERVER` | im Original `jellyfin`; hier `plex` | `plex` wählt das Plex-Backend (ein Medienserver pro Instanz) |
-| `PLEX_URL` | – (Pflicht bei `plex`) | URL deines Plex-Servers aus Sicht von Backend und Gateway, z. B. `http://192.168.1.10:32400` oder `http://host.docker.internal:32400` |
-| `PLEX_TOKEN` oder `PLEX_TOKEN_FILE` | – (Pflicht bei `plex`) | Plex-Token (am besten eines eigenen Plex-Kontos). Nur Backend und Gateway nutzen es; geht nie an Browser |
-| `JELLYFIN_URL`, `JELLYFIN_ADMIN_API_KEY` | – (nur Original / `MEDIA_SERVER=jellyfin`) | Mit Plex nicht verwendet; leer lassen |
-| `REQUESTS_URL`, `REQUESTS_API_KEY` | – (Pflicht) | Interne URL (mitgeliefert: `http://requests:5055`) und API-Key des Wunsch-Dienstes (ältere Variablennamen funktionieren weiter, mit Hinweis im Log) |
+| `PLEX_URL` | – (Einrichtungsassistent) | URL deines Plex-Servers aus Sicht von Backend und Gateway, z. B. `http://192.168.1.10:32400` oder `http://host.docker.internal:32400` |
+| `PLEX_TOKEN` oder `PLEX_TOKEN_FILE` | – (Einrichtungsassistent) | Plex-Token (am besten eines eigenen Plex-Kontos). Nur Backend und Gateway nutzen es; geht nie an Browser |
+| `JELLYFIN_URL`, `JELLYFIN_ADMIN_API_KEY` | – (nur Original / `MEDIA_SERVER=jellyfin`) | Mit Plex nicht verwendet; nicht setzen |
+| `REQUESTS_URL`, `REQUESTS_API_KEY` | – (optional) | Interne URL (mitgeliefert: `http://requests:5055`) und API-Key des Wunsch-Dienstes; ohne beide sind Wünsche und Anfragen ausgeblendet (ältere Variablennamen funktionieren weiter, mit Hinweis im Log) |
 | `ADMIN_GROUP` | `friendflix-admins` | Authentik-Gruppe, deren Mitglieder Portal-Admins werden |
 | `BIND_ADDR` | `127.0.0.1` | Host-Adresse für die drei Ports – nie eine öffentliche Schnittstelle |
 | `WEB_PORT`, `BACKEND_PORT`, `GATEWAY_PORT` | `3080`, `3081`, `3082` | Host-Ports für den Reverse Proxy |
 | `FF_REGISTRY`, `FF_TAG` | `ghcr.io/letsmanu`, `latest` | Herkunft und Version der Images (festnageln mit Commit-SHA oder `x.y.z`) |
 | `SESSION_TTL_SECONDS`, `SESSION_IDLE_SECONDS` | `28800`, `7200` | Maximale Sitzungsdauer (8 h) und Ablauf bei Inaktivität (2 h) |
 | `TZ` | `Europe/Vienna` | Zeitzone für geplante Jobs (Rückblick, Wiedergabe-Check, Backups) |
-| `AUTHENTIK_URL`, `AUTHENTIK_API_TOKEN`, `AUTHENTIK_ENROLL_FLOW` | leer | Einladungen, die auch das Authentik-Konto anlegen (alle drei nötig) |
+| `AUTHENTIK_URL`, `AUTHENTIK_API_TOKEN`, `AUTHENTIK_ENROLL_FLOW` | leer | Einladungen, die auch das Authentik-Konto anlegen (alle drei nötig); URL und Token liefern der Admin-Nutzerseite auch den Zwei-Faktor-Stand und *Passwort-Link senden* |
+| `AUTHENTIK_RECOVERY_FLOW`, `AUTHENTIK_TOTP_SETUP_FLOW` | `default-recovery-flow`, `default-authenticator-totp-setup` | Wiederherstellungs-Flow, dessen E-Mail-Stage den Passwort-Link sendet (Authentik 2024.4 oder neuer); der zweite ist reserviert. Siehe [docs/de/authentik.md](docs/de/authentik.md#10-passwort-wiederherstellung-per-e-mail) |
 | `NTFY_URL`, `NTFY_BASE_URL`, `DISCORD_WEBHOOK_URL` | leer | Gemeinsamer ntfy-/Discord-Kanal; ntfy-Server für persönliche Themen |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | leer, leer, `PUBLIC_URL` | Web-Push; nur aktiv, wenn beide Schlüssel gesetzt sind |
 | `DIGEST_DAY`, `DIGEST_HOUR` | `0` (Sonntag), `18` | Zeitplan des Wochenrückblicks; `-1` = aus; im Admin-Bereich änderbar |
@@ -352,7 +355,7 @@ flowchart TB
 
 ### Betrieb
 
-- **Backups:** Der optionale Sidecar `backup` macht täglich um `BACKUP_HOUR` einen `pg_dump`, prüft jeden Dump mit `pg_restore --list`, behält `BACKUP_KEEP_DAYS` Tage und wird `unhealthy`, wenn ein Lauf fehlschlägt. Wiederherstellung und monatlicher Restore-Test (`scripts/restore-test.sh`): [docs/operations.md](docs/operations.md). `APP_ENC_KEY` getrennt von den Dumps im Passwort-Manager aufbewahren.
+- **Backups:** Der optionale Sidecar `backup` macht täglich um `BACKUP_HOUR` einen `pg_dump`, prüft jeden Dump mit `pg_restore --list`, behält `BACKUP_KEEP_DAYS` Tage und wird `unhealthy`, wenn ein Lauf fehlschlägt. Wiederherstellung und monatlicher Restore-Test (`scripts/restore-test.sh`): [docs/operations.md](docs/operations.md). Das Volume `bootstrap` (`scripts/backup-bootstrap.sh`, enthält `APP_ENC_KEY`) getrennt von den Dumps sichern.
 - **Updates:** *Admin → Update* zeigt die installierte Version und das neueste Release samt Notizen (dazu die Commits auf main) und stößt über Portainer (Webhook oder API) ein Redeploy an. Von Hand: `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`. Datenbank-Migrationen laufen beim Start.
 - **Monitoring:** `/health` (Liveness) und `/health/ready` (Redis, Postgres, Medienserver) auf `127.0.0.1:3081`; Prometheus-Metriken unter `:3081/metrics` und `:3082/metrics` (Bearer `METRICS_TOKEN`). Beispiele für Icinga und Prometheus sowie ein optionaler Prometheus-+-Grafana-Stack mit fertigem Dashboard (`compose.monitoring.yaml`, internes Netz, kein Standardpasswort): [docs/monitoring.md](docs/monitoring.md).
 - **Lieferkette:** Images werden gescannt (Trivy), keyless mit cosign signiert und mit SBOM- und Provenienz-Attestations veröffentlicht; vor dem Deployen lassen sie sich prüfen – [docs/operations.md](docs/operations.md). Die Builds sind reproduzierbar: jedes Release lässt sich aus dem Quellcode nachbauen und ergibt denselben Image-Digest – [docs/reproducible-builds.md](docs/reproducible-builds.md) (englisch).

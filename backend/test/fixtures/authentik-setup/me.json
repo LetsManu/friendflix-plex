@@ -1,0 +1,1 @@
+{ "user": { "pk": 7, "username": "akadmin", "name": "authentik Default Admin", "email": "admin@example.com", "is_superuser": true, "groups": [] } }

@@ -67,7 +67,7 @@ describe('authorize() single flight', () => {
     authzMode = 'error';
     const before = authzCalls;
     const rs = await Promise.all(Array.from({ length: 10 }, () => get(`/media/Items/${ID}/Images/Primary`, sid)));
-    expect(rs.every((r) => r.status === 401)).toBe(true);
+    expect(rs.every((r) => r.status === 503)).toBe(true); // backend trouble, not a logout
     expect(authzCalls - before).toBe(1);
     authzMode = 'ok';
     const r = await get(`/media/Items/${ID}/Images/Primary`, sid); // backend recovered: retried at once

@@ -3,6 +3,7 @@
 <script lang="ts">
   import { api, img } from '#lib/api';
   import { t, type TKey } from '#lib/i18n';
+  import { initials, toPeople } from '#lib/detail/safe';
 
   interface Member { id: string; name: string; role?: string; type: string; image: boolean }
   /** item whose cast & crew is shown; the section stays hidden while loading, on failure or when empty */
@@ -10,7 +11,7 @@
   /** already loaded by the parent (DetailView): no second /people request; undefined = fetch here */
   export let people: Member[] | undefined = undefined;
   let fetched: Member[] = [], seq = 0;
-  $: shown = (people ?? fetched).slice(0, 20);
+  $: shown = toPeople(people ?? fetched).slice(0, 20);
 
   $: if (people === undefined) void load(id);
   async function load(itemId: string) {
@@ -18,11 +19,10 @@
     fetched = [];
     try {
       const r = await api(`/api/items/${itemId}/people`);
-      if (my === seq) fetched = ((r?.people ?? []) as Member[]).slice(0, 20);
+      if (my === seq) fetched = toPeople(r?.people).slice(0, 20);
     } catch { /* optional section */ }
   }
   const ROLE: Record<string, TKey> = { Director: 'detail.cast.role.director', Writer: 'detail.cast.role.writer', Producer: 'detail.cast.role.producer', Composer: 'detail.cast.role.composer' };
-  const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
 </script>
 
 {#if shown.length}

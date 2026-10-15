@@ -80,9 +80,9 @@ describe('through the routes (makeEnv server: plex)', () => {
     let built: ReturnType<typeof build> | undefined;
     env = await makeEnv({}, {
       server: 'plex', plexFake: fake,
-      ctxPatch: (c) => {
-        built = build(c.db as unknown as pg.Pool, c.kv as MemoryKV, fake);
-        c.jf = built.ms;
+      plexMedia: (pool, kv) => {
+        built = build(pool, kv, fake);
+        return built.ms;
       },
     });
     tf = built!.tf;

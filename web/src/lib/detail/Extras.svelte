@@ -4,18 +4,20 @@
   import { img, type Item } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
   import { t } from '#lib/i18n';
+  import { uniqueBy } from '#lib/detail/safe';
 
   /** Jellyfin special features and local trailers; `kind` comes from GET /api/items/:id/extras/all */
   export let items: Array<Item & { kind?: 'trailer' | 'extra' }>;
   /** query string (audio/sub choice) appended to the player links */
   export let qs = '';
 
+  $: list = uniqueBy(items, (x) => x.id);
   let failed = new Set<string>();
   const mins = (x: Item) => (x.runtimeTicks ? Math.max(1, Math.round(x.runtimeTicks / 600_000_000)) : 0);
 </script>
 
 <ul class="ex">
-  {#each items as x (x.id)}
+  {#each list as x (x.id)}
     <li>
       <a href={qs ? `/watch/${x.id}?${qs}` : `/watch/${x.id}`} aria-label={$t('hubs.extras.play', { name: x.name })}>
         <span class="im">

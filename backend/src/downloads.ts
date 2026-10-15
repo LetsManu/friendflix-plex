@@ -6,7 +6,8 @@ import type { Ctx } from './ctx.js';
 import { MediaError, type ItemDto } from './media/types.js';
 import { enqueueJob, jobProgress, preparer } from './downloadprep.js';
 import { getProfile, jfUserFor } from './profiles.js';
-import { effectiveRole, type RoleTemplate } from './roles.js';
+import { effectiveLimits } from './limits.js';
+import type { RoleTemplate } from './roles.js';
 import type { Session } from './session.js';
 import type { JfUser, UserRow } from './types.js';
 
@@ -430,6 +431,12 @@ export async function listLicenses(ctx: Ctx, userId: string, deviceId: string, p
   return viewLicenses(ctx, r.rows);
 }
 
+/** Active licenses of an account on all devices and profiles (admin user detail), oldest first. */
+export async function userLicenses(ctx: Ctx, userId: string): Promise<LicenseView[]> {
+  const r = await ctx.db.query<LicenseRow>(`select * from downloads where user_id=$1 and ${ACTIVE} order by created_at, id`, [userId]);
+  return viewLicenses(ctx, r.rows);
+}
+
 export async function getLicense(ctx: Ctx, userId: string, deviceId: string, profileId: string, id: string): Promise<LicenseView | null> {
   const r = await ctx.db.query<LicenseRow>('select * from downloads where id=$1 and user_id=$2 and device_id=$3 and profile_id=$4', [id, userId, deviceId, profileId]);
   if (!r.rows[0]) return null;
@@ -484,7 +491,7 @@ export async function checkLicenses(ctx: Ctx, user: UserRow, deviceId: string, p
   const rows = ids.length ? (await ctx.db.query<LicenseRow>('select * from downloads where id = any($1::uuid[]) and user_id=$2 and device_id=$3 and profile_id=$4', [ids, user.id, deviceId, profileId])).rows : [];
   const byId = new Map(rows.map((r) => [r.id, r]));
   const dev = (await ctx.db.query<{ approved: boolean }>('select approved from devices where user_id=$1 and device_id=$2', [user.id, deviceId])).rows[0];
-  const role = await effectiveRole(ctx, user.role);
+  const role = await effectiveLimits(ctx, user);
   const allowed = !user.disabled && Boolean(dev?.approved) && roleAllowsDownloads(ctx, role);
   const now = Date.now();
   const valid: Array<{ id: string; expiresAt: Date; validUntil: Date }> = [];
@@ -574,7 +581,7 @@ export async function authorizeDownload(ctx: Ctx, session: Pick<Session, 'userId
   if (!lic) return null;
   const dev = (await ctx.db.query<{ approved: boolean }>('select approved from devices where user_id=$1 and device_id=$2', [user.id, session.deviceId])).rows[0];
   if (!dev?.approved) return null;
-  if (!roleAllowsDownloads(ctx, await effectiveRole(ctx, user.role))) return null;
+  if (!roleAllowsDownloads(ctx, await effectiveLimits(ctx, user))) return null;
   // The media server may use one shared token (no per-user enforcement upstream): the profile must still be able to see the item
   // (re-rating, kids cap, role libraries). Not visible -> deny and revoke the licence.
   const vkey = `${lic.id}|${profileId}`;

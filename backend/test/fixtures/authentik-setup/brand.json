@@ -1,0 +1,1 @@
+{ "pagination": { "count": 1 }, "results": [{ "brand_uuid": "0b9b6c4e-0000-4000-8000-000000000001", "domain": "authentik-default", "default": true, "flow_recovery": null }] }

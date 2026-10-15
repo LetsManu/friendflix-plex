@@ -15,6 +15,8 @@ export interface KV {
   /** Atomic get-and-delete: only one concurrent caller gets the value. */
   take(key: string): Promise<string | null>;
   del(key: string): Promise<void>;
+  /** Atomic compare-and-delete: deletes the key only while it still holds `value` (a lock released by its owner only). True if deleted. */
+  delIfEquals(key: string, value: string): Promise<boolean>;
   /** Atomic counter: increments (creating it at 1 with the ttl on first use) and returns the new value. */
   incr(key: string, ttlSeconds: number): Promise<number>;
   /** Keys starting with prefix. */
@@ -44,6 +46,10 @@ export class RedisKV implements KV {
   }
   async del(key: string) {
     await this.redis.del(key);
+  }
+  async delIfEquals(key: string, value: string) {
+    const lua = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+    return (await this.redis.eval(lua, 1, key, value)) === 1;
   }
   async incr(key: string, ttl: number) {
     const n = await this.redis.incr(key);
@@ -99,6 +105,11 @@ export class MemoryKV implements KV {
   }
   async del(key: string) {
     this.m.delete(key);
+  }
+  async delIfEquals(key: string, value: string) {
+    if (this.live(key) !== value) return false;
+    this.m.delete(key);
+    return true;
   }
   async incr(key: string, ttl: number) {
     const cur = this.live(key);

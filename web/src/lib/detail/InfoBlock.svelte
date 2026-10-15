@@ -7,6 +7,7 @@
   import Rich from '#lib/i18n/Rich.svelte';
   import type { Facts } from '#lib/fresh';
   import QualityChips from '#lib/QualityChips.svelte';
+  import { strings } from '#lib/detail/safe';
 
   export let item: Item;
   export let people: Person[] = [];
@@ -18,7 +19,8 @@
   $: directors = byType(people, 'Director');
   $: writers = byType(people, 'Writer');
   $: actors = byType(people, 'Actor', 'GuestStar');
-  $: moods = moodTags(item.genres);
+  $: genres = strings(item.genres);
+  $: moods = moodTags(genres);
   $: age = ageText(item.rating);
 </script>
 
@@ -28,7 +30,7 @@
     {#if directors.length}<div><dt>{$t('detail.info.director')}</dt><dd>{#each directors as p, n (p.id + n)}{#if n}{', '}{/if}<a href="/person/{p.id}">{p.name}</a>{/each}</dd></div>{/if}
     {#if cast && actors.length}<div><dt>{$t('detail.info.cast')}</dt><dd>{#each actors as p, n (p.id + n)}{#if n}{', '}{/if}<a href="/person/{p.id}">{p.name}</a>{/each}</dd></div>{/if}
     {#if writers.length}<div><dt>{$t('detail.info.writer')}</dt><dd>{#each writers as p, n (p.id + n)}{#if n}{', '}{/if}<a href="/person/{p.id}">{p.name}</a>{/each}</dd></div>{/if}
-    {#if item.genres.length}<div><dt>{$t('detail.info.genres')}</dt><dd>{item.genres.join(', ')}</dd></div>{/if}
+    {#if genres.length}<div><dt>{$t('detail.info.genres')}</dt><dd>{genres.join(', ')}</dd></div>{/if}
     {#if moods.length}<div><dt>{$t('detail.info.moods')}</dt><dd>{moods.join(', ')}</dd></div>{/if}
     {#if facts?.traits}<div><dt>{$t('fresh.q.label')}</dt><dd class="qd"><QualityChips traits={facts.traits} /></dd></div>{/if}
     {#if item.rating}<div><dt>{$t('detail.info.age')}</dt><dd><span class="age">{item.rating}</span>{#if age} <span>{age}</span>{/if}</dd></div>{/if}

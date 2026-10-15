@@ -664,6 +664,101 @@ export const MIGRATIONS: string[] = [
   );
   create index playback_timings_created on playback_timings(created_at);
   `,
+  // 37: Block 23 user management (access expiry, per-user limits, approval queue, multi-use invites)
+  `
+  alter table users
+    add column access_until timestamptz,
+    add column expiry_notified_at timestamptz,
+    add column locked_reason text,
+    add column deletion_at timestamptz,
+    add column avatar text;
+  create table user_limits (
+    user_id uuid primary key references users(id) on delete cascade,
+    max_streams int,
+    remote_bitrate int,
+    max_downloads int,
+    download_max_height int,
+    requests_per_month int,
+    updated_at timestamptz default now()
+  );
+  create table approval_requests (
+    id uuid primary key,
+    authentik_sub text unique not null,
+    email text,
+    name text not null,
+    requested_at timestamptz default now(),
+    notified_at timestamptz,
+    rejected_at timestamptz,
+    reject_message text
+  );
+  alter table invites
+    add column max_uses int not null default 1,
+    add column uses int not null default 0,
+    add column access_days int;
+  create table invite_uses (
+    invite_id uuid references invites(id) on delete cascade,
+    user_id uuid references users(id) on delete cascade,
+    at timestamptz default now(),
+    primary key (invite_id, user_id)
+  );
+  update invites set uses = 1 where used_at is not null;
+  insert into invite_uses(invite_id, user_id, at)
+    select id, used_by, used_at from invites where used_by is not null;
+  `,
+  // 38: Block 23 phase 2 account deletion: the tombstone of a claimed deletion (snapshot for the later steps; no FK, the users row
+  // is deleted in step 4; the personal fields are nulled when finished, the pseudonym stays for the audit views) + due lookup
+  `
+  create table account_deletions (
+    user_id uuid primary key,
+    pseudonym text not null,
+    step int not null default 0,
+    authentik_sub text,
+    jellyfin_ids text[],
+    seerr_user_id int,
+    name text,
+    email text,
+    started_at timestamptz not null default now(),
+    finished_at timestamptz,
+    last_error text,
+    failed_step int
+  );
+  create index account_deletions_sub on account_deletions(authentik_sub) where finished_at is null;
+  create index users_deletion_at on users(deletion_at) where deletion_at is not null;
+  `,
+  // 39: Block 25 settings store. settings holds admin/wizard-set config keys (plain JSON value, or an AES-256-GCM blob for secrets);
+  // settings_meta.rev is bumped by every write so instances reload. An install with users counts as set up (never sees the wizard).
+  // The data-source keys move over from app_settings unchanged (same APP_ENC_KEY, same blob format); a malformed row (no string enc)
+  // is dropped instead of failing the migration.
+  `
+  create table settings (
+    key text primary key,
+    value jsonb,
+    enc text,
+    last4 text,
+    updated_at timestamptz not null default now(),
+    updated_by uuid references users(id) on delete set null,
+    check ((value is null) <> (enc is null))
+  );
+  create table settings_meta (
+    id int primary key check (id = 1),
+    rev bigint not null default 0,
+    setup_completed_at timestamptz,
+    setup_code_hash text,
+    setup_code_expires_at timestamptz,
+    setup_code_failures int not null default 0
+  );
+  insert into settings_meta(id, setup_completed_at)
+    select 1, case when exists (select 1 from users) then now() end;
+  insert into settings(key, enc, last4, updated_at)
+    select case key when 'source.tmdb' then 'TMDB_API_KEY' else 'OMDB_API_KEY' end, value->>'enc', value->>'last4', updated_at
+    from app_settings where key in ('source.tmdb','source.omdb') and value ? 'enc' and jsonb_typeof(value->'enc') = 'string';
+  delete from app_settings where key in ('source.tmdb','source.omdb');
+  `,
+  // 40: Block 25b. An install that got migration 39 while it had no users yet, and its first users afterwards (before the setup wizard
+  // existed), counts as set up as well: it must never fall into setup mode. An empty install stays in setup.
+  `
+  update settings_meta set setup_completed_at = now() where setup_completed_at is null and exists (select 1 from users);
+  `,
 ];
 
 export async function migrate(pool: pg.Pool): Promise<void> {

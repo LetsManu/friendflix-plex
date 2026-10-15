@@ -9,7 +9,7 @@ const toasts = (page: import('@playwright/test').Page) => page.getByRole('region
 const logged = (api: { log: string[] }, re: RegExp) => api.log.some((l) => re.test(l));
 
 test.describe('admin people (desktop)', () => {
-  test.use({ allowedConsole: /status of (500|502)/ });
+  test.use({ allowedConsole: /status of (409|500|502)/ });
   test.beforeEach(({ api }) => { api.asAdmin = true; });
 
   test.describe('users', () => {
@@ -119,6 +119,212 @@ test.describe('admin people (desktop)', () => {
       await expect(page.getByRole('row', { name: /Anna Beispiel/ })).toBeVisible();
       await page.getByRole('button', { name: 'Aktionen für Tester' }).click();
       await expect(page.getByRole('dialog', { name: 'Tester' }).getByRole('button', { name: 'Du kannst dich nicht selbst sperren oder herabstufen.' })).toBeDisabled();
+    });
+
+    test('bulk lock two users asks and calls the bulk API', async ({ page, api }) => {
+      await page.goto('/admin/users');
+      const table = page.getByRole('table', { name: 'Nutzer' });
+      await expect(table.getByRole('checkbox', { name: 'Tester auswählen' })).toBeDisabled();
+      await expect(page.getByRole('region', { name: 'Aktionen für die Auswahl' })).toHaveCount(0);
+      await table.getByRole('checkbox', { name: 'Ben Test auswählen' }).check();
+      await table.getByRole('checkbox', { name: 'Clara Fischer auswählen' }).check();
+      const bar = page.getByRole('region', { name: 'Aktionen für die Auswahl' });
+      await expect(bar).toContainText('2 ausgewählt');
+      await bar.getByRole('button', { name: 'Sperren', exact: true }).click();
+      const dlg = page.getByRole('alertdialog', { name: '2 Nutzer sperren?' });
+      await expect(dlg).toContainText('Ben Test, Clara Fischer');
+      await dlg.getByRole('button', { name: 'Abbrechen' }).click();
+      expect(logged(api, /\/api\/admin\/users\/bulk/)).toBe(false);
+      await bar.getByRole('button', { name: 'Sperren', exact: true }).click();
+      await dlg.getByRole('button', { name: 'Sperren' }).click();
+      await expect(toasts(page).getByText('2 Konten geändert.')).toBeVisible();
+      const post = api.log.find((l) => l.startsWith('POST /api/admin/users/bulk '))!;
+      expect(post).toContain('"action":"lock"');
+      expect(post).toContain(auid(3));
+      expect(post).toContain(auid(4));
+      await expect(table.getByRole('row', { name: /Ben Test/ }).getByText('Gesperrt')).toBeVisible();
+      await expect(table.getByRole('row', { name: /Clara Fischer/ }).getByText('Gesperrt')).toBeVisible();
+      await expect(bar).toHaveCount(0);
+    });
+
+    test('bulk access +30 days sends a date-time; names link to the detail page', async ({ page, api }) => {
+      await page.goto('/admin/users');
+      const table = page.getByRole('table', { name: 'Nutzer' });
+      await expect(table.getByRole('link', { name: 'Ben Test' })).toHaveAttribute('href', `/admin/users/${auid(3)}`);
+      await expect(table.getByRole('row', { name: /Ben Test/ })).toContainText('–');
+      await table.getByRole('checkbox', { name: 'Ben Test auswählen' }).check();
+      const bar = page.getByRole('region', { name: 'Aktionen für die Auswahl' });
+      await bar.getByRole('combobox', { name: 'Zugang bis' }).selectOption('p30');
+      // picking (also with arrow keys) does not run anything yet; Apply does
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+      await bar.getByRole('form', { name: 'Zugang bis' }).getByRole('button', { name: 'Übernehmen' }).click();
+      const dlg = page.getByRole('alertdialog', { name: /Zugang für 1 Nutzer bis/ });
+      await dlg.getByRole('button', { name: 'Übernehmen' }).click();
+      await expect.poll(() => logged(api, /POST \/api\/admin\/users\/bulk .*"action":"access","accessUntil":"\d{4}-\d\d-\d\dT[\d:.]+Z"/)).toBe(true);
+      const until = api.admin.users.find((u) => u.name === 'Ben Test')!.access_until!;
+      expect(Math.round((Date.parse(until) - Date.now()) / 86400e3)).toBe(30);
+    });
+
+    test('bulk lock with an admin selected needs the typed name, like the single lock', async ({ page, api }) => {
+      api.admin.users.find((u) => u.name === 'David Müller')!.role = 'admin';
+      await page.goto('/admin/users');
+      const table = page.getByRole('table', { name: 'Nutzer' });
+      await table.getByRole('checkbox', { name: 'Ben Test auswählen' }).check();
+      await table.getByRole('checkbox', { name: 'David Müller auswählen' }).check();
+      const bar = page.getByRole('region', { name: 'Aktionen für die Auswahl' });
+      await bar.getByRole('button', { name: 'Sperren', exact: true }).click();
+      const dlg = page.getByRole('alertdialog', { name: '2 Nutzer sperren?' });
+      await expect(dlg).toContainText('Darunter Admins: David Müller.');
+      await expect(dlg.getByRole('button', { name: 'Sperren' })).toBeDisabled();
+      await dlg.getByRole('textbox').fill('David Müller');
+      await dlg.getByRole('button', { name: 'Sperren' }).click();
+      await expect(toasts(page).getByText('2 Konten geändert.')).toBeVisible();
+      // a demoting role change asks the same way; promoting does not
+      await table.getByRole('checkbox', { name: 'David Müller auswählen' }).check();
+      await bar.getByRole('combobox', { name: 'Rolle ändern' }).selectOption('guest');
+      await bar.getByRole('form', { name: 'Rolle ändern' }).getByRole('button', { name: 'Übernehmen' }).click();
+      await expect(page.getByRole('alertdialog', { name: /1 Nutzer zu „Gast“ machen\?/ }).getByRole('textbox')).toBeVisible();
+    });
+
+    test('a failed bulk call reloads the list and keeps the selection', async ({ page }) => {
+      await page.goto('/admin/users');
+      const table = page.getByRole('table', { name: 'Nutzer' });
+      await table.getByRole('checkbox', { name: 'Ben Test auswählen' }).check();
+      await page.route('**/api/admin/users/bulk', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"x"}' }));
+      let reloads = 0;
+      page.on('request', (r) => { if (r.method() === 'GET' && /\/api\/admin\/users\?/.test(r.url())) reloads++; });
+      const bar = page.getByRole('region', { name: 'Aktionen für die Auswahl' });
+      await bar.getByRole('button', { name: 'Überall abmelden' }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Überall abmelden' }).click();
+      await expect(toasts(page).getByText(/Einige Konten wurden eventuell schon geändert/)).toBeVisible();
+      await expect.poll(() => reloads).toBeGreaterThan(0);
+      await expect(bar).toContainText('1 ausgewählt');
+    });
+
+    test('unlocking an account whose access ended explains why (row and bulk); a past end date cannot be applied', async ({ page, api }) => {
+      const emma = api.admin.users.find((u) => u.name === 'Emma Schneider')!;
+      emma.access_until = new Date(Date.now() - 86400e3).toISOString();
+      emma.locked_reason = 'expired';
+      await page.goto('/admin/users');
+      const table = page.getByRole('table', { name: 'Nutzer' });
+      const row = table.getByRole('row', { name: /Emma Schneider/ });
+      await page.getByRole('button', { name: 'Aktionen für Emma Schneider' }).click();
+      await page.getByRole('dialog', { name: 'Emma Schneider' }).getByRole('button', { name: 'Entsperren' }).click();
+      await expect(toasts(page).getByText('Der Zugang ist abgelaufen – verlängere stattdessen den Zugang.')).toBeVisible();
+      await expect(row.getByText('Gesperrt')).toBeVisible(); // rolled back
+      expect(emma.disabled).toBe(true);
+
+      await table.getByRole('checkbox', { name: 'Emma Schneider auswählen' }).check();
+      const bar = page.getByRole('region', { name: 'Aktionen für die Auswahl' });
+      await bar.getByRole('button', { name: 'Entsperren', exact: true }).click();
+      await page.getByRole('alertdialog', { name: '1 Nutzer entsperren?' }).getByRole('button', { name: 'Entsperren' }).click();
+      await expect.poll(() => logged(api, /POST \/api\/admin\/users\/bulk .*"action":"unlock".* -> 409/)).toBe(true);
+      await expect(toasts(page).getByText('Der Zugang ist abgelaufen – verlängere stattdessen den Zugang.').last()).toBeVisible();
+      await expect(toasts(page).getByText(/Einige Konten wurden eventuell schon geändert/)).toHaveCount(0); // all or nothing
+      expect(emma.disabled).toBe(true);
+
+      // the bulk access form refuses a past day (it would lock everyone selected at the next expiry tick)
+      const form = bar.getByRole('form', { name: 'Zugang bis' });
+      await form.getByRole('combobox', { name: 'Zugang bis' }).selectOption('date');
+      const day = form.getByLabel('Zugang bis (Datum)');
+      await expect(day).toHaveAttribute('min', /^\d{4}-\d\d-\d\d$/);
+      await day.fill('2020-01-01');
+      await expect(form.getByRole('button', { name: 'Übernehmen' })).toBeDisabled();
+      await day.fill('2099-01-01');
+      await expect(form.getByRole('button', { name: 'Übernehmen' })).toBeEnabled();
+    });
+
+    test('approvals: a past end date cannot be approved', async ({ page }) => {
+      await page.goto('/admin/users?tab=approvals');
+      const card = page.getByRole('region', { name: 'Mia Neu' });
+      await card.getByRole('combobox', { name: 'Zugang bis' }).selectOption('date');
+      const day = card.getByLabel('Zugang bis (Datum)');
+      await expect(day).toHaveAttribute('min', /^\d{4}-\d\d-\d\d$/);
+      await day.fill('2020-01-01');
+      await expect(card.getByRole('button', { name: 'Freigeben' })).toBeDisabled();
+      await day.fill('2099-01-01');
+      await expect(card.getByRole('button', { name: 'Freigeben' })).toBeEnabled();
+    });
+
+    test('last active: inactive for 90+ days lists never-seen and old accounts', async ({ page, api }) => {
+      api.admin.users.find((u) => u.name === 'Felix Weber')!.last_seen = null;
+      api.admin.users.find((u) => u.name === 'Greta Wagner')!.last_seen = new Date(Date.now() - 120 * 86400e3).toISOString();
+      await page.goto('/admin/users');
+      await page.getByRole('combobox', { name: 'Zuletzt aktiv' }).selectOption('90+');
+      const table = page.getByRole('table', { name: 'Nutzer' });
+      await expect(table.getByRole('row', { name: /Felix Weber/ })).toBeVisible();
+      await expect(table.getByRole('row', { name: /Greta Wagner/ })).toBeVisible();
+      await expect(table.getByRole('row', { name: /Anna Beispiel/ })).toHaveCount(0);
+    });
+
+    test('approval tab approves with role', async ({ page, api }) => {
+      await page.goto('/admin/users');
+      const tabs = page.getByRole('tablist', { name: 'Nutzerverwaltung' });
+      await tabs.getByRole('tab', { name: 'Warten auf Freigabe (2)' }).click();
+      await expect(page).toHaveURL(/\?tab=approvals$/);
+      const card = page.getByRole('region', { name: 'Mia Neu' });
+      await expect(card).toContainText('mia@example.org');
+      await card.getByRole('combobox', { name: 'Rolle' }).selectOption('family');
+      await card.getByRole('button', { name: 'Freigeben' }).click();
+      await expect(toasts(page).getByText('Mia Neu freigegeben.')).toBeVisible();
+      await expect(card).toHaveCount(0);
+      await expect(tabs.getByRole('tab', { name: 'Warten auf Freigabe (1)' })).toBeVisible();
+      const post = api.log.find((l) => l.startsWith(`POST /api/admin/approvals/${auid(401)}/approve `))!;
+      expect(post).toContain('"role":"family"');
+      expect(post).not.toContain('accessUntil');
+      // reject with a message
+      const paul = page.getByRole('region', { name: 'Paul Fremd' });
+      await paul.getByRole('button', { name: 'Ablehnen' }).click();
+      await paul.getByRole('textbox', { name: 'Nachricht (optional)' }).fill('Kenne ich nicht');
+      await paul.getByRole('button', { name: 'Paul Fremd ablehnen' }).click();
+      await expect(toasts(page).getByText('Paul Fremd abgelehnt.')).toBeVisible();
+      await expect.poll(() => logged(api, new RegExp(`POST /api/admin/approvals/${auid(402)}/reject .*"message":"Kenne ich nicht"`))).toBe(true);
+      await expect(page.getByText('Niemand wartet auf Freigabe.')).toBeVisible();
+    });
+
+    test('approvals: the old ?tab=pending link opens the tab; an already handled request drops its card', async ({ page, api }) => {
+      await page.goto('/admin/users?tab=pending');
+      await expect(page.getByRole('tab', { name: 'Warten auf Freigabe (2)' })).toHaveAttribute('aria-selected', 'true');
+      const card = page.getByRole('region', { name: 'Mia Neu' });
+      await expect(card).toBeVisible();
+      // someone else approved Mia meanwhile: the server answers 409 and no longer lists her
+      api.admin.approvals = api.admin.approvals.filter((a) => a.name !== 'Mia Neu');
+      await page.route('**/api/admin/approvals/*/approve', (r) => r.fulfill({ status: 409, contentType: 'application/json', body: '{"error":"user_exists"}' }));
+      await card.getByRole('button', { name: 'Freigeben' }).click();
+      await expect(toasts(page).getByText('Mia Neu wurde schon bearbeitet.')).toBeVisible();
+      await expect(card).toHaveCount(0);
+      await expect(page.getByRole('region', { name: 'Paul Fremd' })).toBeVisible();
+    });
+
+    test('invites tab creates a 3-use invite and shows 0/3', async ({ page, api }) => {
+      await page.goto('/admin/users?tab=invites');
+      await expect(page.getByRole('tab', { name: 'Einladungen' })).toHaveAttribute('aria-selected', 'true');
+      const form = page.getByRole('region', { name: 'Neue Einladung' });
+      await form.getByRole('spinbutton', { name: 'Max. Nutzungen' }).fill('3');
+      await form.getByRole('spinbutton', { name: 'Zugang (Tage)' }).fill('90');
+      await form.getByRole('textbox', { name: 'Notiz' }).fill('Lesekreis');
+      await form.getByRole('button', { name: 'Einladung erstellen' }).click();
+      await expect(page.getByRole('region', { name: 'Dein Einladungs-Link' })).toBeVisible();
+      const post = api.log.find((l) => l.startsWith('POST /api/admin/invites '))!;
+      expect(post).toContain('"maxUses":3');
+      expect(post).toContain('"accessDays":90');
+      const table = page.getByRole('table', { name: 'Einladungen' });
+      const row = table.getByRole('row', { name: /Lesekreis/ });
+      await expect(row).toContainText('0/3');
+      await expect(row).toContainText('90 Tage');
+      await expect(row.getByText('Offen')).toBeVisible();
+      // a partly used invite stays open; its accounts unfold
+      const multi = table.getByRole('row', { name: /Spieleabend/ });
+      await expect(multi.getByText('Offen')).toBeVisible();
+      await multi.getByText('2/5').click();
+      await expect(multi.getByRole('link', { name: 'Tom Kraus' })).toHaveAttribute('href', `/admin/users/${auid(52)}`);
+    });
+
+    test('old /admin/invites redirects', async ({ page }) => {
+      await page.goto('/admin/invites');
+      await expect(page).toHaveURL(/\/admin\/users\?tab=invites$/);
+      await expect(page.getByRole('heading', { level: 1, name: 'Nutzer' })).toBeVisible();
+      await expect(page.getByRole('table', { name: 'Einladungen' }).getByRole('row', { name: /Für Annas Bruder/ })).toBeVisible();
     });
   });
 
@@ -289,7 +495,7 @@ test.describe('admin people (desktop)', () => {
   test.describe('invites', () => {
     test('create → one-time link with Copy and QR; list with status pills', async ({ page, api, context }) => {
       await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-      await page.goto('/admin/invites');
+      await page.goto('/admin/users?tab=invites');
       const table = page.getByRole('table', { name: 'Einladungen' });
       await expect(table.getByRole('row', { name: /Für Annas Bruder/ }).getByText('Offen')).toBeVisible();
       await expect(table.getByRole('row', { name: /Oma/ }).getByText('Eingelöst', { exact: true })).toBeVisible();
@@ -301,7 +507,7 @@ test.describe('admin people (desktop)', () => {
       await form.getByRole('textbox', { name: 'Notiz' }).fill('Tante Gerda');
       await form.getByRole('button', { name: 'Einladung erstellen' }).click();
       const res = page.getByRole('region', { name: 'Dein Einladungs-Link' });
-      await expect(res.getByRole('textbox', { name: 'Einmal-Link' })).toHaveValue(/https:\/\/portal\.example\.com\/invite\//);
+      await expect(res.getByRole('textbox', { name: 'Einladungs-Link' })).toHaveValue(/https:\/\/portal\.example\.com\/invite\//);
       await expect(res.getByText('Der Link führt durch die Konto-Erstellung')).toBeVisible();
       const post = api.log.find((l) => l.startsWith('POST /api/admin/invites '))!;
       expect(post).toContain('"role":"family"');
@@ -318,7 +524,7 @@ test.describe('admin people (desktop)', () => {
     });
 
     test('"already has an account" skips enrollment; revoke asks first and is irreversible', async ({ page, api }) => {
-      await page.goto('/admin/invites');
+      await page.goto('/admin/users?tab=invites');
       const form = page.getByRole('region', { name: 'Neue Einladung' });
       await form.getByRole('switch', { name: 'Hat schon ein Authentik-Konto' }).click();
       await form.getByRole('button', { name: 'Einladung erstellen' }).click();
@@ -340,7 +546,7 @@ test.describe('admin people (desktop)', () => {
     });
 
     test('expired entries are removed with Undo (no question); status filter; empty state', async ({ page, api }) => {
-      await page.goto('/admin/invites');
+      await page.goto('/admin/users?tab=invites');
       await page.getByRole('combobox', { name: 'Status' }).selectOption('expired');
       const table = page.getByRole('table', { name: 'Einladungen' });
       await expect(table.getByRole('row')).toHaveCount(2);
@@ -415,7 +621,7 @@ test.describe('admin people (desktop)', () => {
   });
 
   test.describe('every page', () => {
-    for (const [path, h1] of [['users', 'Nutzer'], ['roles', 'Rollen'], ['devices', 'Geräte'], ['invites', 'Einladungen'], ['audit', 'Audit-Log']] as const) {
+    for (const [path, h1] of [['users', 'Nutzer'], ['roles', 'Rollen'], ['devices', 'Geräte'], ['audit', 'Audit-Log']] as const) {
       test(`${path}: one h1 from the shell, no horizontal overflow, keyboard reachable`, async ({ page }) => {
         await page.goto(`/admin/${path}`);
         await expect(page.getByRole('heading', { level: 1, name: h1 })).toBeVisible();
@@ -431,13 +637,13 @@ test.describe('admin people (desktop)', () => {
 
   test.describe('screenshots', () => {
     test.skip(!SHOTS, 'B18_SHOTS not set');
-    for (const path of ['users', 'roles', 'devices', 'invites', 'audit']) {
+    for (const path of ['users', 'roles', 'devices', 'users?tab=invites', 'audit']) {
       test(`shot ${path}`, async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 });
         await page.goto(`/admin/${path}`);
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
         await page.waitForTimeout(600);
-        await page.screenshot({ path: `${SHOTS}/${path}-desktop.png`, fullPage: true });
+        await page.screenshot({ path: `${SHOTS}/${path.replace('?tab=', '-')}-desktop.png`, fullPage: true });
       });
     }
   });

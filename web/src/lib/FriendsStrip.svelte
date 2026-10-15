@@ -3,6 +3,7 @@
 <script lang="ts">
   import { api } from '#lib/api';
   import { t } from '#lib/i18n';
+  import { initials, uniqueBy } from '#lib/detail/safe';
 
   interface Friend { id: string; name: string; stars?: number; watched?: boolean; recommended?: boolean }
   /** item whose friend activity is shown; the section stays hidden while loading, on failure or when empty */
@@ -15,10 +16,9 @@
     friends = [];
     try {
       const r = await api(`/api/items/${itemId}/friends`);
-      if (my === seq) friends = (r?.friends ?? []) as Friend[];
+      if (my === seq) friends = uniqueBy(r?.friends as Friend[] | undefined, (f) => f.id);
     } catch { /* optional section */ }
   }
-  const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
   const facts = (f: Friend, recommends: string, watched: string) => [f.recommended && recommends, f.stars && `★${f.stars}`, f.watched && watched].filter(Boolean) as string[];
 </script>
 

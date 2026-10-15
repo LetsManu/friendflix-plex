@@ -11,7 +11,13 @@ export interface InviteRow {
   expires_at: Date;
   used_at: Date | null;
   authentik_invite: string | null;
+  uses: number;
+  max_uses: number;
+  /** days of access a new account gets (access_until = now + access_days), null = no end */
+  access_days: number | null;
 }
+
+const INVITE_COLS = 'id, role, note, expires_at, used_at, authentik_invite, uses, max_uses, access_days';
 
 export interface WarnLogger {
   warn(obj: object, msg: string): void;
@@ -25,7 +31,7 @@ export function authentikConfigProblem(cfg: Ctx['cfg']): string[] | null {
   return missing.length && missing.length < keys.length ? [...missing] : null;
 }
 
-const akBase = (url: string) => url.replace(/\/$/, '');
+export const akBase = (url: string) => url.replace(/\/$/, '');
 
 /**
  * Where the invite page's "Konto anlegen" button leads: the Authentik enrollment flow with the
@@ -49,9 +55,9 @@ export type AuthentikInviteStatus = 'off' | 'skipped' | 'ok' | 'failed';
 /**
  * Creates an Authentik invitation bound to the enrollment flow. Never throws: failures are logged.
  * Not single_use: Authentik deletes a single-use invitation as soon as its stage passes, i.e. when the link is
- * merely *opened* - a friend who opens it on the phone and finishes on the laptop would be locked out. The portal
- * invite stays single-use (that is what grants access); the Authentik invitation expires with it and is deleted
- * by the portal once the invite is redeemed or revoked (deleteAuthentikInvitation).
+ * merely *opened* - a friend who opens it on the phone and finishes on the laptop would be locked out. This also
+ * serves multi-use portal invites: the portal invite counts the uses (that is what grants access); the Authentik
+ * invitation expires with it and is deleted by the portal once the invite is used up or revoked (deleteAuthentikInvitation).
  */
 async function createAuthentikInvitation(ctx: Ctx, expiresAt: Date, log: WarnLogger): Promise<string | null> {
   const { AUTHENTIK_URL: url, AUTHENTIK_API_TOKEN: tok, AUTHENTIK_ENROLL_FLOW: flow } = ctx.cfg;
@@ -100,7 +106,7 @@ async function createAuthentikInvitation(ctx: Ctx, expiresAt: Date, log: WarnLog
   }
 }
 
-/** Best effort: removes the Authentik invitation once the portal invite is redeemed or revoked (it is reusable until then). */
+/** Best effort: removes the Authentik invitation once the portal invite is used up or revoked (it is reusable until then). */
 export async function deleteAuthentikInvitation(ctx: Ctx, pk: string | null | undefined, log: WarnLogger = consoleLog) {
   const { AUTHENTIK_URL: url, AUTHENTIK_API_TOKEN: tok } = ctx.cfg;
   if (!pk || !url || !tok || !/^[\w-]{1,64}$/.test(pk)) return;
@@ -118,7 +124,11 @@ export async function deleteAuthentikInvitation(ctx: Ctx, pk: string | null | un
  * `enroll: false` is for people who already have an Authentik account: no Authentik invitation,
  * the invite link only offers "Anmelden & freischalten".
  */
-export async function createInvite(ctx: Ctx, createdBy: string, opts: { role: string; ttlHours: number; note?: string; enroll?: boolean }, log: WarnLogger = consoleLog) {
+export async function createInvite(
+  ctx: Ctx, createdBy: string,
+  opts: { role: string; ttlHours: number; note?: string; enroll?: boolean; maxUses?: number; accessDays?: number | null },
+  log: WarnLogger = consoleLog,
+) {
   const token = randomToken(24);
   const expiresAt = new Date(Date.now() + opts.ttlHours * 3600_000);
   const missing = authentikConfigProblem(ctx.cfg);
@@ -132,34 +142,69 @@ export async function createInvite(ctx: Ctx, createdBy: string, opts: { role: st
     authentik = akId ? 'ok' : 'failed';
   }
   const id = randomUUID();
-  await ctx.db.query('insert into invites(id, token_hash, role, note, expires_at, created_by, authentik_invite) values ($1,$2,$3,$4,$5,$6,$7)', [
-    id, sha256(token), opts.role, opts.note ?? null, expiresAt, createdBy, akId,
+  const maxUses = opts.maxUses ?? 1;
+  await ctx.db.query('insert into invites(id, token_hash, role, note, expires_at, created_by, authentik_invite, max_uses, access_days) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [
+    id, sha256(token), opts.role, opts.note ?? null, expiresAt, createdBy, akId, maxUses, opts.accessDays ?? null,
   ]);
+  // '' without a public URL (setup mode, where the gate keeps invites unreachable): the links stay relative, nothing throws
   const base = ctx.cfg.PUBLIC_URL.replace(/\/$/, '');
   return {
     id, token, link: `${base}/invite/${token}`,
     /** portal entry that starts login and sends the person through Authentik enrollment */
     enrollUrl: akId ? `${base}/auth/enroll?invite=${token}` : undefined,
-    authentik, expiresAt,
+    authentik, expiresAt, uses: 0, maxUses,
   };
 }
 
-/** Returns the invite if it exists, is unused and not expired. */
+/** Returns the invite if it exists, has uses left and is not expired. */
 export async function lookupInvite(ctx: Ctx, token: string): Promise<InviteRow | null> {
   if (!/^[\w-]{20,80}$/.test(token)) return null;
-  const r = await ctx.db.query<InviteRow>('select id, role, note, expires_at, used_at, authentik_invite from invites where token_hash=$1 and used_at is null and expires_at > now()', [sha256(token)]);
+  const r = await ctx.db.query<InviteRow>(`select ${INVITE_COLS} from invites where token_hash=$1 and uses < max_uses and expires_at > now()`, [sha256(token)]);
   return r.rows[0] ?? null;
 }
 
-/** Atomically consumes an invite (single use even under concurrent logins). */
+/**
+ * Atomically takes one use of an invite (never more than max_uses, even under concurrent logins).
+ * used_at keeps the time of the first use (compatibility with single-use invites).
+ */
 export async function claimInvite(ctx: Ctx, token: string): Promise<InviteRow | null> {
   const r = await ctx.db.query<InviteRow>(
-    'update invites set used_at = now() where token_hash=$1 and used_at is null and expires_at > now() returning id, role, note, expires_at, used_at, authentik_invite',
+    `update invites set uses = uses + 1, used_at = coalesce(used_at, now())
+      where token_hash=$1 and uses < max_uses and (expires_at is null or expires_at > now()) returning ${INVITE_COLS}`,
     [sha256(token)],
   );
   return r.rows[0] ?? null;
 }
 
-export async function releaseInvite(ctx: Ctx, id: string) {
-  await ctx.db.query('update invites set used_at = null, used_by = null where id=$1', [id]);
+/** access_until of an account created from the invite (null = no end) */
+export function inviteAccessUntil(inv: Pick<InviteRow, 'access_days'>, now = Date.now()): Date | null {
+  return inv.access_days ? new Date(now + inv.access_days * 86400_000) : null;
+}
+
+/**
+ * Records the account a claimed use created. used_by stays the first account (compatibility). Once the invite is
+ * used up, its Authentik invitation is deleted (fire-and-forget) so the enrollment link creates no more accounts.
+ */
+export async function recordInviteUse(ctx: Ctx, inv: InviteRow, userId: string, log: WarnLogger = consoleLog) {
+  await ctx.db.query('update invites set used_by = coalesce(used_by, $1) where id=$2', [userId, inv.id]);
+  await ctx.db.query('insert into invite_uses(invite_id, user_id) values ($1,$2) on conflict do nothing', [inv.id, userId]);
+  if (inv.uses >= inv.max_uses) void deleteAuthentikInvitation(ctx, inv.authentik_invite, log);
+}
+
+/**
+ * Gives a claimed use back (provisioning failed, or the account it made is undone). With `userId`, that account's
+ * invite_uses row goes too (used_by moves to the next oldest account). The last returned use reopens the invite
+ * completely (used_at/used_by cleared).
+ */
+export async function releaseInvite(ctx: Ctx, id: string, userId?: string) {
+  if (userId) await ctx.db.query('delete from invite_uses where invite_id=$1 and user_id=$2', [id, userId]);
+  await ctx.db.query(
+    `update invites set uses = uses - 1,
+            used_at = case when uses <= 1 then null else used_at end,
+            used_by = case when uses <= 1 then null
+                           when used_by = $2::uuid then (select user_id from invite_uses where invite_id=$1 order by at limit 1)
+                           else used_by end
+      where id=$1 and uses > 0`,
+    [id, userId ?? null],
+  );
 }

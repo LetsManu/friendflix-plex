@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Manuel Weißböck
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# FriendFlix portal stack.
+# FriendFlix portal stack. A new install needs no .env: `up -d`, then the setup code from the backend log
+# (`logs backend | grep "setup code"`) opens the setup wizard (docs/setup.md); every setting lives in the database (Admin -> Settings).
+# The `bootstrap` service generates the internal secrets into the `bootstrap` volume (back it up, scripts/backup-bootstrap.sh).
 # - NPM runs OUTSIDE Docker (or in its own stack) and reaches the portal through three ports that are bound to
 #   127.0.0.1 only (BIND_ADDR): web, backend (API/auth/WebSocket) and gateway (/media). Nothing else is published.
 # - Jellyfin and the request service have NO ports and are only reachable via the internal `media` network.
@@ -20,14 +22,43 @@ networks:
   egress: {} # outbound internet for Jellyfin/request service metadata only; nothing is published
 
 services:
+  # Init container (runs once per `up`, then exits): writes every secret needed before the database can be read into the
+  # `bootstrap` volume (postgres_password, redis_password, redis.conf, app_enc_key, internal_secret; root:10001, 0440) and
+  # the gateway's copy of internal_secret into `bootstrap-gateway`. A new install sets none of them. Existing installs:
+  # the four values below win when set in .env and are copied into the volume on every start. It logs file names only.
+  bootstrap:
+    # same build as `backend` (the image tag must exist before `up`); `docker compose build` runs it twice, the second from cache
+    build: { context: ., dockerfile: backend/Dockerfile }
+    image: friendflix-backend:dev
+    command: ["node", "backend/dist/bootstrap.js"]
+    user: "0:0" # owns the files; no capability but CHOWN (hands the group to 10001), no network
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+    restart: "no"
+    healthcheck: { disable: true } # the image's HTTP check is for the backend; this one only has to exit 0
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      APP_ENC_KEY: ${APP_ENC_KEY:-}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-}
+    volumes:
+      - bootstrap:/run/friendflix
+      - bootstrap-gateway:/run/friendflix-gateway
+
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: friendflix
       POSTGRES_USER: friendflix
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
-    volumes: [pgdata:/var/lib/postgresql/data]
+      # the entrypoint reads the file as root before it drops to uid 70; only used when the data directory is created
+      POSTGRES_PASSWORD_FILE: /run/friendflix/postgres_password
+    volumes: [pgdata:/var/lib/postgresql/data, bootstrap:/run/friendflix:ro]
+    depends_on:
+      bootstrap: { condition: service_completed_successfully }
     networks: [db]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U friendflix"]
@@ -39,17 +70,21 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set in .env}", "--save", "", "--appendonly", "no"]
+    # requirepass comes from the bootstrap volume; runs as the image's redis user plus the secrets group (reads redis.conf)
+    command: ["redis-server", "/run/friendflix/redis.conf", "--save", "", "--appendonly", "no"]
+    user: "999:999"
+    group_add: ["10001"]
     read_only: true
+    volumes: [bootstrap:/run/friendflix:ro]
+    depends_on:
+      bootstrap: { condition: service_completed_successfully }
     networks: [db]
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/friendflix/redis_password)\" redis-cli ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 30
       start_period: 20s
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
 
   backend:
     build: { context: ., dockerfile: backend/Dockerfile }
@@ -59,25 +94,27 @@ services:
     tmpfs: [/tmp]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    # secrets group: reads the bootstrap volume (DATABASE_URL, REDIS_URL, APP_ENC_KEY and INTERNAL_SECRET derive from it)
+    group_add: ["10001"]
+    # Every setting below is optional: set in the browser (Admin -> Settings) and stored in the database.
+    # A value set here (.env) still wins and shows locked ("from environment"); the lines only pass existing .env values through.
     environment:
-      PUBLIC_URL: ${PUBLIC_URL:?}
-      DATABASE_URL: postgres://friendflix:${POSTGRES_PASSWORD}@postgres:5432/friendflix
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      PUBLIC_URL: ${PUBLIC_URL:-}
       APP_ENC_KEY: ${APP_ENC_KEY:-}
       INTERNAL_SECRET: ${INTERNAL_SECRET:-}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
-      ADMIN_GROUP: ${ADMIN_GROUP:-friendflix-admins}
-      SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-7200}
-      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-28800}
-      OIDC_ISSUER: ${OIDC_ISSUER:?}
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?}
+      ADMIN_GROUP: ${ADMIN_GROUP:-}
+      SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       MEDIA_SERVER: ${MEDIA_SERVER:-jellyfin}
-      JELLYFIN_URL: ${JELLYFIN_URL:-} # required when MEDIA_SERVER=jellyfin (the backend refuses to start without it)
-      JELLYFIN_ADMIN_API_KEY: ${JELLYFIN_ADMIN_API_KEY:-} # required when MEDIA_SERVER=jellyfin
+      JELLYFIN_URL: ${JELLYFIN_URL:-}
+      JELLYFIN_ADMIN_API_KEY: ${JELLYFIN_ADMIN_API_KEY:-}
       OIDC_ALLOW_INSECURE: ${OIDC_ALLOW_INSECURE:-false}
-      # request service; the two old-name lines below only keep older .env files working (they log a deprecation warning)
-      REQUESTS_URL: ${REQUESTS_URL:-${SEERR_URL:-${REQUESTS_URL:?set in .env}}}
+      # request service (optional); the two old-name lines below only keep older .env files working (they log a deprecation warning)
+      REQUESTS_URL: ${REQUESTS_URL:-}
       REQUESTS_API_KEY: ${REQUESTS_API_KEY:-}
       SEERR_URL: ${SEERR_URL:-}
       SEERR_API_KEY: ${SEERR_API_KEY:-}
@@ -97,41 +134,45 @@ services:
       AUTHENTIK_URL: ${AUTHENTIK_URL:-}
       AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-}
       AUTHENTIK_ENROLL_FLOW: ${AUTHENTIK_ENROLL_FLOW:-}
+      AUTHENTIK_RECOVERY_FLOW: ${AUTHENTIK_RECOVERY_FLOW:-}
+      AUTHENTIK_TOTP_SETUP_FLOW: ${AUTHENTIK_TOTP_SETUP_FLOW:-}
       UPDATE_REPO: ${UPDATE_REPO:-LetsManu/friendflix}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       PORTAINER_WEBHOOK_URL: ${PORTAINER_WEBHOOK_URL:-}
       PORTAINER_URL: ${PORTAINER_URL:-}
       PORTAINER_API_KEY: ${PORTAINER_API_KEY:-}
       PORTAINER_STACK_ID: ${PORTAINER_STACK_ID:-}
-      PORTAINER_ENDPOINT_ID: ${PORTAINER_ENDPOINT_ID:-1}
-      PLAYBACK_CHECK_HOUR: ${PLAYBACK_CHECK_HOUR:-4}
-      PREVIEW_WARM: ${PREVIEW_WARM:-true}
+      PORTAINER_ENDPOINT_ID: ${PORTAINER_ENDPOINT_ID:-}
+      PLAYBACK_CHECK_HOUR: ${PLAYBACK_CHECK_HOUR:-}
+      PREVIEW_WARM: ${PREVIEW_WARM:-}
       # download preparation + cleanup, audio/subtitle language index, Jellyfin session polling; false only for extra replicas
       BACKGROUND_JOBS: ${BACKGROUND_JOBS:-true}
       # gzip/brotli for JSON API responses >= 1 KB; false when the reverse proxy already compresses
-      API_COMPRESSION: ${API_COMPRESSION:-true}
+      API_COMPRESSION: ${API_COMPRESSION:-}
       # admin health page: gateway address (only /health is called) and disk / database warning levels
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:4000}
-      HEALTH_DISK_WARN_PCT: ${HEALTH_DISK_WARN_PCT:-85}
-      HEALTH_DISK_CRIT_PCT: ${HEALTH_DISK_CRIT_PCT:-95}
-      HEALTH_DB_WARN_GB: ${HEALTH_DB_WARN_GB:-10}
-      CAST_ENABLED: ${CAST_ENABLED:-true}
-      DOWNLOADS_ENABLED: ${DOWNLOADS_ENABLED:-true}
-      DIRECT_PLAY_REQUIRES_DOWNLOAD: ${DIRECT_PLAY_REQUIRES_DOWNLOAD:-false}
+      HEALTH_DISK_WARN_PCT: ${HEALTH_DISK_WARN_PCT:-}
+      HEALTH_DISK_CRIT_PCT: ${HEALTH_DISK_CRIT_PCT:-}
+      HEALTH_DB_WARN_GB: ${HEALTH_DB_WARN_GB:-}
+      CAST_ENABLED: ${CAST_ENABLED:-}
+      DOWNLOADS_ENABLED: ${DOWNLOADS_ENABLED:-}
+      DIRECT_PLAY_REQUIRES_DOWNLOAD: ${DIRECT_PLAY_REQUIRES_DOWNLOAD:-}
       DOWNLOAD_DIR: /data/downloads
-      DOWNLOAD_CACHE_MAX_GB: ${DOWNLOAD_CACHE_MAX_GB:-50}
-      DOWNLOAD_PREP_CONCURRENCY: ${DOWNLOAD_PREP_CONCURRENCY:-1}
-      DOWNLOAD_CREATE_PER_HOUR: ${DOWNLOAD_CREATE_PER_HOUR:-20}
-      DOWNLOAD_MIN_FREE_GB: ${DOWNLOAD_MIN_FREE_GB:-2}
-      DOWNLOAD_PAUSE_STREAMS: ${DOWNLOAD_PAUSE_STREAMS:-2}
-      DOWNLOAD_FILE_TTL_HOURS: ${DOWNLOAD_FILE_TTL_HOURS:-48}
-      DOWNLOAD_OFFLINE_GRACE_DAYS: ${DOWNLOAD_OFFLINE_GRACE_DAYS:-7}
+      DOWNLOAD_CACHE_MAX_GB: ${DOWNLOAD_CACHE_MAX_GB:-}
+      DOWNLOAD_PREP_CONCURRENCY: ${DOWNLOAD_PREP_CONCURRENCY:-}
+      DOWNLOAD_CREATE_PER_HOUR: ${DOWNLOAD_CREATE_PER_HOUR:-}
+      DOWNLOAD_MIN_FREE_GB: ${DOWNLOAD_MIN_FREE_GB:-}
+      DOWNLOAD_PAUSE_STREAMS: ${DOWNLOAD_PAUSE_STREAMS:-}
+      DOWNLOAD_FILE_TTL_HOURS: ${DOWNLOAD_FILE_TTL_HOURS:-}
+      DOWNLOAD_OFFLINE_GRACE_DAYS: ${DOWNLOAD_OFFLINE_GRACE_DAYS:-}
     # root fs is read-only. PREVIEWS_PATH / DOWNLOADS_PATH: named volume by default, or a host folder
     # (e.g. /mnt/data/friendflix/downloads, must be writable by uid 1000) - see docs/downloads.md "Speicherort"
     volumes:
       - ${PREVIEWS_PATH:-previews}:/data/previews # cached hover/billboard clips
       - ${DOWNLOADS_PATH:-downloads}:/data/downloads # prepared offline-download MP4s (rw here, ro in the gateway)
+      - bootstrap:/run/friendflix:ro
     depends_on:
+      bootstrap: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
     ports: ["${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-3081}:3000"]
@@ -147,13 +188,18 @@ services:
     security_opt: ["no-new-privileges:true"]
     environment:
       MEDIA_SERVER: ${MEDIA_SERVER:-jellyfin}
-      JELLYFIN_URL: ${JELLYFIN_URL:-} # required when MEDIA_SERVER=jellyfin (the backend refuses to start without it)
+      JELLYFIN_URL: ${JELLYFIN_URL:-}
       BACKEND_URL: http://backend:3000
-      INTERNAL_SECRET: ${INTERNAL_SECRET:-}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-} # unset: the copy in the bootstrap-gateway volume
       METRICS_TOKEN: ${METRICS_TOKEN:-}
       DOWNLOAD_DIR: /data/downloads
-    volumes: ["${DOWNLOADS_PATH:-downloads}:/data/downloads:ro"] # same folder as the backend, read-only
-    depends_on: [backend]
+    group_add: ["10001"] # reads bootstrap-gateway (internal_secret only: never the database password or the encryption key)
+    volumes:
+      - ${DOWNLOADS_PATH:-downloads}:/data/downloads:ro # same folder as the backend, read-only
+      - bootstrap-gateway:/run/friendflix-gateway:ro
+    depends_on:
+      bootstrap: { condition: service_completed_successfully }
+      backend: { condition: service_started }
     ports: ["${BIND_ADDR:-127.0.0.1}:${GATEWAY_PORT:-3082}:4000"]
     networks: [front, media]
 
@@ -166,7 +212,10 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     environment:
-      ORIGIN: ${PUBLIC_URL:?}
+      # the origin comes from the request (Host + X-Forwarded-Proto, set by the reverse proxy); adapter-node 6 reads no ORIGIN
+      PROTOCOL_HEADER: x-forwarded-proto
+    depends_on:
+      bootstrap: { condition: service_completed_successfully }
     ports: ["${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-3080}:3000"]
     networks: [front]
 
@@ -182,22 +231,23 @@ services:
     user: "70:70"
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    group_add: ["10001"] # reads postgres_password from the bootstrap volume
     environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD:?}
-      # alternative to PGPASSWORD: path of a mounted password file (e.g. a Docker secret)
-      PGPASSWORD_FILE: ${BACKUP_PGPASSWORD_FILE:-}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-} # wins when set; otherwise PGPASSWORD_FILE is read
+      # password file: the bootstrap volume's by default, or a mounted file (e.g. a Docker secret)
+      PGPASSWORD_FILE: ${BACKUP_PGPASSWORD_FILE:-/run/friendflix/postgres_password}
       TZ: ${TZ:-Europe/Vienna}
       BACKUP_HOUR: ${BACKUP_HOUR:-3}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-${KEEP_DAYS:-14}}
       BACKUP_RUN_ON_START: ${BACKUP_RUN_ON_START:-false}
-    volumes: ["${BACKUP_PATH:-./backups}:/backups"]
+    volumes: ["${BACKUP_PATH:-./backups}:/backups", "bootstrap:/run/friendflix:ro"]
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         umask 077
         S=/tmp/backup.status
         log() { echo "$$(date '+%Y-%m-%d %H:%M:%S') backup: $$*"; }
-        [ -n "$${PGPASSWORD_FILE:-}" ] && [ -r "$$PGPASSWORD_FILE" ] && PGPASSWORD=$$(cat "$$PGPASSWORD_FILE") && export PGPASSWORD
+        [ -z "$${PGPASSWORD:-}" ] && [ -r "$${PGPASSWORD_FILE:-}" ] && PGPASSWORD=$$(cat "$$PGPASSWORD_FILE") && export PGPASSWORD
         run() {
           f=/backups/friendflix-$$(date +%Y%m%d-%H%M).dump
           if pg_dump -h postgres -U friendflix -Fc -f "$$f.tmp" friendflix && [ -s "$$f.tmp" ] \
@@ -228,6 +278,7 @@ services:
       timeout: 5s
       retries: 1
     depends_on:
+      bootstrap: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
     networks: [db]
 
@@ -255,6 +306,9 @@ services:
       egress: {}
 
 volumes:
+  # generated secrets (bootstrap service): back it up apart from the database dumps, see scripts/backup-bootstrap.sh
+  bootstrap:
+  bootstrap-gateway:
   pgdata:
   previews:
   downloads:

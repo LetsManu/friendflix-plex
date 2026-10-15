@@ -4,6 +4,7 @@ import websocket from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { audit } from '../audit.js';
+import { publicOrigin } from '../config.js';
 import { bus } from '../bus.js';
 import type { Ctx } from '../ctx.js';
 import { clientMsg, PartyRegistry } from '../party.js';
@@ -27,7 +28,6 @@ export const parties = new PartyRegistry();
 export async function partyRoutes(app: FastifyInstance, ctx: Ctx) {
   await app.register(websocket, { options: { maxPayload: 4096 } });
   const pre = { preHandler: requireGrownUp(ctx) }; // no watch parties on kids profiles
-  const origin = new URL(ctx.cfg.PUBLIC_URL).origin;
 
   const roomInfo = (r: ReturnType<PartyRegistry['get']> & object) => ({
     id: r.id, itemId: r.itemId, title: r.title, hostId: r.hostId, members: r.members.size, startAt: r.startAt,
@@ -88,7 +88,7 @@ export async function partyRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.get('/ws/party/:id', { websocket: true, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (socket, req) => {
     // Cross-site WebSocket hijacking guard: browsers always send Origin on WS handshakes.
-    if (req.headers.origin !== origin || !(await authenticate(ctx, req)) || !req.session!.deviceApproved) return socket.close(4401, 'unauthorized');
+    if (req.headers.origin !== publicOrigin(ctx.cfg) || !(await authenticate(ctx, req)) || !req.session!.deviceApproved) return socket.close(4401, 'unauthorized');
     if (isKidsProfile(req)) return socket.close(4403, 'kids profile');
     const room = parties.get((req.params as { id: string }).id);
     if (!room) return socket.close(4404, 'room not found');

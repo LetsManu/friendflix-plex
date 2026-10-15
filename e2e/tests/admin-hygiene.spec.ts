@@ -43,6 +43,8 @@ test.describe('admin library hygiene', () => {
     await page.getByRole('combobox', { name: 'Problem' }).selectOption('');
     await page.getByRole('button', { name: /Sprache/ }).click(); // the issue picked the category; unpress it
     await expect(page.getByRole('button', { name: /Sprache/ })).toHaveAttribute('aria-pressed', 'false');
+    // the unpress reloads the list (rows = null); until it is back the table filters locally and sends no query
+    await expect(table(page).getByRole('row')).toHaveCount(51);
     await page.getByRole('searchbox', { name: 'Tabelle filtern' }).fill('zephyr');
     await expect.poll(() => urls.at(-1)?.searchParams.get('q')).toBe('zephyr');
     await expect(page.getByText('1–50 von 60')).toBeVisible();
@@ -98,6 +100,9 @@ test.describe('admin library hygiene', () => {
   });
 
   test('Jetzt prüfen → POST scan; running state disables the button', async ({ page, api }) => {
+    // The mock's timestamps are relative to a NOW taken when the worker loaded mocks/admin.ts; pin the page's clock to
+    // lastDone + 12 min so the relative text does not drift to "vor 13 Minuten" in a worker that has run for a while.
+    await page.clock.setFixedTime(Date.parse(api.admin.hygiene.lastDone!) + 12 * 60_000);
     await page.goto('/admin/hygiene');
     await expect(page.getByText(/Zuletzt geprüft vor 12 Minuten · vollständig vorgestern/)).toBeVisible();
     const btn = page.getByRole('button', { name: 'Jetzt prüfen' });

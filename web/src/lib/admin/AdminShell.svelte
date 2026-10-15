@@ -12,12 +12,15 @@
   import { t } from '#lib/i18n';
   import { GROUPS, OVERVIEW, activeItem, badgeCount, badgeTone, groupOf } from './nav';
   import { refreshSummary, summary } from './summary';
+  import { features, linkShown, serverCaps } from '#lib/capabilities';
 
   const page = pageStore();
   $: item = activeItem($page.url.pathname);
   $: group = groupOf(item);
   $: overview = item === OVERVIEW;
   $: title = item && !overview ? $t(item.label) : $t('admin.title');
+  // entries of a service this instance has not set up (e.g. requests) are left out
+  $: groups = GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => linkShown($serverCaps, i.href, $features)) }));
 
   onMount(() => {
     void refreshSummary();
@@ -32,7 +35,7 @@
   <aside class="side">
     <nav aria-label={$t('admin.nav.label')}>
       <a class="ni" href={OVERVIEW.href} aria-current={overview ? 'page' : undefined}><Icon name={OVERVIEW.icon} size={20} /><span class="nl">{$t(OVERVIEW.label)}</span></a>
-      {#each GROUPS as g (g.id)}
+      {#each groups as g (g.id)}
         <h2 class="gh" id="adm-g-{g.id}">{$t(g.label)}</h2>
         <ul aria-labelledby="adm-g-{g.id}">
           {#each g.items as it (it.href)}
@@ -61,7 +64,7 @@
     {#if overview}
       <!-- phone: the admin index is a grouped list (same look as /me); hidden next to the sidebar -->
       <nav class="plist" aria-label={$t('admin.nav.label')}>
-        {#each GROUPS as g (g.id)}
+        {#each groups as g (g.id)}
           <section aria-labelledby="adm-p-{g.id}">
             <h2 class="pgh" id="adm-p-{g.id}">{$t(g.label)}</h2>
             <ul class="lst">

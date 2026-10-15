@@ -13,9 +13,16 @@ let admin: { cookies: Record<string, string>; csrf: string };
 const call = (e: TestEnv, a: typeof admin | null, method: 'GET' | 'PUT' | 'DELETE' | 'POST', url: string, payload?: unknown) =>
   e.app.inject({ method, url, cookies: a?.cookies, headers: a ? { 'x-csrf-token': a.csrf } : {}, payload: payload as object });
 
+/** stamps a re-authentication on the session (replacing or removing a key needs one at most 10 minutes old) */
+const reauth = async (e: TestEnv, a: typeof admin, at = Date.now()) => {
+  const k = `sess:${a.cookies.ff_sid}`;
+  await e.kv.set(k, JSON.stringify({ ...JSON.parse((await e.kv.get(k))!), reauthAt: at }), 600);
+};
+
 beforeAll(async () => {
   env = await makeEnv();
   admin = await env.login();
+  await reauth(env, admin);
 });
 afterAll(() => env.close());
 
@@ -23,10 +30,10 @@ describe('source keys', () => {
   it('PUT stores the key encrypted', async () => {
     const r = await call(env, admin, 'PUT', '/api/admin/sources/tmdb', { key: KEY });
     expect(r.statusCode).toBe(200);
-    const row = (await env.pool.query("select * from app_settings where key='source.tmdb'")).rows[0];
+    const row = (await env.pool.query("select * from settings where key='TMDB_API_KEY'")).rows[0];
     expect(JSON.stringify(row)).not.toContain(KEY);
-    expect(decrypt(keyFromBase64(ENC_KEY), row.value.enc)).toBe(KEY);
-    expect(row.value.last4).toBe(KEY.slice(-4));
+    expect(decrypt(keyFromBase64(ENC_KEY), row.enc)).toBe(KEY);
+    expect(row.last4).toBe(KEY.slice(-4));
   });
 
   it('responses never contain the key', async () => {
@@ -53,7 +60,7 @@ describe('source keys', () => {
       env.ctx.cfg = { ...orig, TMDB_API_KEY: 'filekey-abcdef99' };
       const a = admin;
       const fileEnv = env;
-      await fileEnv.pool.query("insert into app_settings(key, value) values ('source.tmdb', $1)", [JSON.stringify({ enc: encrypt(fileEnv.ctx.encKey, 'dbkey-zzzzzzzz'), last4: 'zzzz', updatedAt: 'x' })]);
+      await fileEnv.pool.query("insert into settings(key, enc, last4) values ('TMDB_API_KEY', $1, 'zzzz')", [encrypt(fileEnv.ctx.encKey, 'dbkey-zzzzzzzz')]);
       const put = await call(fileEnv, a, 'PUT', '/api/admin/sources/tmdb', { key: KEY });
       expect(put.statusCode).toBe(409);
       expect(put.json()).toEqual({ error: 'from_file' });
@@ -62,23 +69,60 @@ describe('source keys', () => {
       const st = await call(fileEnv, a, 'GET', '/api/admin/sources/tmdb');
       expect(st.json()).toMatchObject({ set: true, from: 'file', last4: 'ef99' });
       expect(st.body).not.toContain('filekey-abcdef99');
-      await env.pool.query("delete from app_settings where key='source.tmdb'");
+      await env.pool.query("delete from settings where key='TMDB_API_KEY'");
     } finally {
       env.ctx.cfg = orig;
-      await env.pool.query("delete from app_settings where key='source.tmdb'");
+      await env.pool.query("delete from settings where key='TMDB_API_KEY'");
     }
   });
 
   it('a stored key that no longer decrypts is reported as invalid, not as set', async () => {
     const other = Buffer.alloc(32, 9);
-    await env.pool.query("delete from app_settings where key='source.omdb'");
-    await env.pool.query("insert into app_settings(key, value) values ('source.omdb', $1)", [JSON.stringify({ enc: encrypt(other, 'omdbkey-12345678'), last4: '5678', updatedAt: 'x' })]);
+    await env.pool.query("delete from settings where key='OMDB_API_KEY'");
+    await env.pool.query("insert into settings(key, enc, last4) values ('OMDB_API_KEY', $1, '5678')", [encrypt(other, 'omdbkey-12345678')]);
     try {
       const j = (await call(env, admin, 'GET', '/api/admin/sources/omdb')).json();
       expect(j).toMatchObject({ set: false, from: null, last4: null, invalid: true });
     } finally {
-      await env.pool.query("delete from app_settings where key='source.omdb'");
+      await env.pool.query("delete from settings where key='OMDB_API_KEY'");
       await call(env, admin, 'DELETE', '/api/admin/sources/omdb');
+    }
+  });
+
+  it('PUT and DELETE need a recent re-authentication: 401 reauth_required, nothing changes', async () => {
+    const stale = await env.login();
+    await reauth(env, stale, Date.now() - 601_000);
+    await call(env, admin, 'PUT', '/api/admin/sources/tmdb', { key: KEY });
+    await env.pool.query('delete from audit_log');
+    try {
+      const put = await call(env, stale, 'PUT', '/api/admin/sources/tmdb', { key: 'another-key-0000' });
+      expect(put.statusCode).toBe(401);
+      expect(put.json()).toEqual({ error: 'reauth_required' });
+      const del = await call(env, stale, 'DELETE', '/api/admin/sources/tmdb');
+      expect(del.statusCode).toBe(401);
+      expect(del.json()).toEqual({ error: 'reauth_required' });
+      expect(await getSourceKey(env.ctx, 'tmdb')).toEqual({ key: KEY, from: 'db' });
+      expect((await env.pool.query("select 1 from audit_log where action like 'source.%'")).rowCount).toBe(0);
+      // reading and testing need no fresh sign-in
+      expect((await call(env, stale, 'GET', '/api/admin/sources/tmdb')).statusCode).toBe(200);
+      expect((await call(env, stale, 'POST', '/api/admin/sources/tmdb/test', {})).statusCode).toBe(200);
+      await reauth(env, stale);
+      expect((await call(env, stale, 'DELETE', '/api/admin/sources/tmdb')).statusCode).toBe(200);
+    } finally {
+      await call(env, admin, 'DELETE', '/api/admin/sources/tmdb');
+    }
+  });
+
+  it('25a review: a key saved on another instance is used at once (the store snapshot, no own cache)', async () => {
+    await call(env, admin, 'PUT', '/api/admin/sources/tmdb', { key: KEY });
+    try {
+      expect(await getSourceKey(env.ctx, 'tmdb')).toEqual({ key: KEY, from: 'db' });
+      // what another instance's save looks like here: a new revision, reloaded into ctx.cfg (no source route, no cache drop)
+      await env.ctx.settings.save({ TMDB_API_KEY: 'other-instance-key-42' }, null);
+      expect(await getSourceKey(env.ctx, 'tmdb')).toEqual({ key: 'other-instance-key-42', from: 'db' });
+      expect((await call(env, admin, 'GET', '/api/admin/sources/tmdb')).json()).toMatchObject({ set: true, from: 'db', last4: 'y-42', invalid: false });
+    } finally {
+      await call(env, admin, 'DELETE', '/api/admin/sources/tmdb');
     }
   });
 
@@ -171,7 +215,10 @@ describe('source keys', () => {
   it('final review M3: buildApp syncs the file keys (a restart with a new secret file lifts the pause)', async () => {
     const kv = new MemoryKV();
     await kv.set(PAUSE_KEY('omdb'), '1', 600);
-    const app = await buildApp({ ...env.ctx, kv, cfg: { ...env.ctx.cfg, OMDB_API_KEY: 'omdb-file-key-77' } });
+    const orig = env.ctx.cfg;
+    env.ctx.cfg = { ...orig, OMDB_API_KEY: 'omdb-file-key-77' }; // a key from env / a secret file (the test store reports it as env)
+    const app = await buildApp({ ...env.ctx, kv });
+    env.ctx.cfg = orig;
     try {
       expect(await kv.get(FILE_FP_KEY('omdb'))).toBeTruthy();
       expect(await kv.get(PAUSE_KEY('omdb'))).toBeNull();

@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { CAST_TOKEN_RE, resolveCast } from '../cast.js';
@@ -8,7 +8,9 @@ import type { Ctx } from '../ctx.js';
 import { authorizeDownload } from '../downloads.js';
 import { setLive } from '../live.js';
 import { dispatchMediaEvent } from '../media/events.js';
+import { mediaUrlKey } from '../media/index.js';
 import { MediaError, type ExternalSession } from '../media/types.js';
+import { effectiveLimits } from '../limits.js';
 import { jfUserFor, resolveProfile } from '../profiles.js';
 import { isHomeAddress } from '../netaddr.js';
 import { effectiveRole, remoteBitrateCap } from '../roles.js';
@@ -25,7 +27,8 @@ const eq = (a: string, b: string) => {
   return x.length === y.length && timingSafeEqual(x, y);
 };
 
-export const checkSecret = (req: FastifyRequest, header: string, secret: string) => eq(String(req.headers[header] ?? ''), secret);
+/** An empty secret (WEBHOOK_SECRET is unset until it is generated) never matches, also not a missing or empty header. */
+export const checkSecret = (req: FastifyRequest, header: string, secret: string) => secret.length > 0 && eq(String(req.headers[header] ?? ''), secret);
 
 interface MediaAuth {
   userId: string;
@@ -63,6 +66,8 @@ const ITEM_MEMO_MS = 5_000;
 const itemMemo = new Map<string, { exp: number; v: boolean }>();
 
 export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
+  /** The settings revision on every authenticated authz answer: the gateway refetches /internal/gateway-config when it moves. */
+  const withRev = (reply: FastifyReply) => reply.header('x-ff-config-rev', String(ctx.settings.rev()));
   let planBWarned = false; // the "Plan B unsupported" error is logged once per process, not per request
   /** The session's account, role and media server identity (active profile); null = no usable session. */
   async function sessionIdentity(sid: string) {
@@ -79,7 +84,9 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
   async function lookup(sid: string): Promise<MediaAuth | null> {
     const id = await sessionIdentity(sid);
     if (!id) return null;
-    const { user, role, jfUser } = id;
+    const { user, jfUser } = id;
+    // per-user overrides (remote cap) on top of the role; an unknown role keeps the guest fallback without overrides
+    const role = (await effectiveLimits(ctx, user)) ?? id.role;
     return { userId: user.id, ...(await ctx.jf.mediaAuth(jfUser)), maxBitrate: role.maxBitrate, remoteMaxBitrate: remoteBitrateCap(role), canDownload: role.download || ctx.cfg.DIRECT_PLAY_REQUIRES_DOWNLOAD !== 'true', ...(role.maxHeight ? { maxHeight: role.maxHeight } : {}) };
   }
 
@@ -107,6 +114,7 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
   // rate limiting is off (one call per gateway cache miss; the gateway rate-limits failed cast auth itself).
   app.post('/internal/authz', { config: { rateLimit: false } }, async (req, reply) => {
     if (!checkSecret(req, 'x-internal-secret', ctx.cfg.INTERNAL_SECRET)) return reply.code(403).send({ error: 'forbidden' });
+    withRev(reply);
     const body = z.union([
       // ip = address the gateway derived for the caller (same rule as `client`): outside HOME_NETWORKS the role's remote cap lowers maxBitrate
       z.object({ sid: z.string().regex(/^[\w-]{20,80}$/), ip: z.string().min(1).max(64).optional() }).strict(),
@@ -148,6 +156,7 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
       authzNginx.inc({ result: 'bad_secret' });
       return reply.code(403).send();
     }
+    withRev(reply);
     if (!ctx.jf.capabilities.planB) {
       // a server without Plan B support (capabilities.planB): refuse clearly instead of failing somewhere inside planBAuthHeader()
       authzNginx.inc({ result: 'unsupported' });
@@ -187,6 +196,7 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
    */
   app.post('/internal/authz/item', { config: { rateLimit: false } }, async (req, reply) => {
     if (!checkSecret(req, 'x-internal-secret', ctx.cfg.INTERNAL_SECRET)) return reply.code(403).send({ error: 'forbidden' });
+    withRev(reply);
     const b = z.object({
       sid: z.string().regex(/^[\w-]{20,80}$/),
       itemId: z.string().regex(/^[0-9a-f]{32}$/),
@@ -211,12 +221,25 @@ export function internalRoutes(app: FastifyInstance, ctx: Ctx) {
     return { allow };
   });
 
+  /**
+   * The gateway's configuration (it has no database): the media server URL from the live settings plus the settings revision it belongs
+   * to. 503 setup_required while the URL is empty; the gateway keeps retrying and answers /media/* with 503 until then.
+   */
+  app.get('/internal/gateway-config', { config: { rateLimit: false } }, async (req, reply) => {
+    if (!checkSecret(req, 'x-internal-secret', ctx.cfg.INTERNAL_SECRET)) return reply.code(403).send({ error: 'forbidden' });
+    const rev = ctx.settings.rev(); // same snapshot as ctx.cfg (both read synchronously)
+    const cfg = ctx.cfg;
+    const url = (cfg as unknown as Record<string, unknown>)[mediaUrlKey(cfg)];
+    reply.header('cache-control', 'no-store');
+    if (typeof url !== 'string' || !url) return reply.code(503).send({ error: 'setup_required' });
+    return { rev, upstreamUrl: url };
+  });
+
   // Webhooks of the configured server (Jellyfin: /internal/webhook/jellyfin), translated into neutral events by the implementation.
   if (ctx.jf.webhookEvents) {
-    const translate = ctx.jf.webhookEvents.bind(ctx.jf);
     app.post(`/internal/webhook/${ctx.jf.kind}`, async (req, reply) => {
       if (!checkSecret(req, 'x-webhook-secret', ctx.cfg.WEBHOOK_SECRET)) return reply.code(403).send({ error: 'forbidden' });
-      const events = translate(req.body);
+      const events = ctx.jf.webhookEvents?.(req.body); // the current instance (rebuilt when the media settings change)
       if (!events) return reply.code(400).send({ error: 'bad_request' });
       for (const e of events) await dispatchMediaEvent(ctx, e);
       return { ok: true };

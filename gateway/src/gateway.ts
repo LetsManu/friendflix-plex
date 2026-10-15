@@ -13,14 +13,16 @@ export { mediaBrowserHeader } from './upstream/jellyfin.js';
 export interface GatewayOptions {
   /** media server adapter (allowlist, credential params, auth header); default Jellyfin */
   upstream?: Upstream;
-  /** base URL of the media server */
-  upstreamUrl?: string;
+  /** base URL of the media server, or a getter of the current one (remoteConfig); null/invalid = /media/* answers 503 */
+  upstreamUrl?: string | (() => string | null);
   /** @deprecated alias of upstreamUrl */
   jellyfinUrl?: string;
   backendUrl: string;
   internalSecret: string;
   metricsToken?: string;
   fetchImpl?: typeof fetch;
+  /** called with the x-ff-config-rev header of every /internal/authz* answer (remoteConfig.noteRev) */
+  onConfigRev?: (rev: string | null) => void;
   /** directory holding prepared offline downloads (read-only mount); without it 'file' downloads answer 503 */
   downloadDir?: string;
 }
@@ -249,7 +251,21 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
   const up = opts.upstream ?? jellyfinUpstream;
   const upstreamUrl = opts.upstreamUrl ?? opts.jellyfinUrl;
   if (!upstreamUrl) throw new Error('gateway: upstreamUrl missing');
-  const base = new URL(upstreamUrl);
+  const currentUrl = typeof upstreamUrl === 'function' ? upstreamUrl : (() => { const u = new URL(upstreamUrl).href; return () => u; })();
+  /** the media server base for this request (parsed once per URL); null = none yet or not a URL */
+  let parsed: { raw: string; url: URL | null } | undefined;
+  const upstreamBase = (): URL | null => {
+    const raw = currentUrl();
+    if (!raw) return null;
+    if (parsed?.raw !== raw) {
+      let url: URL | null = null;
+      try { url = new URL(raw); } catch { /* answered as "no upstream" */ }
+      parsed = { raw, url };
+    }
+    return parsed.url;
+  };
+  /** every /internal/authz* answer tells the settings revision; a newer one makes remoteConfig refetch the upstream */
+  const noteRev = (r: Response) => opts.onConfigRev?.(r.headers.get('x-ff-config-rev'));
   const authCache = new Map<string, { exp: number; v: Authz | null }>();
   const castCache = new Map<string, { exp: number; v: Authz | null }>();
   const castFails = new Map<string, { start: number; hashes: Set<string>; blockedUntil: number }>();
@@ -274,9 +290,10 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
 
   /**
    * Session -> media credentials, memoised 5 s (denials 2 s). Single flight: the ~30 image/segment requests a page fires right
-   * after the memo expired share ONE backend call. Backend failures (network, 5xx) are not memoised, so the next request retries.
+   * after the memo expired share ONE backend call. Backend failures (network, 5xx such as 503 setup_required, a refused secret) are
+   * 'error' (503 to the client) and are not memoised, so the next request retries.
    */
-  const authInflight = new Map<string, Promise<Authz | null>>();
+  const authInflight = new Map<string, Promise<Authz | null | 'error'>>();
 
   /** Upstream.authorize helper: item visibility of the session's active profile (backend /internal/authz/item), memoised 5 s. */
   const itemCache = new Map<string, { exp: number; v: boolean }>();
@@ -292,6 +309,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
       body: JSON.stringify({ sid, itemId: id, kind }),
       signal: AbortSignal.timeout(5000),
     });
+    noteRev(r);
     if (r.status === 401) return false;
     if (!r.ok) throw new Error(`authz/item ${r.status}`); // backend trouble: 503, not cached
     const v = ((await r.json()) as { allow?: unknown }).allow === true;
@@ -300,7 +318,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
     return v;
   }
   /** The backend lowers maxBitrate for callers outside the home networks, so the answer depends on the client address (same rule as clientKey). */
-  async function authorize(cookie: string | undefined, ip: string): Promise<Authz | null> {
+  async function authorize(cookie: string | undefined, ip: string): Promise<Authz | null | 'error'> {
     const sid = /(?:^|;\s*)ff_sid=([\w-]+)/.exec(cookie ?? '')?.[1];
     if (!sid) return null;
     const key = `${sid}|${ip}`;
@@ -309,8 +327,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
     const running = authInflight.get(key);
     if (running) return running;
     const p = (async () => {
-      let v: Authz | null = null;
-      let cacheable = true;
+      let v: Authz | null | 'error' = null;
       try {
         const r = await f(new URL('/internal/authz', opts.backendUrl), {
           method: 'POST',
@@ -318,13 +335,13 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
           body: JSON.stringify({ sid, ip }),
           signal: AbortSignal.timeout(5000),
         });
+        noteRev(r);
         if (r.ok) v = (await r.json()) as Authz;
-        else if (r.status >= 500) cacheable = false;
+        else if (![400, 401].includes(r.status)) v = 'error'; // 400/401 = no usable session (memoised); anything else is the backend's trouble
       } catch {
-        v = null;
-        cacheable = false;
+        v = 'error';
       }
-      if (cacheable) {
+      if (v !== 'error') {
         authCache.set(key, { exp: Date.now() + (v ? 5_000 : 2_000), v });
         if (authCache.size > 5000) authCache.clear();
       }
@@ -340,6 +357,12 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
     if (url.pathname === '/metrics') {
       if (opts.metricsToken && req.headers.authorization !== `Bearer ${opts.metricsToken}`) return end(res, 401, 'unauthorized');
       return end(res, 200, metrics(), 'text/plain; version=0.0.4');
+    }
+    // no media server yet (setup not done): 503 before any backend call; /health stays 200 so the container is not restarted
+    if (url.pathname.startsWith('/media/') && !upstreamBase()) {
+      const cast = url.pathname.startsWith(CAST_PREFIX); // a receiver must be able to read the 503 (CORS), counted as a cast request
+      (cast ? castCount : count)('503');
+      return end(res, 503, 'unavailable', 'text/plain', { 'retry-after': '5', 'cache-control': 'no-store', ...(cast ? CAST_CORS : {}) });
     }
     if (url.pathname.startsWith(CAST_PREFIX)) return handleCast(req, res, url);
     if (url.pathname.startsWith('/media/d/')) return handleDownload(req, res, url);
@@ -358,6 +381,10 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
     const t0 = performance.now();
     const auth = await authorize(req.headers.cookie, authClientIp(req.headers, req.socket.remoteAddress));
     const authzMs = performance.now() - t0;
+    if (auth === 'error') {
+      count('503');
+      return end(res, 503, 'unavailable', 'text/plain', { 'cache-control': 'no-store' });
+    }
     if (!auth) {
       count('401');
       return end(res, 401, 'unauthorized');
@@ -390,6 +417,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
         body: JSON.stringify({ sid, dl }),
         signal: AbortSignal.timeout(5000),
       });
+      noteRev(r);
       if (r.ok) {
         const j = (await r.json()) as DownloadAuthz;
         if (!j?.download || (j.download.kind !== 'file' && j.download.kind !== 'static')) return 'error';
@@ -559,6 +587,7 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
         body: JSON.stringify({ ct, client }),
         signal: AbortSignal.timeout(5000),
       });
+      noteRev(r);
       if (r.ok) {
         const j = (await r.json()) as Authz;
         if (!j.scope) return 'error'; // a cast answer without scope would be an unscoped token: never use it
@@ -645,6 +674,11 @@ export function createGateway(opts: GatewayOptions): { server: Server; metrics: 
   }
 
   async function forward(req: IncomingMessage, res: ServerResponse, url: URL, path: string, auth: Authz, countCode: (k: string) => void, cast = false, download = false, authzMs = 0) {
+    const base = upstreamBase();
+    if (!base) {
+      countCode('503');
+      return end(res, 503, 'unavailable', 'text/plain', cast ? CAST_CORS : undefined); // the upstream went away since the check in handle()
+    }
     let target = new URL(path, base);
     if (target.origin !== base.origin) return end(res, 403, 'forbidden'); // SSRF guard (defence in depth)
     for (const [k, v] of url.searchParams) {

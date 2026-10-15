@@ -21,5 +21,7 @@ import fresh from './fresh';
 import mine from './mine';
 import diagnose from './diagnose';
 import version from './version';
+import settings from './settings';
+import setup from './setup';
 
-export default { common, shell, home, detail, player, account, social, admin, hubs, anime, together, kids, scenes, fresh, mine, diagnose, version, ui, adminPeople, adminContent } as const;
+export default { common, shell, home, detail, player, account, social, admin, hubs, anime, together, kids, scenes, fresh, mine, diagnose, version, settings, setup, ui, adminPeople, adminContent } as const;

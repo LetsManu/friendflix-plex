@@ -10,11 +10,11 @@ import { timed } from '../timing.js';
  * MediaBrowser Client="FriendFlix", Device="Portal", DeviceId="abc", Version="0.1.0", Token="..."
  * Values are stripped of quotes/newlines so they can never break out of the header.
  */
-export function mediaBrowserHeader(opts: { deviceId: string; token?: string; version?: string }): string {
+export function mediaBrowserHeader(opts: { deviceId: string; token?: string; version?: string; device?: string }): string {
   const esc = (v: string) => v.replace(/["\\\r\n]/g, '');
   const parts: Array<[string, string]> = [
     ['Client', 'FriendFlix'],
-    ['Device', 'Portal'],
+    ['Device', opts.device ?? 'Portal'],
     ['DeviceId', opts.deviceId],
     ['Version', opts.version ?? '0.1.0'],
   ];

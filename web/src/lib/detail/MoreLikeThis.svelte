@@ -7,12 +7,15 @@
   import { openModal, swapModal } from '#lib/modal';
   import { lengthLabel } from '#lib/hover';
   import { t } from '#lib/i18n';
+  import { uniqueBy } from '#lib/detail/safe';
 
   /** null = loading */
   export let items: Item[] | null;
   /** modal: titles open inside the dialog (no extra history entry); page: normal links */
   export let variant: 'modal' | 'page' = 'page';
 
+  /** the same title twice (Jellyfin "similar" can repeat one) would be a duplicate key of the keyed list below */
+  $: list = items === null ? null : uniqueBy(items, (i) => i.id);
   let failId = '';
   const href = (i: Item) => (i.type === 'Episode' && i.seriesId ? `/item/${i.seriesId}` : `/item/${i.id}`);
   function go(e: MouseEvent, i: Item) {
@@ -25,14 +28,14 @@
   async function add(i: Item) { if (!(await toggleList(i.id, $listIds.has(i.id)))) { failId = i.id; setTimeout(() => (failId = ''), 4000); } }
 </script>
 
-{#if items === null || items.length}
-  <section class="more" aria-labelledby="more-h" aria-busy={items === null}>
+{#if list === null || list.length}
+  <section class="more" aria-labelledby="more-h" aria-busy={list === null}>
     <h2 id="more-h">{$t('detail.more.title')}</h2>
     <ul class="grid3" class:modal={variant === 'modal'}>
-      {#if items === null}
+      {#if list === null}
         {#each Array(6) as _}<li><div class="skeleton sk"></div></li>{/each}
       {:else}
-        {#each items as i (i.id)}
+        {#each list as i (i.id)}
           {@const inList = $listIds.has(i.id)}
           {@const len = lengthLabel(i)}
           <li class="mc">

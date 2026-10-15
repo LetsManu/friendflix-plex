@@ -40,6 +40,8 @@ COPY --from=deps --chown=node:node /app/node_modules node_modules
 COPY --from=build --chown=node:node /app/backend/dist backend/dist
 COPY --chown=node:node backend/package.json backend/
 COPY --chown=node:node version.json ./
+# the Authentik blueprints the setup wizard imports (backend/src/setup/authentikSetup.ts reads them from ../../../deploy/authentik/)
+COPY --chown=node:node deploy/authentik/*.yaml deploy/authentik/
 # ffmpeg: remuxes prepared offline downloads (HLS fMP4 -> faststart MP4, stream copy only). Not version-pinned on purpose
 # (pins vanish from the Alpine mirrors, see above): reproducible as long as Alpine v3.x has not shipped a newer ffmpeg or
 # dependency since the build. No font package is installed, so the fontconfig trigger writes no (mtime-bearing) cache;

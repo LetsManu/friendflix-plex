@@ -193,6 +193,7 @@ export default {
       server_errors: 'Viele Serverfehler',
       client_errors: 'Viele Browserfehler',
       failed_playbacks: 'Wiedergaben fehlgeschlagen',
+      pending_approvals: 'Anmeldungen warten auf Freigabe',
     },
     disks: {
       title: 'Speicher',

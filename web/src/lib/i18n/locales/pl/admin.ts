@@ -10,6 +10,7 @@ const pl: Translation<typeof de> = {
     users: 'Użytkownicy', status: 'Status', previews: 'Podglądy', playback: 'Test odtwarzania', digest: 'Podsumowanie tygodnia', sources: 'Źródła danych', invites: 'Zaproszenia',
     requests: 'Życzenia', polls: 'Głosowania', lists: 'Listy', roles: 'Role', devices: 'Urządzenia', audit: 'Dziennik audytu', update: 'Aktualizacja',
     hygiene: 'Porządek w bibliotece',
+    settings: 'Ustawienia',
     usage: 'Korzystanie',
   },
   roleNames: { friend: 'Znajomy', family: 'Rodzina', guest: 'Gość', admin: 'Admin' },
@@ -343,7 +344,26 @@ const pl: Translation<typeof de> = {
       enable: '{actor} odblokował(a) użytkownika {target}',
       revoke_sessions: '{actor} wylogował(a) użytkownika {target} wszędzie',
       provisioned: 'Utworzono konto dla {target}',
+      access: '{actor} zmienił(a) dostęp: {target}',
+      limits: '{actor} zmienił(a) limity: {target}',
+      repair: '{actor} naprawił(a) połączenia: {target}',
+      recovery_email: '{actor} wysłał(a) link do hasła: {target}',
+      mfa_setup_sent: '{actor} wysłał(a) konfigurację 2FA: {target}',
+      activity_viewed: '{actor} przejrzał(a) historię: {target}',
+      revoke_device: '{actor} wylogował(a) na jednym urządzeniu: {target}',
+      recovery_email_failed: '{actor} próbował(a) wysłać link do hasła: {target} – nie udało się ({reason})',
+      deletion_requested: '{actor} zaplanował(a) usunięcie konta {target} ({date})',
+      deletion_requested_self: '{actor} poprosił(a) o usunięcie własnego konta ({date})',
+      deletion_restored: '{actor} anulował(a) usunięcie konta {target}',
+      deletion_restored_self: '{actor} anulował(a) usunięcie własnego konta',
+      deletion_restored_locked: '{actor} anulował(a) usunięcie konta {target} – pozostaje zablokowane, dostęp wygasł',
+      deletion_restored_self_locked: '{actor} anulował(a) usunięcie własnego konta – pozostaje zablokowane, dostęp wygasł',
+      deletion_now: '{actor} zlecił(a) natychmiastowe usunięcie konta {target}',
+      deletion_started: 'Rozpoczęto usuwanie konta {target}',
+      deletion_failed: 'Usuwanie konta {target} nie powiodło się na kroku {step} z 6',
+      deleted: 'Konto {target} zostało usunięte',
     },
+    failReason: { recovery_not_configured: 'brak przepływu odzyskiwania', authentik_user_not_found: 'brak użytkownika Authentik', not_supported: 'nieobsługiwane', authentik_unavailable: 'Authentik niedostępny', unknown: 'błąd' },
     device: {
       approve: '{actor} zatwierdził(a) urządzenie użytkownika {target}',
       unapprove: '{actor} cofnął(-ęła) zatwierdzenie urządzenia użytkownika {target}',
@@ -386,6 +406,7 @@ const pl: Translation<typeof de> = {
       pin_set: '{actor} ustawił(a) PIN profilu',
       pin_clear: '{actor} usunął(-ęła) PIN profilu',
       select: '{actor} zmienił(a) profil',
+      admin_update: '{actor} zmienił(a) profil: {target}',
     },
     download: {
       revoke: '{actor} cofnął(-ęła) licencję pobrania',
@@ -395,12 +416,25 @@ const pl: Translation<typeof de> = {
     },
     settings: {
       language: '{actor} zmienił(a) język domyślny',
+      update: '{actor} zmienił(a) ustawienia',
+      import_env: '{actor} przeniósł(-osła) wartości ze środowiska do ustawień',
+      generate: '{actor} wygenerował(a) nowy klucz',
+    },
+    setup: {
+      completed: '{actor} zakończył(a) konfigurację początkową',
     },
     system: {
       update: '{actor} uruchomił(a) aktualizację',
     },
     session: {
       revoke_others: '{actor} wylogował(a) się na innych urządzeniach',
+      revoke_device: '{actor} wylogował(a) jedno ze swoich urządzeń',
+      reauth: '{actor} zalogował(a) się ponownie (dla operacji na koncie)',
+      reauth_mismatch: '{actor}: odrzucono ponowne logowanie innym kontem',
+    },
+    account: {
+      export: '{actor} pobrał(a) swoje dane',
+      profile: '{actor} zmienił(a) nazwę lub kolor swojego konta',
     },
     tv: {
       pair: '{actor} sparował(a) telewizor',
@@ -444,6 +478,9 @@ const pl: Translation<typeof de> = {
       server_errors: { one: '{n} błąd serwera w 15 minut', few: '{n} błędy serwera w 15 minut', many: '{n} błędów serwera w 15 minut', other: '{n} błędu serwera w 15 minut' },
       client_errors: { one: '{n} błąd przeglądarki w 15 minut', few: '{n} błędy przeglądarki w 15 minut', many: '{n} błędów przeglądarki w 15 minut', other: '{n} błędu przeglądarki w 15 minut' },
       failed_playbacks: { one: '{n} nieudane odtworzenie', few: '{n} nieudane odtworzenia', many: '{n} nieudanych odtworzeń', other: '{n} nieudanego odtworzenia' },
+    },
+    approvals: {
+      pending_approvals: { one: '{n} logowanie czeka na zatwierdzenie', few: '{n} logowania czekają na zatwierdzenie', many: '{n} logowań czeka na zatwierdzenie', other: '{n} logowania czeka na zatwierdzenie' },
     },
   },
 };

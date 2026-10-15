@@ -89,7 +89,7 @@
       <StatTile icon="users" label={$t('admin.status.users')} value={s ? fmtNumber(s.users.active) : null} href="/admin/users" hint={s ? `${$t('admin.dash.locked')}: ${fmtNumber(s.users.locked)}` : ''} />
       <StatTile icon="play" label={$t('admin.status.activeStreams')} value={s ? fmtNumber(s.live.streams) : null} href="/admin/playback" />
       <StatTile icon="tv" label={$t('admin.status.partyRooms')} value={s ? fmtNumber(s.live.partyRooms) : null} />
-      <StatTile icon="mail" label={$t('admin.status.openInvites')} value={s ? fmtNumber(s.pending.invites) : null} href="/admin/invites" />
+      <StatTile icon="mail" label={$t('admin.status.openInvites')} value={s ? fmtNumber(s.pending.invites) : null} href="/admin/users?tab=invites" />
       <StatTile icon="monitor" label={$t('admin.status.pendingDevices')} value={s ? fmtNumber(s.pending.devices) : null} href="/admin/devices" tone={s?.pending.devices ? 'warn' : 'default'} />
       <StatTile icon="vote" label={$t('admin.status.pendingPolls')} value={s ? fmtNumber(s.pending.polls) : null} href="/admin/polls" tone={s?.pending.polls ? 'warn' : 'default'} />
       <StatTile icon="inbox" label={$t('adminContent.status.pendingRequests')} value={!s ? null : s.pending.requests === null ? '–' : fmtNumber(s.pending.requests)} href="/admin/requests" tone={s?.pending.requests ? 'warn' : 'default'} />

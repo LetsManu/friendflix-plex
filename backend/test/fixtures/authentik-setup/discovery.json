@@ -1,0 +1,1 @@
+{ "issuer": "https://auth.example.com/application/o/friendflix/", "authorization_endpoint": "https://auth.example.com/application/o/authorize/", "token_endpoint": "https://auth.example.com/application/o/token/", "jwks_uri": "https://auth.example.com/application/o/friendflix/jwks/", "code_challenge_methods_supported": ["plain", "S256"] }

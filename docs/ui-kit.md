@@ -74,7 +74,7 @@ await runAction({
 | --- | --- | --- |
 | `Button` | `variant` primary/secondary/ghost/danger, `pending`, `icon`, `size` md/sm, `href`, `block`, `solid` | pending = spinner + `aria-busy`, keeps focus, swallows clicks |
 | `DataTable` | `rows` (null = loading), `columns`, `key`, `caption`, `filterable`, `pageSize` (25, 0 = off), `actions(row)`, `rowLabel(row)`, `busyKey(row)` (runAction key; the table follows `busyKeys` itself), `busy(row)` (custom test), `error` + `on:retry`, `emptyText`, bind `q`/`sort`/`page`; server paging: `total` + `on:query` ({ q, sort, offset, limit }) | sticky header, `aria-sort`, cards at ≤720px (mark one column `primary`), slots `cell` (let:row let:col), `toolbar`, `empty` |
-| `Column<T>` (`ui/table.ts`) | `key`, `label`, `value(row)`, `sortable`, `sort(a,b)`, `filter: false`, `align`, `width`, `primary`, `hideOnCard` | |
+| `Column<T>` (`ui/table.ts`) | `key`, `label`, `value(row)`, `sortable`, `sort(a,b)`, `filter: false`, `align`, `width`, `primary`, `hideOnCard`, `hideLabel` | |
 | `ActionMenu` | `items: MoreAction[]` ({ id, label, icon, run, href, danger, disabled }), `label`, `title`, `busy` | popover / bottom sheet (MoreActions) |
 | `StatusPill` | `tone` ok/warn/err/info/muted, `label`, `icon` | |
 | `StatTile` | `label`, `value` (null = skeleton), `icon`, `hint`, `href`, `tone`, `pressed` (`true`/`false`; `undefined` = off), `on:click` | value is not a heading; with `pressed` set (and no `href`) the tile is a real `<button aria-pressed>` toggle for filter tiles (hygiene categories), link and plain tiles are unchanged |

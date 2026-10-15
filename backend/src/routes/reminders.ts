@@ -6,7 +6,7 @@ import type { Ctx } from '../ctx.js';
 import { seerrHooks } from '../hooks.js';
 import { MediaError } from '../media/types.js';
 import { fireTmdb, isAvailableEpisode } from '../reminders.js';
-import { portalStatus, SeerrError } from '../seerr/client.js';
+import { portalStatus, requestsClient, SeerrError } from '../seerr/client.js';
 import { requireGrownUp } from '../kids.js';
 import { id32 } from './_shared.js';
 
@@ -71,7 +71,7 @@ export function reminderRoutes(app: FastifyInstance, ctx: Ctx) {
 
     let d: any;
     try {
-      d = await ctx.seerr.details(b.mediaType, b.tmdbId);
+      d = await requestsClient(ctx).details(b.mediaType, b.tmdbId); // no request service: 404 requests_disabled
     } catch (e) {
       if (e instanceof SeerrError && e.status === 404) return reply.code(404).send({ error: 'not_found' });
       if (e instanceof SeerrError) return reply.code(502).send({ error: 'seerr', status: e.status });

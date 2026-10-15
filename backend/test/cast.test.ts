@@ -431,13 +431,13 @@ describe('cast disabled', () => {
   it('is off when CAST_ENABLED=false or PUBLIC_URL is not https', async () => {
     const was = env.ctx.cfg.CAST_ENABLED;
     const { ct } = await create();
-    env.ctx.cfg.CAST_ENABLED = 'false';
+    env.ctx.cfg = { ...env.ctx.cfg, CAST_ENABLED: 'false' };
     try {
       expect((await call(admin, 'GET', '/api/cast/config')).json()).toEqual({ enabled: false });
       expect((await call(admin, 'POST', '/api/cast/session', { itemId: ID })).statusCode).toBe(404);
       expect((await authz({ ct })).statusCode).toBe(401);
     } finally {
-      env.ctx.cfg.CAST_ENABLED = was;
+      env.ctx.cfg = { ...env.ctx.cfg, CAST_ENABLED: was };
     }
   });
 });
@@ -512,11 +512,11 @@ describe('cast: FriendFlix-served subtitles (subtitleExtract)', () => {
     const { j } = await create();
     const url: string = j.subtitles[0].url;
     const was = env.ctx.cfg.CAST_ENABLED;
-    env.ctx.cfg.CAST_ENABLED = 'false';
+    env.ctx.cfg = { ...env.ctx.cfg, CAST_ENABLED: 'false' };
     try {
       expect((await fetchSub(url)).statusCode).toBe(404);
     } finally {
-      env.ctx.cfg.CAST_ENABLED = was;
+      env.ctx.cfg = { ...env.ctx.cfg, CAST_ENABLED: was };
     }
     const jf = env.ctx.jf as { capabilities: Jf['capabilities'] };
     const caps = jf.capabilities;

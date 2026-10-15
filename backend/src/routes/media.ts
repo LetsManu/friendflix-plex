@@ -7,7 +7,8 @@ import { MediaError, type ItemDto, type TranscodeReason } from '../media/types.j
 import { methodOf } from '../playstats.js';
 import { clearLive, countLive, getLive, listLive, setLive } from '../live.js';
 import { isHomeRequest } from '../netaddr.js';
-import { effectiveRole, remoteBitrateCap } from '../roles.js';
+import { effectiveLimits } from '../limits.js';
+import { remoteBitrateCap } from '../roles.js';
 import { requireGrownUp } from '../kids.js';
 import { requireUser } from '../session.js';
 import { playbackHooks } from '../hooks.js';
@@ -274,7 +275,7 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
       /** why the viewer lowered maxBitrate (menu pick or auto-ABR); only used when that choice is the binding cap */
       reasonHint: z.enum(['network', 'manual']).optional(),
     }).parse(req.body);
-    const role = (await effectiveRole(ctx, req.user!.role))!;
+    const role = (await effectiveLimits(ctx, req.user!))!;
     if ((await countLive(ctx, req.user!.id)) >= role.maxStreams) return reply.code(429).send({ error: 'max_streams', max: role.maxStreams });
     // outside the home networks the role's remote cap applies on top; the viewer may lower the quality, never raise it above the limit
     const remote = !isHomeRequest(req, ctx.cfg.HOME_NETWORKS);
@@ -314,7 +315,7 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
         // Start takes a stream slot. Progress/Stopped after TTL expiry are still forwarded (a sleeping tab must not lose its position)
         // and rebuild the live record without counting against maxStreams.
         if (kind === 'Playing') {
-          const role = (await effectiveRole(ctx, user.role))!;
+          const role = (await effectiveLimits(ctx, user))!;
           if ((await countLive(ctx, user.id)) >= role.maxStreams) return reply.code(429).send({ error: 'max_streams', max: role.maxStreams });
         }
         const item = await ctx.jf.item(req.jfUser!, b.itemId); // access check: the user must be able to see the item

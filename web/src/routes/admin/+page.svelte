@@ -192,7 +192,7 @@
   <StatTile icon="users" label={$t('admin.dash.total')} value={s ? fmtNumber(s.users.total) : null} href="/admin/users"
     hint={s ? `${$t('admin.dash.active')}: ${fmtNumber(s.users.active)} · ${$t('admin.dash.locked')}: ${fmtNumber(s.users.locked)}` : ''} />
   <StatTile icon="play" label={$t('admin.dash.streams')} value={s ? fmtNumber(s.live.streams) : null} hint={s ? `${$t('admin.dash.parties')}: ${fmtNumber(s.live.partyRooms)}` : ''} />
-  <StatTile icon="mail" label={$t('admin.status.openInvites')} value={s ? fmtNumber(s.pending.invites) : null} href="/admin/invites" />
+  <StatTile icon="mail" label={$t('admin.status.openInvites')} value={s ? fmtNumber(s.pending.invites) : null} href="/admin/users?tab=invites" />
   <StatTile icon="vote" label={$t('admin.status.pendingPolls')} value={s ? fmtNumber(s.pending.polls) : null} href="/admin/polls" tone={s?.pending.polls ? 'warn' : 'default'} />
 </div>
 

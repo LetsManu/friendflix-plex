@@ -75,6 +75,21 @@ export async function revokeSessions(ctx: Ctx, userId: string, deviceId?: string
   return n;
 }
 
+/**
+ * Drops the media gateway's memoised identity of every session of the user, without signing anything out:
+ * the next media request re-reads role and limits (e.g. after an admin changed the user's limits). Returns the count.
+ */
+export async function forgetUserAuth(ctx: Ctx, userId: string): Promise<number> {
+  let n = 0;
+  for (const k of await ctx.kv.keys('sess:')) {
+    const raw = await ctx.kv.get(k);
+    if (!raw || (JSON.parse(raw) as { userId: string }).userId !== userId) continue;
+    forgetAuth(k.slice('sess:'.length));
+    n++;
+  }
+  return n;
+}
+
 /** True if a live session of the user (other than `exceptSid`) still belongs to this device. */
 export async function deviceHasSession(ctx: Ctx, userId: string, deviceId: string, exceptSid?: string): Promise<boolean> {
   for (const k of await ctx.kv.keys('sess:')) {

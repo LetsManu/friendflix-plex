@@ -10,6 +10,7 @@ const fr: Translation<typeof de> = {
     users: 'Utilisateurs', status: 'État', previews: 'Aperçus', playback: 'Test de lecture', digest: 'Récap hebdomadaire', sources: 'Sources de données', invites: 'Invitations',
     requests: 'Demandes', polls: 'Votes', lists: 'Listes', roles: 'Rôles', devices: 'Appareils', audit: 'Journal d’audit', update: 'Mise à jour',
     hygiene: 'Entretien de la bibliothèque',
+    settings: 'Paramètres',
     usage: 'Utilisation',
   },
   roleNames: { friend: 'Ami', family: 'Famille', guest: 'Invité', admin: 'Admin' },
@@ -314,7 +315,26 @@ const fr: Translation<typeof de> = {
       enable: '{actor} a débloqué {target}',
       revoke_sessions: '{actor} a déconnecté {target} partout',
       provisioned: 'Compte créé pour {target}',
+      access: '{actor} a modifié l’accès de {target}',
+      limits: '{actor} a modifié les limites de {target}',
+      repair: '{actor} a réparé les liens de {target}',
+      recovery_email: '{actor} a envoyé un lien de mot de passe à {target}',
+      mfa_setup_sent: '{actor} a envoyé la configuration 2FA à {target}',
+      activity_viewed: '{actor} a consulté l’historique de {target}',
+      revoke_device: '{actor} a déconnecté {target} sur un appareil',
+      recovery_email_failed: '{actor} a tenté d’envoyer un lien de mot de passe à {target} – échec ({reason})',
+      deletion_requested: '{actor} a programmé la suppression de {target} (le {date})',
+      deletion_requested_self: '{actor} a demandé la suppression de son propre compte (le {date})',
+      deletion_restored: '{actor} a annulé la suppression de {target}',
+      deletion_restored_self: '{actor} a annulé la suppression de son propre compte',
+      deletion_restored_locked: '{actor} a annulé la suppression de {target} – reste bloqué, l’accès a pris fin',
+      deletion_restored_self_locked: '{actor} a annulé la suppression de son propre compte – reste bloqué, l’accès a pris fin',
+      deletion_now: '{actor} a fait supprimer {target} immédiatement',
+      deletion_started: 'La suppression de {target} a commencé',
+      deletion_failed: 'La suppression de {target} a échoué à l’étape {step} sur 6',
+      deleted: '{target} a été supprimé',
     },
+    failReason: { recovery_not_configured: 'aucun flux de récupération configuré', authentik_user_not_found: 'aucun utilisateur Authentik', not_supported: 'non pris en charge', authentik_unavailable: 'Authentik injoignable', unknown: 'erreur' },
     device: {
       approve: '{actor} a validé un appareil de {target}',
       unapprove: '{actor} a retiré la validation d\'un appareil de {target}',
@@ -357,6 +377,7 @@ const fr: Translation<typeof de> = {
       pin_set: '{actor} a défini un code PIN de profil',
       pin_clear: '{actor} a supprimé un code PIN de profil',
       select: '{actor} a changé de profil',
+      admin_update: '{actor} a modifié un profil de {target}',
     },
     download: {
       revoke: '{actor} a révoqué une licence de téléchargement',
@@ -366,12 +387,25 @@ const fr: Translation<typeof de> = {
     },
     settings: {
       language: '{actor} a changé la langue par défaut',
+      update: '{actor} a modifié les paramètres',
+      import_env: '{actor} a repris des valeurs de l’environnement dans les paramètres',
+      generate: '{actor} a généré une nouvelle clé',
+    },
+    setup: {
+      completed: '{actor} a terminé la configuration initiale',
     },
     system: {
       update: '{actor} a lancé une mise à jour',
     },
     session: {
       revoke_others: '{actor} s’est déconnecté(e) des autres appareils',
+      revoke_device: '{actor} a déconnecté un de ses appareils',
+      reauth: '{actor} s’est reconnecté(e) (pour une action sur le compte)',
+      reauth_mismatch: '{actor} : une nouvelle connexion avec un autre compte a été refusée',
+    },
+    account: {
+      export: '{actor} a téléchargé ses données',
+      profile: '{actor} a modifié le nom ou la couleur de son compte',
     },
     tv: {
       pair: '{actor} a associé un téléviseur',
@@ -415,6 +449,9 @@ const fr: Translation<typeof de> = {
       server_errors: { one: '{n} erreur serveur en 15 minutes', many: '{n} erreurs serveur en 15 minutes', other: '{n} erreurs serveur en 15 minutes' },
       client_errors: { one: '{n} erreur navigateur en 15 minutes', many: '{n} erreurs navigateur en 15 minutes', other: '{n} erreurs navigateur en 15 minutes' },
       failed_playbacks: { one: '{n} lecture en échec', many: '{n} lectures en échec', other: '{n} lectures en échec' },
+    },
+    approvals: {
+      pending_approvals: { one: '{n} connexion en attente de validation', many: '{n} connexions en attente de validation', other: '{n} connexions en attente de validation' },
     },
   },
 };

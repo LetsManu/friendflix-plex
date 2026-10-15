@@ -9,13 +9,19 @@
 const NOW = Date.now();
 const ago = (h: number): string => new Date(NOW - h * 3600e3).toISOString();
 const fut = (h: number): string => new Date(NOW + h * 3600e3).toISOString();
+/** access_until set and not in the future (the backend refuses to unlock such an account: 409 access_expired) */
+const accessEnded = (until: string | null): boolean => until !== null && Date.parse(until) <= Date.now();
 /** uuid-shaped ids (the backend validates uuids for users/devices) */
 export const auid = (n: number): string => `00000000-0000-4000-a000-${n.toString().padStart(12, '0')}`;
 
-export interface AdminUser { id: string; name: string; email: string | null; role: string; disabled: boolean; jellyfin_username: string; seerr_user_id: number | null; created_at: string; last_seen: string | null }
+export interface AdminUser { id: string; name: string; email: string | null; role: string; disabled: boolean; jellyfin_username: string; seerr_user_id: number | null; created_at: string; last_seen: string | null; access_until?: string | null; profiles?: number; /** why a locked account is locked (default manual) */ locked_reason?: 'manual' | 'expired' | 'deletion'; /** scheduled deletion (Block 23 self-service) */ deletion_at?: string | null; /** claimed by the deletion tick, users row still there (steps 1-4) */ cleanup?: { step: number; error: string | null } }
+/** a claimed deletion whose users row is gone (status=deleting lists it by pseudonym); step = the step in work (1-6) */
+export interface AdminCleanup { id: string; pseudonym: string; started_at: string; step: number; error: string | null }
 export interface AdminDevice { user_id: string; device_id: string; label: string; approved: boolean; last_seen: string; name: string; /** the admin's own device (backend: current) */ current?: boolean }
 export interface AdminRequest { id: number; title: string; mediaType: 'movie' | 'tv'; requestedBy: string; status: string; createdAt: string }
-export interface AdminInvite { id: string; role: string; note: string | null; expires_at: string; used_at: string | null; used_by_name: string | null }
+export interface AdminInvite { id: string; role: string; note: string | null; expires_at: string; used_at: string | null; used_by_name: string | null; uses: number; max_uses: number; access_days: number | null }
+/** open approval request (GET /api/admin/approvals) */
+export interface AdminApproval { id: string; name: string; email: string | null; requested_at: string }
 export interface PreviewRow { itemId: string; name: string; type: string; status: 'ok' | 'failed' | 'missing' | 'preparing'; bytes: number | null; audioLang: string | null; error: string | null; createdAt: string | null }
 export interface AuditRow { id: number; at: string; action: string; target: string | null; meta: Record<string, unknown>; actor: string | null; target_name: string | null }
 
@@ -30,6 +36,9 @@ export interface AdminState {
   /** every request; the list endpoint filters by state */
   requests: AdminRequest[];
   invites: AdminInvite[];
+  /** accounts made from an invite (GET /api/admin/invites/:id/uses) */
+  inviteUses: Record<string, Array<{ id: string; name: string; email: string | null; role: string; disabled: boolean; at: string }>>;
+  approvals: AdminApproval[];
   audit: AuditRow[];
   polls: Array<{ id: string; title: string; creator: string; winnerOptionId: string; closesAt?: string; options: Array<{ id: string; title: string; votes?: number; inLibrary?: boolean }> }>;
   lists: Array<{ id: string; name: string; owner: { id: string; name: string }; itemCount: number; featured: boolean }>;
@@ -66,7 +75,23 @@ export interface AdminState {
   usageCalls: string[];
   usageDetailCalls: string[];
   usageSince: string | null;
+  /** Block 23 user detail (/api/admin/users/:id*): Authentik state (mfa null = no Authentik API), link health, limits, profiles, activity calls */
+  detailMfa: { totp: boolean; webauthn: boolean; static: boolean } | null;
+  /** Block 23 self-service: deletions whose users row is gone, and ids the deletion tick has claimed (restore answers 409) */
+  cleanups: AdminCleanup[];
+  claimed: Set<string>;
+  authentik: { recovery: boolean; mfaSetup: boolean };
+  linkedOk: { jellyfin: boolean | null; requests: boolean };
+  limits: Record<string, DetailLimits>;
+  userProfiles: Record<string, DetailProfile[]>;
+  activityCalls: number;
+  /** licences revoked via DELETE /api/admin/downloads/:id */
+  revokedLicences: string[];
 }
+export interface DetailLimits { maxStreams: number | null; remoteBitrate: number | null; maxDownloads: number | null; downloadMaxHeight: number | null; requestsPerMonth: number | null }
+export interface DetailProfile { id: string; name: string; kids: boolean; maxRating: string | null; avatar: string; lastUsed: string | null; isOwner: boolean; hasPin: boolean }
+/** role values the limits page shows as placeholders */
+export const DETAIL_ROLE_LIMITS: DetailLimits = { maxStreams: 2, remoteBitrate: 8_000_000, maxDownloads: 5, downloadMaxHeight: 720, requestsPerMonth: 3 };
 export type HygieneCode = 'no_overview' | 'no_poster' | 'no_backdrop' | 'no_year' | 'no_ids' | 'no_audio' | 'audio_unknown' | 'foreign_no_subs' | 'forced_only' | 'image_subs_only' | 'dup_ids' | 'dup_title' | 'dup_episode' | 'no_source' | 'zero_runtime' | 'heavy_bitrate' | 'hevc_10bit' | 'video_codec' | 'audio_codec';
 export interface HygieneItem {
   itemId: string; type: 'Movie' | 'Series' | 'Episode'; name: string; seriesId: string | null; seriesName: string | null; year: number | null;
@@ -131,9 +156,18 @@ export function adminState(): AdminState {
       { id: 106, title: 'Quiet Mornings', mediaType: 'movie', requestedBy: 'Emma Schneider', status: 'verfügbar', createdAt: ago(90) },
     ],
     invites: [
-      { id: auid(201), role: 'friend', note: 'Für Annas Bruder', expires_at: fut(30), used_at: null, used_by_name: null },
-      { id: auid(202), role: 'guest', note: null, expires_at: ago(5), used_at: null, used_by_name: null },
-      { id: auid(203), role: 'family', note: 'Oma', expires_at: fut(2), used_at: ago(1), used_by_name: 'Oma Inge' },
+      { id: auid(201), role: 'friend', note: 'Für Annas Bruder', expires_at: fut(30), used_at: null, used_by_name: null, uses: 0, max_uses: 1, access_days: null },
+      { id: auid(202), role: 'guest', note: null, expires_at: ago(5), used_at: null, used_by_name: null, uses: 0, max_uses: 1, access_days: null },
+      { id: auid(203), role: 'family', note: 'Oma', expires_at: fut(2), used_at: ago(1), used_by_name: 'Oma Inge', uses: 1, max_uses: 1, access_days: null },
+      { id: auid(204), role: 'guest', note: 'Spieleabend', expires_at: fut(40), used_at: ago(3), used_by_name: 'Mila Kraus', uses: 2, max_uses: 5, access_days: 30 },
+    ],
+    inviteUses: {
+      [auid(203)]: [{ id: auid(50), name: 'Oma Inge', email: null, role: 'family', disabled: false, at: ago(1) }],
+      [auid(204)]: [{ id: auid(51), name: 'Mila Kraus', email: 'mila@example.org', role: 'guest', disabled: false, at: ago(3) }, { id: auid(52), name: 'Tom Kraus', email: null, role: 'guest', disabled: false, at: ago(2) }],
+    },
+    approvals: [
+      { id: auid(401), name: 'Mia Neu', email: 'mia@example.org', requested_at: ago(2) },
+      { id: auid(402), name: 'Paul Fremd', email: null, requested_at: ago(20) },
     ],
     audit: [
       { id: 50, at: ago(0.2), action: 'user.disable', target: auid(6), meta: {}, actor: 'Tester', target_name: 'Emma Schneider' },
@@ -177,6 +211,34 @@ export function adminState(): AdminState {
     usageCalls: [],
     usageDetailCalls: [],
     usageSince: leaveDay(-10),
+    detailMfa: { totp: true, webauthn: false, static: true },
+    cleanups: [],
+    claimed: new Set(),
+    authentik: { recovery: true, mfaSetup: false },
+    linkedOk: { jellyfin: true, requests: true },
+    limits: {},
+    userProfiles: {},
+    activityCalls: 0,
+    revokedLicences: [],
+  };
+}
+
+const profilesOf = (st: AdminState, u: AdminUser): DetailProfile[] => (st.userProfiles[u.id] ??= [
+  { id: `${u.id.slice(0, -4)}p001`, name: u.name.split(' ')[0]!, kids: false, maxRating: null, avatar: 'a2', lastUsed: u.last_seen, isOwner: true, hasPin: false },
+  { id: `${u.id.slice(0, -4)}p002`, name: 'Kinder', kids: true, maxRating: 'FSK-6', avatar: 'a4', lastUsed: null, isOwner: false, hasPin: true },
+]);
+/** GET /api/admin/users/:id (shape of backend/src/routes/adminUsers.ts; never credentials or the Authentik sub) */
+function userDetail(st: AdminState, u: AdminUser) {
+  const profiles = profilesOf(st, u);
+  return {
+    user: { id: u.id, name: u.name, email: u.email, role: u.role, disabled: u.disabled, lockedReason: u.disabled ? (u.locked_reason ?? 'manual') : null, accessUntil: u.access_until ?? null, deletionAt: u.deletion_at ?? null, createdAt: u.created_at, lastActive: u.last_seen, avatar: null },
+    mfa: st.detailMfa,
+    authentik: st.authentik,
+    totals: { d7: { hours: 3.5, streams: 4 }, d30: { hours: 12.5, streams: 15 }, all: { hours: 140, streams: 230 }, downloads: 3, requests: 7 },
+    linked: { jellyfin: { ok: st.linkedOk.jellyfin, username: u.jellyfin_username }, requests: { ok: st.linkedOk.requests, id: st.linkedOk.requests ? 7 : null } },
+    profiles,
+    devices: st.devices.filter((d) => d.user_id === u.id).map((d, i) => ({ id: d.device_id, name: d.label, lastSeen: d.last_seen, approved: d.approved, sessions: i + 1 })),
+    licenses: [{ id: auid(601), itemId: 'it1', status: 'fetched', ready: true, title: 'Hearth', seriesName: null, season: null, episode: null, profileId: profiles[0]!.id, createdAt: ago(30), validUntil: fut(24 * 20), expiresAt: fut(24 * 20), bytes: 1.2e9 }].filter((l) => !st.revokedLicences.includes(l.id)),
   };
 }
 
@@ -272,10 +334,23 @@ function sorted<T>(rows: T[], sp: URLSearchParams, keys: Record<string, (r: T) =
   const dir = sp.get('dir') === 'desc' ? -1 : 1;
   return [...rows].sort((a, b) => { const x = k(a), y = k(b); return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))) * dir; });
 }
+const WEEK = 7 * 86400e3;
 function usersList(st: AdminState, sp: URLSearchParams) {
-  const q = norm(sp.get('q') ?? '');
-  let rows = st.users.filter((u) => (!q || norm(`${u.name} ${u.email ?? ''} ${u.jellyfin_username}`).includes(q)) && (!sp.get('role') || u.role === sp.get('role')) && (!sp.get('status') || (sp.get('status') === 'locked') === u.disabled));
-  rows = sorted(rows, sp, { name: (u) => u.name, email: (u) => u.email ?? '', role: (u) => u.role, status: (u) => Number(u.disabled), lastSeen: (u) => u.last_seen ?? '' });
+  const q = norm(sp.get('q') ?? ''), status = sp.get('status'), inactive = sp.get('lastActive') === '90+', lastActive = inactive ? 0 : Number(sp.get('lastActive') ?? 0), now = Date.now();
+  // status=pending: the open approval requests in the same row shape (backend: pending true, role null)
+  const all = status === 'pending'
+    ? st.approvals.map((a) => ({ id: a.id, name: a.name, email: a.email, role: null as unknown as string, disabled: false, jellyfin_username: '', seerr_user_id: null, created_at: a.requested_at, last_seen: null, access_until: null, locked_reason: null, deletion_at: null as string | null, cleanup: null as { step: number; error: string | null; gone: boolean } | null, profiles: 0, devices: 0, pending: true }))
+    : st.users.map((u) => ({ ...u, access_until: u.access_until ?? null, locked_reason: u.disabled ? (u.locked_reason ?? 'manual') : null, deletion_at: u.deletion_at ?? null,
+      cleanup: status === 'deleting' && u.cleanup ? { ...u.cleanup, gone: false } : null, profiles: u.profiles ?? 1, devices: st.devices.filter((d) => d.user_id === u.id).length, pending: false }))
+      // status=deleting: plus the cleanup rows (backend: pseudonym as name, no e-mail or role, cleanup {step, error})
+      .concat(status === 'deleting' ? st.cleanups.map((c) => ({ id: c.id, name: c.pseudonym, email: null, role: null as unknown as string, disabled: true, jellyfin_username: '', seerr_user_id: null, created_at: c.started_at, last_seen: null, access_until: null, locked_reason: 'deletion' as const, deletion_at: null, profiles: 0, devices: 0, pending: false, cleanup: { step: c.step, error: c.error, gone: true } })) : []);
+  let rows = all.filter((u) => (!q || norm(`${u.name} ${u.email ?? ''} ${u.jellyfin_username}`).includes(q)) && (!sp.get('role') || u.role === sp.get('role'))
+    && (!status || status === 'pending' || (status === 'locked' && u.disabled) || (status === 'active' && !u.disabled && !u.deletion_at)
+      || (status === 'deleting' && (Boolean(u.deletion_at) || Boolean(u.cleanup)))
+      || (status === 'expiring' && u.access_until !== null && Date.parse(u.access_until) >= now && Date.parse(u.access_until) <= now + WEEK))
+    && (!lastActive || (u.last_seen !== null && Date.parse(u.last_seen) >= now - lastActive * 86400e3))
+    && (!inactive || u.last_seen === null || Date.parse(u.last_seen) < now - 90 * 86400e3));
+  rows = sorted(rows, sp, { name: (u) => u.name, email: (u) => u.email ?? '', role: (u) => u.role, status: (u) => Number(u.disabled), lastSeen: (u) => u.last_seen ?? '', accessUntil: (u) => u.access_until ?? '', profiles: (u) => u.profiles, devices: (u) => u.devices });
   const { slice, total } = paged(rows, sp, 1000);
   return { users: slice, total };
 }
@@ -289,7 +364,7 @@ function devicesList(st: AdminState, sp: URLSearchParams) {
 }
 function invitesList(st: AdminState, sp: URLSearchParams) {
   const q = norm(sp.get('q') ?? ''), now = new Date().toISOString();
-  const status = (i: AdminInvite) => (i.used_at ? 'used' : i.expires_at < now ? 'expired' : 'open');
+  const status = (i: AdminInvite) => (i.uses >= i.max_uses ? 'used' : i.expires_at < now ? 'expired' : 'open');
   let rows = st.invites.filter((i) => (!q || norm(`${i.note ?? ''} ${i.role} ${i.used_by_name ?? ''}`).includes(q)) && (!sp.get('status') || status(i) === sp.get('status')));
   rows = sorted(rows, sp, { role: (i) => i.role, note: (i) => i.note ?? '', validUntil: (i) => i.expires_at, status: (i) => status(i) });
   const { slice, total } = paged(rows, sp, 100);
@@ -312,7 +387,7 @@ export function adminSummary(st: AdminState) {
   const locked = st.users.filter((u) => u.disabled).length;
   return {
     users: { total: st.users.length, active: st.users.length - locked, locked },
-    pending: { requests: st.seerrUp ? pendingReq : null, devices: st.devices.filter((d) => !d.approved).length, polls: st.polls.length, invites: st.invites.filter((i) => !i.used_at && i.expires_at > new Date().toISOString()).length, previewsFailed: 10 },
+    pending: { requests: st.seerrUp ? pendingReq : null, devices: st.devices.filter((d) => !d.approved).length, polls: st.polls.length, invites: st.invites.filter((i) => i.uses < i.max_uses && i.expires_at > new Date().toISOString()).length, previewsFailed: 10 },
     requests: st.seerrUp ? { pending: pendingReq, approved: st.requests.filter((r) => r.status === 'genehmigt').length, processing: 1, available: st.requests.filter((r) => r.status === 'verfügbar').length, declined: 2, total: st.requests.length + 3 } : null,
     storage: { downloadsEnabled: true, downloadsBytes: 12.4 * 1024 ** 3, downloadsMaxBytes: 50 * 1024 ** 3, previewBytes: 99e6, previewClips: 30 },
     playbackCheck: { finishedAt: ago(2), total: 20, failed: 1 },
@@ -342,15 +417,116 @@ export function adminRoute(st: AdminState, m: string, p: string, sp: URLSearchPa
 
   // ---- people ----
   if (p === '/api/admin/users') return J(usersList(st, sp));
+  // ---- user detail (Block 23) ----
+  if ((mm = p.match(/^\/api\/admin\/users\/([0-9a-f-]{36}|u1)(\/.*)?$/)) && !(m === 'PATCH' && !mm[2]) && mm[2] !== '/revoke-sessions') {
+    const u = st.users.find((x) => x.id === mm![1]);
+    if (!u) return J({ error: 'not_found' }, 404);
+    const rest = mm[2] ?? '';
+    let sub: RegExpMatchArray | null;
+    if (!rest && m === 'GET') return J(userDetail(st, u));
+    if (rest === '/activity' && m === 'GET') {
+      st.activityCalls++;
+      log('user.activity_viewed', u.id, { profiles: 2 }, u.name);
+      const pr = profilesOf(st, u);
+      return J({ items: [
+        { id: 'it1', name: 'Hearth', type: 'Movie', played: false, playedPercentage: 45.4, lastPlayedDate: ago(2), profile: { id: pr[0]!.id, name: pr[0]!.name } },
+        { id: 'it2', name: 'Pilot', type: 'Episode', seriesName: 'Sundial', parentIndexNumber: 1, indexNumber: 1, played: true, lastPlayedDate: ago(30), profile: { id: pr[1]!.id, name: pr[1]!.name } },
+      ], skipped: [] });
+    }
+    if (rest === '/audit' && m === 'GET') {
+      const rows = st.audit.filter((e) => e.target === u.id);
+      const { slice, total } = paged(rows, sp, 50);
+      return J({ entries: slice.map((e) => ({ ...e, actor_id: e.actor ? 'u1' : null })), total });
+    }
+    if (rest === '/limits') {
+      const cur = (st.limits[u.id] ??= { maxStreams: null, remoteBitrate: null, maxDownloads: null, downloadMaxHeight: null, requestsPerMonth: null });
+      if (m === 'GET') return J({ limits: cur, role: DETAIL_ROLE_LIMITS });
+      if (m === 'PUT') { const to = { ...cur, ...body }; log('user.limits', u.id, { from: cur, to }, u.name); st.limits[u.id] = to; return J({ limits: to }); }
+    }
+    if (rest === '/repair' && m === 'POST') {
+      st.linkedOk = { jellyfin: st.linkedOk.jellyfin === false ? true : st.linkedOk.jellyfin, requests: true };
+      log('user.repair', u.id, {}, u.name);
+      return J({ ok: true, jellyfin: { identities: 2, failed: 0 }, requests: { ok: true, id: 7 } });
+    }
+    if (rest === '/recovery' && m === 'POST') { log('user.recovery_email', u.id, { ok: true }, u.name); return ok(); }
+    if (rest === '/mfa-setup' && m === 'POST') return J({ error: 'not_supported' }, 501);
+    // Block 23 self-service: cancel a scheduled deletion (ended access stays locked as expired), or let the next tick delete it
+    if (rest === '/deletion/restore' && m === 'POST') {
+      if (st.claimed.has(u.id)) return J({ error: 'deletion_in_progress' }, 409);
+      if (!u.deletion_at || u.locked_reason !== 'deletion') return J({ error: 'not_scheduled' }, 409);
+      u.deletion_at = null;
+      if (accessEnded(u.access_until ?? null)) { u.locked_reason = 'expired'; log('user.deletion_restored', u.id, { lockedReason: 'expired' }, u.name); }
+      else { u.disabled = false; u.locked_reason = undefined; log('user.enable', u.id, {}, u.name); log('user.deletion_restored', u.id, {}, u.name); }
+      return ok();
+    }
+    if (rest === '/deletion/now' && m === 'POST') {
+      if (u.id === 'u1') return J({ error: 'cannot_lock_yourself_out' }, 400);
+      if (!u.deletion_at || u.locked_reason !== 'deletion') return J({ error: 'not_scheduled' }, 409);
+      const to = new Date().toISOString();
+      log('user.deletion_now', u.id, { from: u.deletion_at, to }, u.name);
+      u.deletion_at = to;
+      return ok();
+    }
+    if ((sub = rest.match(/^\/sessions\/([^/]+)\/revoke$/)) && m === 'POST') { log('user.revoke_device', u.id, { deviceId: sub[1] }, u.name); return J({ revoked: 1 }); }
+    if ((sub = rest.match(/^\/profiles\/([^/]+)$/)) && m === 'PATCH') {
+      const pr = profilesOf(st, u).find((x) => x.id === sub![1]);
+      if (!pr) return J({ error: 'not_found' }, 404);
+      if (body.name && profilesOf(st, u).some((x) => x !== pr && x.name.toLowerCase() === String(body.name).toLowerCase())) return J({ error: 'name_taken' }, 409);
+      const from = { name: pr.name, hasPin: pr.hasPin };
+      if (body.name) pr.name = body.name;
+      if (body.resetPin) pr.hasPin = false;
+      log('profile.admin_update', u.id, { from, to: { name: pr.name, hasPin: pr.hasPin } }, u.name);
+      return J({ profile: pr });
+    }
+    return null;
+  }
   if ((mm = p.match(/^\/api\/admin\/users\/([^/]+)$/)) && m === 'PATCH') {
     const u = st.users.find((x) => x.id === mm![1]);
     if (!u) return J({ error: 'not_found' }, 404);
     if (u.id === 'u1' && (body.disabled || (body.role && body.role !== 'admin'))) return J({ error: 'cannot_lock_yourself_out' }, 400);
+    const until = body.accessUntil !== undefined ? body.accessUntil : u.access_until ?? null;
+    if (body.disabled === false && u.disabled && accessEnded(until)) return J({ error: 'access_expired' }, 409);
     if (body.role && body.role !== u.role) { log('user.role', u.id, { from: u.role, to: body.role }, u.name); u.role = body.role; }
     if (typeof body.disabled === 'boolean' && body.disabled !== u.disabled) { u.disabled = body.disabled; log(body.disabled ? 'user.disable' : 'user.enable', u.id, {}, u.name); }
+    if (body.accessUntil !== undefined) {
+      log('user.access', u.id, { from: u.access_until ?? null, to: body.accessUntil }, u.name); u.access_until = body.accessUntil;
+      if (u.disabled && u.locked_reason === 'expired' && !accessEnded(body.accessUntil)) { u.disabled = false; u.locked_reason = undefined; log('user.enable', u.id, {}, u.name); }
+    }
     return ok();
   }
   if ((mm = p.match(/^\/api\/admin\/users\/([^/]+)\/revoke-sessions$/)) && m === 'POST') return J({ revoked: 2 });
+  if (p === '/api/admin/users/bulk' && m === 'POST') {
+    const users = (body.ids as string[]).map((id) => st.users.find((u) => u.id === id));
+    if (users.some((u) => !u)) return J({ error: 'not_found' }, 404);
+    if ((body.action === 'lock' || (body.action === 'role' && body.role !== 'admin')) && body.ids.includes('u1')) return J({ error: 'cannot_lock_yourself_out' }, 400);
+    if (body.action === 'unlock' && (users as AdminUser[]).some((u) => u.disabled && accessEnded(u.access_until ?? null))) return J({ error: 'access_expired' }, 409);
+    let done = 0;
+    for (const u of users as AdminUser[]) {
+      if (body.action === 'lock' || body.action === 'unlock') {
+        const d = body.action === 'lock';
+        if (u.disabled === d) continue;
+        u.disabled = d; log(d ? 'user.disable' : 'user.enable', u.id, {}, u.name);
+      } else if (body.action === 'role') {
+        if (u.role === body.role) continue;
+        log('user.role', u.id, { from: u.role, to: body.role }, u.name); u.role = body.role;
+      } else if (body.action === 'access') {
+        log('user.access_until', u.id, { from: u.access_until ?? null, to: body.accessUntil }, u.name); u.access_until = body.accessUntil;
+      }
+      done++;
+    }
+    return J({ done });
+  }
+  if (p === '/api/admin/approvals' && m === 'GET') return J({ requests: st.approvals });
+  if ((mm = p.match(/^\/api\/admin\/approvals\/([^/]+)\/(approve|reject)$/)) && m === 'POST') {
+    const a = st.approvals.find((x) => x.id === mm![1]);
+    if (!a) return J({ error: 'not_found' }, 404);
+    st.approvals = st.approvals.filter((x) => x !== a);
+    if (mm[2] === 'reject') { log('user.rejected', a.id, { from: 'pending', to: 'rejected', name: a.name, message: body?.message ?? null }); return ok(); }
+    const id = auid(500 + st.users.length);
+    st.users.push({ id, name: a.name, email: a.email, role: body.role, disabled: false, jellyfin_username: a.name.split(' ')[0]!.toLowerCase(), seerr_user_id: null, created_at: new Date().toISOString(), last_seen: null, access_until: body.accessUntil ?? null });
+    log('user.approved', id, { from: 'pending', to: body.role }, a.name);
+    return J({ id });
+  }
   if (p === '/api/admin/roles' && m === 'GET') {
     return J({ roles: ROLES, invitable: ['friend', 'family', 'guest'], limits: Object.entries(ROLES).map(([role, r], i) => ({ role, label: r.label, builtinLabel: true, requestsPerMonth: i === 0 ? null : 3, isDefault: i === 2, transcoding: i !== 3, maxHeight: i === 1 ? 1080 : null, download: i < 2, maxDownloads: 5, downloadMaxHeight: 720, downloadDays: 30, maxBitrate: role === 'guest' ? 2_000_000 * 4 : 40_000_000, remoteMaxBitrate: role === 'family' ? 12_000_000 : role === 'guest' ? 4_000_000 : 8_000_000, remoteDefault: role === 'guest' ? 4_000_000 : 8_000_000, remoteIsDefault: role !== 'family' })) });
   }
@@ -371,11 +547,23 @@ export function adminRoute(st: AdminState, m: string, p: string, sp: URLSearchPa
   if (p === '/api/admin/invites' && m === 'GET') return J(invitesList(st, sp));
   if (p === '/api/admin/invites' && m === 'POST') {
     const id = auid(300 + st.invites.length);
-    st.invites.unshift({ id, role: body.role, note: body.note ?? null, expires_at: fut(body.ttlHours ?? 48), used_at: null, used_by_name: null });
-    log('invite.create', id, { role: body.role });
-    return J({ id, link: `https://portal.example.com/invite/${'t'.repeat(32)}`, authentik: 'ok', expiresAt: fut(body.ttlHours ?? 48) });
+    const maxUses = body.maxUses ?? 1;
+    st.invites.unshift({ id, role: body.role, note: body.note ?? null, expires_at: fut(body.ttlHours ?? 48), used_at: null, used_by_name: null, uses: 0, max_uses: maxUses, access_days: body.accessDays ?? null });
+    log('invite.create', id, { role: body.role, maxUses, accessDays: body.accessDays ?? null });
+    return J({ id, link: `https://portal.example.com/invite/${'t'.repeat(32)}`, authentik: 'ok', expiresAt: fut(body.ttlHours ?? 48), uses: 0, maxUses });
   }
-  if ((mm = p.match(/^\/api\/admin\/invites\/([^/]+)$/)) && m === 'DELETE') { st.invites = st.invites.filter((i) => i.id !== mm![1] || i.used_at); log('invite.revoke', mm[1]!); return ok(); }
+  if ((mm = p.match(/^\/api\/admin\/invites\/([^/]+)\/uses$/)) && m === 'GET') {
+    if (!st.invites.some((i) => i.id === mm![1])) return J({ error: 'not_found' }, 404);
+    return J({ uses: st.inviteUses[mm[1]!] ?? [] });
+  }
+  // revoke: an unused invite is deleted, a partly used one is closed (max_uses = uses), a used-up one stays
+  if ((mm = p.match(/^\/api\/admin\/invites\/([^/]+)$/)) && m === 'DELETE') {
+    const inv = st.invites.find((i) => i.id === mm![1]);
+    if (inv && inv.uses === 0) st.invites = st.invites.filter((i) => i !== inv);
+    else if (inv) inv.max_uses = inv.uses;
+    log('invite.revoke', mm[1]!);
+    return ok();
+  }
   if (p === '/api/admin/audit') return J(auditList(st, sp));
   if (p === '/api/admin/audit/filters') return J({ actors: [{ id: 'u1', name: AUDIT_ACTOR }], system: st.audit.some((e) => e.actor === null), categories: [...new Set(st.audit.map((e) => e.action.split('.')[0]!))].sort() });
 
@@ -522,6 +710,7 @@ export function adminRoute(st: AdminState, m: string, p: string, sp: URLSearchPa
     if (m === 'POST') return ok();
     return J({ running: false, done: 6, total: 6, startedAt: ago(3), finishedAt: ago(2), results: [{ itemId: 'a'.repeat(32), name: 'Kaputter Film', type: 'Movie', ok: false, status: 500, ms: 900, bytes: 0, error: 'HTTP 500 transcoder failed' }, ...Array.from({ length: 5 }, (_, i) => ({ itemId: String(i).repeat(32), name: 'Film ' + i, type: 'Movie', ok: true, status: 200, ms: 800 + i * 90, bytes: 1, error: null }))] });
   }
+  if ((mm = p.match(/^\/api\/admin\/downloads\/([^/]+)$/)) && m === 'DELETE') { st.revokedLicences.push(mm[1]!); log('download.revoke', mm[1]!); return ok(); }
   if (p === '/api/admin/downloads') return J({ enabled: true, maxBytes: 50 * 1024 ** 3, diskBytes: 12.4 * 1024 ** 3, jobCounts: { ready: 3, preparing: 1 }, jobs: [{ id: auid(400), item_id: 'abcdef0123456789abcdef0123456789', title: 'Inkwell', series_name: null, quality: 'hd', audio_lang: 'deu', status: 'preparing', seg_done: 40, seg_total: 100, bytes: 1e9, error: null, created_at: ago(2), updated_at: ago(1), licenses: 2 }], licenses: [{ id: auid(401), user_name: 'Anna', device_label: 'iPhone', item_id: 'x', title: 'Inkwell', series_name: null, quality: 'hd', status: 'fetched', created_at: ago(30), expires_at: fut(500) }] });
   if ((mm = p.match(/^\/api\/admin\/downloads\/([^/]+)$/)) && m === 'DELETE') return ok();
   if (p === '/api/admin/digest') {

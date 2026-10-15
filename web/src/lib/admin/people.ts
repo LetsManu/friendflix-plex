@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/** Helpers of the People admin pages (users, roles, devices, invites, audit): device kinds, audit details, date filters. */
+/** Helpers of the People admin pages (users, roles, devices, invites, audit): device kinds, audit details, date filters, bulk texts. */
+import { ApiError } from '#lib/api';
 import { fmtList, fmtNumber, hasKey, tr, trDynamic } from '#lib/i18n';
+import { errorText } from '#lib/ui/action';
 
 export type DeviceKind = 'tv' | 'phone' | 'tablet' | 'desktop' | 'other';
 /** icon + kind of a device from its label ("Chrome auf Windows", "LG webOS TV" …) */
@@ -71,8 +73,56 @@ export function dayEnd(day: string): string {
   return d && !Number.isNaN(d.getTime()) ? d.toISOString() : '';
 }
 
+/** today as YYYY-MM-DD (local): the earliest access end a date field offers (`min`) */
+export function today(now = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+/** end of the chosen day as ISO time when it lies in the future, else '' (a past end would lock the account at the next expiry tick) */
+export function futureDayEnd(day: string, now = Date.now()): string {
+  const end = dayEnd(day);
+  return end && Date.parse(end) > now ? end : '';
+}
+
+/** clear texts for the account guards of the user actions (single and bulk); null for any other error */
+export function accountGuardText(e: unknown): string | null {
+  const code = e instanceof ApiError ? (e.body as { error?: string } | null)?.error : undefined;
+  if (code === 'last_admin') return tr('adminPeople.bulk.lastAdmin');
+  if (code === 'cannot_lock_yourself_out') return tr('adminPeople.users.selfNote');
+  if (code === 'access_expired') return tr('adminPeople.users.accessExpired');
+  return null;
+}
+
+/** a scheduled deletion's restore / delete now: the claim already won, nothing scheduled, else the account guards */
+export function deletionErrorText(e: unknown): string {
+  const code = e instanceof ApiError ? (e.body as { error?: string } | null)?.error : undefined;
+  if (code === 'deletion_in_progress') return tr('adminPeople.detail.actions.deletionRunning');
+  if (code === 'not_scheduled') return tr('adminPeople.detail.actions.notScheduled');
+  return accountGuardText(e) ?? errorText(e);
+}
+
+/** the restore toast: an account whose access has ended stays locked (as expired) after the restore (F8) */
+export function restoredText(name: string, accessUntil: string | null, now = Date.now()): string {
+  const ended = accessUntil !== null && Date.parse(accessUntil) <= now;
+  return tr(ended ? 'adminPeople.detail.actions.restoredLocked' : 'adminPeople.detail.actions.restored', { name });
+}
+
 /** invite lifetimes offered in the form (hours) */
 export const EXPIRY_PRESETS = [{ id: 'h6', hours: 6 }, { id: 'd1', hours: 24 }, { id: 'd2', hours: 48 }, { id: 'd7', hours: 168 }, { id: 'd14', hours: 336 }] as const;
 
 export type InviteStatus = 'open' | 'used' | 'expired';
-export const inviteStatus = (i: { used_at: string | null; expires_at: string }, now = Date.now()): InviteStatus => (i.used_at ? 'used' : new Date(i.expires_at).getTime() < now ? 'expired' : 'open');
+/** used = every use taken (a revoked, partly used invite is closed that way); a partly used one stays open until it expires */
+export const inviteStatus = (i: { uses: number; max_uses: number; expires_at: string }, now = Date.now()): InviteStatus =>
+  (i.uses >= i.max_uses ? 'used' : new Date(i.expires_at).getTime() < now ? 'expired' : 'open');
+
+/** names for a bulk confirmation: the first `max`, then "+n" for the rest ("A, B, C +2") */
+export function bulkSummary(names: readonly string[], max = 10): string {
+  const shown = names.slice(0, max).join(', ');
+  return names.length > max ? `${shown} +${names.length - max}` : shown;
+}
+
+export type AccessPreset = '+30' | '+90' | 'unlimited';
+/** access-until for a preset as ISO date-time (the API wants one with offset); unlimited = null */
+export function accessPreset(p: AccessPreset, now = Date.now()): string | null {
+  if (p === 'unlimited') return null;
+  return new Date(now + Number(p.slice(1)) * 86_400_000).toISOString();
+}

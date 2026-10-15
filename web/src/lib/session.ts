@@ -4,6 +4,7 @@ import { api } from '#lib/api';
 import { disablePush } from '#lib/push';
 import { getAllDownloads } from '#lib/offline/db';
 import { clearHint } from '#lib/gate';
+import { clearPending } from '#lib/admin/settings/form';
 import { tr } from '#lib/i18n';
 import { confirm } from '#lib/ui/confirm';
 import { castEngine, castSession } from '#lib/cast/engine';
@@ -22,6 +23,6 @@ export async function logout(tv: boolean | undefined) {
   if (hasDl && await confirm({ title: tr('account.logout.downloadsTitle'), body: tr('account.logout.downloadsBody'), danger: true, confirmLabel: tr('account.logout.deleteDownloads'), cancelLabel: tr('account.logout.keepDownloads') })) await (await import('#lib/offline/manager')).removeAll().catch(() => undefined);
   await Promise.race([disablePush().catch(() => undefined), new Promise((r) => setTimeout(r, 3000))]); // best effort: drop this device's push subscription before the session ends
   // the next login (maybe another account) starts without the early-render hint and sees the profile gate again – also when the request fails
-  try { await api('/auth/logout', { method: 'POST' }); } finally { clearHint(); }
+  try { await api('/auth/logout', { method: 'POST' }); } finally { clearHint(); clearPending(); } // and an Admin → Settings change kept for a re-authentication
   location.href = tv ? '/tv' : '/auth/login';
 }

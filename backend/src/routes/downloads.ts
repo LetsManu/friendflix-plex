@@ -7,7 +7,7 @@ import {
   DownloadError, activeCount, checkLicenses, createDownloads, deleteLicense, downloadHeightCap, getLicense, listLicenses, markFetched, qualityOptions,
   roleAllowsDownloads, syncProgress, type DownloadSourceInfo,
 } from '../downloads.js';
-import { effectiveRole } from '../roles.js';
+import { effectiveLimits } from '../limits.js';
 import { effectiveLanguage, msg } from '../i18n.js';
 import { requireUser } from '../session.js';
 
@@ -29,7 +29,7 @@ export function downloadRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/api/downloads/options/:itemId', { ...pre, config: { rateLimit: { max: 120, timeWindow: '1 minute', keyGenerator: bySession } } }, async (req, reply) => {
     if (reply.sent || (await guard(reply))) return;
     const id = itemId.parse((req.params as { itemId: string }).itemId);
-    const role = await effectiveRole(ctx, req.user!.role);
+    const role = await effectiveLimits(ctx, req.user!);
     const max = role?.maxDownloads ?? 0;
     const used = await activeCount(ctx, req.user!.id);
     const empty = { allowed: false, qualities: [], audio: [], subtitles: [], quota: { used, max }, days: role?.downloadDays ?? 0 };
@@ -70,7 +70,7 @@ export function downloadRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/downloads', { ...pre, config: { rateLimit: { max: ctx.cfg.DOWNLOAD_CREATE_PER_HOUR, timeWindow: '1 hour', keyGenerator: bySession } } }, async (req, reply) => {
     if (reply.sent || (await guard(reply))) return;
     const body = createBody.parse(req.body);
-    const role = await effectiveRole(ctx, req.user!.role);
+    const role = await effectiveLimits(ctx, req.user!);
     if (!roleAllowsDownloads(ctx, role)) return reply.code(403).send({ error: 'downloads_not_allowed' });
     if (!req.session!.deviceId) return reply.code(403).send({ error: 'device_required' });
     try {
@@ -82,7 +82,7 @@ export function downloadRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.get('/api/downloads', pre, async (req, reply) => {
     if (reply.sent || (await guard(reply))) return;
-    const role = await effectiveRole(ctx, req.user!.role);
+    const role = await effectiveLimits(ctx, req.user!);
     return {
       downloads: req.session!.deviceId ? await listLicenses(ctx, req.user!.id, req.session!.deviceId, req.profile!.id) : [],
       quota: { used: await activeCount(ctx, req.user!.id), max: role?.maxDownloads ?? 0 },

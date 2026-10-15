@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import { JellyfinError } from '../src/jellyfin/client.js';
 import { JellyfinService } from '../src/jellyfin/service.js';
-import { createMediaServer, MEDIA_SERVERS, mediaConfigProblems } from '../src/media/index.js';
+import { createMediaServer, MEDIA_SERVERS, mediaConfigProblems, mediaSettings } from '../src/media/index.js';
 import { toPlaybackDto } from '../src/jellyfin/dto.js';
 import { MediaError, publicCapabilities, type MediaCapabilities } from '../src/media/types.js';
 import { MemoryKV } from '../src/kv.js';
@@ -30,13 +30,14 @@ describe('MEDIA_SERVER config', () => {
   it('rejects unknown kinds (no silent fallback on a typo)', () => {
     for (const v of ['not-a-server', 'Jellyfin', ' jellyfin', '__proto__']) expect(() => loadConfig({ ...BASE, MEDIA_SERVER: v })).toThrow();
   });
-  it('jellyfin still requires JELLYFIN_URL and a non-empty admin key', () => {
+  it('jellyfin requires JELLYFIN_URL and the admin key once setup is complete (registry runRequired), not at config load', () => {
+    // Block 25: a new install starts without them and the setup wizard fills them in, so loadConfig accepts them unset ('' = unset)
     const { JELLYFIN_URL: _u, ...noUrl } = BASE;
-    expect(() => loadConfig(noUrl)).toThrow(/JELLYFIN_URL/);
-    expect(() => loadConfig({ ...BASE, JELLYFIN_ADMIN_API_KEY: '' })).toThrow(/JELLYFIN_ADMIN_API_KEY/);
-    // compose passes unset variables as '' (`${JELLYFIN_URL:-}`): same clear "required" message, not a URL parse error
-    expect(() => loadConfig({ ...BASE, JELLYFIN_URL: '' })).toThrow(/JELLYFIN_URL is required for MEDIA_SERVER=jellyfin/);
+    expect(loadConfig(noUrl).JELLYFIN_URL).toBeUndefined();
+    expect(loadConfig({ ...BASE, JELLYFIN_URL: '', JELLYFIN_ADMIN_API_KEY: '' })).toMatchObject({ JELLYFIN_URL: undefined, JELLYFIN_ADMIN_API_KEY: undefined });
     expect(() => loadConfig({ ...BASE, JELLYFIN_URL: 'not a url' })).toThrow();
+    const required = mediaSettings().filter((s) => typeof s.runRequired === 'function' && s.runRequired(loadConfig(BASE))).map((s) => s.key);
+    expect(required).toEqual(['JELLYFIN_URL', 'JELLYFIN_ADMIN_API_KEY']);
   });
   it('jellyfin has no unsupported settings', () => {
     expect(mediaConfigProblems(loadConfig({ ...BASE, DOWNLOADS_ENABLED: 'false' }))).toEqual([]);
@@ -154,14 +155,14 @@ describe('repository hygiene', () => {
 });
 
 describe('seam boundary', () => {
-  it('only jellyfin/* and the media factory import the Jellyfin implementation', () => {
+  it('only jellyfin/*, the media factory and the media setup seam import the Jellyfin implementation', () => {
     const root = new URL('../src/', import.meta.url).pathname;
     const files: string[] = [];
     const walk = (d: string) => { for (const n of readdirSync(d)) { const p = join(d, n); if (statSync(p).isDirectory()) walk(p); else if (p.endsWith('.ts')) files.push(p); } };
     walk(root);
     const offenders = files
       .map((f) => relative(root, f))
-      .filter((f) => !f.startsWith('jellyfin/') && f !== 'media/index.ts')
+      .filter((f) => !f.startsWith('jellyfin/') && f !== 'media/index.ts' && f !== 'media/setup.ts')
       .filter((f) => /from '[./]*\/?jellyfin\//.test(readFileSync(join(root, f), 'utf8')));
     expect(offenders).toEqual([]);
   });

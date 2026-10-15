@@ -1,9 +1,30 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import type { Ctx } from '../ctx.js';
+
 export class SeerrError extends Error {
   constructor(public status: number, message: string) {
     super(message);
   }
+}
+
+/** The request service is optional (Block 25): ctx.seerr is null unless REQUESTS_URL and REQUESTS_API_KEY are both set. */
+export function requestsEnabled(ctx: Pick<Ctx, 'seerr'>): boolean {
+  return ctx.seerr !== null;
+}
+
+/** Thrown where the request service is needed but not set up; the app's error handler answers 404 {error:'requests_disabled'}. */
+export class RequestsDisabledError extends Error {
+  readonly statusCode = 404;
+  constructor() {
+    super('requests_disabled');
+  }
+}
+
+/** ctx.seerr, or RequestsDisabledError when the request service is not set up */
+export function requestsClient(ctx: Pick<Ctx, 'seerr'>): SeerrClient {
+  if (!ctx.seerr) throw new RequestsDisabledError();
+  return ctx.seerr;
 }
 
 export type PortalStatus = 'nicht_angefragt' | 'angefragt' | 'in_arbeit' | 'teilweise' | 'verfuegbar' | 'abgelehnt';

@@ -83,4 +83,4 @@ function timedProxy<T extends object>(target: T, kind: TimingKind, methods: Read
 export const timedDb = (db: Db): Db => timedProxy(db, 'db', new Set(['query']));
 
 /** KV whose calls are booked as `kv`. */
-export const timedKv = (kv: KV): KV => timedProxy(kv, 'kv', new Set(['get', 'set', 'replace', 'setnx', 'take', 'del', 'incr', 'keys', 'ping']));
+export const timedKv = (kv: KV): KV => timedProxy(kv, 'kv', new Set(['get', 'set', 'replace', 'setnx', 'take', 'del', 'delIfEquals', 'incr', 'keys', 'ping']));

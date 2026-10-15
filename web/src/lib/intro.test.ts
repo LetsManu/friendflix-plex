@@ -11,7 +11,7 @@ describe('shouldPlayIntro', () => {
   it('never plays on TV', () => expect(shouldPlayIntro({ ...base, tv: true })).toBe(false));
   it('plays at most once per session', () => expect(shouldPlayIntro({ ...base, sessionSeen: true })).toBe(false));
   it('never plays during watch / party / public routes', () => {
-    for (const route of ['/watch/abc', '/party/xyz', '/tv', '/invite/code', '/offline']) expect(shouldPlayIntro({ ...base, route })).toBe(false);
+    for (const route of ['/watch/abc', '/party/xyz', '/tv', '/invite/code', '/offline', '/pending', '/restore']) expect(shouldPlayIntro({ ...base, route })).toBe(false);
     expect(shouldPlayIntro({ ...base, route: '/watchlist' })).toBe(true);
   });
   it('reduced motion: user-triggered shows the calm fade, cold start is skipped', () => {

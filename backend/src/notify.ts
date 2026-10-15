@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { publicOrigin } from './config.js';
 import type { Ctx } from './ctx.js';
 import { broadcastLanguage, isMsg, renderKnown, renderNotice, userLanguage, type Language, type Rendered, type Text } from './i18n.js';
 export { renderNotice, type Rendered } from './i18n.js';
@@ -59,6 +60,17 @@ export async function notify(ctx: Pick<Ctx, 'db' | 'cfg' | 'fetchImpl'>, n: Noti
   return true;
 }
 
+/**
+ * Sends the notice to every active admin (role admin, not disabled), each in their own language.
+ * A dedupe key gets the admin's id appended. Returns how many notifications were created.
+ */
+export async function notifyAdmins(ctx: Pick<Ctx, 'db' | 'cfg' | 'fetchImpl'>, n: Omit<Notice, 'userId'>): Promise<number> {
+  const admins = (await ctx.db.query<{ id: string }>("select id from users where role='admin' and not disabled order by created_at, id")).rows;
+  let sent = 0;
+  for (const a of admins) if (await notify(ctx, { ...n, userId: a.id, ...(n.dedupe ? { dedupe: `${n.dedupe}-${a.id}` } : {}) })) sent++;
+  return sent;
+}
+
 /** Base URL of the ntfy server for personal topics: NTFY_BASE_URL, else the origin of NTFY_URL; null = not configured. */
 export function ntfyBase(cfg: Pick<Ctx['cfg'], 'NTFY_BASE_URL' | 'NTFY_URL'>): string | null {
   try {
@@ -75,7 +87,9 @@ export async function pushPersonal(ctx: Pick<Ctx, 'db' | 'cfg' | 'fetchImpl'>, u
   const r = await ctx.db.query<{ topic: string | null }>("select data->>'ntfyTopic' as topic from user_prefs where user_id=$1", [userId]);
   const topic = r.rows[0]?.topic;
   if (!topic || !/^[A-Za-z0-9_-]{1,64}$/.test(topic)) return false;
-  const click = n.link ? new URL(n.link, ctx.cfg.PUBLIC_URL).toString() : undefined;
+  // without a public URL (setup mode, where the gate keeps this unreachable) the link goes out as given instead of throwing
+  const origin = publicOrigin(ctx.cfg);
+  const click = n.link ? (origin ? new URL(n.link, origin).toString() : n.link) : undefined;
   const res = await ctx.fetchImpl(new URL(encodeURIComponent(topic), `${base}/`).toString(), {
     method: 'POST',
     headers: { Title: encodeURIComponent(brandTitle(n.title)).slice(0, 200), ...(click ? { Click: click } : {}) },

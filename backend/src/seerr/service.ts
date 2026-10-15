@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import type pg from 'pg';
 import type { Ctx } from '../ctx.js';
 import type { UserRow } from '../types.js';
-import { SeerrError } from './client.js';
+import { requestsClient, SeerrError } from './client.js';
 
 const norm = (s?: string) => (s ?? '').replace(/-/g, '').toLowerCase();
 
@@ -25,10 +25,10 @@ export async function ensureSeerrUser(ctx: Ctx, user: UserRow): Promise<number> 
 /** Jellyfin: the Seerr user that carries the account's Jellyfin id (imported on first use). */
 async function ensureImportedSeerrUser(ctx: Ctx, user: UserRow): Promise<number> {
   if (user.seerr_user_id) return user.seerr_user_id;
-  const find = async () => (await ctx.seerr.listUsers()).results.find((u) => norm(u.jellyfinUserId) === norm(user.jellyfin_user_id));
+  const find = async () => (await requestsClient(ctx).listUsers()).results.find((u) => norm(u.jellyfinUserId) === norm(user.jellyfin_user_id));
   let su = await find();
   if (!su) {
-    await ctx.seerr.importJellyfinUsers([user.jellyfin_user_id]);
+    await requestsClient(ctx).importJellyfinUsers([user.jellyfin_user_id]);
     su = await find();
   }
   if (!su) throw new Error('seerr user mapping failed');
@@ -48,7 +48,7 @@ async function ensureLocalSeerrUser(ctx: Ctx, user: UserRow): Promise<number> {
   let stale: number | null = null;
   if (user.seerr_user_id) {
     try {
-      await ctx.seerr.getUser(user.seerr_user_id);
+      await requestsClient(ctx).getUser(user.seerr_user_id);
       return user.seerr_user_id;
     } catch (e) {
       if (!is404(e)) throw e; // Seerr down etc.: the caller's usual error
@@ -77,7 +77,7 @@ async function ensureLocalSeerrUser(ctx: Ctx, user: UserRow): Promise<number> {
 async function findByEmail(ctx: Ctx, email: string): Promise<number | null> {
   const take = 100;
   for (let skip = 0, pages = 0; pages < 100; pages++) {
-    const r = (await ctx.seerr.listUsersPage(take, skip)).results ?? [];
+    const r = (await requestsClient(ctx).listUsersPage(take, skip)).results ?? [];
     const hit = r.find((u) => (u.email ?? '').trim().toLowerCase() === email);
     if (hit) return hit.id;
     if (r.length < take) return null;
@@ -93,7 +93,7 @@ async function findOrCreateLocalUser(ctx: Ctx, user: UserRow): Promise<number> {
   const username = user.name.trim() || email;
   let created: { id: number };
   try {
-    created = await ctx.seerr.createLocalUser({ email, username, password: randomBytes(24).toString('base64url') });
+    created = await requestsClient(ctx).createLocalUser({ email, username, password: randomBytes(24).toString('base64url') });
   } catch (e) {
     // created meanwhile outside this lock (another instance, or by hand): take that one
     const again = e instanceof SeerrError && e.status === 409 ? await findByEmail(ctx, email) : null;
@@ -103,9 +103,9 @@ async function findOrCreateLocalUser(ctx: Ctx, user: UserRow): Promise<number> {
   if (!created?.id) throw new Error('seerr user mapping failed');
   try {
     // Seerr gives new users its default permissions: set exactly REQUEST (never ADMIN, no auto-approve)
-    await ctx.seerr.setUserPermissions(created.id, username, SEERR_PERMISSION_REQUEST);
+    await requestsClient(ctx).setUserPermissions(created.id, username, SEERR_PERMISSION_REQUEST);
   } catch (e) {
-    await ctx.seerr.deleteUser(created.id).catch(() => undefined); // no half-configured user that a later lookup would adopt
+    await requestsClient(ctx).deleteUser(created.id).catch(() => undefined); // no half-configured user that a later lookup would adopt
     throw e;
   }
   return created.id;

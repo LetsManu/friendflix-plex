@@ -6,7 +6,7 @@
   import { afterNavigate, beforeNavigate, goto, onNavigate } from '$app/navigation';
   import { pageStore } from '#lib/page';
   const page = pageStore();
-  import { api, setActiveProfile, setCsrf, type Me } from '#lib/api';
+  import { api, ApiError, setActiveProfile, setCsrf, type Me } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
   import Logo from '#lib/Logo.svelte';
   import Footer from '#lib/Footer.svelte';
@@ -20,7 +20,7 @@
   import { loadModal, prefetchModal } from '#lib/lazy';
   import { startTvLink, type ToTv } from '#lib/remote';
   import { logout as doLogout } from '#lib/session';
-  import { capsFrom, serverCaps } from '#lib/capabilities';
+  import { capsFrom, features, featuresFrom, serverCaps } from '#lib/capabilities';
   import { setMeta } from '#lib/offline/db';
   import { focusEl, focusFirst, isBackKey, isEditable, startSpatial } from '#lib/spatial';
   import Intro from '#lib/Intro.svelte';
@@ -65,6 +65,7 @@
    * active. Without /api/me the page mounts after the server language was applied (boot() awaits setLocale before `me`).
    * Either way the page mounts once in the right language; nothing re-creates it later (see pageEpoch in lib/i18n).
    */
+  if (bootHint?.noRequests) features.set(featuresFrom({ requests: false })); // until /api/me answers: no request links flash
   let earlyLang = !(early && bootHint?.lang);
   if (early && bootHint?.lang) void setLocale(bootHint.lang).finally(() => (earlyLang = true));
   let pageReady = false; // sticky: a later language load (ready = false for a moment) must not unmount the page
@@ -103,7 +104,8 @@
   let catLangs: string[] | null = null;
 
   $: path = $page.url.pathname;
-  $: publicPage = path.startsWith('/invite/') || path === '/tv' || path === '/offline';
+  // /setup: the wizard of a new install (no account yet); /setup/extras is not public (the first admin is signed in there)
+  $: publicPage = path.startsWith('/invite/') || path === '/tv' || path === '/offline' || path === '/pending' || path === '/restore' || path === '/setup';
   $: watchPage = path.startsWith('/watch/') || /^\/party\/[^/]+/.test(path); // immersive player pages: no navigation
   $: profilesPage = path === '/profiles' || path === '/welcome'; // full-screen pages without navigation (picker, onboarding)
   $: heroPage = path === '/' || path.startsWith('/item/');
@@ -314,7 +316,9 @@
     window.addEventListener('ff-help', onHelp);
     const onOnboarded = () => { if (me) me = { ...me, onboarded: true }; }; // /welcome finished
     window.addEventListener('ff-onboarded', onOnboarded);
-    stops.push(() => { window.removeEventListener('ff-notes', onNotes); window.removeEventListener('ff-help', onHelp); window.removeEventListener('ff-onboarded', onOnboarded); });
+    const onMeChanged = () => void api<Me>('/api/me').then((m) => { if (me) me = { ...me, name: m.name, profile: m.profile }; }).catch(() => undefined); // /me/account saved name or avatar
+    window.addEventListener('ff-me-changed', onMeChanged);
+    stops.push(() => { window.removeEventListener('ff-notes', onNotes); window.removeEventListener('ff-help', onHelp); window.removeEventListener('ff-onboarded', onOnboarded); window.removeEventListener('ff-me-changed', onMeChanged); });
     // header background: a 10 px sentinel at the top of the document instead of reading scrollY on every scroll event
     if (typeof IntersectionObserver === 'function' && sentinel) {
       const io = new IntersectionObserver(([e]) => { scrolled = !e!.isIntersecting; });
@@ -361,6 +365,7 @@
         setCsrf(m.csrfToken);
         setActiveProfile(m.profile?.id);
         serverCaps.set(capsFrom(m.server?.capabilities));
+        features.set(featuresFrom(m.features));
         writeHint(hintOf(m)); writeActive(m.profile?.id); clearReloadFlag(); // the profile-switch reload is done: a later reload may render early again
         if (m.profile?.id) void setMeta('lastProfileId', m.profile.id).catch(() => undefined); // the offline hub shows the last active profile's downloads
         pending = !m.deviceApproved;
@@ -393,7 +398,10 @@
           if (!watchPage) void settleFocus();
         }
         if (m.tv && !pending) stops.push(startTvLink(onTvCommand, (code) => { if (code === 4401) location.href = '/tv'; else if (code === 4000) replaced = true; }));
-      } catch { /* api() redirects to login on 401 */ }
+      } catch (e) {
+        // a new install: the backend answers 503 setup_required until the wizard is done (spec Part E1); api() redirects to login on 401
+        if (e instanceof ApiError && e.status === 503 && e.body?.error === 'setup_required') await goto('/setup', { replaceState: true });
+      }
     }
   }
 </script>

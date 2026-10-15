@@ -27,7 +27,8 @@ const MOOD: Record<string, Mood> = {
 /** Up to three distinct mood tags derived from the genres, in genre order. */
 export function moodTags(genres: readonly string[] | undefined, max = 3): string[] {
   const out: string[] = [];
-  for (const g of genres ?? []) {
+  for (const g of Array.isArray(genres) ? genres : []) {
+    if (typeof g !== 'string') continue;
     const k = MOOD[g.trim().toLowerCase()];
     const m = k ? tr(MOOD_KEYS[k]) : '';
     if (m && !out.includes(m)) out.push(m);
@@ -53,7 +54,7 @@ export function byType(people: readonly Person[], ...types: string[]): Person[] 
 
 /** Age rating text for the info block ("FSK 12" -> "Ab 12 Jahren"), '' when it cannot be derived. */
 export function ageText(rating?: string): string {
-  if (!rating) return '';
+  if (!rating || typeof rating !== 'string') return '';
   const m = /(?:FSK|PG|ab)?\s*[-:]?\s*(\d{1,2})\b/i.exec(rating);
   if (/^(fsk\s*)?0$/i.test(rating.trim()) || /^(g|all|u|ab 0)$/i.test(rating.trim())) return tr('detail.format.ageAll');
   return m ? tr('detail.format.ageFrom', { n: Number(m[1]) }) : '';

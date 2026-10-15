@@ -24,6 +24,7 @@ const B2T: Record<string, string> = { ger: 'deu', fre: 'fra', dut: 'nld', chi: '
 
 /** Display name for a language code in the current UI language (German list for German); unknown codes fall back to the upper-case code. */
 export function langLabel(code: string): string {
+  if (typeof code !== 'string') return '';
   const raw = code.trim().toLowerCase(), c = B2T[raw] ?? raw;
   if (getLocale() !== 'de') {
     try { const n = ISO1[c] && new Intl.DisplayNames(intlLocale(), { type: 'language' }).of(ISO1[c]); if (n) return n.charAt(0).toLocaleUpperCase(intlLocale()) + n.slice(1); } catch { /* old browser */ }
@@ -33,6 +34,7 @@ export function langLabel(code: string): string {
 
 /** true when the code is a language we have a name for (else langLabel() returns the upper-case code) */
 export function isKnownLang(code: string): boolean {
+  if (typeof code !== 'string') return false;
   const raw = code.trim().toLowerCase();
   return (B2T[raw] ?? raw) in LABEL;
 }
@@ -40,7 +42,9 @@ export function isKnownLang(code: string): boolean {
 /** "Ton: Deutsch, Englisch · Untertitel: Deutsch" (empty string when nothing is known). */
 export function langLine(langs: { audio?: string[]; subs?: string[] } | undefined | null): string {
   const parts: string[] = [];
-  if (langs?.audio?.length) parts.push(tr('detail.langs.audio', { list: langs.audio.map(langLabel).join(', ') }));
-  if (langs?.subs?.length) parts.push(tr('detail.langs.subs', { list: langs.subs.map(langLabel).join(', ') }));
+  const names = (l: unknown) => (Array.isArray(l) ? l.map((c) => langLabel(c as string)).filter(Boolean) : []);
+  const audio = names(langs?.audio), subs = names(langs?.subs);
+  if (audio.length) parts.push(tr('detail.langs.audio', { list: audio.join(', ') }));
+  if (subs.length) parts.push(tr('detail.langs.subs', { list: subs.join(', ') }));
   return parts.join(' · ');
 }

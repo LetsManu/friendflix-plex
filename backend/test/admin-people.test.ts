@@ -28,7 +28,7 @@ beforeAll(async () => {
   for (const [i, u] of ['anna', 'ben', 'clara'].entries()) {
     await env.pool.query("insert into devices(user_id, device_id, label, approved, last_seen) values ($1, $2, $3, $4, now() - ($5 || ' hours')::interval)", [ids[u], `device-${u}-000000001`, `Gerät ${u}`, i === 0, String(i)]);
   }
-  await env.pool.query("insert into invites(id, token_hash, role, note, expires_at, used_at, used_by) values (gen_random_uuid(), 'h1', 'friend', 'für Oma', now() + interval '1 day', null, null), (gen_random_uuid(), 'h2', 'guest', null, now() - interval '1 day', null, null), (gen_random_uuid(), 'h3', 'family', 'Opa', now() + interval '1 day', now(), $1)", [ids.clara]);
+  await env.pool.query("insert into invites(id, token_hash, role, note, expires_at, used_at, used_by, uses) values (gen_random_uuid(), 'h1', 'friend', 'für Oma', now() + interval '1 day', null, null, 0), (gen_random_uuid(), 'h2', 'guest', null, now() - interval '1 day', null, null, 0), (gen_random_uuid(), 'h3', 'family', 'Opa', now() + interval '1 day', now(), $1, 1)", [ids.clara]);
   await audit(env.ctx, adminId, 'user.disable', ids.ben);
   await audit(env.ctx, adminId, 'user.role', ids.anna, { from: 'guest', to: 'friend' });
   await audit(env.ctx, null, 'user.provisioned', ids.clara);

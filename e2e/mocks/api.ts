@@ -4,6 +4,8 @@ import type { BrowserContext, Route } from '@playwright/test';
 import { ME, byName, episodes, hex, items, nolan, people, seedLists, type MockItem, type MockList, MOVIE, MOVIE2, SERIES } from './fixtures.js';
 import { pngFor } from './png.js';
 import { adminRoute, adminState, type AdminState } from './admin.js';
+import { settingsRoute, settingsState, type SettingsMock } from './settings.js';
+import { setupRoute, type SetupMock } from './setup.js';
 
 /** Item whose reactions are locked (viewer has not seen it) / unlocked and contain an XSS probe. */
 export const LOCKED_ID = MOVIE.id;
@@ -23,13 +25,35 @@ export interface MockState {
   clientErrors: unknown[];
   /** admin endpoints (mocks/admin.ts) */
   admin: AdminState;
+  /** Admin → Settings (mocks/settings.ts) */
+  settings: SettingsMock;
   /** /api/me reports an admin owner profile (admin pages, admin menu) */
   asAdmin: boolean;
   /** ids removed from Weiterschauen (DELETE /api/library/resume/:id), left out of GET /api/library/resume */
   resumeGone: Set<string>;
   /** the profile's player sound pref (PUT /api/prefs/audiofx), echoed by GET /api/prefs */
   audioFx?: string;
+  /** Block 23 self-service: GET /api/account; PATCH /api/account/profile changes it, and /api/me follows once saved */
+  account: MockAccount;
+  /** name/avatar saved via PATCH /api/account/profile (merged into /api/me) */
+  accountSaved?: { name: string; avatar: string };
+  /** own devices (GET /api/devices, POST /api/devices/:id/sign-out keeps one, DELETE /api/devices/:id drops it) */
+  devices: MockDevice[];
+  /** answer of POST /api/sessions/revoke-others */
+  revokedOthers: number;
+  /** POST /api/account/delete answers 401 reauth_required even inside the reauth window (it ran out meanwhile) */
+  reauthLapsed?: boolean;
+  /** /api/me `features` (optional services); absent = the field is left out, like an older backend (everything on) */
+  features?: { requests: boolean };
+  /** the setup wizard (mocks/setup.ts); while it is not complete, /api/me answers 503 setup_required */
+  setup?: SetupMock;
 }
+export interface MockAccount {
+  name: string; email: string | null; avatar: string;
+  mfa: { totp: boolean; webauthn: boolean; static: boolean } | null;
+  manageUrl: string | null; reauthUntil: number | null;
+}
+export interface MockDevice { id: string; label: string; approved: boolean; current: boolean; created_at: string; last_seen: string }
 
 export function freshState(): MockState {
   return {
@@ -41,8 +65,15 @@ export function freshState(): MockState {
     unmocked: new Set(),
     clientErrors: [],
     admin: adminState(),
+    settings: settingsState(),
     asAdmin: false,
     resumeGone: new Set(),
+    account: { name: 'Tester', email: 'tester@example.com', avatar: 'blue', mfa: { totp: true, webauthn: false, static: true }, manageUrl: 'https://login.example.com/if/user/#/settings', reauthUntil: null },
+    devices: [
+      { id: 'dev-current-0000000001', label: 'Chrome auf Linux', approved: true, current: true, created_at: '2026-09-01T10:00:00Z', last_seen: '2026-10-14T09:00:00Z' },
+      { id: 'dev-phone-00000000002', label: 'Safari auf iOS', approved: true, current: false, created_at: '2026-09-02T10:00:00Z', last_seen: '2026-10-12T20:15:00Z' },
+    ],
+    revokedOthers: 2,
   };
 }
 
@@ -65,9 +96,9 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     const m = req.method();
     const sp = u.searchParams;
     const body = (): any => { try { return JSON.parse(req.postData() || '{}'); } catch { return {}; } };
-    const J = (b: unknown, status = 200) => {
+    const J = (b: unknown, status = 200, headers?: Record<string, string>) => {
       if (m !== 'GET') st.log.push(`${m} ${p} ${req.postData() ?? ''} -> ${status}`);
-      return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+      return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b), ...(headers ? { headers } : {}) });
     };
     const withFav = (i: MockItem) => ({ ...i, favorite: st.fav.has(i.id) });
     let mm: RegExpMatchArray | null;
@@ -101,7 +132,35 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
       });
     }
     if (p === '/api/client-errors') { st.clientErrors.push(body()); return route.fulfill({ status: 204 }); }
-    if (p === '/api/me') return J(st.asAdmin ? { ...ME, role: 'admin', roleLabel: 'Admin', isAdmin: true } : ME);
+    if (p.startsWith('/api/setup/')) {
+      if (!st.setup) { st.unmocked.add(`${m} ${p}`); return J({ error: 'not_found' }, 404); }
+      const r = setupRoute(st.setup, m, p, body(), await req.allHeaders(), J);
+      if (r) return r;
+    }
+    if (p === '/api/me' && st.setup && !st.setup.complete) return J({ error: 'setup_required' }, 503);
+    if (p === '/api/me') {
+      const base = st.features ? { ...ME, features: st.features } : ME;
+      const me = st.asAdmin ? { ...base, role: 'admin', roleLabel: 'Admin', isAdmin: true } : base;
+      const s = st.accountSaved;
+      return J(s ? { ...me, name: s.name, profile: { ...me.profile, name: s.name.slice(0, 20), avatar: s.avatar } } : me);
+    }
+    // Block 23 self-service: the account page (/me/account)
+    if (p === '/api/account' && m === 'GET') return J(st.account);
+    if (p === '/api/account/profile' && m === 'PATCH') {
+      const b = body();
+      st.account = { ...st.account, ...(b.name !== undefined ? { name: b.name } : {}), ...(b.avatar !== undefined ? { avatar: b.avatar } : {}) };
+      st.accountSaved = { name: st.account.name, avatar: st.account.avatar };
+      return J(st.account);
+    }
+    // deleting the account needs a recent sign-in (reauthUntil); the backend then ends the session
+    if (p === '/api/account/delete' && m === 'POST') {
+      if (st.reauthLapsed || !st.account.reauthUntil || st.account.reauthUntil < Date.now()) return J({ error: 'reauth_required' }, 401);
+      return J({ deletionAt: '2026-10-21T12:00:00.000Z' });
+    }
+    if (p === '/api/devices' && m === 'GET') return J({ devices: st.devices });
+    if ((mm = p.match(/^\/api\/devices\/([^/]+)\/sign-out$/)) && m === 'POST') return J({ revoked: 1 }); // the device stays (approved)
+    if ((mm = p.match(/^\/api\/devices\/([^/]+)$/)) && m === 'DELETE') { st.devices = st.devices.filter((d) => d.id !== mm![1]); return J({ ok: true }); }
+    if (p === '/api/sessions/revoke-others' && m === 'POST') return J({ revoked: st.revokedOthers });
     if (p === '/api/notifications') return J({ notifications: [{ id: 'n1', title: 'Anna hat dich zur Liste „Annas Klassiker“ eingeladen', link: '/lists/' + st.lists[1]!.id, read: false }] });
     if (p === '/api/notifications/read') return J({ ok: true });
     if (p === '/api/prefs') return J({ prefs: st.audioFx ? { audioFx: st.audioFx } : {} });
@@ -281,6 +340,7 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     if (p === '/api/profiles') return J({ profiles: PROFILES, max: 5, activeId: 'p1' });
     if ((mm = p.match(/^\/api\/profiles\/([^/]+)\/select$/)) && m === 'POST') return J({ ok: true });
 
+    if (p.startsWith('/api/admin/settings')) { const r = settingsRoute(st.settings, m, p, body(), J); if (r) return r; }
     if (p.startsWith('/api/admin/')) { const r = adminRoute(st.admin, m, p, sp, body(), J); if (r) return r; }
 
     st.unmocked.add(`${m} ${p}${u.search ? '?…' : ''}`);

@@ -200,3 +200,8 @@ export function previews(ctx: Ctx): Previews {
   if (!p) instances.set(ctx, (p = new Previews(ctx)));
   return p;
 }
+
+/** The warmer's minute tick: always scheduled, does nothing while PREVIEW_WARM is off (the setting applies live). */
+export function previewWarmTick(ctx: Ctx): Promise<void> {
+  return ctx.cfg.PREVIEW_WARM === 'true' ? previews(ctx).warmTick() : Promise.resolve();
+}

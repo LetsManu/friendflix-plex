@@ -9,13 +9,13 @@ import { OMDB_DAILY_BUDGET, PAUSE_KEY, SOURCES, sourceStatus, type SourceName } 
 
 /**
  * Block 22: health snapshot for the admin (traffic lights per dependency, disk usage, error levels) and the issues the warning
- * banner shows. Built by healthTick every 60 s (BACKGROUND_JOBS) and served from kv `health:snap`; a request never waits for a
- * slow probe except the explicit ?refresh=1 (every probe is bounded at 3 s).
+ * banner shows (Block 23: also open approval requests). Built by healthTick every 60 s (BACKGROUND_JOBS) and served from kv
+ * `health:snap`; a request never waits for a slow probe except the explicit ?refresh=1 (every probe is bounded at 3 s).
  * Nothing in a snapshot carries a URL, path, key, token or exception text: reasons are codes the web translates.
  */
 export type Level = 'ok' | 'warn' | 'err' | 'off';
 export type ServiceId = 'media' | 'postgres' | 'redis' | 'gateway' | 'oidc' | 'requests' | 'tmdb' | 'omdb' | 'playbackCheck';
-export type Reason = 'slow' | 'down' | 'issuer_mismatch' | 'invalid_key' | 'paused' | 'budget' | 'not_set' | 'failed_titles' | 'unavailable' | 'full' | 'low_free' | 'cap' | 'large' | 'server_errors' | 'client_errors' | 'failed_playbacks' | 'empty_media';
+export type Reason = 'slow' | 'down' | 'issuer_mismatch' | 'invalid_key' | 'paused' | 'budget' | 'not_set' | 'failed_titles' | 'unavailable' | 'full' | 'low_free' | 'cap' | 'large' | 'server_errors' | 'client_errors' | 'failed_playbacks' | 'empty_media' | 'pending_approvals';
 export interface ServiceHealth { id: ServiceId; level: Level; reason?: Reason; ms?: number; detail?: { n?: number; pct?: number } }
 export interface DiskHealth {
   id: 'downloads' | 'previews' | 'database'; level: Level; reason?: Reason; totalBytes?: number; freeBytes?: number; usedPct?: number; ownBytes: number; capBytes?: number;
@@ -128,14 +128,17 @@ async function playbackCheckProbe(ctx: Ctx): Promise<ServiceHealth> {
 
 async function services(ctx: Ctx, fetchImpl: typeof fetch, timeoutMs: number): Promise<ServiceHealth[]> {
   const gatewayUrl = `${trimSlash(ctx.cfg.GATEWAY_URL)}/health`;
+  const seerr = ctx.seerr;
   const [media, postgres, redis, gateway, oidc, requests, tmdb, omdb, check] = await Promise.all([
     bounded(() => ctx.jf.admin.ping(), timeoutMs).then((o) => timedService('media', o)),
     bounded(async () => { await ctx.db.query('select 1'); return true; }, timeoutMs).then((o) => timedService('postgres', o)),
     bounded(() => ctx.kv.ping(), timeoutMs).then((o) => timedService('redis', o)),
     bounded(async () => (await fetchImpl(gatewayUrl, { signal: AbortSignal.timeout(timeoutMs) })).status === 200, timeoutMs).then((o) => timedService('gateway', o)),
     oidcProbe(ctx, fetchImpl, timeoutMs),
-    // the request service only affects wishes: down is a warning, never red
-    bounded(() => ctx.seerr.requestCount(), timeoutMs).then((o): ServiceHealth => (o.ok ? { id: 'requests', level: 'ok', ms: o.ms } : { id: 'requests', level: 'warn', reason: 'down', ms: o.ms })),
+    // the request service only affects wishes: down is a warning, never red; not set up (it is optional) is off
+    seerr
+      ? bounded(() => seerr.requestCount(), timeoutMs).then((o): ServiceHealth => (o.ok ? { id: 'requests', level: 'ok', ms: o.ms } : { id: 'requests', level: 'warn', reason: 'down', ms: o.ms }))
+      : Promise.resolve<ServiceHealth>({ id: 'requests', level: 'off', reason: 'not_set' }),
     bounded(() => sourceProbe(ctx, SOURCES[0]!), timeoutMs).then((o): ServiceHealth => (o.ok ? o.v : { id: 'tmdb', level: 'off', reason: 'unavailable' })),
     bounded(() => sourceProbe(ctx, SOURCES[1]!), timeoutMs).then((o): ServiceHealth => (o.ok ? o.v : { id: 'omdb', level: 'off', reason: 'unavailable' })),
     bounded(() => playbackCheckProbe(ctx), timeoutMs).then((o): ServiceHealth => (o.ok ? o.v : { id: 'playbackCheck', level: 'off', reason: 'unavailable' })),
@@ -216,7 +219,13 @@ async function errorHealth(ctx: Ctx): Promise<ErrorHealth> {
   return { level: reason ? 'warn' : 'ok', ...(reason ? { reason } : {}), server15, client15, playback60 };
 }
 
-function issuesOf(svcs: ServiceHealth[], dsks: DiskHealth[], errs: ErrorHealth): HealthIssue[] {
+/** Block 23: open sign-in requests (not rejected) in the approval queue; null when the count cannot be read. */
+async function pendingApprovals(ctx: Ctx, timeoutMs: number): Promise<number | null> {
+  const o = await bounded(async () => (await ctx.db.query<{ n: number }>('select count(*)::int as n from approval_requests where rejected_at is null')).rows[0]?.n ?? 0, timeoutMs);
+  return o.ok ? o.v : null;
+}
+
+function issuesOf(svcs: ServiceHealth[], dsks: DiskHealth[], errs: ErrorHealth, pending: number | null): HealthIssue[] {
   const out: HealthIssue[] = [];
   const add = (id: string, level: Level, reason: Reason | undefined, detail?: HealthIssue['detail']) => {
     if ((level === 'warn' || level === 'err') && reason) out.push({ id, level, reason, fp: issueFp(id, level, reason), ...(detail ? { detail } : {}) });
@@ -229,6 +238,8 @@ function issuesOf(svcs: ServiceHealth[], dsks: DiskHealth[], errs: ErrorHealth):
   if (errs.server15 >= 10) add('errors:server', 'warn', 'server_errors', { n: errs.server15 });
   if (errs.client15 >= 20) add('errors:client', 'warn', 'client_errors', { n: errs.client15 });
   if (errs.playback60 >= 3) add('errors:playback', 'warn', 'failed_playbacks', { n: errs.playback60 });
+  // a to-do for the admin, not a health problem: shown in the banner, but it does not colour `worst`
+  if (pending) add('approvals:pending', 'warn', 'pending_approvals', { n: pending });
   return out;
 }
 
@@ -246,8 +257,8 @@ export async function buildSnapshot(ctx: Ctx, deps: HealthDeps = {}): Promise<He
   const timeoutMs = deps.timeoutMs ?? PROBE_TIMEOUT_MS;
   const fetchImpl = deps.fetchImpl ?? ctx.fetchImpl;
   const d: DiskDeps = { statfs: deps.statfs ?? realStatfs, stat: deps.stat ?? realStat };
-  const [svcs, dsks, errs] = await Promise.all([services(ctx, fetchImpl, timeoutMs), disks(ctx, d, timeoutMs), errorHealth(ctx)]);
-  const issues = issuesOf(svcs, dsks, errs);
+  const [svcs, dsks, errs, pending] = await Promise.all([services(ctx, fetchImpl, timeoutMs), disks(ctx, d, timeoutMs), errorHealth(ctx), pendingApprovals(ctx, timeoutMs)]);
+  const issues = issuesOf(svcs, dsks, errs, pending);
   return { at: new Date().toISOString(), services: svcs, disks: dsks, errors: errs, issues, worst: worstOf([...svcs.map((s) => s.level), ...dsks.map((x) => x.level), errs.level]) };
 }
 
