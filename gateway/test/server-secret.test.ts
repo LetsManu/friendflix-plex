@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { createHmac } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -83,6 +84,8 @@ describe('server.ts on Plex with settings in the database', () => {
     const plexSeen: Array<{ url: string; token: unknown }> = [];
     const plex = createServer((req, res) => {
       plexSeen.push({ url: req.url!, token: req.headers['x-plex-token'] });
+      // trickplay: an error page that quotes the token (server.ts must wire plexOpaqueErrors)
+      if (req.url!.includes('/indexes/sd/')) return void res.writeHead(401, { 'content-type': 'text/html', 'x-plex-token': String(req.headers['x-plex-token']) }).end(`<html>401 ${String(req.headers['x-plex-token'])}</html>`);
       res.writeHead(200, { 'content-type': 'image/jpeg', 'x-plex-token': String(req.headers['x-plex-token']) }).end('JPEG');
     });
     const plexPort = await listen(plex);
@@ -129,6 +132,10 @@ describe('server.ts on Plex with settings in the database', () => {
     return { get, plexSeen, secrets, logs, responses };
   }
   const IMG = `/media/Items/9f1e0000000000000000000000000001/Images/Primary`;
+  /** a trickplay frame signed with SECRET (same HMAC as backend/src/plex/mediapaths.ts) */
+  const ITEM = '9f1e0000000000000000000000000001';
+  const PART = '9f1e3000000000000000000000000001';
+  const TRICK = `/media/Videos/${ITEM}/${PART}/Trickplay/2000/1.jpg?sig=${createHmac('sha256', SECRET).update(`friendflix-plex|tp|${ITEM}|${PART}`).digest('hex').slice(0, 32)}`;
 
   it('before setup: starts (validatePlexEnv accepts remote mode), /health 200, /media 503, the bootstrap secret is used', async () => {
     const g = await boot(() => null);
@@ -153,6 +160,9 @@ describe('server.ts on Plex with settings in the database', () => {
     expect(g.plexSeen.length).toBeGreaterThan(0);
     expect(g.plexSeen.every((x) => x.token === TOKEN && !x.url.includes(TOKEN))).toBe(true);
     for (const p of ['/health', '/metrics', `${IMG}?X-Plex-Token=${TOKEN}`, '/media/nope']) await g.get(p);
+    const trick = await g.get(TRICK);
+    expect([trick.status, await trick.text()]).toEqual([401, 'upstream error']);
+    expect(g.plexSeen.at(-1)!.url).toContain('/indexes/sd/'); // it did reach Plex
     const logs = g.logs.join('\n');
     expect(logs).toContain('gateway listening on :0');
     expect(logs).toContain('PLEX_TOKEN received');

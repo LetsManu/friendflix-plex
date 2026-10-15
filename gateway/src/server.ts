@@ -12,8 +12,10 @@ const secret = internalSecret(process.env); // env, INTERNAL_SECRET_FILE or the 
 // the media server URL: the adapter's env (JELLYFIN_URL or _FILE) wins and is used as is; otherwise the backend's live settings
 // fork: + keys (credentials such as PLEX_TOKEN the env does not pin come from the backend too) and the adapter bound to them and the secret
 const remote = createRemoteConfig({ backendUrl, internalSecret: secret, envUrl: optional(process.env, upstream.urlEnv), keys: remoteKeys(upstream, process.env) });
+const bound = bindUpstream(upstream, process.env, secret, remote); // fork
 const { server } = createGateway({
-  upstream: bindUpstream(upstream, process.env, secret, remote), // fork
+  upstream: bound, // fork
+  fetchImpl: bound.wrapFetch?.(fetch), // fork: Plex error answers reach clients opaque
   upstreamUrl: remote.url,
   onConfigRev: remote.noteRev,
   backendUrl,

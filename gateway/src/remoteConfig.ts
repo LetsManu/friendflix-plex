@@ -88,6 +88,7 @@ export function createRemoteConfig(opts: RemoteConfigOptions): RemoteConfig {
   let again = false;
   let stopped = false;
   let failing = '';
+  let differs = false; // fork: the backend's URL differs from the env one (logged once)
   let timer: NodeJS.Timeout | undefined;
   const ac = new AbortController();
 
@@ -114,6 +115,10 @@ export function createRemoteConfig(opts: RemoteConfigOptions): RemoteConfig {
         // fork: with an env URL only the credentials are taken from the answer
         const next = opts.envUrl || (usable(j.upstreamUrl) ? j.upstreamUrl : null);
         if (Number.isSafeInteger(j.rev) && next && got) {
+          if (opts.envUrl && !differs && usable(j.upstreamUrl) && new URL(j.upstreamUrl).origin !== new URL(opts.envUrl).origin) {
+            differs = true; // fork: the credentials then go to the env URL, which the backend's settings probe never checked
+            log(`gateway upstream: the environment's URL (${new URL(opts.envUrl).origin}) differs from the backend's (${new URL(j.upstreamUrl).origin}); pin both or neither`);
+          }
           if (next !== url && !opts.envUrl) log(`gateway upstream: ${new URL(next).origin} (settings rev ${String(j.rev)})`);
           // fork: a changed credential is announced by name only, never by value
           if (keys.length && (!auth || keys.some((k) => auth![k] !== got[k]))) log(`gateway upstream credentials: ${keys.join(', ')} ${auth ? 'updated' : 'received'} (settings rev ${String(j.rev)})`);

@@ -91,6 +91,11 @@ export interface Upstream {
    * gatewayKeys values (env pin first, else the backend's). Absent = the adapter is used as is.
    */
   bind?(rt: UpstreamRuntime): Upstream;
+  /**
+   * fork: wraps the gateway's fetch (server.ts fetchImpl), e.g. so that upstream error answers never reach a client as they are
+   * (Plex: plexOpaqueErrors). It sees the backend calls too and must leave them alone. Absent = plain fetch.
+   */
+  wrapFetch?(f: typeof fetch): typeof fetch;
 }
 
 /** fork: what Upstream.bind() gets (see upstream/index.ts bindUpstream). */

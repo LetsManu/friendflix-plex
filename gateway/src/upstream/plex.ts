@@ -150,6 +150,21 @@ function envSecret(name: string): () => string {
   };
 }
 
+/**
+ * The Plex fetch (Upstream.wrapFetch, server.ts): an answer with status >= 400 to a request carrying X-Plex-Token (only the gateway's
+ * Plex requests do; backend calls pass unchanged) keeps its status but gets a fixed body and no upstream header. A Plex error page or a
+ * proxy in front of Plex can then never hand the token, the server's address or anything else of the upstream to a client.
+ */
+export function plexOpaqueErrors(f: typeof fetch): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const r = await f(input, init);
+    if (r.status < 400 || !new Headers(init?.headers).has('x-plex-token')) return r;
+    void r.body?.cancel().catch(() => {});
+    const head = (init?.method ?? 'GET').toUpperCase() === 'HEAD';
+    return new Response(head ? null : 'upstream error', { status: r.status, headers: { 'content-type': 'text/plain' } });
+  }) as typeof fetch;
+}
+
 export interface PlexUpstreamOptions {
   /** the Plex admin token (default: PLEX_TOKEN / PLEX_TOKEN_FILE; bind(): the env pin, else the backend's) */
   token?: () => string;
@@ -259,8 +274,13 @@ export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
     gatewayKeys: ['PLEX_TOKEN'],
     // the running gateway's adapter (server.ts via bindUpstream): signatures with the resolved INTERNAL_SECRET, the token from the env pin
     // or the backend. A missing token throws a message without any value; server.ts keeps /media at 503 until it is there.
+    wrapFetch: plexOpaqueErrors,
     bind: (rt) => createPlexUpstream({
-      secret: rt.secret,
+      secret: () => {
+        const s = rt.secret();
+        if (!s) throw new Error('plex: no internal secret'); // never an HMAC with an empty key (internalSecret() refuses it first)
+        return s;
+      },
       token: () => {
         const t = rt.value('PLEX_TOKEN');
         if (!t) throw new Error('plex: no token yet');

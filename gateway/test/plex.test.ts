@@ -10,7 +10,7 @@ import { blocksDirectStream, createGateway, normalizeCastPath, normalizePath, sa
 import { internalSecret } from '../src/env.js';
 import { createRemoteConfig } from '../src/remoteConfig.js';
 import { bindUpstream, checkUpstreamConfig, jellyfinUpstream, remoteKeys, selectUpstream, UPSTREAMS } from '../src/upstream/index.js';
-import { createPlexUpstream, decodePlexId, plexUpstream, verifyChSig, verifyPartSig, verifySession, verifyTpSig } from '../src/upstream/plex.js';
+import { createPlexUpstream, decodePlexId, plexOpaqueErrors, plexUpstream, verifyChSig, verifyPartSig, verifySession, verifyTpSig } from '../src/upstream/plex.js';
 
 interface Vectors {
   secret: string; token: string; allow: string[]; deny: string[]; direct: string[]; cast: { allow: string[]; deny: string[] };
@@ -442,14 +442,19 @@ describe('remote mode: bootstrap-volume secret and the token from the backend', 
   });
 
   /** fake Plex (accepts `accept`), fake backend (gateway-config + authz) and a gateway as server.ts builds it from `env` */
-  async function stack(env: NodeJS.ProcessEnv, opts: { accept: string; backendToken: () => string | null }) {
+  async function stack(env: NodeJS.ProcessEnv, opts: { accept: string; backendToken: () => string | null; errors?: boolean }) {
     const seen: Array<{ url: string; token: unknown }> = [];
     const gwCfg: Array<string | undefined> = [];
     let rev = 1;
     const plex = createServer((req, res) => {
       seen.push({ url: req.url!, token: req.headers['x-plex-token'] });
-      // a refusal that echoes the sent token in a header (PMS' own 401 body names no token; error bodies are relayed by the core)
-      if (req.headers['x-plex-token'] !== opts.accept) return void res.writeHead(401, { 'content-type': 'text/html', 'x-plex-token': String(req.headers['x-plex-token']) }).end('<html>401 Unauthorized</html>');
+      // a hostile / chatty server: every error echoes the sent token in a header AND the body (plexOpaqueErrors must hide both)
+      const sent = String(req.headers['x-plex-token']);
+      const fail = (status: number) => void res.writeHead(status, { 'content-type': 'text/html', 'x-plex-token': sent, 'x-plex-server': 'plex.example.com' }).end(req.method === 'HEAD' ? undefined : `<html>${status} token=${sent}</html>`);
+      if (sent !== opts.accept) return fail(401);
+      if (opts.errors && req.url!.includes('/indexes/sd/')) return fail(500); // trickplay
+      if (opts.errors && req.url!.endsWith('/index.m3u8')) return fail(404); // a non-200 HLS playlist
+      if (opts.errors && req.url!.includes('/library/parts/')) return fail(403); // direct stream
       res.writeHead(200, { 'content-type': 'image/jpeg', 'x-plex-token': opts.accept }).end('JPEG');
     });
     const plexPort = await listen(plex);
@@ -478,12 +483,13 @@ describe('remote mode: bootstrap-volume secret and the token from the backend', 
     const secret = internalSecret(env);
     const remote = createRemoteConfig({ backendUrl: `http://127.0.0.1:${bePort}`, internalSecret: secret, envUrl: env.PLEX_URL || undefined, keys: remoteKeys(base, env), retryMs: 20, refreshMs: 60_000, log: (m) => logs.push(m) });
     stops.push(remote.stop);
-    const gw = createGateway({ upstream: bindUpstream(base, env, secret, remote), upstreamUrl: remote.url, onConfigRev: remote.noteRev, backendUrl: `http://127.0.0.1:${bePort}`, internalSecret: secret }).server;
+    const bound = bindUpstream(base, env, secret, remote);
+    const gw = createGateway({ upstream: bound, fetchImpl: bound.wrapFetch?.(fetch), upstreamUrl: remote.url, onConfigRev: remote.noteRev, backendUrl: `http://127.0.0.1:${bePort}`, internalSecret: secret }).server;
     const port = await listen(gw);
     servers.push(gw);
     const responses: string[] = [];
-    const get = async (p: string) => {
-      const r = await fetch(`http://127.0.0.1:${port}${p}`, { headers: { cookie: 'ff_sid=goodsid-goodsid-goodsid-1' } });
+    const get = async (p: string, method = 'GET') => {
+      const r = await fetch(`http://127.0.0.1:${port}${p}`, { method, headers: { cookie: 'ff_sid=goodsid-goodsid-goodsid-1' } });
       responses.push(`${r.status}\n${[...r.headers].map(([k, v]) => `${k}: ${v}`).join('\n')}\n${await r.clone().text()}`);
       return r;
     };
@@ -574,7 +580,7 @@ describe('remote mode: bootstrap-volume secret and the token from the backend', 
     const env = { MEDIA_SERVER: 'plex', FF_GATEWAY_BOOTSTRAP_DIR: bootstrapDir() };
     const st = await stack(env, { accept: 'something-else', backendToken: () => REMOTE_TOK });
     const r = await st.until(`/media/Items/${I}/Images/Primary`, (s) => s !== 503);
-    expect(r.status).toBe(401); // Plex' refusal is relayed, its body (which quotes the token) is not
+    expect([r.status, await r.clone().text(), r.headers.get('content-type')]).toEqual([401, 'upstream error', 'text/plain']); // status kept, Plex' body and headers not
     for (const p of ['/health', '/metrics', TRICK, STREAMP, HLSP, `/media/Items/${I}/Images/Primary?X-Plex-Token=${REMOTE_TOK}`, '/media/nope', `/media/c/${'C'.repeat(43)}/Videos/${I}/hls/${S1}/00000.ts`]) await st.get(p);
     expect(st.seen.length).toBeGreaterThan(1);
     expect(st.seen.every((x) => x.token === REMOTE_TOK)).toBe(true); // sent upstream, as a header only
@@ -584,6 +590,49 @@ describe('remote mode: bootstrap-volume secret and the token from the backend', 
       expect(text, text).not.toContain(REMOTE_TOK);
       expect(text.toLowerCase()).not.toContain('x-plex');
     }
+  });
+
+  it('Plex error answers (404 playlist, 500 trickplay, 403 stream, HEAD) keep their status but reach the client opaque', async () => {
+    const env = { MEDIA_SERVER: 'plex', FF_GATEWAY_BOOTSTRAP_DIR: bootstrapDir() };
+    const st = await stack(env, { accept: REMOTE_TOK, backendToken: () => REMOTE_TOK, errors: true });
+    await st.until(`/media/Items/${I}/Images/Primary`, (s) => s === 200);
+    const cases: Array<[string, string, number, string]> = [
+      [`/media/Videos/${I}/hls/${S1}/index.m3u8`, 'GET', 404, 'upstream error'],
+      [TRICK, 'GET', 500, 'upstream error'],
+      [STREAMP, 'GET', 403, 'upstream error'],
+      [STREAMP, 'HEAD', 403, ''],
+      [`/media/Videos/${I}/hls/${S1}/index.m3u8`, 'HEAD', 404, ''],
+    ];
+    for (const [p, method, status, body] of cases) {
+      const r = await st.get(p, method);
+      expect([p, method, r.status, await r.text(), r.headers.get('content-type')]).toEqual([p, method, status, body, 'text/plain']);
+    }
+    expect(st.seen.filter((x) => x.token === REMOTE_TOK).length).toBeGreaterThanOrEqual(cases.length);
+    for (const text of st.responses) {
+      expect(text, text).not.toContain(REMOTE_TOK);
+      expect(text.toLowerCase()).not.toContain('x-plex');
+      expect(text).not.toContain('plex.example.com');
+    }
+  });
+
+  it('plexOpaqueErrors leaves answers below 400 and requests without X-Plex-Token (backend calls) untouched', async () => {
+    const answer = (status: number) => (async () => new Response(status === 204 ? null : 'BODY', { status, headers: { 'x-upstream': '1' } })) as unknown as typeof fetch;
+    const ok = await plexOpaqueErrors(answer(206))('http://p/x', { headers: { 'X-Plex-Token': 't' } });
+    expect([ok.status, await ok.text(), ok.headers.get('x-upstream')]).toEqual([206, 'BODY', '1']);
+    const be = await plexOpaqueErrors(answer(503))('http://backend/internal/authz', { method: 'POST', headers: { 'x-internal-secret': 's' } });
+    expect([be.status, await be.text(), be.headers.get('x-upstream')]).toEqual([503, 'BODY', '1']);
+    const be2 = await plexOpaqueErrors(answer(401))('http://backend/internal/gateway-config');
+    expect(await be2.text()).toBe('BODY');
+    const err = await plexOpaqueErrors(answer(502))('http://p/x', { headers: new Headers({ 'x-plex-token': 't' }) });
+    expect([err.status, await err.text(), err.headers.get('x-upstream')]).toEqual([502, 'upstream error', null]);
+    expect(plexUpstream.wrapFetch).toBe(plexOpaqueErrors);
+    expect(jellyfinUpstream.wrapFetch).toBeUndefined();
+  });
+
+  it('a bound adapter with an empty secret never verifies a signature', async () => {
+    const b = bindUpstream(plexUpstream, {}, '', { value: () => REMOTE_TOK });
+    const ctx = { path: `/Videos/${I}/${P}/Trickplay/2000/1.jpg`, query: new URLSearchParams(`sig=${TPSIG}`), cast: false, checkItem: async () => true };
+    await expect(b.authorize!(ctx)).rejects.toThrow(/^plex: no internal secret$/); // the gateway answers 503
   });
 
   it('the registered adapter bound to a runtime without a token yet throws a message without any value', () => {

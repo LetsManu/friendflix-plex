@@ -326,6 +326,18 @@ describe('createRemoteConfig with keys (gatewayKeys not pinned in env)', () => {
     rc.stop();
   });
 
+  it('envUrl set with keys: a backend URL with another origin is logged once (pin both or neither), without the token', async () => {
+    const lines: string[] = [];
+    const be = fakeBackend([plexAnswer(2, TOKEN, 'http://other:32400/x'), plexAnswer(3, 'rotated-token', 'http://other:32400')]);
+    const rc = createRemoteConfig({ backendUrl: BACKEND, internalSecret: SECRET, envUrl: 'http://plex-env:32400', fetchImpl: be.f, refreshMs: 100, keys: ['PLEX_TOKEN'], log: (m) => lines.push(m) });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(be.calls).toHaveLength(2);
+    const differ = lines.filter((l) => l.includes('pin both or neither'));
+    expect(differ).toEqual(["gateway upstream: the environment's URL (http://plex-env:32400) differs from the backend's (http://other:32400); pin both or neither"]);
+    expect(lines.join('\n')).not.toContain(TOKEN);
+    rc.stop();
+  });
+
   it('envUrl set with keys: an answer without a usable upstreamUrl still carries the keys', async () => {
     const be = fakeBackend([json({ rev: 2, upstreamUrl: 'not a url', upstreamAuth: { PLEX_TOKEN: TOKEN } })]);
     const rc = createRemoteConfig({ backendUrl: BACKEND, internalSecret: SECRET, envUrl: 'http://plex-env:32400', fetchImpl: be.f, keys: ['PLEX_TOKEN'], log: () => {} });
