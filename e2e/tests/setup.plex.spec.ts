@@ -31,7 +31,7 @@ test.describe('setup wizard: Plex media step', () => {
     await expect(token).toHaveAttribute('type', 'password');
     await expect(token).toHaveAttribute('autocomplete', 'off');
     const text = await page.locator('main').innerText();
-    expect(text).toContain('den Token seines Besitzers');
+    expect(text).toContain('den Token des Plex-Kontos, das FriendFlix nutzt; der Token des Server-Besitzers schaltet alle Funktionen frei');
     expect(text).not.toMatch(/jellyfin|seerr/i);
     await expect(page.locator('main img, main svg[role=img]')).toHaveCount(0);
   });

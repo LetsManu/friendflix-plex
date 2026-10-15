@@ -131,6 +131,7 @@ The article reads the token from a *View XML* link, which carries it in the addr
 
 Recommendations:
 
+- **Which account.** FriendFlix uses the token of the Plex account you give it. The **server owner's token unlocks every feature** (for example *Live streams* of other Plex apps and some library care actions). A **dedicated account** keeps FriendFlix's audio-track changes away from the account you watch on; the check then shows the *not the owner's token* note and owner-only features are limited (see [Not the owner's token](#setup-wizard-on-plex)). Pick the owner's token for everything, a dedicated account for a quiet daily account.
 - Use a **dedicated Plex account** (or at least a dedicated token) for FriendFlix, not your daily account. Plex stores the selected audio track per Plex account, and FriendFlix has to change it when someone picks a language (see [Audio tracks](#audio-tracks)). If other Plex apps use the same account, they would see those changes.
 - The token is a password: keep it in `PLEX_TOKEN_FILE` (Docker secret, see the comment at the end of `compose.plex.yaml`) rather than in `.env` where you can, and do not paste it into issues or chats. If it leaks, revoke it (see [Rotating or revoking the token](#rotating-or-revoking-the-token)) and enter a new one.
 

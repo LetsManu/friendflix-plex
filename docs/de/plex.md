@@ -131,6 +131,7 @@ Der Artikel liest das Token aus einem *View XML*-Link, der es in der Adresse tr�
 
 Empfehlungen:
 
+- **Welches Konto.** FriendFlix nutzt das Token des Plex-Kontos, das du ihm gibst. Das **Token des Server-Besitzers schaltet alle Funktionen frei** (z. B. *Live-Streams* anderer Plex-Apps und manche Bibliothekspflege-Aktionen). Ein **eigenes Konto** hält die Tonspur-Wechsel von FriendFlix von dem Konto fern, mit dem du schaust; die Prüfung zeigt dann den Hinweis *nicht das Token des Besitzers*, und Funktionen nur für Besitzer sind eingeschränkt (siehe [Nicht das Token des Besitzers](#einrichtungsassistent-mit-plex)). Besitzer-Token für alles, eigenes Konto für ein ruhiges Alltagskonto.
 - Nimm ein **eigenes Plex-Konto** (mindestens ein eigenes Token) für FriendFlix, nicht dein Alltagskonto. Plex speichert die gewählte Tonspur pro Plex-Konto, und FriendFlix muss sie ändern, wenn jemand eine Sprache wählt (siehe [Tonspuren](#tonspuren)). Nutzen andere Plex-Apps dasselbe Konto, sehen sie diese Änderungen.
 - Das Token ist ein Passwort: Lege es möglichst in `PLEX_TOKEN_FILE` (Docker Secret, siehe Kommentar am Ende von `compose.plex.yaml`) statt in `.env` und poste es nie in Issues oder Chats. Ist es durchgesickert, widerrufe es (siehe [Token wechseln oder widerrufen](#token-wechseln-oder-widerrufen)) und trage ein neues ein.
 

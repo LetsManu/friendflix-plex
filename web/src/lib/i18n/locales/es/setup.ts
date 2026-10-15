@@ -51,7 +51,7 @@ const setup: Translation<typeof de> = {
     create: 'Crear clave de API automáticamente',
     created: 'Clave de API creada y guardada.',
     manualText: 'Introduce la dirección y una clave de API con permisos de administrador. Al guardar se comprueba la conexión.',
-    textPlex: 'FriendFlix necesita la dirección de tu servidor Plex y el token de su propietario.',
+    textPlex: 'FriendFlix necesita la dirección de tu servidor Plex y el token de la cuenta de Plex que usa FriendFlix; el token del propietario del servidor desbloquea todas las funciones.',
     manualTextPlex: 'Introduce la dirección y el token de Plex. La prueba comprueba la conexión e indica si el token pertenece al propietario del servidor.',
     noAuto: 'Este servidor multimedia no tiene configuración automática. Introduce los valores a mano.',
   },

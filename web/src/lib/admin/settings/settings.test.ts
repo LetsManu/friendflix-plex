@@ -54,6 +54,21 @@ describe('settings texts', () => {
     }
   });
 
+  it('fork: the Plex address help names backend and media gateway; the token texts ask for the account FriendFlix uses (owner = every feature)', async () => {
+    for (const l of ['de', 'en', 'es', 'fr', 'it', 'pl', 'tr']) {
+      await setLocale(l);
+      const url = keyHelp('PLEX_URL').toLowerCase();
+      expect(url, l).toContain('backend');
+      expect(url, l).toContain(tr('adminContent.health.svc.gateway').toLowerCase());
+      // the token help and the wizard text say the same: FriendFlix's own account, the owner's token unlocks every feature
+      const [account, owner] = keyHelp('PLEX_TOKEN').split('.')[0]!.split(/\s?;\s/);
+      expect(account, l).toContain('FriendFlix');
+      expect(owner, l).toBeTruthy();
+      expect(tr('setup.media.textPlex'), l).toContain('FriendFlix');
+      expect(tr('setup.media.textPlex'), l).toContain(owner!);
+    }
+  });
+
   it('fork: PLEX_URL has its own invalid_url text in every language (only the address, the token in its own field); other keys keep the general one', async () => {
     for (const l of ['de', 'en', 'es', 'fr', 'it', 'pl', 'tr']) {
       await setLocale(l);

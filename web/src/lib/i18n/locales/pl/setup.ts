@@ -51,7 +51,7 @@ const setup: Translation<typeof de> = {
     create: 'Utwórz klucz API automatycznie',
     created: 'Klucz API utworzony i zapisany.',
     manualText: 'Wpisz adres i klucz API z uprawnieniami administratora. Zapisanie sprawdza połączenie.',
-    textPlex: 'FriendFlix potrzebuje adresu twojego serwera Plex i tokenu jego właściciela.',
+    textPlex: 'FriendFlix potrzebuje adresu twojego serwera Plex i tokenu konta Plex, którego używa FriendFlix; token właściciela serwera odblokowuje wszystkie funkcje.',
     manualTextPlex: 'Wpisz adres i token Plex. Test sprawdza połączenie i informuje, czy token należy do właściciela serwera.',
     noAuto: 'Ten serwer multimediów nie ma automatycznej konfiguracji. Wpisz wartości ręcznie.',
   },

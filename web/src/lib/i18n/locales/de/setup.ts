@@ -49,7 +49,7 @@ const setup = {
     create: 'API-Schlüssel automatisch anlegen',
     created: 'API-Schlüssel angelegt und gespeichert.',
     manualText: 'Trage die Adresse und einen API-Schlüssel mit Admin-Rechten ein. Beim Speichern wird die Verbindung geprüft.',
-    textPlex: 'FriendFlix braucht die Adresse deines Plex-Servers und den Token seines Besitzers.',
+    textPlex: 'FriendFlix braucht die Adresse deines Plex-Servers und den Token des Plex-Kontos, das FriendFlix nutzt; der Token des Server-Besitzers schaltet alle Funktionen frei.',
     manualTextPlex: 'Trage die Adresse und den Plex-Token ein. Beim Test wird die Verbindung geprüft und gemeldet, ob der Token dem Server-Besitzer gehört.',
     noAuto: 'Für diesen Medienserver gibt es keine automatische Einrichtung. Trage die Werte von Hand ein.',
   },

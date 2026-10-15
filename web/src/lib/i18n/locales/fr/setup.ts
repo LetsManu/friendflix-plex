@@ -51,7 +51,7 @@ const setup: Translation<typeof de> = {
     create: 'Créer la clé API automatiquement',
     created: 'Clé API créée et enregistrée.',
     manualText: 'Saisis l’adresse et une clé API avec des droits d’administration. L’enregistrement vérifie la connexion.',
-    textPlex: 'FriendFlix a besoin de l’adresse de ton serveur Plex et du jeton de son propriétaire.',
+    textPlex: 'FriendFlix a besoin de l’adresse de ton serveur Plex et du jeton du compte Plex qu’utilise FriendFlix ; le jeton du propriétaire du serveur débloque toutes les fonctions.',
     manualTextPlex: 'Saisis l’adresse et le jeton Plex. Le test vérifie la connexion et indique si le jeton appartient au propriétaire du serveur.',
     noAuto: 'Ce serveur multimédia n’a pas de configuration automatique. Saisis les valeurs à la main.',
   },
