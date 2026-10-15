@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Plex adapter (fork: FriendFlix for Plex). The gateway reaches Plex with ONE admin token (PLEX_TOKEN / PLEX_TOKEN_FILE from its own
- * env, sent as the X-Plex-Token header only: never in a URL, never to the client), so Plex cannot enforce per-profile visibility:
+ * env, else the one saved in the setup wizard / Admin -> Settings, fetched from the backend's /internal/gateway-config behind the
+ * internal secret; sent as the X-Plex-Token header only: never in a URL, a log line, an error or to the client), so Plex cannot
+ * enforce per-profile visibility:
  *  - authorize(): every path carries an item id; the gateway asks the backend (/internal/authz/item) whether the session's profile may
  *    see it. Plex part ids and transcode sessions are not item-scoped, so they must carry the backend's HMAC binding (INTERNAL_SECRET):
  *    a visible item id plus a foreign part / session never passes.
@@ -110,12 +112,15 @@ export function plexPlaylist(body: string, _ctx?: PlaylistContext): string {
   }).join('\n');
 }
 
-/** Startup check (Upstream.validateConfig): PLEX_URL must be an http(s) URL and a token (PLEX_TOKEN or a readable PLEX_TOKEN_FILE) present. */
+/**
+ * Startup check (Upstream.validateConfig): a PLEX_URL that is set must be an http(s) URL, a PLEX_TOKEN_FILE that is set must be readable
+ * and non-empty. Neither set is fine (remote mode, settings in the database): the gateway takes them from the backend and answers
+ * /media with 503 until the setup saved them.
+ */
 export function validatePlexEnv(env: NodeJS.ProcessEnv): string[] {
   const problems: string[] = [];
   const url = (env.PLEX_URL ?? '').trim();
-  if (!url) problems.push('PLEX_URL is not set');
-  else {
+  if (url) {
     try {
       if (!/^https?:$/.test(new URL(url).protocol)) problems.push('PLEX_URL must be an http(s) URL');
     } catch {
@@ -129,7 +134,7 @@ export function validatePlexEnv(env: NodeJS.ProcessEnv): string[] {
     } catch {
       problems.push('PLEX_TOKEN_FILE cannot be read');
     }
-  } else if (!(env.PLEX_TOKEN ?? '').trim()) problems.push('PLEX_TOKEN (or PLEX_TOKEN_FILE) is not set');
+  }
   return problems;
 }
 
@@ -146,9 +151,9 @@ function envSecret(name: string): () => string {
 }
 
 export interface PlexUpstreamOptions {
-  /** the Plex admin token (default: PLEX_TOKEN / PLEX_TOKEN_FILE) */
+  /** the Plex admin token (default: PLEX_TOKEN / PLEX_TOKEN_FILE; bind(): the env pin, else the backend's) */
   token?: () => string;
-  /** the shared signing secret (default: INTERNAL_SECRET / INTERNAL_SECRET_FILE) */
+  /** the shared signing secret (default: INTERNAL_SECRET / INTERNAL_SECRET_FILE; bind(): the gateway's resolved one, bootstrap volume included) */
   secret?: () => string;
 }
 
@@ -245,12 +250,23 @@ export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
     // No requireBitrate (Block 20): rewrite() rebuilds every Plex query from scratch, so a bitrate param injected or clamped here would
     // never reach Plex. The transcode's maxVideoBitrate / videoResolution are fixed by the backend at start (decision + start.m3u8 with
     // the role / remote cap of POST /api/playback/info); the session URLs the client fetches carry no parameters Plex would read.
-    // cred.token is the FriendFlix identity (no secret); the Plex token comes from this process' env only
+    // cred.token is the FriendFlix identity (no secret); the Plex token comes from this process' env or the backend, never the client
     authHeaders: (_c: UpstreamCredentials) => ({ 'X-Plex-Token': token(), 'X-Plex-Client-Identifier': 'friendflix-gateway', 'X-Plex-Product': 'FriendFlix' }),
     authorize,
     rewrite,
     validateConfig: validatePlexEnv,
     playlist: plexPlaylist,
+    gatewayKeys: ['PLEX_TOKEN'],
+    // the running gateway's adapter (server.ts via bindUpstream): signatures with the resolved INTERNAL_SECRET, the token from the env pin
+    // or the backend. A missing token throws a message without any value; server.ts keeps /media at 503 until it is there.
+    bind: (rt) => createPlexUpstream({
+      secret: rt.secret,
+      token: () => {
+        const t = rt.value('PLEX_TOKEN');
+        if (!t) throw new Error('plex: no token yet');
+        return t;
+      },
+    }),
   };
 }
 

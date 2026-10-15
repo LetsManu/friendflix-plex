@@ -63,6 +63,11 @@ export function mediaUrlKey(cfg: Config): string {
   return key;
 }
 
+/** fork: settings the gateway needs besides the URL (MediaSetupProvider.gatewayKeys; Plex: PLEX_TOKEN); none for a kind without. */
+export function mediaGatewayKeys(cfg: Config): readonly string[] {
+  return MEDIA_SETUP[cfg.MEDIA_SERVER]?.gatewayKeys ?? [];
+}
+
 /**
  * What a factory gets. `db` is the backend's shared Postgres pool: implementations that keep state (an id map, sync cursors …) use it
  * instead of opening a pool of their own. Jellyfin ignores it.

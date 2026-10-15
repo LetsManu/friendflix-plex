@@ -3,16 +3,17 @@
 import { internalSecret, need, optional } from './env.js';
 import { createGateway } from './gateway.js';
 import { createRemoteConfig } from './remoteConfig.js';
-import { checkUpstreamConfig, selectUpstream } from './upstream/index.js';
+import { bindUpstream, checkUpstreamConfig, remoteKeys, selectUpstream } from './upstream/index.js';
 
 const upstream = selectUpstream(process.env.MEDIA_SERVER);
 checkUpstreamConfig(upstream, process.env); // like the backend's config validation: refuse to start with a clear error
 const backendUrl = need(process.env, 'BACKEND_URL');
 const secret = internalSecret(process.env); // env, INTERNAL_SECRET_FILE or the bootstrap-gateway volume
 // the media server URL: the adapter's env (JELLYFIN_URL or _FILE) wins and is used as is; otherwise the backend's live settings
-const remote = createRemoteConfig({ backendUrl, internalSecret: secret, envUrl: optional(process.env, upstream.urlEnv) });
+// fork: + keys (credentials such as PLEX_TOKEN the env does not pin come from the backend too) and the adapter bound to them and the secret
+const remote = createRemoteConfig({ backendUrl, internalSecret: secret, envUrl: optional(process.env, upstream.urlEnv), keys: remoteKeys(upstream, process.env) });
 const { server } = createGateway({
-  upstream,
+  upstream: bindUpstream(upstream, process.env, secret, remote), // fork
   upstreamUrl: remote.url,
   onConfigRev: remote.noteRev,
   backendUrl,

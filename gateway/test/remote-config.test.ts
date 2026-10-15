@@ -37,6 +37,7 @@ describe('createRemoteConfig', () => {
     rc.noteRev('99');
     await settle();
     expect(rc.url()).toBe('http://jf:8096');
+    expect(rc.value('PLEX_TOKEN')).toBeNull();
     expect(be.calls).toEqual([]);
     rc.stop();
   });
@@ -242,6 +243,119 @@ describe('createRemoteConfig', () => {
     rc.noteRev('2');
     await settle();
     expect(lines).toHaveLength(n);
+    rc.stop();
+  });
+});
+
+// fork: credentials besides the URL (Plex: PLEX_TOKEN) come from the same answer, behind the internal secret, and are never logged
+describe('createRemoteConfig with keys (gatewayKeys not pinned in env)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+  const TOKEN = 'plex-remote-token-ABCDEF-123456';
+  const plexAnswer = (rev: number, token: string, upstreamUrl = 'http://plex:32400') => json({ rev, upstreamUrl, upstreamAuth: { PLEX_TOKEN: token } });
+
+  it('keeps the token and exposes it by key; url() only once it is there', async () => {
+    const be = fakeBackend([setupRequired(), plexAnswer(3, TOKEN)]);
+    const rc = createRemoteConfig({ backendUrl: BACKEND, internalSecret: SECRET, fetchImpl: be.f, retryMs: 100, keys: ['PLEX_TOKEN'], log: () => {} });
+    await settle();
+    expect([rc.url(), rc.value('PLEX_TOKEN')]).toEqual([null, null]);
+    await vi.advanceTimersByTimeAsync(100);
+    expect([rc.url(), rc.value('PLEX_TOKEN')]).toEqual(['http://plex:32400', TOKEN]);
+    expect(rc.value('OTHER')).toBeNull();
+    expect(rc.value('constructor')).toBeNull(); // no prototype keys
+    expect(be.calls.every((c) => c.secret === SECRET)).toBe(true);
+    rc.stop();
+  });
+
+  it('without keys an answer\'s upstreamAuth is ignored (Jellyfin)', async () => {
+    const be = fakeBackend([plexAnswer(1, TOKEN)]);
+    const rc = createRemoteConfig({ backendUrl: BACKEND, internalSecret: SECRET, fetchImpl: be.f, log: () => {} });
+    await settle();
+    expect([rc.url(), rc.value('PLEX_TOKEN')]).toEqual(['http://plex:32400', null]);
+    rc.stop();
+  });
+
+  it('an answer without (or with an unusable) wanted key is refused: none yet = null, else the last good one stays', async () => {
+    const be = fakeBackend([
+      cfgAnswer(1, 'http://plex:32400'),
+      json({ rev: 1, upstreamUrl: 'http://plex:32400', upstreamAuth: [TOKEN] }),
+      json({ rev: 1, upstreamUrl: 'http://plex:32400', upstreamAuth: { PLEX_TOKEN: '' } }),
+      plexAnswer(2, TOKEN),
+      json({ rev: 3, upstreamUrl: 'http://plex:32400', upstreamAuth: { PLEX_TOKEN: 'a\r\nInjected: header' } }),
+      json({ rev: 3, upstreamUrl: 'http://plex:32400', upstreamAuth: { PLEX_TOKEN: 'x'.repeat(4097) } }),
+      json({ rev: 3, upstreamUrl: 'http://plex:32400', upstreamAuth: { PLEX_TOKEN: 7 } }),
+      json({ rev: 3, upstreamUrl: 'http://plex:32400', upstreamAuth: null }),
+      json({ rev: 3, upstreamUrl: 'http://plex:32400', upstreamAuth: { PLEX_TOKEN: 'two words' } }),
+      plexAnswer(4, 'rotated-token'),
+    ]);
+    const rc = createRemoteConfig({ backendUrl: BACKEND, internalSecret: SECRET, fetchImpl: be.f, retryMs: 100, refreshMs: 100, keys: ['PLEX_TOKEN'], log: () => {} });
+    await settle();
+    for (let i = 0; i < 2; i++) {
+      expect([rc.url(), rc.value('PLEX_TOKEN')]).toEqual([null, null]);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    await vi.advanceTimersByTimeAsync(100);
+    for (let i = 0; i < 6; i++) {
+      expect([rc.url(), rc.value('PLEX_TOKEN')]).toEqual(['http://plex:32400', TOKEN]);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    expect(rc.value('PLEX_TOKEN')).toBe('rotated-token');
+    expect(be.calls).toHaveLength(10);
+    rc.stop();
+  });
+
+  it('a new rev from an authz answer refetches at once and takes over a rotated token', async () => {
+    const be = fakeBackend([plexAnswer(6, TOKEN), plexAnswer(7, 'rotated-token')]);
+    const rc = createRemoteConfig({ backendUrl: BACKEND, internalSecret: SECRET, fetchImpl: be.f, keys: ['PLEX_TOKEN'], log: () => {} });
+    await settle();
+    expect(rc.value('PLEX_TOKEN')).toBe(TOKEN);
+    rc.noteRev('7');
+    await settle();
+    expect(rc.value('PLEX_TOKEN')).toBe('rotated-token');
+    rc.stop();
+  });
+
+  it('envUrl set with keys: the backend is asked for the keys only; url() is the env URL once they are there', async () => {
+    const be = fakeBackend([setupRequired(), plexAnswer(2, TOKEN, 'http://other:32400')]);
+    const rc = createRemoteConfig({ backendUrl: BACKEND, internalSecret: SECRET, envUrl: 'http://plex-env:32400', fetchImpl: be.f, retryMs: 100, keys: ['PLEX_TOKEN'], log: () => {} });
+    await settle();
+    expect(be.calls).toHaveLength(1);
+    expect(rc.url()).toBeNull();
+    await vi.advanceTimersByTimeAsync(100);
+    expect([rc.url(), rc.value('PLEX_TOKEN')]).toEqual(['http://plex-env:32400', TOKEN]);
+    rc.stop();
+  });
+
+  it('envUrl set with keys: an answer without a usable upstreamUrl still carries the keys', async () => {
+    const be = fakeBackend([json({ rev: 2, upstreamUrl: 'not a url', upstreamAuth: { PLEX_TOKEN: TOKEN } })]);
+    const rc = createRemoteConfig({ backendUrl: BACKEND, internalSecret: SECRET, envUrl: 'http://plex-env:32400', fetchImpl: be.f, keys: ['PLEX_TOKEN'], log: () => {} });
+    await settle();
+    expect([rc.url(), rc.value('PLEX_TOKEN')]).toEqual(['http://plex-env:32400', TOKEN]);
+    rc.stop();
+  });
+
+  it('never logs the token: not on receipt, rotation, refusal, a broken body or a thrown error', async () => {
+    const lines: string[] = [];
+    const be = fakeBackend([
+      json({ error: `boom ${TOKEN}` }, 500),
+      () => Promise.reject(new Error(`fetch failed ${TOKEN}`)),
+      new Response(`not json ${TOKEN}`, { status: 200 }),
+      json({ rev: 1, upstreamUrl: 'http://plex:32400', upstreamAuth: { PLEX_TOKEN: `${TOKEN} bad` } }),
+      plexAnswer(1, TOKEN),
+      plexAnswer(2, 'rotated-token-ZYX'),
+      json({ error: 'forbidden' }, 403),
+      plexAnswer(2, 'rotated-token-ZYX'),
+    ]);
+    const rc = createRemoteConfig({ backendUrl: BACKEND, internalSecret: SECRET, fetchImpl: be.f, retryMs: 10, refreshMs: 10, keys: ['PLEX_TOKEN'], log: (m) => lines.push(m) });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(rc.value('PLEX_TOKEN')).toBe('rotated-token-ZYX');
+    const all = lines.join('\n');
+    expect(all).toContain('PLEX_TOKEN received');
+    expect(all).toContain('PLEX_TOKEN updated');
+    expect(all).toContain('HTTP 500');
+    expect(all).toContain('keeping the last upstream');
+    for (const s of [TOKEN, 'rotated-token-ZYX', SECRET]) expect(all).not.toContain(s);
+    expect(lines.filter((l) => l.includes('credentials'))).toHaveLength(2); // an unchanged token is not announced again
     rc.stop();
   });
 });

@@ -5,9 +5,11 @@ import type { AddressInfo } from 'node:net';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { blocksDirectStream, createGateway, normalizeCastPath, normalizePath, sanitizePlaylist } from '../src/gateway.js';
-import { checkUpstreamConfig, selectUpstream, UPSTREAMS } from '../src/upstream/index.js';
+import { internalSecret } from '../src/env.js';
+import { createRemoteConfig } from '../src/remoteConfig.js';
+import { bindUpstream, checkUpstreamConfig, jellyfinUpstream, remoteKeys, selectUpstream, UPSTREAMS } from '../src/upstream/index.js';
 import { createPlexUpstream, decodePlexId, plexUpstream, verifyChSig, verifyPartSig, verifySession, verifyTpSig } from '../src/upstream/plex.js';
 
 interface Vectors {
@@ -369,10 +371,13 @@ describe('Plex adapter hooks', () => {
     expect(up.rewrite!(`/Items/${I}/Images/Backdrop`, new URLSearchParams(`tag=m${M}`)).query.get('url')).toBe('/library/metadata/1/art');
   });
 
-  it('validateConfig: PLEX_URL (http/https) and PLEX_TOKEN or a readable PLEX_TOKEN_FILE', () => {
+  it('validateConfig: a set PLEX_URL must be http(s), a set PLEX_TOKEN_FILE readable; neither set is remote mode (settings in the DB)', () => {
     const v = up.validateConfig!;
     expect(v({ PLEX_URL: 'http://plex:32400', PLEX_TOKEN: 't' })).toEqual([]);
-    expect(v({})).toEqual(['PLEX_URL is not set', 'PLEX_TOKEN (or PLEX_TOKEN_FILE) is not set']);
+    expect(v({})).toEqual([]);
+    expect(v({ PLEX_URL: '', PLEX_TOKEN: '' })).toEqual([]); // compose passes ${VAR:-}
+    expect(v({ PLEX_URL: 'http://plex:32400' })).toEqual([]); // token from the backend
+    expect(v({ PLEX_TOKEN: 't' })).toEqual([]); // URL from the backend
     expect(v({ PLEX_URL: 'ftp://x', PLEX_TOKEN: 't' })).toEqual(['PLEX_URL must be an http(s) URL']);
     expect(v({ PLEX_URL: 'nope', PLEX_TOKEN: 't' })).toEqual(['PLEX_URL is not a valid URL']);
     const dir = mkdtempSync(join(tmpdir(), 'ffgw-'));
@@ -381,7 +386,8 @@ describe('Plex adapter hooks', () => {
     expect(v({ PLEX_URL: 'http://plex:32400', PLEX_TOKEN_FILE: join(dir, 'tok') })).toEqual([]);
     expect(v({ PLEX_URL: 'http://plex:32400', PLEX_TOKEN_FILE: join(dir, 'empty') })).toEqual(['PLEX_TOKEN_FILE is empty']);
     expect(v({ PLEX_URL: 'http://plex:32400', PLEX_TOKEN_FILE: join(dir, 'missing') })).toEqual(['PLEX_TOKEN_FILE cannot be read']);
-    expect(() => checkUpstreamConfig(selectUpstream('plex'), { MEDIA_SERVER: 'plex' })).toThrow(/PLEX_URL/);
+    expect(() => checkUpstreamConfig(selectUpstream('plex'), { MEDIA_SERVER: 'plex' })).not.toThrow();
+    expect(() => checkUpstreamConfig(selectUpstream('plex'), { MEDIA_SERVER: 'plex', PLEX_URL: 'nope' })).toThrow(/PLEX_URL/);
   });
 
   it('playlist: credentials stripped from every URI, URIs outside the session refused', () => {
@@ -414,5 +420,178 @@ describe('Plex adapter hooks', () => {
       'img.m3u8',
     ].join('\n');
     expect(sanitizePlaylist(master, req, up.stripQuery)).toBe('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=4000000,RESOLUTION=1920x1080,CODECS="avc1.640029,mp4a.40.2"\nindex.m3u8');
+  });
+});
+
+/**
+ * fork: settings in the database. A no-.env install has neither PLEX_TOKEN nor INTERNAL_SECRET in the gateway env: the secret comes from
+ * the bootstrap volume (FF_GATEWAY_BOOTSTRAP_DIR), the token from the backend's /internal/gateway-config (behind that secret). What
+ * server.ts wires up: internalSecret(env) + createRemoteConfig({ keys: remoteKeys() }) + bindUpstream().
+ */
+describe('remote mode: bootstrap-volume secret and the token from the backend', () => {
+  const REMOTE_TOK = 'remote-plex-token-QWERTY-987654';
+  const ROTATED = 'rotated-plex-token-ASDFGH-123987';
+  const ENV_TOK = 'env-plex-token-ZXCVBN-555111';
+  const listen = (s: Server) => new Promise<number>((r) => s.listen(0, '127.0.0.1', () => r((s.address() as AddressInfo).port)));
+  const close = (s: Server) => new Promise<void>((r) => s.close(() => r()));
+  const servers: Server[] = [];
+  const stops: Array<() => void> = [];
+  afterEach(async () => {
+    stops.splice(0).forEach((f) => f());
+    await Promise.all(servers.splice(0).map(close));
+  });
+
+  /** fake Plex (accepts `accept`), fake backend (gateway-config + authz) and a gateway as server.ts builds it from `env` */
+  async function stack(env: NodeJS.ProcessEnv, opts: { accept: string; backendToken: () => string | null }) {
+    const seen: Array<{ url: string; token: unknown }> = [];
+    const gwCfg: Array<string | undefined> = [];
+    let rev = 1;
+    const plex = createServer((req, res) => {
+      seen.push({ url: req.url!, token: req.headers['x-plex-token'] });
+      // a refusal that echoes the sent token in a header (PMS' own 401 body names no token; error bodies are relayed by the core)
+      if (req.headers['x-plex-token'] !== opts.accept) return void res.writeHead(401, { 'content-type': 'text/html', 'x-plex-token': String(req.headers['x-plex-token']) }).end('<html>401 Unauthorized</html>');
+      res.writeHead(200, { 'content-type': 'image/jpeg', 'x-plex-token': opts.accept }).end('JPEG');
+    });
+    const plexPort = await listen(plex);
+    const be = createServer((req, res) => {
+      const json = (o: unknown, status = 200, h: Record<string, string> = {}) => res.writeHead(status, { 'content-type': 'application/json', 'x-ff-config-rev': String(rev), ...h }).end(JSON.stringify(o));
+      const secretOk = req.headers['x-internal-secret'] === V.secret;
+      if (req.url === '/internal/gateway-config') {
+        gwCfg.push(req.headers['x-internal-secret'] as string | undefined);
+        if (!secretOk) return json({ error: 'forbidden' }, 403);
+        const t = opts.backendToken();
+        if (!t) return json({ error: 'setup_required' }, 503, { 'cache-control': 'no-store' });
+        return json({ rev, upstreamUrl: `http://127.0.0.1:${plexPort}`, upstreamAuth: { PLEX_TOKEN: t } }, 200, { 'cache-control': 'no-store' });
+      }
+      req.resume();
+      req.on('end', () => {
+        if (!secretOk) return json({ error: 'forbidden' }, 403);
+        if (req.url === '/internal/authz/item') return json({ allow: true });
+        return json({ userId: 'u1', token: 'p-identity', deviceId: 'ff-u1', maxBitrate: 8_000_000, canDownload: true });
+      });
+    });
+    const bePort = await listen(be);
+    servers.push(plex, be);
+    const logs: string[] = [];
+    const base = selectUpstream(env.MEDIA_SERVER);
+    checkUpstreamConfig(base, env);
+    const secret = internalSecret(env);
+    const remote = createRemoteConfig({ backendUrl: `http://127.0.0.1:${bePort}`, internalSecret: secret, envUrl: env.PLEX_URL || undefined, keys: remoteKeys(base, env), retryMs: 20, refreshMs: 60_000, log: (m) => logs.push(m) });
+    stops.push(remote.stop);
+    const gw = createGateway({ upstream: bindUpstream(base, env, secret, remote), upstreamUrl: remote.url, onConfigRev: remote.noteRev, backendUrl: `http://127.0.0.1:${bePort}`, internalSecret: secret }).server;
+    const port = await listen(gw);
+    servers.push(gw);
+    const responses: string[] = [];
+    const get = async (p: string) => {
+      const r = await fetch(`http://127.0.0.1:${port}${p}`, { headers: { cookie: 'ff_sid=goodsid-goodsid-goodsid-1' } });
+      responses.push(`${r.status}\n${[...r.headers].map(([k, v]) => `${k}: ${v}`).join('\n')}\n${await r.clone().text()}`);
+      return r;
+    };
+    const until = async (p: string, ok: (status: number) => boolean) => {
+      for (let i = 0; i < 100; i++) {
+        const r = await get(p);
+        if (ok(r.status)) return r;
+        await new Promise((d) => setTimeout(d, 10));
+      }
+      throw new Error(`no answer for ${p}`);
+    };
+    return { seen, gwCfg, logs, responses, get, until, remote, port, bumpRev: () => { rev++; } };
+  }
+  const bootstrapDir = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ffgw-boot-'));
+    writeFileSync(join(dir, 'internal_secret'), `${V.secret}\n`);
+    return dir;
+  };
+  const TRICK = `/media/Videos/${I}/${P}/Trickplay/2000/1.jpg?sig=${TPSIG}`;
+  const STREAMP = `/media/Videos/${I}/stream?MediaSourceId=${P}&sig=${SIG}`;
+  const HLSP = `/media/Videos/${I}/hls/${S1}/00000.ts`;
+
+  it('remoteKeys: PLEX_TOKEN unless the env pins it (VAR or VAR_FILE); Jellyfin asks for none; bind-less adapters stay as they are', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ffgw-'));
+    writeFileSync(join(dir, 'tok'), 'tok\n');
+    expect(remoteKeys(plexUpstream, {})).toEqual(['PLEX_TOKEN']);
+    expect(remoteKeys(plexUpstream, { PLEX_TOKEN: '' })).toEqual(['PLEX_TOKEN']);
+    expect(remoteKeys(plexUpstream, { PLEX_TOKEN: 't' })).toEqual([]);
+    expect(remoteKeys(plexUpstream, { PLEX_TOKEN_FILE: join(dir, 'tok') })).toEqual([]);
+    expect(remoteKeys(jellyfinUpstream, {})).toEqual([]);
+    expect(bindUpstream(jellyfinUpstream, {}, 's', { value: () => null })).toBe(jellyfinUpstream);
+  });
+
+  it('no env secret, token or URL: starts, /media 503 until the backend has the setup, then signatures verify with the bootstrap-dir secret and the remote token is sent', async () => {
+    let backendToken: string | null = null;
+    const env = { MEDIA_SERVER: 'plex', FF_GATEWAY_BOOTSTRAP_DIR: bootstrapDir() };
+    const st = await stack(env, { accept: REMOTE_TOK, backendToken: () => backendToken });
+    const health = await st.get('/health');
+    expect(health.status).toBe(200);
+    expect((await st.get(`/media/Items/${I}/Images/Primary`)).status).toBe(503);
+    expect(st.seen).toEqual([]);
+    backendToken = REMOTE_TOK; // the setup wizard saved PLEX_URL + PLEX_TOKEN
+    await st.until(`/media/Items/${I}/Images/Primary`, (s) => s !== 503);
+    expect(st.gwCfg.every((h) => h === V.secret)).toBe(true); // the bootstrap-volume secret authenticates the gateway
+    for (const p of [TRICK, STREAMP, HLSP, `/media/Items/${I}/Images/Primary`]) expect((await st.get(p)).status, p).toBe(200);
+    // a wrong signature still fails: the secret is really checked (not just "some" secret)
+    expect((await st.get(`/media/Videos/${I}/${P}/Trickplay/2000/1.jpg?sig=${'0'.repeat(32)}`)).status).toBe(403);
+    expect(st.seen.length).toBeGreaterThanOrEqual(4);
+    expect(st.seen.every((x) => x.token === REMOTE_TOK && !x.url.includes(REMOTE_TOK))).toBe(true);
+  });
+
+  it('a token rotation in the backend applies after the next authz answer carries the new rev', async () => {
+    let backendToken = REMOTE_TOK;
+    const accept = { v: REMOTE_TOK };
+    const env = { MEDIA_SERVER: 'plex', FF_GATEWAY_BOOTSTRAP_DIR: bootstrapDir() };
+    const st = await stack(env, { get accept() { return accept.v; }, backendToken: () => backendToken });
+    await st.until(`/media/Items/${I}/Images/Primary`, (s) => s === 200);
+    backendToken = ROTATED;
+    accept.v = ROTATED;
+    st.bumpRev();
+    // the authz memo of the first session may hide the new rev for a moment: another session asks the backend at once
+    for (let i = 0; i < 100 && st.remote.value('PLEX_TOKEN') !== ROTATED; i++) {
+      await fetch(`http://127.0.0.1:${st.port}/media/Items/${I}/Images/Primary`, { headers: { cookie: `ff_sid=othersid-othersid-othe${i}` } });
+      await new Promise((d) => setTimeout(d, 10));
+    }
+    expect(st.remote.value('PLEX_TOKEN')).toBe(ROTATED);
+    expect((await st.get(`/media/Items/${I}/Images/Primary?tag=2`)).status).toBe(200);
+    expect(st.seen.at(-1)!.token).toBe(ROTATED);
+  });
+
+  it('env PLEX_TOKEN wins over the backend\'s token (and the backend is not asked when PLEX_URL is pinned too)', async () => {
+    const env = { MEDIA_SERVER: 'plex', FF_GATEWAY_BOOTSTRAP_DIR: bootstrapDir(), PLEX_TOKEN: ENV_TOK };
+    const st = await stack(env, { accept: ENV_TOK, backendToken: () => REMOTE_TOK });
+    expect((await st.until(TRICK, (s) => s !== 503)).status).toBe(200);
+    expect(st.seen.every((x) => x.token === ENV_TOK)).toBe(true);
+    expect(st.remote.value('PLEX_TOKEN')).toBeNull(); // not even fetched
+  });
+
+  it('env PLEX_TOKEN_FILE wins too; with PLEX_URL pinned but no token the backend is asked for the token only', async () => {
+    const dir = bootstrapDir();
+    writeFileSync(join(dir, 'tok'), `${ENV_TOK}\n`);
+    const pinnedTok = await stack({ MEDIA_SERVER: 'plex', FF_GATEWAY_BOOTSTRAP_DIR: dir, PLEX_TOKEN_FILE: join(dir, 'tok') }, { accept: ENV_TOK, backendToken: () => REMOTE_TOK });
+    expect((await pinnedTok.until(TRICK, (s) => s !== 503)).status).toBe(200);
+    expect(pinnedTok.seen.every((x) => x.token === ENV_TOK)).toBe(true);
+  });
+
+  it('the token never reaches a client or a log line (also when Plex refuses it and echoes it in a header)', async () => {
+    const env = { MEDIA_SERVER: 'plex', FF_GATEWAY_BOOTSTRAP_DIR: bootstrapDir() };
+    const st = await stack(env, { accept: 'something-else', backendToken: () => REMOTE_TOK });
+    const r = await st.until(`/media/Items/${I}/Images/Primary`, (s) => s !== 503);
+    expect(r.status).toBe(401); // Plex' refusal is relayed, its body (which quotes the token) is not
+    for (const p of ['/health', '/metrics', TRICK, STREAMP, HLSP, `/media/Items/${I}/Images/Primary?X-Plex-Token=${REMOTE_TOK}`, '/media/nope', `/media/c/${'C'.repeat(43)}/Videos/${I}/hls/${S1}/00000.ts`]) await st.get(p);
+    expect(st.seen.length).toBeGreaterThan(1);
+    expect(st.seen.every((x) => x.token === REMOTE_TOK)).toBe(true); // sent upstream, as a header only
+    expect(st.seen.every((x) => !x.url.includes(REMOTE_TOK))).toBe(true);
+    expect(st.logs.join('\n')).toContain('PLEX_TOKEN received');
+    for (const text of [...st.responses, ...st.logs]) {
+      expect(text, text).not.toContain(REMOTE_TOK);
+      expect(text.toLowerCase()).not.toContain('x-plex');
+    }
+  });
+
+  it('the registered adapter bound to a runtime without a token yet throws a message without any value', () => {
+    const b = bindUpstream(plexUpstream, {}, V.secret, { value: () => null });
+    expect(b.kind).toBe('plex');
+    expect(() => b.authHeaders({ token: 'id', deviceId: 'd' })).toThrow(/^plex: no token yet$/);
+    const t = bindUpstream(plexUpstream, {}, V.secret, { value: () => REMOTE_TOK });
+    expect(t.authHeaders({ token: 'id', deviceId: 'd' })['X-Plex-Token']).toBe(REMOTE_TOK);
+    expect(bindUpstream(plexUpstream, { PLEX_TOKEN: ENV_TOK }, V.secret, { value: () => REMOTE_TOK }).authHeaders({ token: 'id', deviceId: 'd' })['X-Plex-Token']).toBe(ENV_TOK);
   });
 });

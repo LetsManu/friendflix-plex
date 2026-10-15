@@ -71,5 +71,6 @@ export const plexSetup: MediaSetupProvider = {
   kind: 'plex',
   keys: ['PLEX_URL', 'PLEX_TOKEN'],
   urlKey: 'PLEX_URL',
+  gatewayKeys: ['PLEX_TOKEN'], // the gateway's X-Plex-Token: sent to it only over /internal/gateway-config (internal secret)
   probe,
 };

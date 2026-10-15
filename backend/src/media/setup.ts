@@ -17,6 +17,12 @@ export interface MediaSetupProvider {
   keys: readonly string[];
   /** the gateway upstream (Jellyfin: 'JELLYFIN_URL') */
   urlKey: string;
+  /**
+   * fork: settings the gateway needs besides urlKey (Plex: ['PLEX_TOKEN'], the one server-wide token). /internal/gateway-config sends
+   * them as `upstreamAuth` behind the internal secret (no-store, never logged) and answers 503 setup_required while one is empty.
+   * Jellyfin: absent (the gateway authenticates with each user's own token from /internal/authz).
+   */
+  gatewayKeys?: readonly string[];
   /** the settings probe with candidate values; `fetchImpl` never follows a redirect and is aborted at the probe's deadline */
   probe(values: Record<string, string | undefined>, deps: { fetchImpl: typeof fetch }): Promise<ProbeResult>;
   auto?: {

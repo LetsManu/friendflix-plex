@@ -81,4 +81,22 @@ export interface Upstream {
    * Jellyfin: absent, so cookie playlists stream through unchanged.
    */
   playlist?(body: string, ctx: PlaylistContext): string;
+  /**
+   * fork: settings besides the URL the adapter needs from the backend (Plex: ['PLEX_TOKEN']). One the gateway env (VAR or VAR_FILE)
+   * does not pin comes from /internal/gateway-config (remoteConfig `keys`); until it is there /media answers 503. Jellyfin: absent.
+   */
+  readonly gatewayKeys?: readonly string[];
+  /**
+   * fork: the adapter bound to the running gateway: the resolved INTERNAL_SECRET (env, _FILE or the bootstrap volume) and the
+   * gatewayKeys values (env pin first, else the backend's). Absent = the adapter is used as is.
+   */
+  bind?(rt: UpstreamRuntime): Upstream;
+}
+
+/** fork: what Upstream.bind() gets (see upstream/index.ts bindUpstream). */
+export interface UpstreamRuntime {
+  /** the gateway's INTERNAL_SECRET as resolved at start */
+  secret(): string;
+  /** a gatewayKeys value: the env pin, else the backend's current one; null while there is none */
+  value(key: string): string | null;
 }
