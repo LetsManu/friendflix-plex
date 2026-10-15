@@ -12,7 +12,7 @@ Zurück zur [README](../../README.de.md).
 - FriendFlix verwaltet seine Nutzer selbst mit **einem Plex-Admin-Token**. Deine Freunde brauchen kein plex.tv-Konto, und es funktioniert ohne Plex Pass.
 - Profile, Kinderprofile, Altersgrenzen, Wiedergabefortschritt und Favoriten liegen **in FriendFlix**, nicht in Plex. FriendFlix schreibt nie Wiedergabestatus nach Plex.
 - Das Token benutzen nur Gateway und Backend auf dem Server. Es geht nie an einen Browser; Clients sehen nur FriendFlix-URLs.
-- `compose.plex.yaml` **verbindet nur mit deinem vorhandenen Plex-Server** (`PLEX_URL`, `PLEX_TOKEN` oder `PLEX_TOKEN_FILE`). Es startet keinen Plex-Container.
+- `compose.plex.yaml` **verbindet nur mit deinem vorhandenen Plex-Server**. Es startet keinen Plex-Container. Plex-Adresse und Token trägst du im Einrichtungsassistenten ein (oder später unter *Admin → Einstellungen*); die `.env` brauchst du nur, wenn du sie festschreiben willst (`PLEX_URL`, `PLEX_TOKEN` oder `PLEX_TOKEN_FILE`).
 
 Dasselbe als Bild – wer was hält und was welche Grenze überquert (alle Diagramme, mit Container-Ansicht und dem Ablauf bei „Play“: [architecture.md](../architecture.md), englisch):
 
@@ -130,7 +130,7 @@ Folge dem Plex-Supportartikel **„Finding an authentication token / X-Plex-Toke
 Empfehlungen:
 
 - Nimm ein **eigenes Plex-Konto** (mindestens ein eigenes Token) für FriendFlix, nicht dein Alltagskonto. Plex speichert die gewählte Tonspur pro Plex-Konto, und FriendFlix muss sie ändern, wenn jemand eine Sprache wählt (siehe [Tonspuren](#tonspuren)). Nutzen andere Plex-Apps dasselbe Konto, sehen sie diese Änderungen.
-- Das Token ist ein Passwort: Lege es möglichst in `PLEX_TOKEN_FILE` (Docker Secret, siehe Kommentar am Ende von `compose.plex.yaml`) statt in `.env` und poste es nie in Issues oder Chats. Ist es durchgesickert, widerrufe es wie in der Plex-Dokumentation beschrieben (z. B. das Gerät in den autorisierten Geräten deines Kontos entfernen) und erzeuge ein neues.
+- Das Token ist ein Passwort: Lege es möglichst in `PLEX_TOKEN_FILE` (Docker Secret, siehe Kommentar am Ende von `compose.plex.yaml`) statt in `.env` und poste es nie in Issues oder Chats. Ist es durchgesickert, widerrufe es (siehe [Token wechseln oder widerrufen](#token-wechseln-oder-widerrufen)) und trage ein neues ein.
 
 Prüfen von der Maschine aus, auf der FriendFlix läuft:
 
@@ -142,27 +142,71 @@ curl -s -H "X-Plex-Token: $PLEX_TOKEN" -H "Accept: application/json" "$PLEX_URL/
 
 ## 3. FriendFlix konfigurieren
 
-`compose.plex.yaml` ist ein Override für `compose.prod.yaml` (fertige Images) oder `compose.yaml` (lokaler Build). Es setzt `MEDIA_SERVER=plex` für Backend und Gateway, reicht die Plex-Variablen durch, wechselt auf die Images `friendflix-plex-*` und entfernt die Jellyfin-Variablen wieder aus den Containern.
+`compose.plex.yaml` ist ein Override für `compose.prod.yaml` (fertige Images) oder `compose.yaml` (lokaler Build). Es setzt `MEDIA_SERVER=plex` für Backend und Gateway, wechselt auf die Images `friendflix-plex-*` und entfernt die Jellyfin-Variablen wieder aus den Containern. **In der `.env` ist nichts Plex-Spezifisches nötig**: Adresse und Token kommen in den Einrichtungsassistenten.
 
 ```bash
-# .env (Vorlage: Block „FriendFlix for Plex“ in .env.example)
-PLEX_URL=http://192.168.1.10:32400     # so erreichen Backend + Gateway Plex
-PLEX_TOKEN=...                         # oder PLEX_TOKEN= leer lassen und PLEX_TOKEN_FILE=/run/secrets/plex_token
+# .env: nur die allgemeinen Werte (siehe .env.example); keine Plex-Werte nötig
 REQUESTS_URL=http://requests:5055      # verlangt compose.prod.yaml ebenfalls (siehe „Wünsche“ im Funktionsvergleich)
 
 docker compose -f compose.prod.yaml -f compose.plex.yaml config --quiet   # prüft die zusammengeführte Konfiguration
 docker compose -f compose.prod.yaml -f compose.plex.yaml up -d
+docker compose logs backend | grep "setup code"                           # der Code, nach dem der Assistent fragt
 ```
 
 Tipp: Mit `COMPOSE_FILE=compose.prod.yaml:compose.plex.yaml` in `.env` reicht `docker compose up -d` / `ps` / `logs`.
 
+### Einrichtungsassistent mit Plex
+
+Öffne deine FriendFlix-Adresse; solange die Einrichtung offen ist, führt jede Seite nach `/setup` (allgemeine Schritte: [setup.md](setup.md)). Im **Mediaserver-Schritt** trägst du ein:
+
+- die **Adresse** von Plex, wie Backend und Gateway sie erreichen, zum Beispiel `http://plex.example.com:32400` (siehe [Netzwerk](#netzwerk)), und
+- das **Token** aus [Abschnitt 2](#2-admin-token-holen).
+
+Vor dem Speichern prüft das Backend: `/identity` (ist es überhaupt ein Plex-Server, ohne Token), `/library/sections` (nimmt Plex das Token an) und `/status/sessions` (ist es das Token des Server-Besitzers). Das Token geht nur als Header raus, Weiterleitungen werden nicht verfolgt, und die Antwort ist ein kurzer Code, nie das Token oder ein Fehlertext. Danach werden beide Werte in der Datenbank gespeichert; das Token **verschlüsselt** (`APP_ENC_KEY`), es wird nie wieder angezeigt und nie an einen Browser geschickt. Beides lässt sich später unter *Admin → Einstellungen* (Gruppe Mediaserver) ändern; ein leeres Feld lässt das gespeicherte Token unverändert.
+
+Der erste Admin sieht nach der ersten Anmeldung eine Weile eine leere Bibliothek, bis der erste Bibliotheksabgleich gelaufen ist (alle 5 Minuten).
+
+**Nicht das Token des Besitzers.** Funktioniert das Token, ist aber nicht das des Server-Besitzers (Plex verweigert `/status/sessions`), endet die Prüfung mit einem Hinweis: *Das Token funktioniert, ist aber nicht das des Plex-Server-Besitzers, daher können einige Funktionen eingeschränkt sein.* Das Token wird trotzdem gespeichert. Bibliothek, Wiedergabe und Konten funktionieren; was Besitzerrechte braucht (z. B. *Live-Streams* anderer Plex-Apps und manche Bibliothekspflege-Aktionen), kann eingeschränkt sein. Nimm das Token des Besitzerkontos, wenn du alles willst.
+
+**Warum es kein „Mit Plex anmelden“ und kein automatisches Token gibt.** FriendFlix nutzt **ein gemeinsames Dienst-Token** für alle, und deine Freunde haben keine mit FriendFlix verknüpften Plex-Konten. Eine Passwort-Anmeldung im Assistenten würde dein plex.tv-Passwort an einen dritten Host schicken statt an den Server, den du eingegeben hast, kommt mit Zwei-Faktor-Konten schlecht zurecht und hinterlässt ein Konto-Token, das sich nicht sauber widerrufen lässt. Deshalb wird das Token von Hand eingetragen. Ein Plex-PIN-Ablauf („Seite öffnen und bestätigen“) kann später kommen.
+
+**Umgebungswerte gewinnen.** Ein Wert in der `.env` (oder als `_FILE`-Secret) gewinnt gegen die Datenbank und steht im Assistenten und unter *Admin → Einstellungen* **gesperrt** (*Aus der Umgebung*). Das ist optional:
+
 | Variable | Pflicht | Zweck |
 |---|---|---|
 | `MEDIA_SERVER` | setzt `compose.plex.yaml` auf `plex` | wählt die Plex-Implementierung in Backend und Gateway |
-| `PLEX_URL` | ja | Plex-Adresse aus Sicht der Container (LAN-IP, `http://host.docker.internal:32400` für Plex auf dem Docker-Host, oder ein Containername in einem gemeinsamen Netz) |
-| `PLEX_TOKEN` / `PLEX_TOKEN_FILE` | eins von beiden | das Plex-Token, das FriendFlix für alle nutzt; nur Backend und Gateway lesen es, es geht als Header an Plex und nie an einen Browser |
+| `PLEX_URL` | nein (fest vorgeben) | Plex-Adresse aus Sicht der Container (LAN-IP, `http://host.docker.internal:32400` für Plex auf dem Docker-Host, oder ein Containername in einem gemeinsamen Netz). `compose.plex.yaml` gibt sie an Backend **und** Gateway weiter: für beide setzen oder für keins, nie bei nur einem entfernen |
+| `PLEX_TOKEN` / `PLEX_TOKEN_FILE` | nein (fest vorgeben) | das Plex-Token, das FriendFlix für alle nutzt. Dieser Wert gilt **nur im Backend**: das Gateway hat kein `PLEX_TOKEN` in seiner Umgebung |
 
-Images: `ghcr.io/letsmanu/friendflix-plex-backend`, `-web`, `-gateway` (`FF_REGISTRY` / `FF_TAG` wie im Original). Die CI des Forks veröffentlicht sie, sobald die Plex-Unterstützung released ist; bis dahin lokal bauen mit `docker compose -f compose.yaml -f compose.plex.yaml build`. Das Backend-Image enthält `ffmpeg`, das FriendFlix mit Plex für Untertitel und Downloads braucht.
+**Wie das Gateway das Token bekommt.** Das Gateway hat keine Datenbank. Es fragt das Backend im internen Netz nach Plex-Adresse und Token (`/internal/gateway-config`), geschützt durch das gemeinsame Geheimnis aus dem Bootstrap-Volume, und hält sie nur im Speicher. Eine Änderung unter *Admin → Einstellungen* erreicht das Gateway innerhalb von Sekunden. Das Token wird nie geloggt und nie an einen Browser geschickt.
+
+**Token als Docker-Secret.** `compose.secrets.yaml` hat keinen Eintrag `plex_token`. Lege die Secret-Datei an und hänge `plex_token` selbst an die Liste des **Backends** an, wie am Ende von `compose.plex.yaml` beschrieben; setze `PLEX_TOKEN_FILE=/run/secrets/plex_token` und lass `PLEX_TOKEN` leer. Ein `_FILE`-Wert sperrt das Feld im Assistenten.
+
+**Admin → Einstellungen mit Plex** zeigt nur die Plex-Medieneinstellungen (`PLEX_URL`, `PLEX_TOKEN`); die Jellyfin-Felder sind ausgeblendet. *Übernehmen* / *Alle übernehmen* (Import aus der Umgebung) kopiert nie `JELLYFIN_*`-Werte.
+
+### Bestehende Installationen (Einstellungen in der `.env`)
+
+Eine Installation, die `PLEX_URL` / `PLEX_TOKEN` schon in der `.env` hat, läuft nach dem Update weiter: Die Umgebung gewinnt gegen die Datenbank, und der Assistent erscheint nicht mehr, sobald Konten existieren. Die Felder stehen gesperrt. So übernimmst du sie in die Datenbank:
+
+1. *Admin → Einstellungen*, Gruppe Mediaserver: **Übernehmen** je Zeile oder **Alle übernehmen** (Import aus der Umgebung). Die Werte werden kopiert (Token verschlüsselt); bis du sie entfernst, gewinnt weiter die Umgebung.
+2. Entferne `PLEX_URL`, `PLEX_TOKEN` und `PLEX_TOKEN_FILE` (und einen `plex_token`-Secret-Eintrag) aus `.env` / Compose und führe `docker compose up -d` aus. Die Felder sind dann bearbeitbar. Lässt du `PLEX_URL` in der `.env`, dann für Backend und Gateway gleichermaßen.
+
+Mehr zum Übernehmen von Einstellungen: [setup.md, Abschnitt 14](setup.md#14-umstieg-auf-einstellungen-in-der-datenbank).
+
+### Plex-Server wechseln
+
+Zeigt die Adresse auf einen **anderen Plex-Server** (andere `machineIdentifier`), baut FriendFlix sein Bibliotheksabbild komplett neu auf und schreibt eine Warnung ins Log. Während des Aufbaus kann die Bibliothek eine Weile leer oder nur teilweise gefüllt wirken. Derselbe Server unter neuer Adresse behält das Abbild.
+
+Grenzen:
+
+- **Der Wiedergabestand wird nicht gelöscht.** Gesehen-Markierungen, Fortsetzen-Positionen und Favoriten (`plex_userdata`) bleiben erhalten, und Titel des neuen Servers können dieselben internen Nummern haben wie Titel des alten, daher können einzelne Markierungen falsch sein. Einen Admin-Befehl, der sie löscht, gibt es nicht. Nutzer können einzelne Titel als ungesehen markieren; das Löschen eines Kontos entfernt alle seine Markierungen.
+- Der Wechsel wird bei einem Abgleich erkannt, indem die Kennung mit der beim vorigen Durchlauf gespeicherten verglichen wird. Wer **FriendFlix aktualisiert und im selben Neustart den Server wechselt**, hat noch keine gespeicherte Kennung, und der Wechsel wird nicht erkannt. Erst aktualisieren, laufen lassen, dann die Adresse ändern.
+
+### Token wechseln oder widerrufen
+
+Ist das Token durchgesickert oder willst du ein neues: Widerrufe es zuerst bei Plex (Plex-Konto → *Autorisierte Geräte* oder auf allen Geräten abmelden; die genauen Namen ändern sich, siehe die Plex-Supportseiten), erzeuge ein neues Token wie in [Abschnitt 2](#2-admin-token-holen) und trage es unter *Admin → Einstellungen* ein. Das Gateway übernimmt es innerhalb von Sekunden. Ist das Token in der `.env` oder als `_FILE`-Secret festgeschrieben, ändere es dort und erstelle das Backend neu.
+
+Bis du das neue Token einträgst, nutzt FriendFlix weiter das alte (das nach dem Widerruf fehlschlägt). **Ein geleertes Tokenfeld entfernt es nicht**: Bei Plex ist das Token Pflicht, das Speichern wird abgelehnt („erforderlich“) und das letzte gute Token bleibt; ein leeres Feld heißt „unverändert“.
 
 ### Netzwerk
 
@@ -257,6 +301,11 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | Chromecast | Funktioniert | HLS; Text-Untertitel über signierte FriendFlix-Untertitel-URLs |
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen, Hubs | Funktioniert | FriendFlix-Funktionen |
 | „Kommende Folgen“ / Kalender | Nicht verfügbar | Plex bietet das nicht |
+| Kontoseite (*Mein Bereich → Konto*) | Funktioniert | Nur das Hauptprofil. Zeigt Konto und Geräte; nichts auf der Seite stammt von Plex |
+| Meine Daten herunterladen | Funktioniert | Eine JSON-Datei aus FriendFlix' eigenen Daten, auch dem Wiedergabeverlauf über die Plex-Implementierung (bis 1000 Zeilen, als gekürzt oder teilweise markiert, wenn Plex mittendrin ausfällt). Sie enthält keine Plex-Adresse, keinen Bibliothekspfad und kein Token |
+| Mein Konto löschen (7 Tage Frist, Wiederherstellen) | Funktioniert | Nach der Frist werden die Plex-Identitäten des Kontos, ihre Limits und ihr Wiedergabestand in FriendFlix entfernt. Innerhalb der 7 Tage aktiviert eine Wiederherstellung jede Identität wieder. In Plex selbst existiert nichts, also wird dort nichts gelöscht |
+| Admin → Nutzer: Freigaben, Sperren, Zugang bis, Limits je Nutzer, Sammelaktionen | Funktioniert | Eine Freigabe legt die Identität des Kontos in FriendFlix an; Rolle und Limit-Überschreibungen gelten für jedes Profil des Kontos. Der Reiter *Aktivität* zeigt den Plex-Verlauf jedes Profils. Ein aktives Konto, dessen Plex-Identität verloren ging, zeigt seine Verknüpfung als **Gestört**, bis du *Verknüpfungen reparieren* nutzt |
+| Admin → Einstellungen und Einrichtungsassistent | Funktioniert | Plex-Adresse und Token, siehe [Einrichtungsassistent mit Plex](#einrichtungsassistent-mit-plex). Das Token ist verschlüsselt und nur schreibbar; Umgebungswerte stehen gesperrt. Kein automatisches Token (Begründung dort) |
 | Wünsche (Request-Dienst) | Funktioniert | Jedes FriendFlix-Konto bekommt beim ersten Wunsch einen eigenen lokalen Wunsch-Dienst-Nutzer (nur Wunsch-Recht) |
 | „Aktuell läuft“ anderer Plex-Apps | Nicht verfügbar | Zuschauer sehen nur FriendFlix' eigene Sitzungen (Admins sehen alle unter „Live-Streams“) |
 | nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt: `/internal/authz-nginx` antwortet `501 plan_b_unsupported` |
@@ -281,7 +330,10 @@ Plex kennt nur ein Token, also setzt FriendFlix die Rolleneinstellungen selbst d
 
 | Symptom | Wahrscheinliche Ursache und Lösung |
 |---|---|
-| Health-Check oder Login schlägt fehl, Log zeigt `401` von Plex | `PLEX_TOKEN` falsch oder widerrufen, oder Server nicht geclaimt. `curl`-Prüfung aus Abschnitt 2 ausführen. |
+| Health-Check oder Login schlägt fehl, Log zeigt `401` von Plex | Plex-Token falsch oder widerrufen, oder Server nicht geclaimt. `curl`-Prüfung aus Abschnitt 2 ausführen, dann unter *Admin → Einstellungen* ein neues Token eintragen. |
+| Der Assistent sagt, das Token sei nicht das des Besitzers | Ein Hinweis, kein Fehler: Das Token wird gespeichert und das meiste funktioniert. Für alle Admin-Funktionen das Token des Besitzerkontos nehmen. |
+| Bibliothek leer oder teilweise nach dem Wechsel der Plex-Adresse | Erwartet, während FriendFlix sein Abbild für den neuen Server aufbaut; Markierungen des alten Servers bleiben, siehe [Plex-Server wechseln](#plex-server-wechseln). |
+| Die Mediaserver-Verknüpfung eines Kontos zeigt *Gestört* | Die Plex-Identität des Kontos ging verloren. *Admin → Nutzer →* Person → *Verknüpfungen reparieren*. |
 | `ECONNREFUSED` / Timeouts zu Plex | Gateway oder Backend erreicht `PLEX_URL` nicht. Aus dem Container testen; LAN-Adresse nehmen; Firewalls und Docker-Netze prüfen. |
 | Bibliothek oder Titel fehlt | Rolle hat keinen Zugriff auf die Bibliothek, oder Plex hat den Scan nicht beendet. In Plex scannen und den nächsten FriendFlix-Sync abwarten. |
 | Eine in Plex gelöschte Bibliothek ist noch da | Für eine Weile erwartet: FriendFlix entfernt (oder leert) eine Bibliothek erst, wenn sie in 3 Syncs hintereinander fehlt (etwa 15 Minuten), damit ein Plex-Schluckauf nie den Spiegel löscht. Listet Plex gar keine Bibliotheken, behält FriendFlix alles. |
