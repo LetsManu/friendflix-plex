@@ -165,8 +165,12 @@ export async function buildCollection({ ctx, user, current, currentTmdb, kids, s
       listed.add(p.item.id);
     }
   }
-  if (parts.length < 2) return null;
-  return { name: related ? box!.name : tmdb.name, parts, from: 'tmdb' };
+  // one entry per library title: the library lookup of two TMDB parts can land on the same item (a wrong TMDB id on it, or a media
+  // server that ignores anyProviderIdEquals); a repeated id is a duplicate key in the web's collection row
+  const seen = new Set<string>();
+  const unique = parts.filter((p) => !p.id || (!seen.has(p.id) && Boolean(seen.add(p.id))));
+  if (unique.length < 2) return null;
+  return { name: related ? box!.name : tmdb.name, parts: unique, from: 'tmdb' };
 }
 
 const settle = <T>(p: Promise<T | null>): Promise<T | null> => p.catch(() => null);
@@ -216,7 +220,7 @@ export async function buildAbout({ ctx, user, account, kids, id, log }: AboutInp
   // the box-set lookup may wait for the library-wide index build: bounded; the build goes on in the background and fills the cache
   const setsP = type === 'Movie' && jf.itemCollections ? withinMs(jf.itemCollections(user, id).catch(() => [] as MediaCollection[]), ABOUT_LIMITS.collectionWaitMs) : Promise.resolve(null);
   const friendsP = kids ? Promise.resolve(null) : friendsAverage(ctx, id, account.id).catch(() => null);
-  const canRequestP = kids ? Promise.resolve(false) : limitFor(ctx, account.role).then((l) => l !== 0, () => false);
+  const canRequestP = kids ? Promise.resolve(false) : limitFor(ctx, account).then((l) => l !== 0, () => false);
 
   const [title, omdb, tColl, sets, friends, canRequest] = await Promise.all([titleP, omdbP, tmdbCollP, setsP, friendsP, canRequestP]);
   const collection = sets === null ? null : await buildCollection({ ctx, user, current: item, currentTmdb: tmdbId, kids, sets, tmdb: tColl }).catch(() => null);

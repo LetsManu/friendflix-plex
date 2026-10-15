@@ -35,13 +35,15 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
     headers: { ...(opts.body === undefined ? {} : { 'content-type': 'application/json' }), 'x-csrf-token': csrf, ...(activeProfile ? { 'x-ff-profile': activeProfile } : {}) },
     body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
   });
-  if (res.status === 401 && !location.pathname.startsWith('/invite/') && location.pathname !== '/tv') {
+  const text = await res.text();
+  let json: any = null;
+  try { json = text ? JSON.parse(text) : null; } catch (e) { if (res.status !== 401) throw e; } // a 401 from a proxy may not be JSON
+  // 401 reauth_required: the session is fine, only a sensitive action wants a fresh sign-in; the caller starts it (lib/account/reauth.ts)
+  if (res.status === 401 && json?.error !== 'reauth_required' && !location.pathname.startsWith('/invite/') && location.pathname !== '/tv' && location.pathname !== '/pending' && location.pathname !== '/restore' && location.pathname !== '/setup') {
     clearHint(); // the session is gone: the next start must not render early with this account's hint/profile
     location.href = localStorage.getItem('ff_tv_device') ? '/tv' : '/auth/login'; // a TV re-pairs instead of typing a login
     await new Promise(() => undefined);
   }
-  const text = await res.text();
-  const json = text ? JSON.parse(text) : null;
   if (res.status === 409 && json?.error === 'profile_required' && !/^\/(profiles|invite\/|tv$)/.test(location.pathname)) {
     location.href = '/profiles'; // no profile chosen (yet) for this session
     await new Promise(() => undefined);
@@ -100,7 +102,23 @@ export interface Me { id: string; name: string; role: string; roleLabel: string;
   /** browser language from Accept-Language when supported, else null */ suggestedLanguage?: string | null;
   /** the active profile is a kids profile (kids home, no social features); absent on older servers */ kids?: boolean;
   /** false = the active profile never finished /welcome (absent = onboarded) */ onboarded?: boolean;
-  /** media server kind + capabilities (see lib/capabilities.ts); absent on older servers = everything supported */ server?: { kind: string; capabilities?: unknown } }
+  /** media server kind + capabilities (see lib/capabilities.ts); absent on older servers = everything supported */ server?: { kind: string; capabilities?: unknown };
+  /** optional services of this instance (lib/capabilities.ts featuresFrom); absent on older servers = everything on */ features?: { requests?: boolean } }
+/** GET /api/account (owner profile only): the person's own account for /me/account */
+export interface Account {
+  name: string;
+  /** read-only here (changed on the sign-in page) */
+  email: string | null;
+  avatar: string;
+  /** 2FA devices at Authentik; null = no Authentik API or Authentik unreachable */
+  mfa: { totp: boolean; webauthn: boolean; static: boolean } | null;
+  /** Authentik's user settings page; null when the sign-in is not Authentik */
+  manageUrl: string | null;
+  /** epoch ms until which sensitive actions need no new sign-in; null = sign in again first */
+  reauthUntil: number | null;
+}
+/** GET /api/devices: the account's own devices */
+export interface OwnDevice { id: string; label: string; approved: boolean; current: boolean; created_at: string; last_seen: string }
 export interface MeProfile { id: string; name: string; avatar: string; isOwner: boolean; kids?: boolean; /** parental cap of a kids profile (0/6/12) */ maxRating?: number }
 
 // ---- shared item cache: the modal / item page render instantly from what a card already had, then revalidate ----

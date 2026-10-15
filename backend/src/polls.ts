@@ -7,7 +7,9 @@ import type { Ctx } from './ctx.js';
 import { m } from './i18n.js';
 import { notify } from './notify.js';
 import { parties } from './routes/party.js';
+import { requestsClient, requestsEnabled } from './seerr/client.js';
 import { ensureSeerrUser } from './seerr/service.js';
+import { isOperational } from './setup/state.js';
 import { getUserById } from './users.js';
 
 export interface OptionInput {
@@ -32,6 +34,7 @@ export async function createPoll(ctx: Ctx, creatorId: string, input: { title: st
       if (resolved.some((r) => r.jf === it.id)) continue;
       resolved.push({ jf: it.id, title: it.name });
     } else if (o.tmdbId && o.mediaType) {
+      if (!ctx.seerr) throw new InvalidOptions('wish options need the request service');
       const d = await ctx.seerr.details(o.mediaType, o.tmdbId);
       const inLib = await ctx.jf.findByTmdb(o.tmdbId, o.mediaType).catch(() => null);
       if (inLib) { if (!resolved.some((r) => r.jf === inLib.id)) resolved.push({ jf: inLib.id, title: inLib.name }); } // already in library -> plain library option
@@ -97,6 +100,7 @@ export async function closeDuePolls(ctx: Ctx) {
 }
 
 export async function approvePoll(ctx: Ctx, pollId: string, adminId: string, approve: boolean) {
+  if (approve) requestsClient(ctx); // no request service: RequestsDisabledError (404) before the poll is claimed
   const next = approve ? 'requested' : 'cancelled';
   const p = (await ctx.db.query("update polls set status=$2 where id=$1 and status='needs_approval' returning *", [pollId, next])).rows[0];
   if (!p) return false;
@@ -111,14 +115,14 @@ export async function approvePoll(ctx: Ctx, pollId: string, adminId: string, app
     opt = (await ctx.db.query('select * from poll_options where id=$1', [p.winner_option_id])).rows[0];
     creator = (await getUserById(ctx, p.created_by))!;
     const seerrUser = await ensureSeerrUser(ctx, creator);
-    created = await ctx.seerr.createRequest({ mediaType: opt.media_type, mediaId: opt.tmdb_id, seasons: opt.media_type === 'tv' ? 'all' : undefined, userId: seerrUser });
+    created = await requestsClient(ctx).createRequest({ mediaType: opt.media_type, mediaId: opt.tmdb_id, seasons: opt.media_type === 'tv' ? 'all' : undefined, userId: seerrUser });
   } catch (e) {
     await ctx.db.query("update polls set status='needs_approval' where id=$1 and status='requested'", [pollId]).catch(() => undefined); // retryable; keep the original error
     throw e;
   }
   // after the revert window: once Seerr has the request, a retry must not create a second one
   await ctx.db.query('insert into seerr_requests(seerr_request_id,user_id,media_type,tmdb_id,title,poster,source) values ($1,$2,$3,$4,$5,$6,$7) on conflict (seerr_request_id) do nothing', [created.id, creator.id, opt.media_type, opt.tmdb_id, opt.title, opt.poster, 'poll']);
-  await ctx.seerr.approve(created.id).catch(() => undefined); // admin approval of the poll = approval of the request
+  await ctx.seerr?.approve(created.id).catch(() => undefined); // admin approval of the poll = approval of the request
   await ctx.db.query('update polls set seerr_request_id=$1 where id=$2', [created.id, pollId]);
   await audit(ctx, adminId, 'poll.approve', pollId, { seerrRequest: created.id });
   await notify(ctx, { userId: null, kind: 'poll_requested', title: m('poll.requested', { title: opt.title }), link: '/vote', dedupe: `poll-req-${pollId}`, external: true });
@@ -127,6 +131,7 @@ export async function approvePoll(ctx: Ctx, pollId: string, adminId: string, app
 
 /** Requested titles that became available in the library are scheduled automatically (start in 30 min). */
 export async function resolveRequestedPolls(ctx: Ctx) {
+  if (!requestsEnabled(ctx)) return; // no request service: nothing was requested that could arrive
   const rows = (await ctx.db.query("select p.*, o.tmdb_id, o.media_type, o.title otitle from polls p join poll_options o on o.id=p.winner_option_id where p.status='requested'")).rows;
   for (const p of rows) {
     const found = await ctx.jf.findByTmdb(p.tmdb_id, p.media_type).catch(() => null);
@@ -143,6 +148,7 @@ export async function resolveRequestedPolls(ctx: Ctx) {
 
 /** Maintenance tick: closes polls, restores rooms lost on restart, marks started polls. */
 export async function pollTick(ctx: Ctx) {
+  if (!isOperational(ctx)) return; // setup mode: no media or request service calls (server.ts checks every tick as well)
   await closeDuePolls(ctx);
   const sched = (await ctx.db.query("select p.*, o.jf_item_id, o.title otitle from polls p join poll_options o on o.id=p.winner_option_id where p.status='scheduled'")).rows;
   for (const p of sched) {

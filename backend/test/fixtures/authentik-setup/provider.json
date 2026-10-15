@@ -1,0 +1,5 @@
+{
+  "pk": 3, "name": "FriendFlix", "client_type": "confidential", "client_id": "fictional-client-id-0001", "client_secret": "fictional-client-secret-0001",
+  "grant_types": ["authorization_code"], "redirect_uris": [{ "matching_mode": "strict", "url": "https://tv.example.com/auth/callback" }],
+  "sub_mode": "hashed_user_id", "include_claims_in_id_token": true, "issuer_mode": "per_provider", "assigned_application_slug": "friendflix"
+}

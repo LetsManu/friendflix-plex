@@ -11,7 +11,10 @@ type PushCtx = Pick<Ctx, 'db' | 'cfg' | 'fetchImpl'>;
 type VapidCfg = Pick<Ctx['cfg'], 'VAPID_PUBLIC_KEY' | 'VAPID_PRIVATE_KEY' | 'VAPID_SUBJECT' | 'PUBLIC_URL'>;
 const vapidChecked = new Map<string, boolean>();
 
-/** Both keys set AND accepted by web-push (validated once per distinct config; an invalid pair logs one warning and disables push). */
+/**
+ * Both keys set AND accepted by web-push (validated once per distinct config; an invalid pair logs one warning and disables push).
+ * The pair is a live setting: a changed one is validated on its first use (server.ts also checks it right after the change).
+ */
 export function pushEnabled(cfg: VapidCfg): boolean {
   if (!cfg.VAPID_PUBLIC_KEY || !cfg.VAPID_PRIVATE_KEY) return false;
   const subject = cfg.VAPID_SUBJECT ?? cfg.PUBLIC_URL;
@@ -25,6 +28,7 @@ export function pushEnabled(cfg: VapidCfg): boolean {
       ok = false;
       console.warn(`web push disabled: invalid VAPID configuration (${e instanceof Error ? e.message : 'error'})`);
     }
+    if (vapidChecked.size >= 16) vapidChecked.clear(); // a few configs per process at most; never grows with every change
     vapidChecked.set(key, ok);
   }
   return ok;

@@ -21,6 +21,8 @@ export interface Session {
   idle?: number;
   /** active profile of the account (absent on older sessions = owner profile) */
   profileId?: string;
+  /** epoch ms of the last re-authentication at the IdP (see reauth.ts) */
+  reauthAt?: number;
 }
 
 export const COOKIE = 'ff_sid';

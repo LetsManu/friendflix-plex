@@ -3,6 +3,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { audit } from '../audit.js';
+import { secureCookies } from '../config.js';
 import type { Ctx } from '../ctx.js';
 import { hashPin, verifyPin } from '../crypto.js';
 import { MAX_PROFILES, ProfileError, createProfile, deleteProfile, getProfile, listProfiles, publicProfile, setDeviceKids } from '../profiles.js';
@@ -27,7 +28,6 @@ const uuid = z.guid();
 const maxRating = z.union([z.literal(0), z.literal(6), z.literal(12)]);
 
 export function profileRoutes(app: FastifyInstance, ctx: Ctx) {
-  const secure = ctx.cfg.PUBLIC_URL.startsWith('https://');
   const pre = { preHandler: requireUser(ctx, { allowNoProfile: true, skipProfileHeader: true }) };
 
   const send = (reply: FastifyReply, e: unknown) => {
@@ -116,7 +116,7 @@ export function profileRoutes(app: FastifyInstance, ctx: Ctx) {
       if (kidsChange) {
         // the cap lives in the Jellyfin policy of the profile's user (enforced by Jellyfin for every item, list, search and stream)
         try {
-          await applyRole(ctx, u.jellyfin_user_id!, req.user!.role, req.user!.disabled, { hidden: true });
+          await applyRole(ctx, u.jellyfin_user_id!, req.user!.role, req.user!.disabled, { userId: req.user!.id, hidden: true });
         } catch {
           await ctx.db.query('update profiles set kids=$2, kids_max_rating=$3 where id=$1', [p.id, p.kids, p.kids_max_rating]);
           return reply.code(502).send({ error: 'jellyfin' });
@@ -209,7 +209,7 @@ export function profileRoutes(app: FastifyInstance, ctx: Ctx) {
     forgetAuth(oldSid);
     renamePeerSid(req.user!.id, oldSid, newSid);
     const maxAge = Math.max(60, Math.floor(((s.createdAt ?? Date.now()) + (s.ttl ?? ctx.cfg.SESSION_TTL_SECONDS) * 1000 - Date.now()) / 1000));
-    reply.setCookie(COOKIE, newSid, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge });
+    reply.setCookie(COOKIE, newSid, { httpOnly: true, secure: secureCookies(ctx.cfg), sameSite: 'lax', path: '/', maxAge });
     // a device that picks a kids profile stays on it until a PIN-checked switch (a new login there lands on the kids profile again)
     await setDeviceKids(ctx, req.user!.id, s.deviceId, p.kids ? p.id : null);
     await audit(ctx, req.user!.id, 'profile.select', p.id);

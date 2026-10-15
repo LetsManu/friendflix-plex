@@ -23,7 +23,11 @@ const raw: Record<string, Record<string, unknown>> = {
   [PA]: { Id: PA, Name: 'Eins', Type: 'Movie', ProductionYear: 1979, PremiereDate: '1979-05-25T00:00:00Z', ProviderIds: { Tmdb: '100' } },
   [PC]: { Id: PC, Name: 'Drei', Type: 'Movie', ProductionYear: 1997, PremiereDate: '1997-11-26T00:00:00Z', ProviderIds: { Tmdb: '300' } },
   [HIDLIB]: { Id: HIDLIB, Name: 'Versteckt', Type: 'Movie', ProductionYear: 1992, ProviderIds: { Tmdb: '200' } },
-  [MOV2]: { Id: MOV2, Name: 'Zweiter', Type: 'Movie', OriginalTitle: 'Der Zweite', ProviderIds: { Tmdb: '349' }, CriticRating: 70 },
+  [MOV2]: {
+    Id: MOV2, Name: 'Zweiter', Type: 'Movie', OriginalTitle: 'Der Zweite', ProviderIds: { Tmdb: '349' }, CriticRating: 70,
+    // detail page: cast entries Jellyfin can send without a name, id or type
+    People: [{ Id: 'p1', Name: null, Type: 'Actor' }, { Id: 'p2', Name: 'Lena Doria', Role: 'Cobb' }, { Name: 'Ohne Id', Type: 'Actor' }, { Id: 'p4', Name: 'Carl Norden', Type: 'Director', PrimaryImageTag: 'x' }],
+  },
   [INVIS]: { Id: INVIS, Name: 'Unsichtbar', Type: 'Movie', ProviderIds: { Imdb: 'tt0000001' } },
   [B1]: { Id: B1, Name: 'Ashfall Sammlung', Type: 'BoxSet' },
   [PA2]: { Id: PA2, Name: 'Eins (4K)', Type: 'Movie', ProductionYear: 1979, PremiereDate: '1979-05-25T00:00:00Z', ProviderIds: { Tmdb: '100' } },
@@ -41,9 +45,13 @@ const GLOBAL_HIDDEN = new Set([HIDLIB, INVIS, DUP]);
 const KID_HIDDEN = new Set([PC]);
 let kidJf = '';
 let libHasPart3 = false;
+/** a media server that ignores anyProviderIdEquals answers every lookup with its first movie */
+let providerFilterIgnored = false;
 const hidden = (uid: string | null, item: string) => GLOBAL_HIDDEN.has(item) || (uid === kidJf && KID_HIDDEN.has(item));
 
 const jellyfin: Record<string, Handler> = {
+  // detail page: "more like this" naming one title twice
+  'GET /Items/[0-9a-f]{32}/Similar': () => ({ json: { Items: [raw[PA], raw[PC], raw[PA]] } }),
   'GET /Items/[0-9a-f]{32}': (u) => {
     const i = u.pathname.split('/')[2]!;
     return raw[i] && !hidden(u.searchParams.get('userId'), i) ? { json: raw[i] } : { status: 404 };
@@ -56,6 +64,7 @@ const jellyfin: Record<string, Handler> = {
       const any = u.searchParams.get('anyProviderIdEquals');
       if (any) {
         const t = any.replace('tmdb.', '');
+        if (providerFilterIgnored) return { json: { Items: [{ Id: MOV, Name: 'Ashfall' }] } };
         const hit = Object.values(raw).find((r) => (r.ProviderIds as { Tmdb?: string } | undefined)?.Tmdb === t && (r.Id !== HIDLIB || libHasPart3));
         return { json: { Items: hit ? [{ Id: hit.Id, Name: hit.Name }] : [] } };
       }
@@ -142,7 +151,7 @@ beforeEach(async () => {
   await env.kv.del(`src:omdb:calls:${new Date().toISOString().slice(0, 10)}`);
   extCalls.length = 0;
   for (const k of await env.kv.keys('about:')) await env.kv.del(k);
-  tmdbMode = 'ok'; omdbMode = 'ok'; libHasPart3 = false;
+  tmdbMode = 'ok'; omdbMode = 'ok'; libHasPart3 = false; providerFilterIgnored = false;
   await env.pool.query("update users set role='admin' where authentik_sub='sub-admin'");
   await env.pool.query("update users set role='friend' where authentik_sub='sub-b'");
   await env.pool.query('delete from role_settings');
@@ -319,6 +328,33 @@ describe('fix round 1: collection edge cases', () => {
     await about(owner);
     const b = await about(bea);
     expect(names(b)).toEqual(['Eins', 'Ashfall', 'Drei']);
+  });
+});
+
+describe('detail page "Internal Error" (one movie): no repeated ids, no nameless cast', () => {
+  it('a library lookup that lands on the same title twice lists it once in the collection row', async () => {
+    await keys(true, false);
+    providerFilterIgnored = true; // TMDB part 200 ("Vier") resolves to the current movie MOV, which is already part 348
+    const b = await about(owner);
+    const ids = b.collection.parts.map((p: { id?: string }) => p.id).filter(Boolean);
+    expect(ids).toEqual([...new Set(ids)]);
+    expect(b.collection.parts.map((p: { name: string }) => p.name)).toEqual(['Eins', 'Ashfall', 'Drei']);
+    expect(b.collection.parts.filter((p: { current: boolean }) => p.current)).toHaveLength(1);
+  });
+
+  it('GET /similar names each title once', async () => {
+    const r = await call(owner, 'GET', `/api/items/${MOV}/similar`);
+    expect(r.statusCode, r.body).toBe(200);
+    expect(r.json().items.map((i: { id: string }) => i.id)).toEqual([PA, PC]);
+  });
+
+  it('GET /people drops entries without a name or id and fills a missing type', async () => {
+    const r = await call(owner, 'GET', `/api/items/${MOV2}/people`);
+    expect(r.statusCode, r.body).toBe(200);
+    expect(r.json().people).toEqual([
+      { id: 'p2', name: 'Lena Doria', role: 'Cobb', type: 'Actor', image: false },
+      { id: 'p4', name: 'Carl Norden', type: 'Director', image: true },
+    ]);
   });
 });
 

@@ -195,6 +195,7 @@ const dict: Translation<typeof de> = {
       server_errors: 'Many server errors',
       client_errors: 'Many browser errors',
       failed_playbacks: 'Playbacks failed',
+      pending_approvals: 'Sign-ins waiting for approval',
     },
     disks: {
       title: 'Storage',

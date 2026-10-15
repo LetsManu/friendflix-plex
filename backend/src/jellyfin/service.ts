@@ -350,8 +350,10 @@ export class JellyfinService implements MediaServer {
 
   /** "Ähnliche Titel" from Jellyfin's own similarity (genres/people/tags). */
   async similar(user: JfUser, id: string, limit = 24): Promise<ItemDto[]> {
-    const r = await this.json<{ Items: any[] }>(user, `/Items/${id}/Similar?userId=${user.jellyfin_user_id}&limit=${limit}&fields=${FIELDS}`);
-    return r.Items.map(toItemDto);
+    const r = await this.json<{ Items?: any[] }>(user, `/Items/${id}/Similar?userId=${user.jellyfin_user_id}&limit=${limit}&fields=${FIELDS}`);
+    // each title once (the detail page lists them in a keyed block: a repeated id would break its render)
+    const seen = new Set<string>();
+    return (Array.isArray(r?.Items) ? r.Items : []).filter((i) => typeof i?.Id === 'string' && !seen.has(i.Id) && seen.add(i.Id)).map(toItemDto);
   }
 
   /** Last finished movie/series (episodes are mapped to their series) as seed for "Weil du ... gesehen hast". */
@@ -377,8 +379,9 @@ export class JellyfinService implements MediaServer {
 
   /** Cast & crew for the cast panel. */
   async people(user: JfUser, id: string): Promise<Array<{ id: string; name: string; role?: string; type: string; image: boolean }>> {
-    const r = await this.json<{ Items: Array<{ People?: Array<{ Id: string; Name: string; Role?: string; Type: string; PrimaryImageTag?: string }> }> }>(user, `/Items?userId=${user.jellyfin_user_id}&ids=${id}&fields=People`);
-    return (r.Items[0]?.People ?? []).slice(0, 40).map((p) => ({ id: p.Id, name: p.Name, role: p.Role, type: p.Type, image: Boolean(p.PrimaryImageTag) }));
+    const r = await this.json<{ Items?: Array<{ People?: unknown }> }>(user, `/Items?userId=${user.jellyfin_user_id}&ids=${id}&fields=People`);
+    // same rules as toCredits(): an entry needs a string id and name (Jellyfin can send Name null), a missing type reads as Actor
+    return toCredits({ People: r?.Items?.[0]?.People }).people.slice(0, 40);
   }
 
   /** Bonus material (featurettes, behind the scenes). */
@@ -845,6 +848,13 @@ export class JellyfinService implements MediaServer {
         await client.setPolicy(id, { ...policyFromTemplate(t, ids), IsDisabled: p.disabled, ...(p.hidden ? { IsHidden: true } : {}), ...parental });
       },
       setDisabled: (id, disabled) => client.setPolicy(id, { IsDisabled: disabled }),
+      identityExists: async (id) => {
+        const res = await client.adminFetch(`/Users/${id}`);
+        await res.body?.cancel().catch(() => undefined);
+        if (res.status === 404) return false;
+        if (!res.ok) throw new JellyfinError(res.status, `Jellyfin get user -> ${res.status}`);
+        return true;
+      },
       libraries: async () => (await client.mediaFolders()).map((f) => ({ id: f.Id, name: f.Name })),
       ping: () => client.ping(),
       /** sessions of other apps: FriendFlix' own devices ("ff-<id>") are tracked by the portal itself */

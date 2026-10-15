@@ -7,7 +7,7 @@ import { audit } from '../audit.js';
 import type { Ctx } from '../ctx.js';
 import { effectiveLanguage, m } from '../i18n.js';
 import { localizeStored, notify } from '../notify.js';
-import { portalStatus, requestStateKey, SeerrError } from '../seerr/client.js';
+import { portalStatus, RequestsDisabledError, requestsClient, requestsEnabled, requestStateKey, SeerrError } from '../seerr/client.js';
 import { ensureSeerrUser } from '../seerr/service.js';
 import { requireGrownUp } from '../kids.js';
 import { requireAdmin } from '../session.js';
@@ -32,20 +32,28 @@ function mapResult(r: any) {
 
 const wrap = <T extends (...a: any[]) => Promise<any>>(fn: T): T => sharedWrap(fn, { zod: 'plain', jellyfin: false, seerr: true });
 
+/** preHandler after the sign-in checks: without a request service its routes answer 404 {error:'requests_disabled'} */
+const requestsOn = (ctx: Ctx) => async () => {
+  if (!requestsEnabled(ctx)) throw new RequestsDisabledError();
+};
+
 export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
-  const pre = { preHandler: requireGrownUp(ctx) }; // Seerr requests are for grown-ups: kids profiles get 403 kids_profile
+  const on = requestsOn(ctx);
+  const pre = { preHandler: [requireGrownUp(ctx), on] }; // Seerr requests are for grown-ups: kids profiles get 403 kids_profile
+  // the poster proxy fetches TMDB itself: it also serves stored posters (polls, reminders) while the request service is off
+  const img = { preHandler: requireGrownUp(ctx) };
   // the account's notifications (party invites, recommendations, requests ...) are not shown on kids profiles either
   const npre = { preHandler: requireGrownUp(ctx, { allowNoProfile: true }) };
-  const admin = { preHandler: requireAdmin(ctx) };
+  const admin = { preHandler: [requireAdmin(ctx), on] };
 
   app.get('/api/seerr/search', pre, wrap(async (req) => {
     const q = z.object({ q: z.string().min(2).max(100), page: z.coerce.number().int().min(1).max(10).default(1) }).parse(req.query);
-    const r = await ctx.seerr.search(q.q, q.page);
+    const r = await requestsClient(ctx).search(q.q, q.page);
     return { results: r.results.filter((x) => x.mediaType === 'movie' || x.mediaType === 'tv').map(mapResult), totalPages: r.totalPages };
   }));
 
   // TMDB posters are proxied (fixed host, strict path) so browsers never contact third parties.
-  app.get('/api/seerr/image/*', { ...pre, config: { rateLimit: { max: 600, timeWindow: '1 minute' } } }, async (req, reply) => {
+  app.get('/api/seerr/image/*', { ...img, config: { rateLimit: { max: 600, timeWindow: '1 minute' } } }, async (req, reply) => {
     const path = '/' + String((req.params as { '*': string })['*']);
     if (!/^\/[A-Za-z0-9_-]{5,60}\.(jpg|png|webp)$/.test(path)) return reply.code(400).send({ error: 'bad_path' });
     const r = await ctx.fetchImpl(`https://image.tmdb.org/t/p/w342${path}`, { signal: AbortSignal.timeout(10_000), redirect: 'manual' });
@@ -56,7 +64,7 @@ export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.get('/api/seerr/:type/:id/status', pre, wrap(async (req) => {
     const p = z.object({ type: mediaType, id: z.coerce.number().int().positive() }).parse(req.params);
-    const d = await ctx.seerr.details(p.type, p.id);
+    const d = await requestsClient(ctx).details(p.type, p.id);
     return { status: portalStatus(d.mediaInfo?.status, d.mediaInfo?.requests?.[0]?.status) };
   }));
 
@@ -67,7 +75,7 @@ export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
     const cached = await ctx.kv.get(ck); // '' = cached "no trailer"
     let key = cached ?? '';
     if (cached === null) {
-      const vids: any[] = ((await ctx.seerr.details(p.type, p.id)) as any).relatedVideos ?? [];
+      const vids: any[] = ((await requestsClient(ctx).details(p.type, p.id)) as any).relatedVideos ?? [];
       const yt = Array.isArray(vids) ? vids.filter((v) => v?.site === 'YouTube' && typeof v.key === 'string' && /^[A-Za-z0-9_-]{6,20}$/.test(v.key)) : [];
       key = (yt.find((v) => v.type === 'Trailer') ?? yt.find((v) => v.type === 'Teaser'))?.key ?? '';
       await ctx.kv.set(ck, key, 24 * 3600);
@@ -78,17 +86,17 @@ export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.post('/api/requests', pre, wrap(async (req, reply) => {
     const b = z.object({ mediaType, tmdbId: z.number().int().positive(), seasons: z.array(z.number().int().min(0).max(100)).optional() }).parse(req.body);
-    const d = await ctx.seerr.details(b.mediaType, b.tmdbId);
+    const d = await requestsClient(ctx).details(b.mediaType, b.tmdbId);
     const st = portalStatus(d.mediaInfo?.status, d.mediaInfo?.requests?.[0]?.status);
     if (st !== 'nicht_angefragt' && st !== 'abgelehnt') return reply.code(409).send({ error: 'already_requested', status: st });
-    const limit = await limitFor(ctx, req.user!.role);
+    const limit = await limitFor(ctx, req.user!);
     const slot = await reserve(ctx, req.user!.id, limit); // atomic check + hold; a failure below must not burn it
     if (slot === null) return reply.code(429).send({ error: 'request_limit', limit, used: await usage(ctx, req.user!.id), resetsAt: await resetsAt(ctx) });
     let created;
     const title = String(d.title ?? d.name ?? `#${b.tmdbId}`);
     try {
       const seerrUserId = await ensureSeerrUser(ctx, req.user!);
-      created = await ctx.seerr.createRequest({ mediaType: b.mediaType, mediaId: b.tmdbId, seasons: b.mediaType === 'tv' ? (b.seasons ?? 'all') : undefined, userId: seerrUserId });
+      created = await requestsClient(ctx).createRequest({ mediaType: b.mediaType, mediaId: b.tmdbId, seasons: b.mediaType === 'tv' ? (b.seasons ?? 'all') : undefined, userId: seerrUserId });
       await ctx.db.query(
         'insert into seerr_requests(seerr_request_id, user_id, media_type, tmdb_id, title, poster) values ($1,$2,$3,$4,$5,$6) on conflict (seerr_request_id) do nothing',
         [created.id, req.user!.id, b.mediaType, b.tmdbId, title, d.posterPath ?? null],
@@ -109,7 +117,7 @@ export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
     for (const r of rows) {
       let status = 'angefragt';
       try {
-        const sr = await ctx.seerr.getRequest(r.seerr_request_id);
+        const sr = await requestsClient(ctx).getRequest(r.seerr_request_id);
         status = portalStatus(sr.media?.status, sr.status);
       } catch (e) {
         if (e instanceof SeerrError && e.status === 404) status = 'entfernt';
@@ -126,14 +134,14 @@ export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
       take: z.coerce.number().int().min(1).max(100).default(50),
       skip: z.coerce.number().int().min(0).max(100_000).default(0),
     }).parse(req.query);
-    const r = await ctx.seerr.listRequests(q.filter, q.take, q.skip);
+    const r = await requestsClient(ctx).listRequests(q.filter, q.take, q.skip);
     const ids = r.results.map((x: any) => x.id);
     const owners = ids.length ? (await ctx.db.query('select s.seerr_request_id id, u.name from seerr_requests s join users u on u.id=s.user_id where s.seerr_request_id = any($1)', [ids])).rows : [];
     const byId = new Map(owners.map((o: any) => [o.id, o.name]));
     const titles = await Promise.all(r.results.map(async (x: any) => {
       try {
         const m = x.media ?? {};
-        const d = await ctx.seerr.details(x.type ?? m.mediaType, m.tmdbId);
+        const d = await requestsClient(ctx).details(x.type ?? m.mediaType, m.tmdbId);
         return String(d.title ?? d.name);
       } catch {
         return `#${x.media?.tmdbId}`;
@@ -151,7 +159,7 @@ export function seerrRoutes(app: FastifyInstance, ctx: Ctx) {
   for (const action of ['approve', 'decline'] as const) {
     app.post(`/api/admin/requests/:id/${action}`, admin, wrap(async (req) => {
       const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
-      await ctx.seerr[action](id);
+      await requestsClient(ctx)[action](id);
       await audit(ctx, req.user!.id, `request.${action}`, String(id));
       const row = (await ctx.db.query('select user_id, title from seerr_requests where seerr_request_id=$1', [id])).rows[0];
       if (row) await notify(ctx, { userId: row.user_id, kind: `request_${action}`, title: m(action === 'approve' ? 'request.approved' : 'request.declined', { title: row.title }), link: '/requests', dedupe: `req-${action}-${id}` });

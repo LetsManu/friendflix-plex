@@ -10,7 +10,11 @@ import { compressJson } from './compress.js';
 import { newTimingStore, serverTimingHeader, timedDb, timedKv, timingStorage, timingSummary, type TimingStore } from './timing.js';
 import { metricsPlugin } from './metrics.js';
 import { recordError } from './errorlog.js';
+import { HttpError } from './users.js';
+import { accountRoutes } from './routes/account.js';
 import { adminRoutes, inviteRoutes } from './routes/admin.js';
+import { adminSettingsRoutes } from './routes/adminSettings.js';
+import { adminUserRoutes } from './routes/adminUsers.js';
 import { authRoutes } from './routes/auth.js';
 import { castRoutes } from './routes/cast.js';
 import { internalRoutes } from './routes/internal.js';
@@ -27,6 +31,7 @@ import { reminderRoutes } from './routes/reminders.js';
 import { sceneRoutes } from './routes/scenes.js';
 import { searchRoutes } from './routes/search.js';
 import { seerrRoutes } from './routes/seerr.js';
+import { setupRoutes } from './routes/setup.js';
 import { statsRoutes } from './routes/stats.js';
 import { tvRoutes } from './routes/tv.js';
 import { clientErrorRoutes } from './clientErrors.js';
@@ -43,6 +48,9 @@ import { aboutRoutes } from './routes/about.js';
 import { healthRoutes } from './routes/health.js';
 import { hygieneRoutes } from './routes/hygiene.js';
 import { usageRoutes } from './routes/usage.js';
+import { SettingsError } from './settings/store.js';
+import { hasSetupSession } from './setup/code.js';
+import { isSetupComplete, SETUP_EXPIRED } from './setup/state.js';
 import { syncFileKeys } from './sources/keys.js';
 import { testSourceKey } from './sources/omdb.js';
 import { appVersion } from './version.js';
@@ -50,13 +58,26 @@ import { appVersion } from './version.js';
 export interface Extra {
   /** Additional route registrars for later steps. */
   register?: Array<(app: FastifyInstance, ctx: Ctx) => void | Promise<void>>;
+  /** tests: capture the request log (production logs to stdout; tests are silent otherwise) */
+  logger?: { stream: { write(line: string): void }; level?: string };
 }
+
+/** routes whose bodies hold secrets or one-time credentials (spec Part E3): never logged with an error */
+const SENSITIVE_BODY = /^\/api\/(setup\/|admin\/settings)/;
+
+/**
+ * What answers while setup is incomplete (spec Part E1, rulings D23): matched by the route pattern, so an unknown or encoded path is
+ * gated too. /auth/login and /auth/callback additionally need a setup session (the first admin's sign-in).
+ */
+const SETUP_OPEN_GET: ReadonlySet<string> = new Set(['/health', '/api/version']);
+const SETUP_OPEN: ReadonlySet<string> = new Set(['/internal/gateway-config']);
+const SETUP_LOGIN: ReadonlySet<string> = new Set(['/auth/login', '/auth/callback']);
 
 /** requests slower than this are logged (info) with their jf/db/kv breakdown */
 const SLOW_REQUEST_MS = 500;
 
 export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInstance> {
-  const app = Fastify({ logger: process.env.NODE_ENV !== 'test', trustProxy: true, bodyLimit: 256 * 1024 });
+  const app = Fastify({ logger: extra.logger ?? process.env.NODE_ENV !== 'test', trustProxy: true, bodyLimit: 256 * 1024 });
   // Server-Timing: Postgres and Redis calls are booked on the current request (Jellyfin: JellyfinClient). Same objects underneath.
   ctx.db = timedDb(ctx.db);
   ctx.kv = timedKv(ctx.kv);
@@ -83,9 +104,21 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   });
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof ZodError) return reply.code(400).send({ error: 'bad_request', issues: err.issues.map((i) => i.path.join('.')) });
+    // a refused settings save: each key with its code (never a value)
+    if (err instanceof SettingsError) return reply.code(400).send({ error: err.message, errors: err.errors });
     const status = (err as { statusCode?: number }).statusCode;
     if (status && status < 500) return reply.code(status).send({ error: (err as Error).message });
-    req.log.error({ err }, 'unhandled error');
+    // a business error with a 5xx status (e.g. 503 authentik_unavailable): answered only when its message is a code,
+    // so upstream text (URLs, bodies) never reaches the browser
+    if (err instanceof HttpError) {
+      const code = /^[a-z0-9_]{1,64}$/.test(err.message) ? err.message : 'internal';
+      req.log.warn({ status: err.statusCode, error: code }, 'upstream error');
+      return reply.code(err.statusCode).send({ error: code });
+    }
+    // the wizard's and Admin -> Settings' requests carry one-time admin credentials and secrets: the error is logged by its type and
+    // code only (an error object may quote a request value), never with a body
+    if (SENSITIVE_BODY.test(req.url)) req.log.error({ err: { type: (err as Error).name, code: (err as { code?: unknown }).code } }, 'unhandled error');
+    else req.log.error({ err }, 'unhandled error');
     if (process.env.DEBUG_TEST) console.error(err);
     return reply.code(500).send({ error: 'internal' });
   });
@@ -114,12 +147,41 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   await app.register(rateLimit, { global: true, max: 600, timeWindow: '1 minute' });
   await app.register(metricsPlugin, { ctx });
 
+  // Setup mode: until setup completes, everything but the allow-list answers 503 setup_required (the web then opens /setup).
+  // Cheap once complete: isSetupComplete is cached until the settings rev moves.
+  app.addHook('onRequest', async (req, reply) => {
+    const route = req.routeOptions.url;
+    // the allow-list first: /health and the gateway's polls never wait for the setup state
+    if (route !== undefined && (route.startsWith('/api/setup/') || SETUP_OPEN.has(route))) return;
+    if (route !== undefined && SETUP_OPEN_GET.has(route) && (req.method === 'GET' || req.method === 'HEAD')) return;
+    let open = false;
+    try {
+      open = (await isSetupComplete(ctx)) || (route !== undefined && SETUP_LOGIN.has(route) && (await hasSetupSession(ctx, req)));
+    } finally {
+      // a refused websocket upgrade (Node's own flag: an Upgrade header without Connection: upgrade is a plain request): this hook runs
+      // before @fastify/websocket's own (which would destroy the socket on response), so the upgrade socket is closed here, also when a
+      // check above throws (the error handler's 500); otherwise it stays open and holds up app.close()
+      if (!open && (req.raw as { upgrade?: boolean }).upgrade === true) reply.raw.once('finish', () => req.raw.socket?.destroy());
+    }
+    if (open) return;
+    // the sign-in routes are browser navigations: without a setup session (it ran out between login and callback, or the cookie was lost on
+    // the way back from the IdP) they go to the wizard, which asks for the code again, instead of showing a JSON answer
+    if (route !== undefined && SETUP_LOGIN.has(route) && req.method === 'GET') return reply.redirect(route === '/auth/callback' ? SETUP_EXPIRED : '/setup');
+    return reply.code(503).send({ error: 'setup_required' });
+  });
+
   // CSRF: every state-changing /api request must carry the per-session token.
   app.addHook('preHandler', async (req, reply) => {
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) || !req.url.startsWith('/api/')) return;
     if (req.url.startsWith('/api/invite/')) return; // anonymous, token-protected
     if (req.url.startsWith('/api/client-errors')) return; // browser error beacon: sendBeacon cannot send the csrf header; no ambient authority, rate limited
     if (req.url.startsWith('/api/tv/code') || req.url.startsWith('/api/tv/claim')) return; // anonymous, protected by the TV's own poll secret (no ambient authority)
+    // /restore acts on the account named by the signed ff_restore cookie, never on a session: another account's live session in
+    // the same browser must not make it demand that session's token. JSON-only + SameSite + HMAC cookie protect it (routes/auth.ts)
+    if (req.url === '/api/restore' || req.url.startsWith('/api/restore?')) return;
+    // /api/setup/* never acts on an account session: requireSetupSession checks its own token (x-ff-setup-csrf against the setup session
+    // and the ff_setup_csrf cookie). An admin's ff_sid next to an old ff_setup cookie must get 409 setup_complete, never this hook's 403.
+    if (req.url.startsWith('/api/setup/')) return;
     const sid = req.cookies.ff_sid;
     const raw = sid ? await ctx.kv.get(`sess:${sid}`) : null;
     if (!raw) return; // unauthenticated -> route handler answers 401
@@ -143,10 +205,14 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   });
 
   authRoutes(app, ctx);
+  accountRoutes(app, ctx);
   mediaRoutes(app, ctx);
   castRoutes(app, ctx);
   internalRoutes(app, ctx);
   adminRoutes(app, ctx);
+  adminSettingsRoutes(app, ctx);
+  setupRoutes(app, ctx);
+  adminUserRoutes(app, ctx);
   inviteRoutes(app, ctx);
   seerrRoutes(app, ctx);
   await partyRoutes(app, ctx);

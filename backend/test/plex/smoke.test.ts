@@ -8,11 +8,6 @@
  */
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type pg from 'pg';
-import type { MemoryKV } from '../../src/kv.js';
-import { PlexClient } from '../../src/plex/client.js';
-import { plexPlayback } from '../../src/plex/index.js';
-import { migratePlex } from '../../src/plex/migrations.js';
 import { PlexMediaServer } from '../../src/plex/service.js';
 import { cfg, makeEnv, type TestEnv } from '../helpers.js';
 import { PLEX_TOKEN, PLEX_URL, PlexFake } from '../plexfake.js';
@@ -36,16 +31,9 @@ describe('Plex mode end to end (backend level)', () => {
   beforeAll(async () => {
     env = await makeEnv({}, {
       server: 'plex', plexFake: fake,
-      ctxPatch: (c) => {
-        tf = new TranscoderFake(fake.fetch);
-        ms = new PlexMediaServer({
-          client: new PlexClient(PLEX_URL, PLEX_TOKEN, tf.fetch), db: c.db as unknown as pg.Pool, kv: c.kv as MemoryKV, migrate: () => migratePlex(c.db as unknown as pg.Pool),
-          websocket: false, playback: plexPlayback({ kv: c.kv, secret: cfg.INTERNAL_SECRET, sleep: async () => undefined }),
-        });
-        c.jf = ms;
-      },
+      plexFetch: (f) => (tf = new TranscoderFake(f.fetch)).fetch,
     });
-    await ms.sync.run();
+    ms = env.plex!.ms;
     const { createPlexUpstream } = await import(GATEWAY_PLEX);
     gw = createPlexUpstream({ token: () => PLEX_TOKEN, secret: () => cfg.INTERNAL_SECRET });
   });

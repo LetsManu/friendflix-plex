@@ -21,6 +21,7 @@ export interface BootHint {
   /** UI language of the last answer: an early-rendered page waits until it is active */ lang?: string;
   /** the last answer was a kids profile: only kids routes may render early */ kids?: boolean;
   /** the last answer still owed the /welcome onboarding: nothing renders early */ welcome?: boolean;
+  /** the last answer had no request service (features.requests false): request links stay hidden until /api/me answers */ noRequests?: boolean;
 }
 
 // ---- kids profiles: only a small set of routes; everything else goes to the kids home ----
@@ -31,8 +32,8 @@ export const kidsAllowed = (path: string): boolean => KIDS_ALLOWED.test(path);
 export const kidsRedirect = (me: Pick<GateMe, 'kids'> | null | undefined, path: string): string | null => (me?.kids && !kidsAllowed(path) ? '/kids' : null);
 
 // ---- onboarding (/welcome): new profiles go through it once, after the profile and language gates ----
-/** pages that never send to /welcome (the onboarding itself, the picker, public and remote pages) */
-const NO_WELCOME = /^\/(welcome|profiles|offline|invite|tv|remote)(\/|$)/;
+/** pages that never send to /welcome (the onboarding itself, the picker, public and remote pages, the setup wizard's extras) */
+const NO_WELCOME = /^\/(welcome|profiles|offline|invite|tv|remote|setup)(\/|$)/;
 /** true when the layout must send the profile to /welcome first (`onboarded` absent = older server = onboarded) */
 export const needsWelcome = (me: Pick<GateMe, 'onboarded' | 'tv'> | null | undefined, path: string): boolean =>
   me?.onboarded === false && !me.tv && !NO_WELCOME.test(path);
@@ -57,11 +58,11 @@ export function needsProfileGate(me: GateMe, path: string, sessionPicked: boolea
 /** `/profiles?next=…` for the current location (deep links continue after the pick) */
 export const gateHref = (pathAndSearch: string) => `/profiles?next=${encodeURIComponent(pathAndSearch)}`;
 
-export function hintOf(me: GateMe & { deviceApproved?: boolean; profile?: { id: string } | null; language?: string }): BootHint {
+export function hintOf(me: GateMe & { deviceApproved?: boolean; profile?: { id: string } | null; language?: string; features?: { requests?: boolean } }): BootHint {
   const multi = (me.profileCount ?? 0) > 1;
   return {
     approved: Boolean(me.deviceApproved), multi, tv: Boolean(me.tv), ...(!multi && me.profile?.id ? { profile: me.profile.id } : {}), ...(me.language ? { lang: me.language } : {}),
-    ...(me.kids ? { kids: true } : {}), ...(me.onboarded === false ? { welcome: true } : {}),
+    ...(me.kids ? { kids: true } : {}), ...(me.onboarded === false ? { welcome: true } : {}), ...(me.features?.requests === false ? { noRequests: true } : {}),
   };
 }
 
@@ -75,7 +76,7 @@ export function parseHint(raw: string | null | undefined): BootHint | null {
     if (!(h && typeof h === 'object' && typeof h.approved === 'boolean' && typeof h.multi === 'boolean' && typeof h.tv === 'boolean')) return null;
     return {
       approved: h.approved, multi: h.multi, tv: h.tv, ...(typeof h.profile === 'string' && h.profile ? { profile: h.profile } : {}), ...(typeof h.lang === 'string' && /^[a-z]{2}$/.test(h.lang) ? { lang: h.lang } : {}),
-      ...(h.kids === true ? { kids: true } : {}), ...(h.welcome === true ? { welcome: true } : {}),
+      ...(h.kids === true ? { kids: true } : {}), ...(h.welcome === true ? { welcome: true } : {}), ...(h.noRequests === true ? { noRequests: true } : {}),
     };
   } catch { return null; }
 }

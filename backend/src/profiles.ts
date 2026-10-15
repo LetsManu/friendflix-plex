@@ -142,7 +142,7 @@ export async function createProfile(ctx: Ctx, user: UserRow, b: { name: string; 
   try {
     const kids = { kids: Boolean(b.kids), kids_max_rating: b.maxRating ?? 12 };
     // the row does not exist yet: the kids fields go in as extra policy (applyRole adds them itself on every later re-apply)
-    await applyRole(ctx, jf!.id, user.role, user.disabled, { hidden: true, ...(kids.kids ? { parental: kidsPolicy(kids, (await effectiveRole(ctx, user.role))?.maxParentalRating ?? null) } : {}) });
+    await applyRole(ctx, jf!.id, user.role, user.disabled, { userId: user.id, hidden: true, ...(kids.kids ? { parental: kidsPolicy(kids, (await effectiveRole(ctx, user.role))?.maxParentalRating ?? null) } : {}) });
     const id = randomUUID();
     const pool = ctx.db as pg.Pool;
     const c = await pool.connect();

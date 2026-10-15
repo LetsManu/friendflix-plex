@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import * as client from 'openid-client';
 import type { Config } from './config.js';
+import { HttpError } from './users.js';
 
 export interface OidcClaims {
   sub: string;
@@ -32,6 +33,53 @@ export interface OidcProvider {
   start(opts?: { forceLogin?: boolean }): Promise<LoginStart>;
   /** maxAge: the id_token must carry an auth_time at most that many seconds old (validated by openid-client) */
   finish(currentUrl: URL, saved: Omit<LoginStart, 'url'>, opts?: { maxAge?: number }): Promise<OidcClaims>;
+  /** drops a cached discovery (createLazyOidc); called when PUBLIC_URL or an OIDC_* setting changes */
+  reset?(): void;
+}
+
+/** after a failed discovery, logins answer 503 at once for this long before the next attempt */
+export const OIDC_RETRY_MS = 30_000;
+
+/**
+ * The provider of the live config, discovered on the first start()/finish() and cached. A failed discovery (IdP down, OIDC_ISSUER not
+ * set yet) never stops the backend: start()/finish() throw HttpError(503, 'oidc_unavailable') and the next attempt waits OIDC_RETRY_MS.
+ * reset() (a sign-in setting changed) drops the cache and the wait; a discovery still running for the old config is not cached.
+ */
+export function createLazyOidc(getCfg: () => Config, opts: {
+  discover?: (cfg: Config) => Promise<OidcProvider>; now?: () => number; log?: { warn(o: object, m: string): void };
+} = {}): OidcProvider & { reset(): void } {
+  const discover = opts.discover ?? createAuthentikProvider;
+  const now = opts.now ?? Date.now;
+  let gen = 0;
+  let pending: Promise<OidcProvider> | undefined;
+  let failedAt: number | undefined;
+
+  const provider = (): Promise<OidcProvider> => {
+    if (pending) return pending;
+    if (failedAt !== undefined && now() - failedAt < OIDC_RETRY_MS) return Promise.reject(new HttpError(503, 'oidc_unavailable'));
+    const mine = gen;
+    const p = Promise.resolve().then(() => discover(getCfg())).catch((err: unknown) => {
+      if (mine === gen) {
+        pending = undefined;
+        failedAt = now();
+        // the issuer's error only (discovery never sends the client secret)
+        opts.log?.warn({ err }, 'oidc discovery failed; sign-in answers 503 until the next attempt');
+      }
+      throw new HttpError(503, 'oidc_unavailable');
+    });
+    pending = p;
+    return p;
+  };
+
+  return {
+    start: async (o) => (await provider()).start(o),
+    finish: async (url, saved, o) => (await provider()).finish(url, saved, o),
+    reset() {
+      gen++;
+      pending = undefined;
+      failedAt = undefined;
+    },
+  };
 }
 
 export async function createAuthentikProvider(cfg: Config): Promise<OidcProvider> {

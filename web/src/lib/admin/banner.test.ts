@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { banner, bannerView, dismiss, issueText, refreshBanner, setBannerForTests } from './banner';
+import { banner, bannerView, dismiss, issueHref, issueText, refreshBanner, setBannerForTests } from './banner';
 import type { HealthIssue } from './health';
 
 const issue = (id: string, level: 'warn' | 'err', reason: HealthIssue['reason'], detail?: HealthIssue['detail']): HealthIssue => ({ id, level, reason, fp: 'a'.repeat(12), ...(detail ? { detail } : {}) });
@@ -27,7 +27,17 @@ describe('issueText', () => {
     expect(issueText(issue('errors:playback', 'warn', 'failed_playbacks', { n: 4 }))).toBe('4 Wiedergaben fehlgeschlagen');
     expect(issueText(issue('svc:playbackCheck', 'warn', 'failed_titles', { n: 2 }))).toBe('2 Titel im Wiedergabe-Check fehlgeschlagen');
     expect(issueText(issue('svc:playbackCheck', 'err', 'empty_media', { n: 86 }))).toBe('Medienserver liefert leere Videostücke – Plex neu starten; hilft das nicht, Hardware-Beschleunigung prüfen');
+    expect(issueText(issue('approvals:pending', 'warn', 'pending_approvals', { n: 1 }))).toBe('1 Anmeldung wartet auf Freigabe');
+    expect(issueText(issue('approvals:pending', 'warn', 'pending_approvals', { n: 3 }))).toBe('3 Anmeldungen warten auf Freigabe');
     expect(issueText(issue('weird:thing', 'warn', 'slow'))).toBe('Etwas braucht deine Aufmerksamkeit');
+  });
+});
+
+describe('issueHref', () => {
+  it('open approvals lead to the approval queue, everything else to the status page', () => {
+    expect(issueHref(issue('approvals:pending', 'warn', 'pending_approvals', { n: 2 }))).toBe('/admin/users?tab=approvals');
+    expect(issueHref(issue('svc:media', 'err', 'down'))).toBe('/admin/status');
+    expect(issueHref(null)).toBe('/admin/status');
   });
 });
 

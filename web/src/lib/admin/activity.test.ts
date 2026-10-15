@@ -21,6 +21,62 @@ describe('describeActivity', () => {
     await setLocale('en');
     expect(describeActivity({ id: 6, at: '', action: 'preview.clear', actor: 'Tester' }).text).toBe('Tester deleted a preview clip');
   });
+  it('one-device sign-out and failed password links say what happened', async () => {
+    const base = { id: 9, at: '', target: 'uuid', actor: 'Tester', target_name: 'Anna' };
+    expect(describeActivity({ ...base, action: 'user.revoke_device', meta: { deviceId: 'dev-a', sessions: 2 } })).toEqual({ text: 'Tester hat Anna auf einem Gerät abgemeldet', icon: 'user' });
+    expect(describeActivity({ ...base, action: 'user.recovery_email', meta: { ok: true } }).text).toBe('Tester hat Anna einen Passwort-Link geschickt');
+    expect(describeActivity({ ...base, action: 'user.recovery_email', meta: { ok: false, error: 'recovery_not_configured' } }).text)
+      .toBe('Tester wollte Anna einen Passwort-Link schicken – fehlgeschlagen (kein Ablauf zum Zurücksetzen eingerichtet)');
+    // unknown or odd codes never leak into the text
+    expect(describeActivity({ ...base, action: 'user.recovery_email', meta: { ok: false, error: 'constructor' } }).text).toMatch(/fehlgeschlagen \(Fehler\)$/);
+    await setLocale('en');
+    expect(describeActivity({ ...base, action: 'user.recovery_email', meta: { ok: false, error: 'authentik_unavailable' } }).text)
+      .toBe('Tester tried to send Anna a password link – failed (Authentik unreachable)');
+  });
+  it('re-authentication and own profile changes (Block 23 self-service)', async () => {
+    const base = { id: 10, at: '', target: 'uuid', actor: 'Tester', target_name: 'Tester', meta: { ip: '10.0.0.1' } };
+    expect(describeActivity({ ...base, action: 'session.reauth' })).toEqual({ text: 'Tester hat sich erneut angemeldet (für eine Kontoaktion)', icon: 'log-out' });
+    expect(describeActivity({ ...base, action: 'session.reauth_mismatch' }).text).toBe('Tester: erneute Anmeldung mit einem anderen Konto abgelehnt');
+    expect(describeActivity({ ...base, action: 'session.revoke_device', meta: { sessions: 1 } }).text).toBe('Tester hat ein eigenes Gerät abgemeldet');
+    expect(describeActivity({ ...base, action: 'account.profile', meta: { fields: ['name'] } })).toEqual({ text: 'Tester hat Name oder Farbe des eigenen Kontos geändert', icon: 'user' });
+    await setLocale('en');
+    expect(describeActivity({ ...base, action: 'session.reauth_mismatch' }).text).toBe('Tester: a new sign-in with a different account was refused');
+  });
+  it('data export and account deletion (Block 23 self-service)', async () => {
+    const base = { id: 11, at: '', target: 'uuid', actor: 'Tester', target_name: 'Anna' };
+    expect(describeActivity({ ...base, actor: 'Anna', action: 'account.export' })).toEqual({ text: 'Anna hat die eigenen Daten heruntergeladen', icon: 'user' });
+    expect(describeActivity({ ...base, actor: 'Anna', action: 'user.deletion_requested', meta: { deletionAt: '2026-10-21T12:00:00Z', by: 'self' } }).text)
+      .toBe('Anna hat die Löschung des eigenen Kontos beantragt (am 21.10.2026)');
+    expect(describeActivity({ ...base, action: 'user.deletion_requested', meta: { deletionAt: '2026-10-21T12:00:00Z', by: 'admin' } }).text)
+      .toBe('Tester hat die Löschung von Anna beantragt (am 21.10.2026)');
+    expect(describeActivity({ ...base, action: 'user.deletion_restored' }).text).toBe('Tester hat die Löschung von Anna aufgehoben');
+    // self variants: meta.by, or the actor is the target (a restore by signing in again)
+    expect(describeActivity({ ...base, actor: 'Anna', actor_id: 'uuid', action: 'user.deletion_restored' }).text).toBe('Anna hat die Löschung des eigenen Kontos aufgehoben');
+    expect(describeActivity({ ...base, actor: 'Anna', action: 'user.deletion_restored', meta: { by: 'self' } }).text).toBe('Anna hat die Löschung des eigenen Kontos aufgehoben');
+    expect(describeActivity({ ...base, actor: 'Anna', actor_id: 'uuid', action: 'user.deletion_requested', meta: { deletionAt: '2026-10-21T12:00:00Z' } }).text)
+      .toBe('Anna hat die Löschung des eigenen Kontos beantragt (am 21.10.2026)');
+    expect(describeActivity({ ...base, actor_id: 'other', action: 'user.deletion_restored' }).text).toBe('Tester hat die Löschung von Anna aufgehoben');
+    // restored while the access had ended: it stays locked
+    expect(describeActivity({ ...base, action: 'user.deletion_restored', meta: { lockedReason: 'expired' } }).text)
+      .toBe('Tester hat die Löschung von Anna aufgehoben – bleibt gesperrt, der Zugang ist abgelaufen');
+    expect(describeActivity({ ...base, actor: 'Anna', actor_id: 'uuid', action: 'user.deletion_restored', meta: { lockedReason: 'expired' } }).text)
+      .toBe('Anna hat die Löschung des eigenen Kontos aufgehoben – bleibt gesperrt, der Zugang ist abgelaufen');
+    expect(describeActivity({ ...base, action: 'user.deletion_now', meta: { from: 'a', to: 'b' } }).text).toBe('Tester hat Anna sofort löschen lassen');
+    expect(describeActivity({ ...base, actor: null, target_name: 'deleted-1a2b3c4d', action: 'user.deletion_started', meta: { pseudonym: 'deleted-1a2b3c4d' } }).text)
+      .toBe('Die Löschung von deleted-1a2b3c4d hat begonnen');
+    expect(describeActivity({ ...base, actor: null, target_name: 'deleted-1a2b3c4d', action: 'user.deletion_failed', meta: { step: 3, error: 'media_error' } }).text)
+      .toBe('Die Löschung von deleted-1a2b3c4d ist bei Schritt 3 von 6 fehlgeschlagen');
+    expect(describeActivity({ ...base, actor: null, target_name: 'deleted-1a2b3c4d', action: 'user.deleted' }).text).toBe('deleted-1a2b3c4d wurde gelöscht');
+    // a step that is not a small number never reaches the text
+    expect(describeActivity({ ...base, actor: null, action: 'user.deletion_failed', meta: { step: '<b>' } }).text).not.toContain('<b>');
+    await setLocale('en');
+    expect(describeActivity({ ...base, action: 'user.deletion_now' }).text).toBe('Tester had Anna deleted right away');
+    expect(describeActivity({ ...base, actor: 'Anna', actor_id: 'uuid', action: 'user.deletion_restored' }).text).toBe('Anna cancelled the deletion of their own account');
+    expect(describeActivity({ ...base, action: 'user.deletion_restored', meta: { lockedReason: 'expired' } }).text)
+      .toBe('Tester cancelled the deletion of Anna – stays locked, the access has ended');
+    expect(describeActivity({ ...base, actor: 'Anna', action: 'user.deletion_requested', meta: { deletionAt: '2026-10-21T12:00:00Z', by: 'self' } }).text)
+      .toBe('Anna asked to delete their own account (on 21 Oct 2026)');
+  });
   it('never shows raw keys or JSON for unknown actions', async () => {
     const d = describeActivity({ id: 5, at: '', action: 'weird.thing', actor: 'Tester', meta: { a: 1 } });
     expect(d.text).not.toContain('weird');

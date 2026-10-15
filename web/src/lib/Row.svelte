@@ -130,6 +130,9 @@
      so the page height - and the scroll position restored on "back" - stays exact before a row was rendered once */
   .row { position: relative; z-index: 1; margin: 1.6rem 0 0; padding-bottom: .6rem; --n: 2.4; --gap: .45rem; --sw: calc((100vw - 2 * var(--pad-x) - (var(--n) - 1) * var(--gap)) / var(--n)); content-visibility: auto; contain-intrinsic-size: auto calc(var(--sw) * .5625 + 42px); }
   .row.rk { contain-intrinsic-size: auto calc(var(--sw) * .78 + 42px); }
+  /* iOS WebKit: skipped rows whose size estimate differs (e.g. cards with a title bar) change the page height mid-scroll;
+     the fixed tab bar then jumps into the page and rows paint blank until scrolling stops - render every row there */
+  @supports (-webkit-touch-callout: none) { .row, .row.rk { content-visibility: visible; contain-intrinsic-size: none; } }
   .row:hover, .row:focus-within { z-index: 4; }
   @media (min-width: 560px) { .row { --n: 3; } }
   @media (min-width: 800px) { .row { --n: 4; } }

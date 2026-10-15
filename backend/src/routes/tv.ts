@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { audit } from '../audit.js';
+import { publicOrigin, secureCookies } from '../config.js';
 import type { Ctx } from '../ctx.js';
 import { FALLBACK_LANGUAGE, instanceLanguage, m, msg, userLanguage } from '../i18n.js';
 import { notify } from '../notify.js';
@@ -52,8 +53,6 @@ export function renamePeerSid(userId: string, oldSid: string, newSid: string) {
 export const tvOnline = (userId: string) => [...(peers.get(userId) ?? [])].some((p) => p.role === 'tv');
 
 export function tvRoutes(app: FastifyInstance, ctx: Ctx) {
-  const secure = ctx.cfg.PUBLIC_URL.startsWith('https://');
-  const origin = new URL(ctx.cfg.PUBLIC_URL).origin;
 
   // 1) The TV asks for a code (unauthenticated, rate limited) and polls with a secret it alone knows.
   app.post('/api/tv/code', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async () => {
@@ -107,7 +106,7 @@ export function tvRoutes(app: FastifyInstance, ctx: Ctx) {
       [user.id, deviceId, msg(await userLanguage(ctx, user.id), 'device.tv'), kid?.id ?? null]);
     const sid = rand();
     await saveSession(ctx, sid, newSession({ userId: user.id, csrf: rand(), deviceId, deviceApproved: true, ttl: TV_SESSION_SECONDS, idle: TV_IDLE_SECONDS, ...(kid ? { profileId: kid.id } : {}) }));
-    reply.setCookie(COOKIE, sid, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: TV_SESSION_SECONDS });
+    reply.setCookie(COOKIE, sid, { httpOnly: true, secure: secureCookies(ctx.cfg), sameSite: 'lax', path: '/', maxAge: TV_SESSION_SECONDS });
     await audit(ctx, user.id, 'tv.claim', user.id, { deviceId });
     // somebody could have talked the user into confirming a stranger's code: make a new TV visible and easy to revoke
     await notify(ctx, { userId: user.id, kind: 'tv_paired', title: m('tv.paired.title'), body: m('tv.paired.body'), link: '/devices' });
@@ -118,7 +117,7 @@ export function tvRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // Remote-control hub: phone <-> TV of the SAME user (never across users).
   app.get('/ws/remote', { websocket: true, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (socket, req) => {
-    if (req.headers.origin !== origin || !(await authenticate(ctx, req)) || !req.session!.deviceApproved) return socket.close(4401, 'unauthorized');
+    if (req.headers.origin !== publicOrigin(ctx.cfg) || !(await authenticate(ctx, req)) || !req.session!.deviceApproved) return socket.close(4401, 'unauthorized');
     const role = (req.query as { role?: string }).role === 'tv' ? 'tv' : 'remote';
     // only a paired television may register as the TV: a laptop must not be able to evict the real one
     if (role === 'tv' && !req.session!.deviceId?.startsWith('tv-')) return socket.close(4403, 'not_a_tv');

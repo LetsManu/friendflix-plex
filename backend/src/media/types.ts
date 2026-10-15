@@ -21,6 +21,16 @@ export class MediaError extends Error {
   }
 }
 
+/** Why a setup provider's automation (media/setup.ts `auto.run`) failed: answered to the wizard as a ProbeResult failure. */
+export type MediaSetupCode = 'invalid' | 'wizard_pending' | 'unauthorized' | 'not_admin' | 'unreachable' | 'unexpected';
+
+/** The message names the code only: an upstream text, a URL or the credentials typed into the wizard never go into it. */
+export class MediaSetupError extends Error {
+  constructor(readonly code: MediaSetupCode, readonly detail?: string) {
+    super(`media server setup failed: ${code}${detail ? ` (${detail})` : ''}`);
+  }
+}
+
 // ---------------------------------------------------------------- capabilities
 
 export type SegmentType = 'intro' | 'outro' | 'recap' | 'preview';
@@ -344,6 +354,8 @@ export interface MediaAdmin {
   deleteIdentity(id: string): Promise<void>;
   applyPolicy(id: string, policy: IdentityPolicy): Promise<void>;
   setDisabled(id: string, disabled: boolean): Promise<void>;
+  /** Optional: whether the identity still exists on the server (admin key; works for disabled identities too). Throws MediaError when the server fails. */
+  identityExists?(id: string): Promise<boolean>;
   libraries(): Promise<Array<{ id: string; name: string }>>;
   ping(): Promise<boolean>;
   /** active playback not started through FriendFlix */

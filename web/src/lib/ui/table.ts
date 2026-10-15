@@ -22,6 +22,8 @@ export interface Column<T> {
   primary?: boolean;
   /** phone card: not shown */
   hideOnCard?: boolean;
+  /** desktop header: label only for screen readers (narrow columns such as a row checkbox) */
+  hideLabel?: boolean;
 }
 export interface SortState { key: string; dir: SortDir }
 export interface Query { q: string; sort: SortState | null; offset: number; limit: number }

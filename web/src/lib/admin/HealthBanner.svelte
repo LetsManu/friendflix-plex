@@ -3,12 +3,13 @@
 <script lang="ts">
   /**
    * Slim warning bar for admins under the app bar (Block 22): the worst issue as one sentence, "+n weitere" opens the rest,
-   * "Ansehen" goes to /admin/status, every issue can be hidden until it changes. Mounted by the root layout only for an admin
-   * on the owner profile, never in TV mode, on player / party / profile / public pages or kids profiles.
+   * "Ansehen" goes to /admin/status (open approvals: to the approval queue), every issue can be hidden until it changes.
+   * Mounted by the root layout only for an admin on the owner profile, never in TV mode, on player / party / profile / public
+   * pages or kids profiles.
    */
   import Icon from '#lib/Icon.svelte';
   import { t } from '#lib/i18n';
-  import { banner, bannerView, dismiss, issueText } from './banner';
+  import { banner, bannerView, dismiss, issueHref, issueText } from './banner';
   import type { HealthIssue } from './health';
 
   /** hero pages (/, /item/…) have no top padding under the transparent app bar */
@@ -35,7 +36,7 @@
         {#if view.more}
           <button type="button" class="lnk" aria-expanded={open} on:click={() => (open = !open)}>{open ? $t('admin.banner.less') : $t('admin.banner.more', { n: view.more })}</button>
         {/if}
-        <a class="lnk" href="/admin/status">{$t('admin.banner.view')}</a>
+        <a class="lnk" href={issueHref(first)}>{$t('admin.banner.view')}</a>
         <button type="button" class="x" aria-label={$t('admin.banner.dismiss')} on:click={() => dismiss(first)}><Icon name="x" size={20} /></button>
       </span>
     </div>

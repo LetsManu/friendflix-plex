@@ -8,10 +8,12 @@ FriendFlix is maintained by one person. Everything below is what the code, the c
 
 **What you can expect**
 
-- Only people with an invitation can get an account, and only a signed-in session can reach media or personal data. Sign-in goes through your OIDC identity provider (the docs use Authentik; multi-factor authentication is configured there).
+- Only people with an invitation, or whose sign-in request an admin approved, can get an account, and only a signed-in session can reach media or personal data. Sign-in goes through your OIDC identity provider (the docs use Authentik; multi-factor authentication is configured there).
 - The browser never receives a media-server token. It holds a session cookie (`ff_sid`, `HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS) and plays `/media/...` URLs that only the gateway can resolve.
 - Every playlist and segment request is authorised by the backend (session, profile, role limits) before the gateway fetches it from the media server. Hidden titles and kids-profile restrictions are enforced server side.
 - Secrets stored by FriendFlix (per-user media-server credentials, admin-saved API keys) are encrypted at rest with a key you control (`APP_ENC_KEY`). Profile PINs are stored as salted scrypt hashes.
+- Admins can see what a person watched (*Admin → Users →* a person → *History*, read from the media server). Every time an admin opens it, FriendFlix writes `user.activity_viewed` with the admin and the person to the audit log, which other admins can read. Other admin pages (usage, status) show only totals, never titles.
+- Each person can download their own data and delete their own account (*My space → Account*). Deleting needs a fresh sign-in, waits 7 days so it can be undone, and then removes the account everywhere FriendFlix reaches; the audit log keeps a pseudonym instead of the name. See [Account self-service](#account-self-service).
 - State-changing API calls need a per-session CSRF token. Error reports from the browser are scrubbed and stay in your server log.
 - Published container images are scanned, signed and ship with an SBOM and provenance (see [Supply chain](#supply-chain)).
 
@@ -44,7 +46,7 @@ Networks and ports are defined in [compose.yaml](../compose.yaml); the diagram a
 | Browser to reverse proxy | Any client on the internet to your TLS terminator | HTTPS only; HSTS and TLS settings are configured at the proxy ([setup.md](setup.md)). Treated as untrusted input from here on. |
 | Reverse proxy to web, backend, gateway | Your proxy to three ports bound to `127.0.0.1` (`BIND_ADDR`) | Requests are routed by path (`/api`, `/auth`, `/ws` to the backend, `/media` to the gateway). The backend sets `trustProxy` and so relies on the proxy for the client address. |
 | Web to backend | SvelteKit app to API | Cookie session plus CSRF header on state-changing requests. The web container holds no secrets. |
-| Gateway to backend | Media path to authorisation | Shared `INTERNAL_SECRET` header on `/internal/authz`; the answer (user's media token and limits) is cached for 5 s and never stored. |
+| Gateway to backend | Media path to authorisation | Shared `INTERNAL_SECRET` header on `/internal/authz` and `/internal/gateway-config`; the authz answer (user's media token and limits) is cached for 5 s and never stored, the config answer carries only the settings revision and the media server URL. |
 | Backend and gateway to Postgres and Redis | App to data stores | Only the backend reaches them, over the `db` network which is `internal`. Redis requires a password and persistence is switched off (sessions are not written to disk). |
 | Backend and gateway to media server | Admin API key and per-user tokens | Only on the `media` network (internal). The gateway allowlists upstream paths and clamps height and bitrate before forwarding. |
 | FriendFlix to identity provider | OIDC discovery and code exchange | Authorization code flow with PKCE (S256), `state` and `nonce`, and a cookie binding the flow to the browser. The IdP is trusted to authenticate users and enforce MFA. |
@@ -55,7 +57,7 @@ Networks and ports are defined in [compose.yaml](../compose.yaml); the diagram a
 
 | Who | Wants | Main defences |
 |---|---|---|
-| Anonymous internet client | Reach media or the API without an account; find bugs in public endpoints | Everything except health, version, invite redemption and the TV pairing endpoints needs a session; the gateway rejects paths outside its allowlist; global and per-route rate limits; strict response headers. |
+| Anonymous internet client | Reach media or the API without an account; find bugs in public endpoints; take over a new install before its owner | Everything except health, version, invite redemption, the approval-request status (`/api/pending`, read through a signed cookie) and the TV pairing endpoints needs a session; the gateway rejects paths outside its allowlist; a new install opens only the setup wizard, behind a one-time code from the server log ([Setup wizard](#setup-wizard)); global and per-route rate limits; strict response headers. |
 | Invited user (friend, family, guest) | See more than their role allows (hidden titles, higher bitrate, other people's data), stay signed in on stolen devices | Role and profile checks in the backend, bitrate and stream caps enforced by backend and gateway, device approval, session idle and absolute timeouts, per-user data scoping. |
 | Kid with access to a family device | Leave a kids profile | Profile PIN (scrypt, attempt-limited). Limited by design, see above. |
 | Holder of a leaked URL or cast token | Replay a stream URL | Cast tokens are random, hashed at rest, bound to the first client address, expire, are revocable and limited to two per account. |
@@ -83,9 +85,9 @@ These are backed by automated checks in CI (lint, type check, unit and end-to-en
 |---|---|---|
 | Least privilege | Containers run as non-root (`USER node`), drop all capabilities and cannot gain privileges. Only the backend sits on the db network. The gateway mounts downloads read-only. Roles cap bitrate, resolution and concurrent streams. Cast tokens are scoped to one title (poster tokens to images only). | `compose.yaml`, `backend/Dockerfile`, `gateway/Dockerfile`, `backend/src/cast.ts` |
 | Complete mediation | Gateway authorises every playlist and segment through the backend; the CSRF hook runs on every state-changing `/api` request; item visibility is checked before external lookups. | `gateway/src/gateway.ts`, `backend/src/app.ts` |
-| Fail-safe defaults | Ports bind to `127.0.0.1` by default; unknown gateway paths are rejected; unauthenticated requests get 401; "Share history" is off by default; the backend refuses to start without required settings; an unreadable encrypted value is treated as unset. | `compose.yaml`, `backend/src/config.ts`, `backend/src/sources/keys.ts` |
+| Fail-safe defaults | Ports bind to `127.0.0.1` by default; unknown gateway paths are rejected; unauthenticated requests get 401; "Share history" is off by default; the backend refuses to start without its bootstrap secrets; webhooks answer 403 while no webhook secret is set; an unreadable encrypted value is treated as unset. | `compose.yaml`, `backend/src/config.ts`, `backend/src/settings/resolve.ts` |
 | Economy of mechanism | Small set of building blocks: Node `crypto`, Fastify plugins, one media-server interface, one gateway allowlist. No custom cryptography or protocol. | `backend/src/crypto.ts`, [architecture.md](architecture.md) |
-| Separation of privilege | Admin API key lives only in the backend; the gateway only knows `INTERNAL_SECRET` and gets user tokens on demand; the web container holds no secret; admin role comes from an IdP group (`ADMIN_GROUP`). | `compose.yaml`, [architecture.md](architecture.md) |
+| Separation of privilege | Admin API key lives only in the backend; the gateway only knows `INTERNAL_SECRET` (from its own volume) and gets user tokens on demand; the web container holds no secret; admin role comes from an IdP group (`ADMIN_GROUP`). | `compose.yaml`, [architecture.md](architecture.md) |
 | Defense in depth | Proxy, then session and CSRF, then role checks, then gateway allowlist and clamps, then internal networks, then container hardening, then encryption at rest. | all of the above |
 
 ### Common weaknesses
@@ -105,25 +107,128 @@ How the OWASP Top 10 classes are addressed. This is a design summary, not a proo
 | Logging and monitoring failures | Admin audit log, `/metrics` (bearer token when `METRICS_TOKEN` is set; also block it at the proxy), slow-request logs, scrubbed client error reports ([monitoring.md](monitoring.md)). |
 | Server-side request forgery | The gateway forwards only allowlisted server-relative paths; `mediaFetch` refuses absolute and protocol-relative URLs. External lookups use fixed provider hosts. |
 
+## Account self-service
+
+Each person manages their own account on *My space → Account* (`/me/account`, main profile only; kids and other profiles cannot open it). Admins have matching actions on *Admin → Users →* a person. Everything here is audited; self-service entries record which fields changed (`{ fields }`), never the old or new values.
+
+The account page also tells the person what admins can see: **"Admins can see which titles you watched recently. Every look at them is recorded in the audit log."** This is the same history view described under [Security requirements](#security-requirements) (`user.activity_viewed`).
+
+### Re-authentication
+
+Deleting the account needs a sign-in that is at most **10 minutes** old. The account page sends the person through `GET /auth/reauth`, an OIDC login with `prompt=login` and `max_age=0`, so the identity provider asks for the password and MFA even when its session is still valid. The callback checks that the identity provider's `auth_time` is at most 2 minutes old and that the `sub` is the session's own (a different person gets nothing and an audit entry `session.reauth_mismatch`). It then stamps the portal session with the time (`reauthAt`, audit `session.reauth`). Sensitive routes check the stamp with one guard, `requireRecentAuth`, and answer `401 reauth_required` without it. *Admin → Settings* checks the same stamp for sensitive changes ([Settings and generated secrets](#settings-and-generated-secrets)).
+
+A later release replaces only the producer: an in-app password screen through Authentik's flow executor sets the same stamp, and the guard stays as it is. Until then, changing the password and two-factor methods happens on Authentik's own user settings page ([authentik.md §8.4](authentik.md#84-account-page-and-account-deletion)). The e-mail address is read-only in FriendFlix for now; a later release may change that.
+
+### Download my data
+
+*Your data → Download my data* (`GET /api/account/export`) builds one JSON file on demand and streams it; nothing is stored on the server. It needs the owner session but no re-authentication, is limited to 5 downloads per hour, and is audited (`account.export`). Every query names its columns and reads only the account's own rows, so a column added later never leaks by accident.
+
+What it contains:
+
+- **Account:** id, name, e-mail, role, avatar, created, access until.
+- **Profiles:** name, avatar, kids flag and age limit, owner flag, created.
+- **Lists:** own lists in full (description, look, items with your own notes; items others added are marked `addedByMe: false` without who). Lists you are a member of: only their name and the items you added.
+- **Watchlist and more:** watchlist, bookmarks with notes, reminders, followed series, series audio/subtitle choices, titles hidden from *Continue watching*.
+- **Ratings:** stars with reviews, thumbs, reactions with comments.
+- **History:** the media server's watch history per profile (up to 1,000 items each, marked `truncated` when there is more and `error` when the media server could not answer), plus FriendFlix's own watch-time totals per title and per day.
+- **Requests:** title, type, date and current state (the state is asked of the request service for the newest 100).
+- **Devices:** label, approved, first and last seen.
+- **Notifications:** weekly digest on/off, whether an ntfy topic is set, the number of push subscriptions, and each notice's kind, date and read state.
+- **What you wrote in shared places:** your episode comments (also deleted ones, flagged), your poll choices (the poll's title only for polls you created), recommendations you sent (title and note, without the recipient).
+- **Achievements.**
+
+What it never contains: other people's ids, names or notes; notification texts (they are rendered with other people's names); device ids; push endpoints and keys; the ntfy topic itself (it works like a password); PIN hashes; the Authentik `sub`; any media-server credential.
+
+### Account deletion
+
+*Delete account* first offers the data download, then asks for the fresh sign-in. The last active admin cannot delete their own account (`last_admin`: make someone else admin first).
+
+**At once** (`POST /api/account/delete`, audit `user.deletion_requested`):
+
+- The account is locked: `deletion_at = now + 7 days`, `locked_reason = 'deletion'`. Every session ends on every device, offline licences are revoked, and the media-server users of the account and its profiles are disabled.
+- The admins get a notice with the name and the date.
+- The Authentik user stays **active** for now: signing in is how the person restores the account.
+
+**Grace period (7 days):** signing in again shows "Your account is being deleted – restore?" (`/restore`, reached through a signed `ff_restore` cookie valid for 15 minutes). *Restore my account* unlocks it (or, if the person's access ended meanwhile, keeps it locked as "access ended"); *Keep the deletion* leaves it scheduled. Admins can *Restore account* or *Delete now* on the person's page (delete now moves the date to now; the next run, within a minute, starts the deletion). Unlocking a deletion-locked account from the list is a restore as well.
+
+**Final deletion.** A background job runs every 60 seconds. It first claims a due account: from that moment nothing can be restored, and a sign-in answers `403 account_deleted`. Then it runs six steps, each safe to repeat, and remembers the last one that finished, so a restart continues where it stopped:
+
+1. **Media server:** the account's user and every profile user are deleted (one already gone counts as done).
+2. **Request service:** the linked request-service user is deleted (404 counts as done).
+3. **Offline licences:** revoked again (the lock already did it; repeated for safety).
+4. **FriendFlix rows:** in one transaction, the account and everything that hangs off it (profiles, lists, watchlist, ratings, history, devices, push subscriptions, limits …), the person's approval request, and the admin notices that name the person (those linking to the account and those keyed by its id). Redis caches for the account and its profiles are cleared.
+5. **Audit log:** in every entry the person made or that is about them, the keys `name`, `email`, `jellyfin`, `username` and `ip` (and names nested in profile changes) are removed and replaced by the **pseudonym**. Entries of the person's approval request (`user.rejected`, which can quote the name in the admin's message) are scrubbed the same way, message included.
+6. **Authentik:** the user is **deactivated** (`is_active: false`), never deleted. Deleting it is the owner's call; the steps are in [authentik.md §8.4](authentik.md#84-account-page-and-account-deletion). Without the Authentik API token (or when the user is not found) this step is skipped and recorded as `authentik: not_configured` / `not_found`. **The Authentik user then stays active: the person can sign in again and lands in the approval queue as a new person (a member of `ADMIN_GROUP` gets a new admin account instead).**
+
+When all six are done, the admins get a notice with the pseudonym and the audit log gets `user.deleted`.
+
+**When a step fails** it stores only an error code (never a message that could quote a URL or token), audits `user.deletion_failed` and notifies the admins once per step. The step is then **retried once a minute, without backoff, until it succeeds or an admin fixes the cause** (for example the media server is down, or the Authentik token lacks *Can change User*). *Admin → Users*, filter *Deletion pending*, shows such an account as "Cleanup step n of 6" with the error. See [operations.md](operations.md#kontolöschung).
+
+### The pseudonym
+
+`deleted-` plus the first 8 hex characters of `HMAC-SHA256(APP_ENC_KEY, "friendflix deleted v1|" + account id)`, for example `deleted-3f9a1c07`. It is stable (every entry of the same person gets the same one, so the log still reads as one story) and cannot be turned back into the account id without the key. The audit views show it wherever the name used to be.
+
+### What stays, and for how long
+
+- **The deletion record:** account id, pseudonym, start and end time, kept for good so the audit views can resolve the pseudonym. The name, e-mail, Authentik `sub`, media-server ids and request-service id it held during the cleanup are cleared when the deletion finishes.
+- **The audit log:** entries stay (there is no automatic pruning), with the pseudonym instead of the name.
+- **The deactivated Authentik user** until the owner deletes it.
+- **Database backups** made before the deletion still contain the account until they rotate out (`BACKUP_KEEP_DAYS`, default 14 days; copies elsewhere follow your own rules). Restoring such a dump brings the account back.
+- **Places FriendFlix does not scrub**, where the person's name may remain:
+  - invite notes (an admin's free text, which may name the invitee);
+  - notices in other people's inboxes that were rendered with the name: list invitations, watch-party invitations and recommendations (including the sender's note);
+  - the admins' "new sign-in waiting for approval" notice;
+  - `user.rejected` audit entries of a request that never became this account (for example: rejected, then joined through an invite);
+  - free text other people wrote, such as a list or poll title, a comment or an admin's note in another audit entry.
+- Items (and their notes) the person added to other people's lists stay, without who added them.
+- A deleted admin's own administrative audit entries lose their name-type keys too (hub, source or item names), which removes some non-personal detail.
+
+## Settings and generated secrets
+
+Settings live in the database and are changed by admins in *Admin → Settings*; the secrets needed before the database can be read are generated on the host. The rules:
+
+- **Bootstrap volume.** The `bootstrap` service writes the database and Redis passwords, `APP_ENC_KEY` and `INTERNAL_SECRET` into the `bootstrap` volume and exits. It runs as root with no capability but `CHOWN`, a read-only root file system and no network. Files are owned by `root:10001` with mode `0440`, the directory `0750`; only the containers that need them join group `10001` (`backend`, `redis`, the `backup` sidecar, and the gateway, which mounts only its own `bootstrap-gateway` volume; Postgres reads its password file as root in its entrypoint). Writes are atomic and synced to disk. It logs file names and actions, never values. It refuses to replace an empty `postgres_password` or `app_enc_key` on a volume that holds other files, because a new value would lock out the existing data.
+- **Gateway-only volume.** The gateway mounts `bootstrap-gateway`, which holds a copy of `INTERNAL_SECRET` and nothing else: it never sees the database password or the encryption key, and it is still not on the `db` network. It gets its media server URL from the backend (`GET /internal/gateway-config`, behind `INTERNAL_SECRET`) and logs only the URL's origin.
+- **Environment wins.** A value from the environment or a `_FILE` secret cannot be changed from the web UI; the page shows it locked. Saved values are validated against the same schema as environment values.
+- **Write-only secrets.** Secret settings are encrypted with `APP_ENC_KEY` (see [Cryptography](#cryptography)) in the `settings` table. `GET /api/admin/settings` never returns them: only *set* / *not set*, the change date and, for data-source API keys, the last four characters. Credentials inside a non-secret URL (user info, ntfy's `auth` query) are shown redacted, and a submitted URL that still holds the redaction is refused. A generated webhook secret is returned once, with `Cache-Control: no-store`; the VAPID private key never leaves the server.
+- **Fresh sign-in for sensitive changes.** Saving a secret, `PUBLIC_URL`, `HOME_NETWORKS`, `ADMIN_GROUP`, `NTFY_URL` / `NTFY_BASE_URL`, any `OIDC_*` or `AUTHENTIK_*` value or a URL a stored credential is sent to, generating a secret, and any save or test that would send a stored credential to a changed host need a sign-in at most 10 minutes old ([Re-authentication](#re-authentication)). So does replacing or removing a data-source key in *Admin → Data sources*. **Move** / **Move all** (`settings.import_env`) needs no fresh sign-in: it copies a value that is already in effect from the environment into the database and returns nothing; changing it later follows the rules above.
+- **Checks and logs carry codes, not data.** Each save probes the affected service with the candidate values; probe results and validation errors are codes, never an upstream body. The audit log records `settings.update`, `settings.import_env` and `settings.generate` with key names only.
+- **Revision-only broadcast.** After a save the backend publishes only the new revision number on the Redis channel `ff:settings:rev`; every instance then reloads from the database (and polls the revision every 30 s in case a message is lost). Values never travel over Redis. A stored value that cannot be decrypted or fails validation is ignored, flagged in the UI and logged by key name only.
+- **No Docker socket.** No FriendFlix container gets `/var/run/docker.sock`; the web app cannot control Docker.
+
+## Setup wizard
+
+A new install has no admin and no sign-in yet, so the first run is protected by a one-time code instead (`backend/src/setup/`, `backend/src/routes/setup.ts`):
+
+- **Setup mode.** Until setup completes, every route except `/health`, `/api/version`, `/api/setup/*`, `/internal/gateway-config` and the first admin's `/auth/login` / `/auth/callback` (only with a valid setup session) answers `503 setup_required`, and background jobs do nothing; those two sign-in routes, browser navigations, send a request without a setup session back to the wizard (`/setup`, or `/setup?expired=1` from the callback) instead. The gate matches the route pattern, so unknown or encoded paths are gated too. Once setup is complete, the public `GET /api/setup/state` answers `{ "complete": true }` and nothing else.
+- **Setup code.** The backend that runs the background jobs (`BACKGROUND_JOBS=true`) issues a 12-character code (Crockford base32, 60 bits) at start and prints it once to its log; only `sha256` of it is stored, compared in constant time, and it never appears in an answer or another log line. It is valid for 24 hours; every restart replaces it.
+- **Limits.** 5 tries per 15 minutes per client address (a route rate limit, counted per backend instance and based on the client address the proxy reports through `trustProxy`: a client that can set its own `X-Forwarded-For` at your proxy gets around it) and 10 wrong codes in total, counted in the database across instances, after which the code is invalidated until the next restart. Anyone who can reach the portal before setup is done can therefore lock the code (but not guess it): finish setup promptly or restrict access until it is done ([setup.md](setup.md#the-setup-code)).
+- **Setup session.** A valid code sets `ff_setup` (random token, `HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS, 2 hours sliding; Redis holds only its hash) and the readable `ff_setup_csrf` (`SameSite=Strict`). Every write needs the header `x-ff-setup-csrf` equal to both. `ff_setup` is Lax, not Strict, because the identity provider's redirect back to `/auth/callback` is a cross-site navigation when Authentik runs on another site; writes stay protected by the header, which a cross-site page cannot set. The endpoints answer `409 setup_complete` once setup is done, whatever cookies are sent.
+- **First admin.** The sign-in started from the wizard (`/auth/login?setup=1`) is bound to the setup session that started it; the callback refuses it from any other setup session. It creates the account as admin and marks setup complete in one database transaction, so exactly one account becomes admin this way, even with several backends; the role does not depend on any group. Completion clears the code, deletes every setup session and writes `setup.completed` to the audit log. Installs that already have accounts are marked complete by the migration and never enter setup mode.
+- **Server-side requests (SSRF).** The wizard makes the backend send requests to addresses the code holder types (public address, media server, Authentik), and *Admin → Settings* does the same for admins. This is by design: the code holder is the owner of the install. The requests go to `http`/`https` URLs only (the automatic Jellyfin and Authentik steps also refuse user info in the URL), never follow redirects and have short deadlines; only fixed result codes come back, never an upstream body.
+- **The setup code is owner-equivalent, including the credentials the environment provides.** During setup, saving and testing in the wizard skip the re-authentication that *Admin → Settings* asks for when a destination changes. A probe can therefore send a secret from `.env` to an address typed in the wizard, for example an environment `JELLYFIN_ADMIN_API_KEY` to a typed `JELLYFIN_URL`, or an environment `AUTHENTIK_API_TOKEN` to a typed `AUTHENTIK_URL` (an address set in the environment cannot be changed). On an install that already has a full `.env` but no accounts, anyone who can read the backend log can use the code to send those secrets anywhere: keep the logs as private as `.env`, and finish setup promptly. After setup, admins cannot do this.
+- **One-time credentials.** The Authentik superuser API token and the Jellyfin administrator's password are used for that one request: never stored, logged or put into an error, and the bodies of `/api/setup/*` and `/api/admin/settings*` are kept out of error logs. What is saved instead is a Jellyfin API key named `FriendFlix` (revoked again if saving it fails) and the Authentik service account's token with only the permissions FriendFlix needs. Revoke the superuser token in Authentik afterwards ([authentik.md](authentik.md#3-automatic-setup-from-friendflix)).
+
 ## Cryptography
 
 | Purpose | Mechanism | Notes |
 |---|---|---|
-| Secrets at rest (media-server passwords and tokens, admin-saved API keys) | AES-256-GCM, random 12-byte IV, authentication tag; key `APP_ENC_KEY` (must decode to 32 bytes) | `backend/src/crypto.ts` |
+| Secrets at rest (media-server passwords and tokens, secret settings saved in *Admin → Settings*) | AES-256-GCM, random 12-byte IV, authentication tag; key `APP_ENC_KEY` (must decode to 32 bytes) | `backend/src/crypto.ts` |
 | Profile PINs | scrypt, random 16-byte salt, constant-time comparison; limited failed attempts | `hashPin` / `verifyPin` |
 | Cast and API tokens | 256-bit CSPRNG (`randomBytes`), base64url; only `sha256(token)` is stored in Redis | `backend/src/cast.ts`, [cast.md](cast.md) |
 | Signed cast subtitle URLs | HMAC-SHA-256 with a key derived from `APP_ENC_KEY`, compared in constant time | `backend/src/cast.ts` |
+| Audit pseudonym of a deleted account | `deleted-` + 8 hex characters of HMAC-SHA-256 keyed with `APP_ENC_KEY` over the account id | `backend/src/deletion.ts` |
 | Shared secrets between services | `INTERNAL_SECRET`, `WEBHOOK_SECRET`, `METRICS_TOKEN`, compared in constant time | `backend/src/routes/internal.ts`, `backend/src/app.ts` |
 | Sign-in | OIDC authorization code flow with PKCE (S256), `state`, `nonce` | `backend/src/oidc.ts` |
 | Web Push | VAPID keys (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`) | `backend/src/push.ts` |
 
-Keep `APP_ENC_KEY` out of backups of the database: losing it makes encrypted values unreadable (the app treats them as unset), leaking it together with a database dump exposes them. Docker secrets are supported through [compose.secrets.yaml](../compose.secrets.yaml).
+`APP_ENC_KEY` lives in the `bootstrap` volume (or in `.env` / a Docker secret on installs that set it). Back the volume up apart from the database dumps (`scripts/backup-bootstrap.sh`): losing it makes encrypted values unreadable (the app treats them as unset and flags them for re-entry), leaking it together with a database dump exposes them. Docker secrets are supported through [compose.secrets.yaml](../compose.secrets.yaml).
 
 ## Hardening
 
 What the shipped [compose.yaml](../compose.yaml) and images do:
 
-- **Containers:** `read_only: true` root file system with a `tmpfs` for `/tmp`, `cap_drop: [ALL]`, `security_opt: no-new-privileges:true` on backend, gateway, web and the backup sidecar; Redis runs read-only too. The app images run as the unprivileged `node` user.
+- **Containers:** `read_only: true` root file system with a `tmpfs` for `/tmp`, `cap_drop: [ALL]`, `security_opt: no-new-privileges:true` on backend, gateway, web and the backup sidecar; Redis runs read-only as its own user. The app images run as the unprivileged `node` user. The one-shot `bootstrap` service runs as root, but read-only, without network and with `CHOWN` as its only capability ([Settings and generated secrets](#settings-and-generated-secrets)).
 - **Images:** base images pinned by digest; `npm`, `npx` and `yarn` are removed from the runtime images; production dependencies only; Alpine security updates applied at build; health checks.
 - **Network:** only the three app ports are published, bound to `127.0.0.1`; `db` and `media` networks are `internal`; Redis requires a password and keeps no data on disk.
 - **API headers:** `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`, `Cross-Origin-Resource-Policy: same-origin` (relaxed only for the Chromecast subtitle route) and `Cache-Control: no-store` unless a route sets its own.

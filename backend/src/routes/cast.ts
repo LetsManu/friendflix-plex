@@ -7,7 +7,8 @@ import type { Ctx } from '../ctx.js';
 import { MediaError } from '../media/types.js';
 import { countLive } from '../live.js';
 import { isHomeRequest } from '../netaddr.js';
-import { effectiveRole, remoteBitrateCap } from '../roles.js';
+import { effectiveLimits } from '../limits.js';
+import { remoteBitrateCap } from '../roles.js';
 import { requireUser } from '../session.js';
 import { id32 as itemId } from './_shared.js';
 
@@ -28,7 +29,7 @@ export function castRoutes(app: FastifyInstance, ctx: Ctx) {
     }).parse(req.body);
     const deviceId = req.session!.deviceId;
     if (!deviceId) return reply.code(403).send({ error: 'device_pending' });
-    const role = (await effectiveRole(ctx, req.user!.role))!;
+    const role = (await effectiveLimits(ctx, req.user!))!;
     if (!role.transcoding) return reply.code(403).send({ error: 'transcoding_disabled' }); // Chromecast always needs a transcoded HLS stream
     if ((await countLive(ctx, req.user!.id)) >= role.maxStreams) return reply.code(429).send({ error: 'max_streams', max: role.maxStreams });
     try {

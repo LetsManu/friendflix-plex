@@ -30,6 +30,45 @@ test.describe('app shell (desktop)', () => {
     await expect(cats.getByRole('link', { name: 'Englisch' })).toHaveAttribute('href', '/browse/movies?audio=eng');
   });
 
+  test('without a request service: requests stays in the nav for its reminders, upcoming is hidden', async ({ page, api }) => {
+    api.features = { requests: false };
+    const asked: string[] = [];
+    page.on('request', (r) => { if (/\/api\/(seerr|requests)\//.test(r.url())) asked.push(r.url()); });
+    await page.goto('/');
+    const footer = page.getByRole('contentinfo');
+    await expect(footer.getByRole('link', { name: 'Kalender' })).toBeAttached();
+    await expect(footer.getByRole('link', { name: 'Wünsche' })).toBeAttached();
+    await expect(footer.getByRole('link', { name: 'Demnächst' })).toHaveCount(0);
+    await page.goto('/me');
+    await expect(page.locator('main').getByRole('link', { name: 'Wünsche' })).toBeVisible();
+    await page.goto('/requests?q=dune');
+    await expect(page.getByRole('heading', { level: 2, name: 'Erinnerungen' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Meine Wünsche' })).toHaveCount(0);
+    await expect(page.locator('main').getByRole('textbox')).toHaveCount(0);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    expect(asked).toEqual([]); // neither the upcoming row nor the page asks the request service
+  });
+
+  test('a stale "no request service" boot hint: /requests loads wishes, quota and ?q= once /api/me reports the service', async ({ page, api }) => {
+    api.features = { requests: false };
+    await page.goto('/'); // writes the boot hint with noRequests
+    await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Kalender' })).toBeAttached();
+    api.features = { requests: true }; // the service was set up meanwhile
+    const asked: string[] = [];
+    page.on('request', (r) => { const p = new URL(r.url()).pathname; if (/^\/api\/(seerr|requests)\//.test(p)) asked.push(p); });
+    // /api/me answers late, so the page renders early from the stale hint first
+    await page.route('**/api/me', async (r) => { await new Promise((res) => setTimeout(res, 800)); return r.fallback(); });
+    await page.goto('/requests?q=dune');
+    await expect(page.getByRole('heading', { level: 2, name: 'Meine Wünsche' })).toBeVisible();
+    await expect.poll(() => [...new Set(asked)].sort()).toEqual(['/api/requests/mine', '/api/requests/quota', '/api/seerr/search']);
+  });
+
+  test('requests nav entry shown when features.requests is true', async ({ page, api }) => {
+    api.features = { requests: true };
+    await page.goto('/');
+    await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Wünsche' })).toBeAttached();
+  });
+
   test('header turns solid once the page is scrolled', async ({ page }) => {
     await page.goto('/');
     const header = page.locator('header.nav');

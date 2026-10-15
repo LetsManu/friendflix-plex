@@ -37,6 +37,8 @@
   import TitleFacts from '#lib/detail/TitleFacts.svelte';
   import StoryCard from '#lib/detail/StoryCard.svelte';
   import LeavingDialog from '#lib/detail/LeavingDialog.svelte';
+  import Safe from '#lib/detail/Safe.svelte';
+  import { toPeople } from '#lib/detail/safe';
   import { forgetFacts, loadFacts, type Facts } from '#lib/fresh';
 
   /** Unified detail view: used inside the popup (ItemModal) and as the full page (/item/[id]). */
@@ -86,8 +88,8 @@
     const pItem = api<ItemDetail>(`/api/items/${want}`);
     // secondary requests start now; each one is optional (the view works without it)
     opt(loadFacts(want), (f) => (facts = f), my);
-    opt(api(`/api/items/${want}/people`), (r) => (people = (r.people as Person[]) ?? []), my);
-    opt(api(`/api/items/${want}/extras/all`), (r) => (extras = (r.items as typeof extras) ?? []), my);
+    opt(api(`/api/items/${want}/people`), (r) => (people = toPeople(r?.people)), my);
+    opt(api(`/api/items/${want}/extras/all`), (r) => (extras = Array.isArray(r?.items) ? (r.items as typeof extras) : []), my);
     let seriesFired = false;
     const fireSeries = () => {
       if (seriesFired) return;
@@ -433,8 +435,8 @@
         {#if item.rating}<span class="age" title={$t('detail.view.ageRating')}>{item.rating}</span>{/if}
         {#if len}<span>{len}</span>{/if}
       </p>
-      <TitleFacts {facts} episode={item.type === 'Episode'} />
-      <div class="lead" use:smoothHeight><div class="lead-in"><RatingsLine {about} />{#if tagline}<p class="tagline">{tagline}</p>{/if}</div></div>
+      <Safe name="facts" key={item.id}><TitleFacts {facts} episode={item.type === 'Episode'} /></Safe>
+      <div class="lead" use:smoothHeight><div class="lead-in"><Safe name="ratings" key={item.id}><RatingsLine {about} /></Safe>{#if tagline}<p class="tagline">{tagline}</p>{/if}</div></div>
       <a class="btn pill play wide" data-autofocus href={playHref} use:playPrefetch on:click={castPlay}><Icon name="play" size={24} />{playLabel}</a>
       {#if item.type !== 'Series'}<DownloadButton itemId={item.id} block />{:else if playTarget}<DownloadButton itemId={playTarget} seriesId={item.id} block />{/if}
       {#if resumeLine}<p class="resume">{resumeLine}</p>{/if}
@@ -469,12 +471,12 @@
             {#if item.rating}<span class="age" title={$t('detail.view.ageRating')}>{item.rating}</span>{/if}
             {#if len}<span>{len}</span>{/if}
           </p>
-          <TitleFacts {facts} episode={item.type === 'Episode'} />
-          <div class="lead" use:smoothHeight><div class="lead-in"><RatingsLine {about} />{#if tagline}<p class="tagline">{tagline}</p>{/if}</div></div>
+          <Safe name="facts" key={item.id}><TitleFacts {facts} episode={item.type === 'Episode'} /></Safe>
+          <div class="lead" use:smoothHeight><div class="lead-in"><Safe name="ratings" key={item.id}><RatingsLine {about} /></Safe>{#if tagline}<p class="tagline">{tagline}</p>{/if}</div></div>
           <p class="ov">{overview || $t('detail.view.noOverview')}</p>
           {#if langs}<p class="muted small">{langs}</p>{/if}
         {/if}
-        {#if social}<FriendsStrip id={item.id} />{/if}
+        {#if social}<Safe name="friends" key={item.id}><FriendsStrip id={item.id} /></Safe>{/if}
         {#if castMsg}<p class="muted" role="status">{castMsg}</p>{/if}
         <div role="status">{#if saveMsg}<p class="err">{saveMsg}</p>{/if}</div>
         {#if recOpen && social}
@@ -487,11 +489,11 @@
         {/if}
       </div>
 
-      {#if about?.collection && item.type === 'Movie'}<CollectionRow collection={about.collection} canRequest={about.canRequest} {variant} />{/if}
+      {#if about?.collection && item.type === 'Movie'}<Safe name="collection" key={item.id}><CollectionRow collection={about.collection} canRequest={about.canRequest} {variant} /></Safe>{/if}
 
-      {#if item.type === 'Series'}<StoryCard seriesId={item.id} />{/if}
+      {#if item.type === 'Series'}<Safe name="story" key={item.id}><StoryCard seriesId={item.id} /></Safe>{/if}
 
-      <CastRow id={item.id} {people} />
+      <Safe name="cast" key={item.id}><CastRow id={item.id} {people} /></Safe>
 
       <!-- ================= tabs (always shown); the panels stay mounted and switch with `hidden` ================= -->
       <div class="tabs" role="tablist" aria-label={$t('hubs.extras.tabs')} tabindex="-1" on:keydown={tabKeys}>
@@ -503,22 +505,22 @@
 
       {#if item.type === 'Series'}
         <div class="tp" id="dv-panel-episodes" role="tabpanel" aria-labelledby="dv-tab-episodes" hidden={curTab !== 'episodes'}>
-          <EpisodeList seriesId={item.id} {seasons} bind:season {episodes} {next} {qs} />
+          <Safe name="episodes" key={item.id}><EpisodeList seriesId={item.id} {seasons} bind:season {episodes} {next} {qs} /></Safe>
         </div>
       {/if}
 
       <div class="tp" id="dv-panel-details" role="tabpanel" aria-labelledby="dv-tab-details" hidden={curTab !== 'details'}>
-        <DetailsTab {item} {people} {facts} {about} download={item.type !== 'Series' && !phone} on:rated={(e) => item && onRated(item.id, e.detail.average)} />
+        <Safe name="details" key={item.id}><DetailsTab {item} {people} {facts} {about} download={item.type !== 'Series' && !phone} on:rated={(e) => item && onRated(item.id, e.detail.average)} /></Safe>
       </div>
 
       <div class="tp" id="dv-panel-more" role="tabpanel" aria-labelledby="dv-tab-more" hidden={curTab !== 'more'}>
-        <MoreLikeThis items={more} {variant} />
+        <Safe name="more" key={item.id}><MoreLikeThis items={more} {variant} /></Safe>
       </div>
 
       {#if extras.length}
         <div class="tp extras" id="dv-panel-extras" role="tabpanel" aria-labelledby="dv-tab-extras" hidden={curTab !== 'extras'}>
           <h2 class="sr-only">{$t('detail.view.extras')}</h2>
-          <Extras items={extras} {qs} />
+          <Safe name="extras" key={item.id}><Extras items={extras} {qs} /></Safe>
         </div>
       {/if}
       <!-- the "⋯ Mehr" download entry: its own headless instance outside the tab panels, so the sheet opens from any tab -->

@@ -44,7 +44,7 @@ export function markSessionSeen(): void {
 
 /** Routes that never get an intro: the player, watch parties, TV pairing and other public pages. */
 export function isIntroFreeRoute(route: string): boolean {
-  return /^\/(watch|party|tv|invite|offline)(\/|$)/.test(route);
+  return /^\/(watch|party|tv|invite|offline|pending|restore)(\/|$)/.test(route);
 }
 
 export interface IntroContext {

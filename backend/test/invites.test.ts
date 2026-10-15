@@ -93,11 +93,13 @@ describe('invites', () => {
     expect(inv.used_by_name).toBe('Freund guest1');
   });
 
-  it('expired invites are rejected and unknown users need an invite', async () => {
+  it('expired invites are rejected and unknown users without an invite wait for approval', async () => {
     const token = (await adm('POST', '/api/admin/invites', { role: 'friend', ttlHours: 1 })).json().link.split('/').pop();
     await env.pool.query("update invites set expires_at = now() - interval '1 minute' where used_at is null");
     expect((await inviteLogin(token, 'late')).statusCode).toBe(410);
-    expect((await inviteLogin(undefined, 'noinvite')).statusCode).toBe(403);
+    const cb = await inviteLogin(undefined, 'noinvite');
+    expect([cb.statusCode, cb.headers.location]).toEqual([302, '/pending']);
+    expect((await env.pool.query("select 1 from users where authentik_sub='noinvite'")).rowCount).toBe(0);
   });
 
   it('a failed provisioning releases the invite', async () => {
@@ -202,6 +204,92 @@ describe('invites', () => {
     const { claimInvite } = await import('../src/invites.js');
     const res = await Promise.all([claimInvite(env.ctx, token), claimInvite(env.ctx, token), claimInvite(env.ctx, token)]);
     expect(res.filter(Boolean)).toHaveLength(1);
+  });
+});
+
+describe('multi-use invites', () => {
+  const tokenOf = (inv: { link: string }) => inv.link.split('/').pop()!;
+
+  it('an invite with maxUses 2 is claimable twice, the third claim fails', async () => {
+    const r = await adm('POST', '/api/admin/invites', { role: 'friend', ttlHours: 24, maxUses: 2, note: 'Paar' });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ uses: 0, maxUses: 2 });
+    const token = tokenOf(r.json());
+    ak.calls.length = 0;
+    expect((await inviteLogin(token, 'multi-1')).statusCode).toBe(302);
+    // not used up yet: the Authentik invitation must stay for the second person
+    await new Promise((res) => setTimeout(res, 20));
+    expect(ak.calls.filter((c) => c.method === 'DELETE')).toHaveLength(0);
+    expect((await env.app.inject(`/api/invite/${token}`)).statusCode).toBe(200);
+    expect((await inviteLogin(token, 'multi-2')).statusCode).toBe(302);
+    await vi.waitFor(() => expect(ak.calls.filter((c) => c.method === 'DELETE')).toHaveLength(1)); // used up: deleted
+    const third = await inviteLogin(token, 'multi-3');
+    expect(third.statusCode).toBe(410);
+    expect((await env.pool.query("select 1 from users where authentik_sub='multi-3'")).rowCount).toBe(0);
+
+    const row = (await env.pool.query('select uses, max_uses, used_at, used_by from invites where id=$1', [r.json().id])).rows[0];
+    const first = (await env.pool.query("select id from users where authentik_sub='multi-1'")).rows[0].id;
+    expect(row).toMatchObject({ uses: 2, max_uses: 2, used_by: first });
+    expect(row.used_at).toBeInstanceOf(Date);
+    const uses = (await adm('GET', `/api/admin/invites/${r.json().id}/uses`)).json().uses;
+    expect(uses.map((u: any) => u.name)).toEqual(['Freund multi-1', 'Freund multi-2']);
+    const listed = (await adm('GET', '/api/admin/invites?status=used')).json().invites.find((i: any) => i.id === r.json().id);
+    expect(listed).toMatchObject({ uses: 2, max_uses: 2 });
+  });
+
+  it('two parallel claims of the last use: exactly one succeeds', async () => {
+    const inv = (await adm('POST', '/api/admin/invites', { role: 'friend', ttlHours: 1, maxUses: 2 })).json();
+    const { claimInvite } = await import('../src/invites.js');
+    expect(await claimInvite(env.ctx, tokenOf(inv))).toBeTruthy();
+    const res = await Promise.all([claimInvite(env.ctx, tokenOf(inv)), claimInvite(env.ctx, tokenOf(inv))]);
+    expect(res.filter(Boolean)).toHaveLength(1);
+    expect((await env.pool.query('select uses from invites where id=$1', [inv.id])).rows[0].uses).toBe(2);
+  });
+
+  it('accessDays sets access_until on the new account', async () => {
+    const inv = (await adm('POST', '/api/admin/invites', { role: 'friend', ttlHours: 1, accessDays: 30 })).json();
+    expect((await inviteLogin(tokenOf(inv), 'days-1')).statusCode).toBe(302);
+    const u = (await env.pool.query("select access_until from users where authentik_sub='days-1'")).rows[0];
+    expect(Math.abs(u.access_until.getTime() - (Date.now() + 30 * 86400_000))).toBeLessThan(60_000);
+    // without accessDays the account has no end
+    const open = (await adm('POST', '/api/admin/invites', { role: 'friend', ttlHours: 1, accessDays: null })).json();
+    expect((await inviteLogin(tokenOf(open), 'days-2')).statusCode).toBe(302);
+    expect((await env.pool.query("select access_until from users where authentik_sub='days-2'")).rows[0].access_until).toBeNull();
+    // bounds
+    for (const bad of [{ maxUses: 0 }, { maxUses: 51 }, { accessDays: 0 }, { accessDays: 3651 }]) {
+      expect((await adm('POST', '/api/admin/invites', { role: 'friend', ...bad })).statusCode).toBe(400);
+    }
+  });
+
+  it('release returns the use', async () => {
+    const inv = (await adm('POST', '/api/admin/invites', { role: 'friend', ttlHours: 1, maxUses: 2 })).json();
+    const { claimInvite, releaseInvite } = await import('../src/invites.js');
+    expect((await inviteLogin(tokenOf(inv), 'rel-1')).statusCode).toBe(302);
+    const user = (await env.pool.query("select id from users where authentik_sub='rel-1'")).rows[0].id;
+    const c = await claimInvite(env.ctx, tokenOf(inv));
+    expect(c).toBeTruthy();
+    expect(await claimInvite(env.ctx, tokenOf(inv))).toBeNull(); // used up
+    await releaseInvite(env.ctx, c!.id);
+    let row = (await env.pool.query('select uses, used_by from invites where id=$1', [inv.id])).rows[0];
+    expect(row).toEqual({ uses: 1, used_by: user }); // the first use stays recorded
+    // releasing a recorded use also removes its invite_uses row; the last release reopens the invite completely
+    await releaseInvite(env.ctx, inv.id, user);
+    row = (await env.pool.query('select uses, used_at, used_by from invites where id=$1', [inv.id])).rows[0];
+    expect(row).toEqual({ uses: 0, used_at: null, used_by: null });
+    expect((await env.pool.query('select 1 from invite_uses where invite_id=$1', [inv.id])).rowCount).toBe(0);
+    expect(await claimInvite(env.ctx, tokenOf(inv))).toBeTruthy();
+  });
+
+  it('revoking a partly used invite closes it and keeps its history', async () => {
+    const inv = (await adm('POST', '/api/admin/invites', { role: 'friend', ttlHours: 24, maxUses: 3 })).json();
+    expect((await inviteLogin(tokenOf(inv), 'revoke-1')).statusCode).toBe(302);
+    ak.calls.length = 0;
+    expect((await adm('DELETE', `/api/admin/invites/${inv.id}`)).statusCode).toBe(200);
+    expect(ak.calls.filter((c) => c.method === 'DELETE')).toHaveLength(1);
+    expect((await env.pool.query('select uses, max_uses from invites where id=$1', [inv.id])).rows[0]).toEqual({ uses: 1, max_uses: 1 });
+    expect((await env.app.inject(`/api/invite/${tokenOf(inv)}`)).statusCode).toBe(404);
+    expect((await adm('GET', `/api/admin/invites/${inv.id}/uses`)).json().uses).toHaveLength(1);
+    expect((await adm('GET', '/api/admin/invites/00000000-0000-4000-8000-000000000000/uses')).statusCode).toBe(404);
   });
 });
 

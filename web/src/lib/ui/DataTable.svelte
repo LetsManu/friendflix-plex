@@ -119,7 +119,7 @@
                   {c.label}<span class="sr-only">{sort?.key === c.key ? (sort.dir === 'asc' ? $t('ui.table.sortAsc') : $t('ui.table.sortDesc')) : ''}</span>
                   <Icon name={sort?.key === c.key ? (sort.dir === 'asc' ? 'arrow-up' : 'arrow-down') : 'sort'} size={14} />
                 </button>
-              {:else}{c.label}{/if}
+              {:else if c.hideLabel}<span class="sr-only">{c.label}</span>{:else}{c.label}{/if}
             </th>
           {/each}
           {#if hasActions}<th scope="col" class="act"><span class="sr-only">{$t('ui.table.actions')}</span></th>{/if}

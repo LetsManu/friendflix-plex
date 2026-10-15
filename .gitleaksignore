@@ -1,3 +1,5 @@
+# Every entry is pinned to a commit SHA: after a rebase or squash of these commits the entries stop matching and the CI secrets
+# job fails. Merge main into a branch instead of rebasing it, or regenerate the entries (gitleaks git --report-format json) afterwards.
 # test-only placeholder (cfg.INTERNAL_SECRET of the test helpers), replaced in a later commit
 12220615f4b663e80fdeae36682cb20d3f41aa8c:backend/test/profiles.test.ts:generic-api-key:167
 12220615f4b663e80fdeae36682cb20d3f41aa8c:backend/test/profiles.test.ts:generic-api-key:212
@@ -17,3 +19,24 @@ c0afee0e9f185ea0f700875b3093fe04fcb3f44c:backend/test/sources-keys.test.ts:gener
 c0afee0e9f185ea0f700875b3093fe04fcb3f44c:backend/test/sources-keys.test.ts:generic-api-key:84
 # fake TMDB/OMDb test keys in the Plex Block 21 tests (fork)
 d0ce3d77e095601f23f1b553703e325d70d0cec8:backend/test/plex/about.test.ts:generic-api-key:187
+# test placeholder (backend/test/helpers.ts INTERNAL_SECRET) in the Block 23 user detail test
+eaa804d7cce260a98fd5db716612bf4d5f1e3e50:backend/test/admin-user-detail.test.ts:generic-api-key:176
+# Block 25a test placeholders (settings store, probes, gateway config, sources keys, e2e mock generate answer)
+f2f5f49d056eaccf884ef590bd02af9545dfef05:backend/test/sources-keys.test.ts:generic-api-key:121
+f2f5f49d056eaccf884ef590bd02af9545dfef05:backend/test/sources-keys.test.ts:generic-api-key:122
+0b780bdbd52bcac95f03ce3a78d25041e00e8cad:e2e/mocks/settings.ts:generic-api-key:199
+4b610b83f2519996a7572c99328f4dcdd3e630d1:backend/test/settings-probes.test.ts:generic-api-key:111
+4b610b83f2519996a7572c99328f4dcdd3e630d1:backend/test/settings-probes.test.ts:generic-api-key:115
+b1e64405249dd1c91566ee8eb23e819d02318b94:backend/test/gateway-config.test.ts:generic-api-key:9
+b1e64405249dd1c91566ee8eb23e819d02318b94:backend/test/gateway-config.test.ts:generic-api-key:51
+4b610b83f2519996a7572c99328f4dcdd3e630d1:backend/test/admin-settings.test.ts:generic-api-key:237
+4b610b83f2519996a7572c99328f4dcdd3e630d1:backend/test/admin-settings.test.ts:generic-api-key:272
+4b610b83f2519996a7572c99328f4dcdd3e630d1:backend/test/admin-settings.test.ts:generic-api-key:330
+c5136e4339bb18a34f1aabe67f08c3085159d704:backend/test/settings-live.test.ts:generic-api-key:83
+c5136e4339bb18a34f1aabe67f08c3085159d704:backend/test/settings-live.test.ts:generic-api-key:87
+eb9759f5d9991fc5c41bf15fd7f866693c336354:backend/test/settings-repo.test.ts:generic-api-key:45
+dae644181e1532bd6f73fe7de5332de9bcfeb6a8:backend/test/settings-store.test.ts:generic-api-key:21
+dae644181e1532bd6f73fe7de5332de9bcfeb6a8:backend/test/settings-store.test.ts:generic-api-key:70
+dae644181e1532bd6f73fe7de5332de9bcfeb6a8:backend/test/settings-store.test.ts:generic-api-key:204
+# Block 25 Task 12: test placeholder password (backend/test/jellyfin-setup.test.ts), not a credential
+4d4c0e6aefedd326740939633b715da1b18dcd88:backend/test/jellyfin-setup.test.ts:generic-api-key:10

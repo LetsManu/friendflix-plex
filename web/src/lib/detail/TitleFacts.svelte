@@ -10,15 +10,17 @@
   export let facts: Facts | null = null;
   export let episode = false;
   $: leaving = facts?.leaving ?? null;
+  /** a label this web build does not know yet (newer server) is left out */
+  $: freshKey = facts?.fresh && !episode ? FRESH_KEYS[facts.fresh] : undefined;
   $: soon = leaving !== null && leaving.days <= LEAVING_BADGE_DAYS;
   /** "2026-10-24" as a local calendar day (new Date('2026-10-24') would be UTC and shift by a day west of Greenwich) */
   const local = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y!, m! - 1, d); };
   $: until = leaving ? fmtDate(local(leaving.leavesAt), { day: 'numeric', month: 'long' }) : '';
 </script>
 
-{#if facts && ((facts.fresh && !episode) || leaving || facts.traits)}
+{#if facts && (freshKey || leaving || facts.traits)}
   <div class="tf">
-    {#if facts.fresh && !episode}<span class="pill">{$t(FRESH_KEYS[facts.fresh])}</span>{/if}
+    {#if freshKey}<span class="pill">{$t(freshKey)}</span>{/if}
     {#if leaving}
       {#if soon}<span class="pill leave">{$t(leaving.days === 0 ? 'fresh.leaving.today' : 'fresh.leaving.days', { n: leaving.days })}</span>{/if}
       <span class="until">{$t('fresh.leaving.until', { date: until })}</span>

@@ -32,6 +32,15 @@ describe('MemoryKV', () => {
     expect(await kv.take('a')).toBeNull();
     expect(await kv.get('a')).toBeNull();
   });
+  it('delIfEquals deletes only while the key holds that value', async () => {
+    const kv = new MemoryKV();
+    await kv.set('lock', 'mine', 10);
+    expect(await kv.delIfEquals('lock', 'theirs')).toBe(false);
+    expect(await kv.get('lock')).toBe('mine');
+    expect(await kv.delIfEquals('lock', 'mine')).toBe(true);
+    expect(await kv.get('lock')).toBeNull();
+    expect(await kv.delIfEquals('lock', 'mine')).toBe(false);
+  });
 });
 
 describe('races', () => {

@@ -26,55 +26,44 @@ export interface SourceStatus {
   budget?: number;
 }
 
-type KeyCtx = Pick<Ctx, 'db' | 'cfg' | 'encKey'>;
-interface Stored { enc: string; last4: string; updatedAt: string }
+type KeyCtx = Pick<Ctx, 'db' | 'cfg' | 'encKey' | 'settings'>;
+interface Stored { enc: string | null; last4: string | null }
 
-const settingKey = (name: SourceName) => `source.${name}`;
-const fileKey = (ctx: Pick<Ctx, 'cfg'>, name: SourceName): string | undefined =>
-  (name === 'tmdb' ? ctx.cfg.TMDB_API_KEY : ctx.cfg.OMDB_API_KEY) || undefined;
+/** the key's row in the settings table (Block 25; before migration 39 it was app_settings 'source.<name>') */
+const settingKey = (name: SourceName) => (name === 'tmdb' ? 'TMDB_API_KEY' : 'OMDB_API_KEY');
+const storedKey = async (ctx: Pick<Ctx, 'db'>, name: SourceName): Promise<Stored | undefined> =>
+  (await ctx.db.query<Stored>('select enc, last4 from settings where key=$1', [settingKey(name)])).rows[0];
+/** the key from the environment / a secret file: ctx.cfg also holds a key saved in the database, so the source decides */
+const fileKey = (ctx: Pick<Ctx, 'cfg' | 'settings'>, name: SourceName): string | undefined =>
+  ctx.settings.sources()[settingKey(name)] === 'env' ? (name === 'tmdb' ? ctx.cfg.TMDB_API_KEY : ctx.cfg.OMDB_API_KEY) || undefined : undefined;
 
-const CACHE_MS = 30_000;
-// per database handle, so separate app instances (tests) never share a cache
-const caches = new WeakMap<object, Map<SourceName, { at: number; key: string | null }>>();
-const cacheOf = (ctx: Pick<Ctx, 'db'>) => {
-  let m = caches.get(ctx.db);
-  if (!m) caches.set(ctx.db, (m = new Map()));
-  return m;
+/**
+ * The key saved in the database, as the settings store resolved it: ctx.cfg holds the decrypted value and every instance reloads it on
+ * the revision broadcast, so a key saved on another instance is used at once (no own cache). Undecryptable rows are left out by the store.
+ */
+const dbKey = (ctx: Pick<Ctx, 'cfg' | 'settings'>, name: SourceName): string | null =>
+  ctx.settings.sources()[settingKey(name)] === 'db' ? (name === 'tmdb' ? ctx.cfg.TMDB_API_KEY : ctx.cfg.OMDB_API_KEY) || null : null;
+
+/** the stored row decrypts with the current APP_ENC_KEY (status only; the value is never kept) */
+const readable = (encKey: Buffer, enc: string): boolean => {
+  try { decrypt(encKey, enc); return true; } catch { return false; } // wrong APP_ENC_KEY: treat as not set, never log
 };
-
-async function dbKey(ctx: KeyCtx, name: SourceName): Promise<string | null> {
-  const cache = cacheOf(ctx);
-  const hit = cache.get(name);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.key;
-  const r = await ctx.db.query<{ value: Stored }>('select value from app_settings where key=$1', [settingKey(name)]);
-  let key: string | null = null;
-  const enc = r.rows[0]?.value?.enc;
-  if (enc) {
-    try { key = decrypt(ctx.encKey, enc); } catch { key = null; } // wrong APP_ENC_KEY: treat as not set, never log
-  }
-  cache.set(name, { at: Date.now(), key });
-  return key;
-}
 
 /** The effective key: a file/env value wins over the one saved in the database. */
 export async function getSourceKey(ctx: KeyCtx, name: SourceName): Promise<{ key: string; from: 'db' | 'file' } | null> {
   const file = fileKey(ctx, name);
   if (file) return { key: file, from: 'file' };
-  const key = await dbKey(ctx, name);
+  const key = dbKey(ctx, name);
   return key ? { key, from: 'db' } : null;
 }
 
-export async function setSourceKey(ctx: KeyCtx, name: SourceName, key: string): Promise<void> {
-  const value: Stored = { enc: encrypt(ctx.encKey, key), last4: key.slice(-4), updatedAt: new Date().toISOString() };
-  await ctx.db.query(
-    'insert into app_settings(key, value) values ($1, $2) on conflict (key) do update set value = excluded.value, updated_at = now()',
-    [settingKey(name), JSON.stringify(value)]);
-  cacheOf(ctx).delete(name);
+/** Saved through the settings store (encrypted, last4, a new revision that the other instances reload). */
+export async function setSourceKey(ctx: KeyCtx, name: SourceName, key: string, actor: string | null = null): Promise<void> {
+  await ctx.settings.save({ [settingKey(name)]: key }, actor);
 }
 
-export async function removeSourceKey(ctx: KeyCtx, name: SourceName): Promise<void> {
-  await ctx.db.query('delete from app_settings where key=$1', [settingKey(name)]);
-  cacheOf(ctx).delete(name);
+export async function removeSourceKey(ctx: KeyCtx, name: SourceName, actor: string | null = null): Promise<void> {
+  await ctx.settings.save({ [settingKey(name)]: null }, actor);
 }
 
 /** A key change must work at once: drop the 401 pause, the invalid flag and every cached (failure) answer. */
@@ -101,7 +90,7 @@ const sameKey = (encKey: Buffer, stored: string | null, key: string) => {
  * At startup: a file/env key that differs from the one seen last time (replaced secret file, restart) clears the source's failure state,
  * so the new key works at once instead of after the 1 h pause.
  */
-export async function syncFileKeys(ctx: Pick<Ctx, 'cfg' | 'kv' | 'encKey'>): Promise<void> {
+export async function syncFileKeys(ctx: Pick<Ctx, 'cfg' | 'settings' | 'kv' | 'encKey'>): Promise<void> {
   for (const name of SOURCES) {
     const file = fileKey(ctx, name);
     if (sameKey(ctx.encKey, await ctx.kv.get(FILE_FP_KEY(name)), file ?? '')) continue;
@@ -118,9 +107,8 @@ export async function sourceStatus(ctx: Ctx, name: SourceName): Promise<SourceSt
   let undecryptable = false;
   if (file) { last4 = file.slice(-4); from = 'file'; }
   else {
-    const r = await ctx.db.query<{ value: Stored }>('select value from app_settings where key=$1', [settingKey(name)]);
-    const v = r.rows[0]?.value;
-    if (v?.enc && (await dbKey(ctx, name)) !== null) { last4 = v.last4 ?? null; from = 'db'; } // undecryptable (APP_ENC_KEY changed) counts as not usable
+    const v = await storedKey(ctx, name);
+    if (v?.enc && readable(ctx.encKey, v.enc)) { last4 = v.last4 ?? null; from = 'db'; } // undecryptable (APP_ENC_KEY changed) counts as not usable
     else if (v?.enc) undecryptable = true;
   }
   const s: SourceStatus = { name, set: from !== null, last4, from, invalid: undecryptable || (from !== null && (await ctx.kv.get(INVALID_KEY(name))) !== null) };

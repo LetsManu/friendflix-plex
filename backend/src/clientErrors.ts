@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { publicOrigin } from './config.js';
 import type { Ctx } from './ctx.js';
 import { recordError, type ErrorInput } from './errorlog.js';
 import { clientErrorsTotal } from './metrics.js';
@@ -77,10 +78,9 @@ export function toErrorInput(e: ReturnType<typeof toLogEntry>, signedIn: boolean
  * Only reports of a signed-in browser feed the admin's error levels; anonymous playback reports are not aggregated at all.
  */
 export function clientErrorRoutes(app: FastifyInstance, ctx: Ctx) {
-  const origin = new URL(ctx.cfg.PUBLIC_URL).origin;
   app.post('/api/client-errors', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
     const o = req.headers.origin;
-    if (typeof o === 'string' && o !== origin) return reply.code(403).send({ error: 'forbidden_origin' });
+    if (typeof o === 'string' && o !== publicOrigin(ctx.cfg)) return reply.code(403).send({ error: 'forbidden_origin' });
 
     // sendBeacon posts text/plain (no CORS preflight); fetch fallbacks and tests may send application/json
     let raw: unknown = req.body;

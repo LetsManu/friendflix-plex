@@ -13,7 +13,7 @@ export const SERVICE_IDS = ['media', 'postgres', 'redis', 'gateway', 'oidc', 're
 export type ServiceId = (typeof SERVICE_IDS)[number];
 export const REASONS = [
   'slow', 'down', 'issuer_mismatch', 'invalid_key', 'paused', 'budget', 'not_set', 'failed_titles', 'unavailable',
-  'full', 'low_free', 'cap', 'large', 'server_errors', 'client_errors', 'failed_playbacks', 'empty_media',
+  'full', 'low_free', 'cap', 'large', 'server_errors', 'client_errors', 'failed_playbacks', 'empty_media', 'pending_approvals',
 ] as const;
 export type Reason = (typeof REASONS)[number];
 export interface Detail { n?: number; pct?: number }

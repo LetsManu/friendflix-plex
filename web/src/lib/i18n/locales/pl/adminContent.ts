@@ -200,6 +200,7 @@ const dict: Translation<typeof de> = {
       server_errors: 'Dużo błędów serwera',
       client_errors: 'Dużo błędów przeglądarki',
       failed_playbacks: 'Nieudane odtworzenia',
+      pending_approvals: 'Logowania czekają na zatwierdzenie',
     },
     disks: {
       title: 'Miejsce',

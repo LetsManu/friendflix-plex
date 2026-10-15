@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Admin warning banner (Block 22): `GET /api/admin/health/banner` as a store (polled every 60 s while the tab is visible),
- * the worst issue first, one sentence per issue, and "Ausblenden" per issue until its level or reason changes (server-side).
+ * the worst issue first, one sentence per issue (Block 23: open approval requests too), and "Ausblenden" per issue until its level or reason changes (server-side).
  */
 import { writable, type Readable } from 'svelte/store';
 import { api } from '#lib/api';
@@ -32,8 +32,12 @@ export function issueText(i: HealthIssue): string {
   if (fam === 'svc') { key = `admin.banner.svc.${i.reason}`; params.name = nameOf(`adminContent.health.svc.${sub}`, sub); }
   else if (fam === 'disk') { key = `admin.banner.disk.${i.reason}`; params.name = nameOf(`admin.banner.name.${sub}`, sub); }
   else if (fam === 'errors') key = `admin.banner.errors.${i.reason}`;
+  else if (fam === 'approvals') key = `admin.banner.approvals.${i.reason}`;
   return hasKey(key) ? tr(key as TKey, params) : tr('admin.banner.generic');
 }
+
+/** where "Ansehen" leads: the approval queue for open sign-in requests, the status page for everything else */
+export const issueHref = (i: HealthIssue | null): string => (i?.id === 'approvals:pending' ? '/admin/users?tab=approvals' : '/admin/status');
 
 const store = writable<BannerState | null>(null);
 export const banner: Readable<BannerState | null> = { subscribe: store.subscribe };

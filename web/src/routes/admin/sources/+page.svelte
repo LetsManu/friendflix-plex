@@ -3,9 +3,11 @@
 <script lang="ts">
   /** Admin → Datenquellen: optional TMDB/OMDb keys. The API only ever returns last4; a typed key lives in the input until saved, then it is cleared. */
   import { onMount } from 'svelte';
+  import { isReauthError, startReauth } from '#lib/account/reauth';
   import { api, ApiError } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
   import { t, tr } from '#lib/i18n';
+  import { toast } from '#lib/ui/toast';
   import AdminCard from '#lib/adminContent/AdminCard.svelte';
   import { busyKeys, runAction } from '#lib/ui/action';
   import Button from '#lib/ui/Button.svelte';
@@ -33,22 +35,30 @@
     if (e instanceof ApiError && e.status === 409) return tr('admin.sources.fromFile');
     return tr('admin.sources.saveFailed');
   }
+  /** replacing or removing a key needs a sign-in at most 10 minutes old: go through it and come back here (the typed key is not kept) */
+  function failed(res: { ok: boolean; skipped?: boolean; error?: unknown }) {
+    if (res.ok || res.skipped) return;
+    if (isReauthError(res.error)) startReauth('/admin/sources');
+    else toast.error(saveError(res.error));
+  }
   async function save(s: Source) {
     const key = keys[s.name].trim();
     if (!key) return;
     const res = await runAction({
       key: `src:save:${s.name}`, run: () => api<Source>(`/api/admin/sources/${s.name}`, { method: 'PUT', body: { key } }),
-      success: tr('admin.sources.saved'), error: saveError,
+      success: tr('admin.sources.saved'), error: false,
     });
     if (res.ok) { keys[s.name] = ''; if (res.value) replace(res.value); }
+    failed(res);
   }
   async function remove(s: Source) {
     if (!(await confirm({ title: tr('admin.sources.removeConfirm', { name: label(s.name) }), body: tr('admin.sources.removeBody'), danger: true, confirmLabel: tr('admin.sources.remove') }))) return;
     const res = await runAction({
       key: `src:remove:${s.name}`, run: () => api<Source>(`/api/admin/sources/${s.name}`, { method: 'DELETE' }),
-      success: tr('admin.sources.removed'), error: saveError,
+      success: tr('admin.sources.removed'), error: false,
     });
     if (res.ok && res.value) replace(res.value);
+    failed(res);
   }
   function test(s: Source) {
     const key = keys[s.name].trim();

@@ -3,6 +3,8 @@
 <script lang="ts">
   import { fmtDate, t, tr } from '#lib/i18n';
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import { features } from '#lib/capabilities';
   import { api, ApiError } from '#lib/api';
   import TrailerButton from '#lib/TrailerButton.svelte';
   import Icon from '#lib/Icon.svelte';
@@ -24,14 +26,17 @@
     else if (r === 'error') msg = tr('home.upcoming.remindFailed');
     else msg = r === 'on' ? tr('home.upcoming.remindSet', { title: it.title }) : tr('home.upcoming.remindRemoved');
   }
-  onMount(() => { void loadReminders(); api(`/api/seerr/upcoming?type=${type}`).then((r) => (items = r.results)).catch(() => (items = [])); });
+  onMount(() => {
+    if (!get(features).requests) { items = []; return; } // no request service: no upcoming titles
+    void loadReminders(); api(`/api/seerr/upcoming?type=${type}`).then((r) => (items = r.results)).catch(() => (items = []));
+  });
   async function wish(it: NonNullable<typeof items>[number]) {
     try { await api('/api/requests', { method: 'POST', body: { mediaType: it.mediaType, tmdbId: it.tmdbId } }); it.status = 'angefragt'; items = items; msg = tr('home.upcoming.wishSent', { title: it.title }); }
     catch (e) { msg = e instanceof ApiError && e.status === 409 ? tr('home.upcoming.wishExists') : tr('home.upcoming.wishFailed'); }
   }
 </script>
 
-{#if items === null || items.length}
+{#if $features.requests && (items === null || items.length)}
   <section class="up" aria-label={heading} aria-busy={items === null}>
     <h2>{heading}</h2>
     <div class="track">

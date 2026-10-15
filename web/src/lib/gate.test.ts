@@ -47,6 +47,14 @@ describe('kids profiles', () => {
     expect(canRenderEarly(h, true, '/kids')).toBe(true);
     expect(parseHint(JSON.stringify({ ...h, kids: 'yes' }))?.kids).toBeUndefined();
   });
+  it('the hint remembers a missing request service (only an explicit false)', () => {
+    const h = hintOf({ deviceApproved: true, profileCount: 1, features: { requests: false } });
+    expect(h.noRequests).toBe(true);
+    expect(parseHint(JSON.stringify(h))).toEqual(h);
+    expect(hintOf({ deviceApproved: true, profileCount: 1, features: { requests: true } }).noRequests).toBeUndefined();
+    expect(hintOf({ deviceApproved: true, profileCount: 1 }).noRequests).toBeUndefined();
+    expect(parseHint(JSON.stringify({ ...h, noRequests: 'yes' }))?.noRequests).toBeUndefined();
+  });
 });
 
 describe('onboarding (/welcome)', () => {
@@ -56,7 +64,7 @@ describe('onboarding (/welcome)', () => {
     expect(needsWelcome({ onboarded: true }, '/')).toBe(false);
     expect(needsWelcome({}, '/')).toBe(false); // older server
     expect(needsWelcome(null, '/')).toBe(false);
-    for (const p of ['/welcome', '/profiles', '/offline', '/invite/x', '/tv', '/remote']) expect(needsWelcome({ onboarded: false }, p), p).toBe(false);
+    for (const p of ['/welcome', '/profiles', '/offline', '/invite/x', '/tv', '/remote', '/setup', '/setup/extras']) expect(needsWelcome({ onboarded: false }, p), p).toBe(false);
     expect(needsWelcome({ onboarded: false, tv: true }, '/')).toBe(false);
   });
   it('continues where the person wanted to go (kids: on the kids home)', () => {

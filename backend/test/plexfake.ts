@@ -45,6 +45,13 @@ export class PlexFake {
   refreshed: string[] = [];
   /** next status for paths matching a regex (e.g. simulate an outage) */
   fail: { re: RegExp; status: number } | null = null;
+  /** GET /identity's machineIdentifier (fork Task 8: another value is another Plex server) */
+  machineIdentifier: string = fixture('identity').MediaContainer.machineIdentifier;
+  /**
+   * Tokens of a shared (non-owner) account and the status PMS gives them on admin-only paths (/status/sessions): library reads work,
+   * the sessions answer 401 or 403 (setup probe: a warning, not a refusal). Any other token than PLEX_TOKEN or these gets 401 everywhere.
+   */
+  sharedTokens = new Map<string, 401 | 403>();
   private nextKey = 100;
 
   constructor() {
@@ -215,8 +222,10 @@ export class PlexFake {
     const path = url.pathname;
     const q = url.searchParams;
     if (this.fail && this.fail.re.test(path)) return { status: this.fail.status };
-    if (path === '/identity') return { status: 200, json: fixture('identity') };
-    if (headers['X-Plex-Token'] !== PLEX_TOKEN) return { status: 401, text: '<html>401 Unauthorized</html>' };
+    if (path === '/identity') return { status: 200, json: { MediaContainer: { ...fixture('identity').MediaContainer, machineIdentifier: this.machineIdentifier } } };
+    const shared = this.sharedTokens.get(headers['X-Plex-Token'] ?? '');
+    if (headers['X-Plex-Token'] !== PLEX_TOKEN && !shared) return { status: 401, text: '<html>401 Unauthorized</html>' };
+    if (shared && path === '/status/sessions') return { status: shared, text: `<html>${shared}</html>` };
     const r = /^\/library\/metadata\/(\d+)\/refresh$/.exec(path);
     if (r && method === 'PUT') {
       if (!this.items.has(r[1]!)) return { status: 404 };

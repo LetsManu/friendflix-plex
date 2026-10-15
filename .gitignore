@@ -13,6 +13,7 @@ secrets/
 *.key
 *.sql
 *.dump
+plan-b.local.conf
 backups/
 data/
 volumes/

@@ -127,7 +127,7 @@ describe("local Seerr users (capabilities.requestUsers = 'local')", () => {
     users = users.filter((u) => u.id !== id);
     env.seerrCalls.length = 0;
     const row = (await env.pool.query("select * from users where authentik_sub='sub-admin'")).rows[0];
-    const seerr = env.ctx.seerr as { listUsersPage: typeof env.ctx.seerr.listUsersPage };
+    const seerr = env.ctx.seerr!;
     const orig = seerr.listUsersPage;
     // barrier: each lookup waits (max 200 ms) until all five callers are inside it, so without the lock all of them would create
     const waiting: Array<() => void> = [];

@@ -11,6 +11,7 @@
   import { itemPath } from '#lib/mobile';
   import Card from '#lib/Card.svelte';
   import { kidsMode } from '#lib/kids';
+  import { features } from '#lib/capabilities';
   import { mobile } from '#lib/viewport';
   import { alreadyWished, clearRecent, isYear, loadRecent, pushRecent, wishCandidates, type SeerrHit } from '#lib/discovery';
 
@@ -28,7 +29,7 @@
     wishCtl?.abort();
     const my = ++wishSeq;
     wishes = []; wishMsg = ''; sent = new Set(); quotaFull = '';
-    if (q.length < 2 || isYear(q) || $kidsMode) return; // kids profiles: no Seerr wishes (403 kids_profile)
+    if (q.length < 2 || isYear(q) || $kidsMode || !$features.requests) return; // kids profiles: no wishes (403 kids_profile); none without a request service
     wishCtl = new AbortController();
     try {
       const r = await api<{ results: SeerrHit[] }>(`/api/seerr/search?q=${encodeURIComponent(q)}`, { signal: wishCtl.signal });
@@ -160,7 +161,7 @@
 {:else if res}
   {#if res.partial}<p class="muted note">{$t('home.search.partial')}</p>{/if}
   {#if empty}
-    <div class="empty"><h2>{$t('home.search.noHits', { term })}</h2><p class="muted">{$t('home.search.notInLibrary')}</p>{#if !wishes.length && !$kidsMode}<a class="btn" href="/requests?q={encodeURIComponent(term)}">{$t('home.search.addWish')}</a>{/if}</div>
+    <div class="empty"><h2>{$t('home.search.noHits', { term })}</h2><p class="muted">{$t('home.search.notInLibrary')}</p>{#if !wishes.length && !$kidsMode && $features.requests}<a class="btn" href="/requests?q={encodeURIComponent(term)}">{$t('home.search.addWish')}</a>{/if}</div>
   {:else}
     {#if res.people.length}
       <section aria-labelledby="sp"><h2 id="sp" class="sh">{$t('home.search.people')}</h2>

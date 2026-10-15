@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { ALL_CAPS, capsFrom, linkShown, segmentShown, serverCaps } from './capabilities';
+import { ALL_CAPS, ALL_FEATURES, capsFrom, features, featuresFrom, linkShown, segmentShown, serverCaps } from './capabilities';
 
 describe('server capabilities', () => {
   it('default: everything supported (before /api/me, older backends)', () => {
@@ -32,5 +32,22 @@ describe('server capabilities', () => {
     expect(capsFrom({}).chapters).toBe(true);
     expect(capsFrom({ chapters: false }).chapters).toBe(false);
     expect(capsFrom({ chapters: 'no' }).chapters).toBe(true);
+  });
+});
+
+describe('instance features', () => {
+  it('default: everything on (before /api/me, older backends); only an explicit false turns requests off', () => {
+    expect(get(features)).toEqual(ALL_FEATURES);
+    for (const raw of [undefined, null, 'x', {}, { requests: 'no' }, { requests: true }]) expect(featuresFrom(raw)).toEqual({ requests: true });
+    expect(featuresFrom({ requests: false })).toEqual({ requests: false });
+  });
+  it('without a request service the upcoming and admin requests links are hidden; /requests stays (reminders)', () => {
+    const off = featuresFrom({ requests: false });
+    expect(linkShown(ALL_CAPS, '/requests', off)).toBe(true);
+    for (const href of ['/upcoming', '/admin/requests']) {
+      expect(linkShown(ALL_CAPS, href)).toBe(true);
+      expect(linkShown(ALL_CAPS, href, off)).toBe(false);
+    }
+    expect(linkShown(ALL_CAPS, '/favorites', off)).toBe(true);
   });
 });

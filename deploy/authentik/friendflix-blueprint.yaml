@@ -7,7 +7,9 @@
 #
 # Creates:
 #   - service account "friendflix-invites" with exactly the global permissions the portal needs
-#     (look up the enrollment flow, create/view/delete invitations)
+#     (look up the enrollment flow, create/view/delete invitations; for the admin user page: look up users,
+#     view their MFA devices, send the password-reset e-mail of the recovery flow; for the account page and
+#     account deletion: change a user's name, deactivate a user)
 #   - non-expiring API token "friendflix-invites-token" for it (copy the key in
 #     Directory → Tokens and App passwords → copy icon) → AUTHENTIK_API_TOKEN
 #   - enrollment flow "friendflix-enrollment" (→ AUTHENTIK_ENROLL_FLOW):
@@ -34,6 +36,20 @@ entries:
         - authentik_stages_invitation.add_invitation
         - authentik_stages_invitation.view_invitation
         - authentik_stages_invitation.delete_invitation
+        # admin user page (backend/src/authentik.ts): find the Authentik user of an account
+        - authentik_core.view_user
+        # account page and account deletion (backend/src/authentik.ts): change the name, deactivate the user
+        # (PATCH core/users/<pk>/ with name / is_active). Global: the token can change any Authentik user.
+        - authentik_core.change_user
+        # two-factor state: without these three Authentik returns an empty device list (no error),
+        # so every user would silently show "no two-factor sign-in"
+        - authentik_stages_authenticator_totp.view_totpdevice
+        - authentik_stages_authenticator_webauthn.view_webauthndevice
+        - authentik_stages_authenticator_static.view_staticdevice
+        # "Send password link": the recovery flow's e-mail stage, then recovery_email (Authentik 2024.4+)
+        - authentik_flows.view_flowstagebinding
+        - authentik_stages_email.view_emailstage
+        - authentik_core.reset_user_password
 
   - model: authentik_core.token
     identifiers:

@@ -47,6 +47,26 @@ export const serverCaps = writable<ServerCaps>(capsFrom(undefined));
 /** a skip button / timeline mark for this segment type may show */
 export const segmentShown = (c: ServerCaps, type: string) => c.segments.includes(type.toLowerCase());
 
-/** pages that only make sense with a capability (menus, footer): href -> required flag */
+/**
+ * Optional services of this instance (sent in /api/me as `features`, not a media server capability). Until /api/me answers - and
+ * for older backends that send nothing - everything counts as on.
+ */
+export interface Features {
+  /** a request service is set up: wishes, upcoming titles (the /requests page keeps its reminders without it) */
+  requests: boolean;
+}
+export const ALL_FEATURES: Features = { requests: true };
+/** Lenient parse: only an explicit false turns a feature off. */
+export function featuresFrom(raw: unknown): Features {
+  const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  return { requests: r.requests !== false };
+}
+export const features = writable<Features>(featuresFrom(undefined));
+
+/** pages that only make sense with a capability or a feature (menus, footer, admin nav): href -> required flag */
 const NEEDS: Record<string, Exclude<keyof ServerCaps, 'segments'>> = { '/calendar': 'upcoming' };
-export const linkShown = (c: ServerCaps, href: string) => { const k = NEEDS[href]; return !k || c[k]; };
+const FEATURE_NEEDS: Record<string, keyof Features> = { '/upcoming': 'requests', '/admin/requests': 'requests' };
+export const linkShown = (c: ServerCaps, href: string, f: Features = ALL_FEATURES) => {
+  const k = NEEDS[href], fk = FEATURE_NEEDS[href];
+  return (!k || c[k]) && (!fk || f[fk]);
+};

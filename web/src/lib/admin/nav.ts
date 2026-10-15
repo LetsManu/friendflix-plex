@@ -15,7 +15,6 @@ export const GROUPS: NavGroup[] = [
     { href: '/admin/roles', label: 'admin.tabs.roles', icon: 'key' },
     { href: '/admin/devices', label: 'admin.tabs.devices', icon: 'monitor', badge: 'devices' },
     { href: '/admin/usage', label: 'admin.tabs.usage', icon: 'bar-chart' },
-    { href: '/admin/invites', label: 'admin.tabs.invites', icon: 'mail' },
   ] },
   { id: 'content', label: 'admin.nav.groups.content', items: [
     { href: '/admin/requests', label: 'admin.tabs.requests', icon: 'inbox', badge: 'requests' },
@@ -33,6 +32,7 @@ export const GROUPS: NavGroup[] = [
     { href: '/admin/status', label: 'admin.tabs.status', icon: 'activity' },
     { href: '/admin/audit', label: 'admin.tabs.audit', icon: 'shield' },
     { href: '/admin/update', label: 'admin.tabs.update', icon: 'refresh' },
+    { href: '/admin/settings', label: 'admin.tabs.settings', icon: 'settings' },
   ] },
 ];
 export const ALL_ITEMS: NavItem[] = [OVERVIEW, ...GROUPS.flatMap((g) => g.items)];
