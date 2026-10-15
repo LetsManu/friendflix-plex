@@ -24,13 +24,6 @@ All notable changes, grouped by what you notice. Each release has its own sectio
 ### Discovering
 - **Recommendation measurement (first step towards engine v2):** `scripts/reco-eval.mjs` replays each profile's history offline (leave-last-out) and compares popularity, the current "Because you watched" logic and item-item co-occurrence on HitRate@10, NDCG@10, MRR, coverage, diversity, already-seen share, mid-popularity share, new-title hit rate and transition accuracy. It reads the database read-only and prints aggregates only. The "Because you watched" rows now report how often they are shown and clicked as bare counts per row and engine (`friendflix_reco_impressions_total`, `friendflix_reco_clicks_total`, plus `_plays_total` and `_dismiss_total` for later steps); no titles, items or profiles are sent. See docs/discovery.md.
 
-## [1.0.1] – Arancini – 2026-10-15
-
-### Releases
-- **Images for the first release:** the 1.0.0 tag build stopped in its secret scan (five old test placeholders that only a full-history scan sees) before publishing images. 1.0.1 is the same code with those placeholders on the scanner's ignore list, so its images are published.
-
-## [1.0.0] – Arancini – 2026-10-15
-
 ### FriendFlix for Plex (this fork)
 - **Plex media server** behind the neutral interface: `MEDIA_SERVER=plex` selects `backend/src/plex/*` and the gateway adapter `gateway/src/upstream/plex.ts`; `compose.plex.yaml` connects the backend and gateway to an existing Plex server (address and token in the setup wizard or *Admin → Settings*; optional pins `PLEX_URL`, `PLEX_TOKEN` / `PLEX_TOKEN_FILE`). Preview: tested against a fake Plex server built from Plex Media Server 1.43 answers, not released.
 - **One server-side Plex token**, held by the backend (the gateway gets it from the backend over the internal network, in memory only), sent as a header and never to a client. FriendFlix enforces roles, profiles, age limits and kids profiles itself, from a Postgres mirror of the Plex library (sync every 5 minutes, notification websocket, nightly sweep). No plex.tv accounts for friends, no Plex Pass needed.
