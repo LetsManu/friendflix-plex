@@ -51,6 +51,8 @@ const setup: Translation<typeof de> = {
     create: 'API anahtarını otomatik oluştur',
     created: 'API anahtarı oluşturuldu ve kaydedildi.',
     manualText: 'Adresi ve yönetici yetkili bir API anahtarını gir. Kaydederken bağlantı denetlenir.',
+    textPlex: 'FriendFlix’in Plex sunucunun adresine ve sahibinin belirtecine ihtiyacı var.',
+    manualTextPlex: 'Adresi ve Plex belirtecini gir. Test bağlantıyı denetler ve belirtecin sunucu sahibine ait olup olmadığını bildirir.',
     noAuto: 'Bu medya sunucusu için otomatik kurulum yok. Değerleri elle gir.',
   },
   signin: {
@@ -193,6 +195,7 @@ const setup: Translation<typeof de> = {
     warning: 'Denetlendi, bir notla:',
   },
   probeDetail: {
+    not_admin: 'Belirteç çalışıyor ama Plex sunucusu sahibine ait değil; bazı özellikler sınırlı olabilir.',
     echo_mismatch: 'FriendFlix bu adresten kendine ulaşamadı. Bu, kendi ağının içinde sık olur (NAT loopback) ve adres dışarıdan doğruysa hata değildir.',
     insecure: 'Adres http:// kullanıyor: çerezler korunmaz, Chromecast ve geçiş anahtarları kapalıdır.',
     not_tested: 'Bu medya sunucusu otomatik olarak denetlenemez.',

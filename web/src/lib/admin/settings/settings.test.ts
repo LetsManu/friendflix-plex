@@ -42,6 +42,18 @@ describe('settings texts', () => {
     expect(keyHelp('NOT_A_KEY')).toBe('');
   });
 
+  it('fork: the Plex keys have a label and help in every language, never name a real host, a logo or the old request service', async () => {
+    for (const l of ['de', 'en', 'es', 'fr', 'it', 'pl', 'tr']) {
+      await setLocale(l);
+      const text = ['PLEX_URL', 'PLEX_TOKEN'].flatMap((k) => [keyLabel(k), keyHelp(k)]);
+      for (const t of text) expect(t, l).not.toBe('');
+      expect(keyLabel('PLEX_TOKEN'), l).not.toBe('PLEX_TOKEN');
+      expect(text.join(' '), l).not.toMatch(/seerr|https?:\/\/|plex\.tv/i);
+      // the note of a token that is not the owner's (probe warning not_admin), through Admin → Settings' own text
+      expect(probeText({ ok: true, code: 'warning', detail: 'not_admin' }), l).toContain(tr('settings.probeDetail.not_admin'));
+    }
+  });
+
   it('moveHint names KEY and KEY_FILE and only summarises legacy names', () => {
     expect(moveHint(['PUBLIC_URL', 'PUBLIC_URL_FILE'])).toContain('PUBLIC_URL und PUBLIC_URL_FILE aus der .env');
     const legacy = moveHint(['REQUESTS_URL', 'REQUESTS_URL_FILE', 'SEERR_URL', 'SEERR_URL_FILE']);

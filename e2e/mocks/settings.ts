@@ -120,13 +120,19 @@ const SERVER: Array<[string, Kind, Source, unknown]> = [
   ['DATABASE_URL', 'secret', 'bootstrap', LEAK], ['REDIS_URL', 'secret', 'bootstrap', null], ['APP_ENC_KEY', 'secret', 'bootstrap', null], ['INTERNAL_SECRET', 'secret', 'bootstrap', null],
 ];
 
-/** non-secret keys whose save needs a recent sign-in (backend adminSettings.ts REAUTH_KEYS, OIDC_* / AUTHENTIK_*, credential destinations) */
-const REAUTH = /^(OIDC_|AUTHENTIK_)|^(ADMIN_GROUP|NTFY_URL|NTFY_BASE_URL|PUBLIC_URL|HOME_NETWORKS|JELLYFIN_URL|REQUESTS_URL|PORTAINER_URL)$/;
+/** fork: the media group of a Plex instance (Admin → Settings shows only the active media server's keys); the Jellyfin keys are not shown */
+const PLEX_MEDIA: Array<[string, Spec]> = [
+  ['PLEX_URL', { kind: 'url', source: 'db', value: 'http://plex.example.com:32400' }],
+  ['PLEX_TOKEN', { kind: 'secret', source: 'db', set: true, last4: 'ZZZZ', leak: LEAK }],
+];
 
-export function settingsState(): SettingsMock {
+/** non-secret keys whose save needs a recent sign-in (backend adminSettings.ts REAUTH_KEYS, OIDC_* / AUTHENTIK_*, credential destinations) */
+const REAUTH = /^(OIDC_|AUTHENTIK_)|^(ADMIN_GROUP|NTFY_URL|NTFY_BASE_URL|PUBLIC_URL|HOME_NETWORKS|JELLYFIN_URL|PLEX_URL|REQUESTS_URL|PORTAINER_URL)$/;
+
+export function settingsState(kind: 'jellyfin' | 'plex' = 'jellyfin'): SettingsMock {
   const groups = GROUPS.map(([id, rows]) => ({
     id,
-    items: rows.map(([key, s]): SettingViewMock => {
+    items: (kind === 'plex' && id === 'media' ? PLEX_MEDIA : rows).map(([key, s]): SettingViewMock => {
       const set = s.set ?? (s.value !== undefined && s.value !== null);
       return {
         key, kind: s.kind, source: s.source ?? 'default', value: s.kind === 'secret' ? (s.leak ?? null) : (s.value ?? null), set, apply: s.apply ?? 'live',
@@ -138,8 +144,8 @@ export function settingsState(): SettingsMock {
   }));
   groups.push({
     id: 'server',
-    items: SERVER.map(([key, kind, source, value]) => ({
-      key, kind, source, value, set: value !== null || source === 'bootstrap', apply: 'restart', restartPending: false, invalid: false, envNames: env(key), updatedAt: null,
+    items: SERVER.map(([key, kind_, source, value]) => ({
+      key, kind: kind_, source, value: key === 'MEDIA_SERVER' ? kind : value, set: value !== null || source === 'bootstrap', apply: 'restart', restartPending: false, invalid: false, envNames: env(key), updatedAt: null,
     })),
   });
   return { rev: 7, groups, reauthRequired: false, probeFail: null, saveErrors: null, testResult: { ok: true, code: 'ok' }, puts: [], tests: [], imports: [] };
@@ -161,6 +167,8 @@ export function settingsRoute(st: SettingsMock, m: string, p: string, body: any,
     st.puts.push(body.force === undefined ? { values } : { values, force: body.force });
     const all = itemsOf(st);
     const find = (k: string) => all.find((x) => x.item.key === k);
+    // fork: the other media kind's key (a stale session) answers 401 like the backend, the web re-authenticates the normal way
+    if (Object.keys(values).some((k) => /^(PLEX|JELLYFIN)_/.test(k) && !find(k))) return J({ error: 'reauth_required' }, 401);
     if (st.reauthRequired && Object.keys(values).some((k) => find(k)?.item.kind === 'secret' || REAUTH.test(k))) return J({ error: 'reauth_required' }, 401);
     if (st.saveErrors) { const errors = st.saveErrors; st.saveErrors = null; return J({ error: 'invalid_settings', errors }, 400); }
     const errors: Record<string, string> = {};

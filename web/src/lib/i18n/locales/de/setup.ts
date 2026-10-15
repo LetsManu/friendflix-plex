@@ -49,6 +49,8 @@ const setup = {
     create: 'API-Schlüssel automatisch anlegen',
     created: 'API-Schlüssel angelegt und gespeichert.',
     manualText: 'Trage die Adresse und einen API-Schlüssel mit Admin-Rechten ein. Beim Speichern wird die Verbindung geprüft.',
+    textPlex: 'FriendFlix braucht die Adresse deines Plex-Servers und den Token seines Besitzers.',
+    manualTextPlex: 'Trage die Adresse und den Plex-Token ein. Beim Test wird die Verbindung geprüft und gemeldet, ob der Token dem Server-Besitzer gehört.',
     noAuto: 'Für diesen Medienserver gibt es keine automatische Einrichtung. Trage die Werte von Hand ein.',
   },
   signin: {
@@ -191,6 +193,7 @@ const setup = {
     warning: 'Geprüft, mit einem Hinweis:',
   },
   probeDetail: {
+    not_admin: 'Der Token funktioniert, gehört aber nicht dem Besitzer des Plex-Servers; manche Funktionen können eingeschränkt sein.',
     echo_mismatch: 'FriendFlix konnte sich unter dieser Adresse nicht selbst erreichen. Das passiert oft im eigenen Netz (NAT-Loopback) und ist kein Fehler, wenn die Adresse von außen stimmt.',
     insecure: 'Die Adresse nutzt http://: Cookies sind nicht geschützt, Chromecast und Passkeys sind aus.',
     not_tested: 'Dieser Medienserver lässt sich nicht automatisch prüfen.',

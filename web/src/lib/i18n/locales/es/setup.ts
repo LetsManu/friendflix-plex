@@ -51,6 +51,8 @@ const setup: Translation<typeof de> = {
     create: 'Crear clave de API automáticamente',
     created: 'Clave de API creada y guardada.',
     manualText: 'Introduce la dirección y una clave de API con permisos de administrador. Al guardar se comprueba la conexión.',
+    textPlex: 'FriendFlix necesita la dirección de tu servidor Plex y el token de su propietario.',
+    manualTextPlex: 'Introduce la dirección y el token de Plex. La prueba comprueba la conexión e indica si el token pertenece al propietario del servidor.',
     noAuto: 'Este servidor multimedia no tiene configuración automática. Introduce los valores a mano.',
   },
   signin: {
@@ -193,6 +195,7 @@ const setup: Translation<typeof de> = {
     warning: 'Comprobado, con una nota:',
   },
   probeDetail: {
+    not_admin: 'El token funciona, pero no es el del propietario del servidor Plex, así que algunas funciones pueden estar limitadas.',
     echo_mismatch: 'FriendFlix no pudo alcanzarse a sí mismo en esta dirección. Suele pasar dentro de tu propia red (NAT loopback) y no es un error si la dirección es correcta desde fuera.',
     insecure: 'La dirección usa http://: las cookies no están protegidas y Chromecast y las llaves de acceso quedan desactivados.',
     not_tested: 'Este servidor multimedia no se puede comprobar automáticamente.',

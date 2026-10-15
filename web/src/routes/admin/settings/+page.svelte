@@ -110,12 +110,19 @@
     const values = changesOf(group);
     if (!Object.keys(values).length || refuseRedacted(group)) return;
     probes = { ...probes, [group]: undefined };
+    // fork: a Plex media save runs the check first (a save answers no warning) so "token is not the owner's" is shown after it
+    let note: ProbeResult | null = null;
+    if (group === 'media' && !force && Object.keys(values).some((k) => k.startsWith('PLEX_'))) {
+      const t = await runAction({ key: `set:test:${group}`, run: () => testGroup(group, values), error: false });
+      if (t.ok && t.value?.ok && t.value.code === 'warning') note = t.value;
+    }
     const res = await runAction({ key: `set:save:${group}`, run: () => saveSettings(values, force), success: tr('settings.saved'), error: false });
     if (res.ok) {
       for (const k of Object.keys(values)) delete edits[k];
       edits = edits;
       resumeNotice = null;
       await load();
+      if (note) probes = { ...probes, [group]: { result: note, save: false } };
       return;
     }
     if (isReauthError(res.error)) return reauth({ action: 'save', group, force });

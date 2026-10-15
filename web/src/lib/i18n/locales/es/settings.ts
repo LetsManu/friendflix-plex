@@ -56,6 +56,7 @@ const settings: Translation<typeof de> = {
   },
   probeDetail: {
     redirect: 'La dirección redirige; introduce la dirección de destino.',
+    not_admin: 'El token funciona, pero no es el del propietario del servidor Plex, así que algunas funciones pueden estar limitadas.',
     not_found: 'El servicio no existe en esta dirección.',
     upstream_error: 'El servicio respondió con un error.',
     incomplete: 'Aún faltan datos.',
@@ -116,6 +117,8 @@ const settings: Translation<typeof de> = {
     AUTHENTIK_TOTP_SETUP_FLOW: { label: 'Flujo de configuración de dos factores', help: 'Slug del flujo para configurar una app de autenticación.' },
     JELLYFIN_URL: { label: 'Dirección de Jellyfin', help: 'Dirección interna del servidor multimedia, p. ej. http://jellyfin:8096.' },
     JELLYFIN_ADMIN_API_KEY: { label: 'Clave de API de Jellyfin (admin)', help: 'Clave de API con permisos de administrador (Jellyfin → Panel → Claves de API).' },
+    PLEX_URL: { label: 'Dirección de Plex', help: 'Dirección interna con la que el backend llega al servidor Plex.' },
+    PLEX_TOKEN: { label: 'Token de Plex', help: 'Token del propietario del servidor Plex. Solo se guarda en el backend y nunca se muestra.' },
     REQUESTS_URL: { label: 'Dirección del servicio de peticiones', help: 'Opcional. Sin dirección y clave, las peticiones quedan ocultas.' },
     REQUESTS_API_KEY: { label: 'Clave de API del servicio de peticiones', help: 'Clave de API de los ajustes del servicio de peticiones.' },
     NTFY_URL: { label: 'Canal ntfy de anuncios', help: 'Canal ntfy compartido para títulos nuevos y avisos, p. ej. https://ntfy.example.com/friendflix.' },

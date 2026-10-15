@@ -51,6 +51,8 @@ const setup: Translation<typeof de> = {
     create: 'Créer la clé API automatiquement',
     created: 'Clé API créée et enregistrée.',
     manualText: 'Saisis l’adresse et une clé API avec des droits d’administration. L’enregistrement vérifie la connexion.',
+    textPlex: 'FriendFlix a besoin de l’adresse de ton serveur Plex et du jeton de son propriétaire.',
+    manualTextPlex: 'Saisis l’adresse et le jeton Plex. Le test vérifie la connexion et indique si le jeton appartient au propriétaire du serveur.',
     noAuto: 'Ce serveur multimédia n’a pas de configuration automatique. Saisis les valeurs à la main.',
   },
   signin: {
@@ -193,6 +195,7 @@ const setup: Translation<typeof de> = {
     warning: 'Vérifié, avec une remarque :',
   },
   probeDetail: {
+    not_admin: 'Le jeton fonctionne, mais ce n’est pas celui du propriétaire du serveur Plex ; certaines fonctions peuvent être limitées.',
     echo_mismatch: 'FriendFlix n’a pas pu se joindre lui-même à cette adresse. Cela arrive souvent dans ton propre réseau (NAT loopback) et n’est pas une erreur si l’adresse est correcte depuis l’extérieur.',
     insecure: 'L’adresse utilise http:// : les cookies ne sont pas protégés, Chromecast et les clés d’accès sont désactivés.',
     not_tested: 'Ce serveur multimédia ne peut pas être vérifié automatiquement.',

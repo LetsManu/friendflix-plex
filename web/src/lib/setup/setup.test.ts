@@ -136,8 +136,8 @@ describe('setup messages', () => {
     expect(filled({ A: ' x ', B: '', C: '  ' })).toEqual({ A: 'x' });
     expect(otherFieldErrors({ JELLYFIN_URL: 'invalid_url', ADMIN_GROUP: 'locked' }, ['JELLYFIN_URL'])).toEqual([`${tr('settings.keys.ADMIN_GROUP.label')}: ${tr('settings.errors.locked')}`]);
     expect(otherFieldErrors(undefined, [])).toEqual([]);
-    expect(['JELLYFIN_ADMIN_API_KEY', 'OIDC_CLIENT_SECRET', 'AUTHENTIK_API_TOKEN'].every(isSecretKey)).toBe(true);
-    expect(['JELLYFIN_URL', 'OIDC_CLIENT_ID', 'ADMIN_GROUP', 'AUTHENTIK_ENROLL_FLOW'].some(isSecretKey)).toBe(false);
+    expect(['JELLYFIN_ADMIN_API_KEY', 'PLEX_TOKEN', 'OIDC_CLIENT_SECRET', 'AUTHENTIK_API_TOKEN'].every(isSecretKey)).toBe(true);
+    expect(['JELLYFIN_URL', 'PLEX_URL', 'OIDC_CLIENT_ID', 'ADMIN_GROUP', 'AUTHENTIK_ENROLL_FLOW'].some(isSecretKey)).toBe(false);
   });
 
   it('every code the backend answers has a sentence in every language; the request service is never named after a product', async () => {
@@ -147,7 +147,7 @@ describe('setup messages', () => {
     // probe codes and details of settings/probes.ts, the media server's automatic key and the setup routes
     const probe = ['ok', 'unreachable', 'timeout', 'unauthorized', 'invalid', 'not_admin', 'issuer_mismatch', 'wizard_pending', 'unexpected', 'warning'];
     const details = ['echo_mismatch', 'insecure', 'not_tested', 'timeout', 'env_locked', 'env_key_locked', 'public_url_missing', 'invalid_url', 'redirect', 'not_found', 'upstream_error',
-      'bad_response', 'incomplete', 'insecure_issuer', 'enroll_flow_missing', 'not_set', 'rate_limited'];
+      'bad_response', 'incomplete', 'insecure_issuer', 'enroll_flow_missing', 'not_set', 'rate_limited', 'not_admin'];
     for (const c of errors) expect(hasKey(`setup.errors.${c}`), c).toBe(true);
     for (const c of ak) expect(hasKey(`setup.ak.fail.${c}`), c).toBe(true);
     for (const c of probe) expect(hasKey(`setup.probe.${c}`) || hasKey(`settings.probe.${c}`), c).toBe(true);
@@ -158,6 +158,16 @@ describe('setup messages', () => {
       await setLocale(l);
       expect(errorText('no_code'), l).toMatch(/BACKGROUND_JOBS=true/);
       expect(akFailText('blueprint_invalid'), l).not.toBe(akFailText('unexpected'));
+    }
+  });
+
+  it('fork: the Plex media step has its own wording and the not_admin note in every language, without the old request service or a placeholder host', async () => {
+    for (const l of LOCALES) {
+      await setLocale(l);
+      const text = [tr('setup.media.textPlex'), tr('setup.media.manualTextPlex'), tr('setup.probeDetail.not_admin')];
+      for (const t of text) expect(t, l).not.toBe('');
+      expect(text.join(' '), l).not.toMatch(/seerr|https?:\/\/|example\.com/i);
+      expect(probeText({ ok: true, code: 'warning', detail: 'not_admin' }), l).toBe(`${tr('setup.probe.warning')} ${tr('setup.probeDetail.not_admin')}`);
     }
   });
 

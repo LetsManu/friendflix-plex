@@ -51,6 +51,8 @@ const setup: Translation<typeof de> = {
     create: 'Create API key automatically',
     created: 'API key created and saved.',
     manualText: 'Enter the address and an API key with admin rights. Saving checks the connection.',
+    textPlex: 'FriendFlix needs the address of your Plex server and its owner’s token.',
+    manualTextPlex: 'Enter the address and the Plex token. The test checks the connection and tells you whether the token belongs to the server owner.',
     noAuto: 'This media server has no automatic setup. Enter the values by hand.',
   },
   signin: {
@@ -193,6 +195,7 @@ const setup: Translation<typeof de> = {
     warning: 'Checked, with a note:',
   },
   probeDetail: {
+    not_admin: 'The token works, but it is not the Plex server owner’s token, so some features may be limited.',
     echo_mismatch: 'FriendFlix could not reach itself at this address. That often happens inside your own network (NAT loopback) and is not an error if the address is right from outside.',
     insecure: 'The address uses http://: cookies are not protected, Chromecast and passkeys are off.',
     not_tested: 'This media server cannot be checked automatically.',

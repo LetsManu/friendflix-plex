@@ -50,6 +50,7 @@ export default {
   },
   probeDetail: {
     redirect: 'Die Adresse leitet weiter; trag die Zieladresse ein.',
+    not_admin: 'Der Token funktioniert, gehört aber nicht dem Besitzer des Plex-Servers; manche Funktionen können eingeschränkt sein.',
     not_found: 'Unter dieser Adresse gibt es den Dienst nicht.',
     upstream_error: 'Der Dienst hat mit einem Fehler geantwortet.',
     incomplete: 'Es fehlen noch Angaben.',
@@ -110,6 +111,8 @@ export default {
     AUTHENTIK_TOTP_SETUP_FLOW: { label: 'Ablauf für Zwei-Faktor-Einrichtung', help: 'Slug des Ablaufs zum Einrichten einer Authenticator-App.' },
     JELLYFIN_URL: { label: 'Jellyfin-Adresse', help: 'Interne Adresse des Mediaservers, z. B. http://jellyfin:8096.' },
     JELLYFIN_ADMIN_API_KEY: { label: 'Jellyfin-API-Schlüssel (Admin)', help: 'API-Schlüssel mit Admin-Rechten (Jellyfin → Dashboard → API-Schlüssel).' },
+    PLEX_URL: { label: 'Plex-Adresse', help: 'Interne Adresse des Plex-Servers, über die das Backend ihn erreicht.' },
+    PLEX_TOKEN: { label: 'Plex-Token', help: 'Token des Plex-Server-Besitzers. Er wird nur im Backend gespeichert und nie angezeigt.' },
     REQUESTS_URL: { label: 'Adresse des Anfragen-Dienstes', help: 'Optional. Ohne Adresse und Schlüssel sind Wünsche ausgeblendet.' },
     REQUESTS_API_KEY: { label: 'API-Schlüssel des Anfragen-Dienstes', help: 'API-Schlüssel aus den Einstellungen des Anfragen-Dienstes.' },
     NTFY_URL: { label: 'ntfy-Kanal für Ankündigungen', help: 'Gemeinsamer ntfy-Kanal für neue Titel und Hinweise, z. B. https://ntfy.example.com/friendflix.' },

@@ -57,6 +57,7 @@ const settings: Translation<typeof de> = {
   },
   probeDetail: {
     redirect: 'Adres przekierowuje; wpisz adres docelowy.',
+    not_admin: 'Token działa, ale nie należy do właściciela serwera Plex, więc niektóre funkcje mogą być ograniczone.',
     not_found: 'Pod tym adresem nie ma tej usługi.',
     upstream_error: 'Usługa odpowiedziała błędem.',
     incomplete: 'Brakuje jeszcze danych.',
@@ -117,6 +118,8 @@ const settings: Translation<typeof de> = {
     AUTHENTIK_TOTP_SETUP_FLOW: { label: 'Przepływ konfiguracji dwuskładnikowej', help: 'Slug przepływu do konfiguracji aplikacji uwierzytelniającej.' },
     JELLYFIN_URL: { label: 'Adres Jellyfin', help: 'Wewnętrzny adres serwera multimediów, np. http://jellyfin:8096.' },
     JELLYFIN_ADMIN_API_KEY: { label: 'Klucz API Jellyfin (admin)', help: 'Klucz API z uprawnieniami administratora (Jellyfin → Panel → Klucze API).' },
+    PLEX_URL: { label: 'Adres Plex', help: 'Wewnętrzny adres, pod którym backend łączy się z serwerem Plex.' },
+    PLEX_TOKEN: { label: 'Token Plex', help: 'Token właściciela serwera Plex. Jest zapisywany tylko w backendzie i nigdy nie jest pokazywany.' },
     REQUESTS_URL: { label: 'Adres usługi próśb', help: 'Opcjonalne. Bez adresu i klucza prośby są ukryte.' },
     REQUESTS_API_KEY: { label: 'Klucz API usługi próśb', help: 'Klucz API z ustawień usługi próśb.' },
     NTFY_URL: { label: 'Kanał ntfy z ogłoszeniami', help: 'Wspólny kanał ntfy dla nowych tytułów i komunikatów, np. https://ntfy.example.com/friendflix.' },

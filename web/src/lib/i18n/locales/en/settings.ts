@@ -52,6 +52,7 @@ const settings: Translation<typeof de> = {
   },
   probeDetail: {
     redirect: 'The address redirects; enter the target address.',
+    not_admin: 'The token works, but it is not the Plex server owner’s token, so some features may be limited.',
     not_found: 'The service does not exist at this address.',
     upstream_error: 'The service answered with an error.',
     incomplete: 'Some details are still missing.',
@@ -112,6 +113,8 @@ const settings: Translation<typeof de> = {
     AUTHENTIK_TOTP_SETUP_FLOW: { label: 'Two-factor setup flow', help: 'Slug of the flow for setting up an authenticator app.' },
     JELLYFIN_URL: { label: 'Jellyfin address', help: 'Internal address of the media server, e.g. http://jellyfin:8096.' },
     JELLYFIN_ADMIN_API_KEY: { label: 'Jellyfin API key (admin)', help: 'API key with admin rights (Jellyfin → Dashboard → API keys).' },
+    PLEX_URL: { label: 'Plex address', help: 'Internal address at which the backend reaches the Plex server.' },
+    PLEX_TOKEN: { label: 'Plex token', help: 'Token of the Plex server owner. It is stored only in the backend and never shown.' },
     REQUESTS_URL: { label: 'Request service address', help: 'Optional. Without address and key, requests are hidden.' },
     REQUESTS_API_KEY: { label: 'Request service API key', help: 'API key from the settings of the request service.' },
     NTFY_URL: { label: 'ntfy announcement channel', help: 'Shared ntfy channel for new titles and notices, e.g. https://ntfy.example.com/friendflix.' },

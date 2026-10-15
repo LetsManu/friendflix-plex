@@ -26,6 +26,9 @@
   let busy: 'auto' | 'save' | 'test' | 'force' | null = null;
   let msg: Message | null = null;
   let ok = '';
+  // fork: a saved Plex token that works but is not the owner's (probe warning not_admin) is saved, and the note stays until "Next"
+  let held = false;
+  $: plex = state.mediaKind === 'plex';
 
   const AUTO_LABEL = { url: 'setup.media.url', username: 'setup.media.username', password: 'setup.media.password' } as const;
   $: autoReady = autoFields.every((f) => auto[f].trim() || f === 'password');
@@ -62,18 +65,25 @@
 
   async function save(force = false) {
     if (busy) return;
-    busy = force ? 'force' : 'save'; msg = null; ok = '';
+    busy = force ? 'force' : 'save'; msg = null; ok = ''; held = false;
     try {
+      // fork: on Plex Test runs before Save (a save answers no warning), so a token that is not the owner's is shown; a refusal of
+      // the check itself is left to the save, which probes the same way (and has the "Save anyway" for an unreachable server)
+      let note = '';
+      if (plex && !force) {
+        const r = await testSetup('media', manualValues).catch(() => null);
+        if (r?.ok && r.code === 'warning') note = probeText(r);
+      }
       await saveSetup(manualValues, force);
       // the key is saved: it never stays in the page
       manual = Object.fromEntries(Object.entries(manual).map(([k, v]) => [k, isSecretKey(k) ? '' : v]));
-      dispatch('done');
+      if (note) { ok = note; held = true; } else dispatch('done');
     } catch (e) { msg = handle(e); } finally { busy = null; }
   }
 </script>
 
 <h2 id="setup-step-h">{$t('setup.media.title')}</h2>
-<p>{$t('setup.media.text')}</p>
+<p>{$t(plex ? 'setup.media.textPlex' : 'setup.media.text')}</p>
 {#if state.steps.media === 'done'}<p class="muted">{$t('setup.doneText')}</p>{/if}
 
 {#if autoFields.length}
@@ -105,7 +115,7 @@
   </form>
 {:else}
   <form novalidate on:submit|preventDefault={() => save()}>
-    <p>{$t('setup.media.manualText')}</p>
+    <p>{$t(plex ? 'setup.media.manualTextPlex' : 'setup.media.manualText')}</p>
     {#each state.media.keys as key (key)}
       <Field label={keyLabel(key)} hint={keyHelp(key)} error={fieldErr(key)} let:id let:describedby let:invalid>
         <input {id} type={isSecretKey(key) ? 'password' : 'text'} autocomplete="off" spellcheck="false" maxlength={4096} bind:value={manual[key]}
@@ -124,6 +134,7 @@
       </Notice>
     {/if}
     <div class="acts">
+      {#if held}<Button icon="check" on:click={() => dispatch('done')}>{$t('setup.next')}</Button>{/if}
       <Button variant="secondary" icon="activity" pending={busy === 'test'} disabled={!Object.keys(manualValues).length} on:click={test}>{$t('setup.test')}</Button>
       <Button type="submit" icon="check" pending={busy === 'save'} disabled={!Object.keys(manualValues).length}>{$t('setup.saveNext')}</Button>
     </div>
