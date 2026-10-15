@@ -4,6 +4,8 @@ All notable changes, grouped by what you notice. Each release has its own sectio
 
 ## [Unreleased]
 
+## [1.0.0] – Arancini – 2026-10-15
+
 ### FriendFlix for Plex (this fork)
 - **Block 23 phase 3 on Plex:** the in-app sign-in, password recovery, the account page's *Security* section and the e-mail change work unchanged on Plex (they run between FriendFlix and Authentik; the Plex token plays no part). An invite creates the account's Plex identity on the first in-app sign-in, and ended access locks the account together with its Plex identities.
 - **Cover wall on Plex:** posters from FriendFlix's mirror of the Plex library, only for movies and shows whose own Plex `contentRating` is on the allow-list, compared exactly and case-sensitively: plain values as they are (`PG`, `TV-PG`, `12A` …), `de/12` as `DE-12`, `gb/U` as `GB-U`, `us/PG` as `PG`; other countries, other spellings and unrated titles never appear, and FriendFlix's own rating table must place the value at age 12 or below. Posters come through Plex's photo transcoder at 200 px (token in the request header only, 2 MB cap). The table of covered spellings is in [docs/plex.md](docs/plex.md#sign-in-and-account-security-on-plex).
