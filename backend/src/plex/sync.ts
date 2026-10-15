@@ -9,6 +9,9 @@
  * - poll every 5 min, nightly sweep (all details again), and the PMS notification websocket (timeline events mark an item stale
  *   and trigger a debounced pass).
  * - itemAdded / itemRemoved events for the media event pipeline (never on the very first pass of an empty mirror).
+ * - server guard: every pass first reads the server's machineIdentifier (/identity). Another server than the stored one (a PLEX_URL
+ *   saved for a different PMS) clears the mirror, so the pass rebuilds it like a first pass (no event storm); the same server under a
+ *   new URL keeps it. An unknown identity (fetch failed, odd answer) changes nothing.
  */
 import type { Db } from '../db.js';
 import type { MediaEvent, MediaRuntime } from '../media/types.js';
@@ -43,6 +46,7 @@ export class PlexSync {
   private stopped = true;
   private lastSweep = '';
   private rt: MediaRuntime | null = null;
+  private identityWarned = false;
 
   constructor(
     private readonly client: PlexClient,
@@ -77,6 +81,7 @@ export class PlexSync {
 
   private async pass(allDetails: boolean): Promise<SyncResult> {
     await this.ready();
+    await this.guardServer();
     const db = this.db;
     const initial = !(await db.query('select 1 from plex_sync_state where k = $1', ['initialized'])).rowCount;
     const sections = (await this.client.sections()).filter((s) => LIST_TYPES[String(s.type)] && /^\d+$/.test(String(s.key)));
@@ -187,6 +192,37 @@ export class PlexSync {
     }
     await db.query(`insert into plex_sync_state(k, v) values ('last_sync', to_jsonb(now())) on conflict (k) do update set v = excluded.v`);
     return { added, removed, details, sections: sections.length };
+  }
+
+  /**
+   * Another Plex server than the mirror was built from (machineIdentifier differs from the stored one): drops the mirror (items with
+   * their tags and collection members, sections) and the `initialized` mark in ONE statement with the identifier swap, so a crash
+   * cannot leave a new identifier over an old mirror and two passes cannot both clear. The first identifier seen (fresh install or an
+   * install from before this guard) is only stored. Without a usable identifier nothing happens.
+   */
+  private async guardServer(): Promise<void> {
+    let machine: unknown;
+    try {
+      machine = (await this.client.container('/identity', { signal: AbortSignal.timeout(5_000) }) as Record<string, unknown>).machineIdentifier;
+    } catch (e) {
+      if (!this.identityWarned) this.log.warn({ err: String(e) }, 'plex: server identity unknown, keeping the mirror');
+      this.identityWarned = true;
+      return;
+    }
+    if (typeof machine !== 'string' || !machine) return;
+    const r = await this.db.query<{ previous: string | null; items: number }>(
+      `with old as (select v #>> '{}' as id from plex_sync_state where k = 'machine_identifier'),
+       swap as (insert into plex_sync_state(k, v) values ('machine_identifier', to_jsonb($1::text))
+                on conflict (k) do update set v = excluded.v where plex_sync_state.v is distinct from excluded.v returning 1),
+       changed as (select old.id from old, swap where old.id is distinct from $1::text),
+       items as (delete from plex_items where exists (select 1 from changed) returning 1),
+       sections as (delete from plex_sections where exists (select 1 from changed) returning 1),
+       state as (delete from plex_sync_state where k = 'initialized' and exists (select 1 from changed) returning 1)
+       select (select id from changed) as previous, (select count(*) from items)::int as items, (select count(*) from sections)::int as sections,
+              (select count(*) from state)::int as state`,
+      [machine]);
+    const row = r.rows[0];
+    if (row?.previous) this.log.warn({ items: row.items }, 'plex: the Plex server changed (another machineIdentifier), rebuilding the library mirror');
   }
 
   /** Detail fetch (`/library/metadata/a,b,c`) in batches; extras become `clip` rows owned by their item. */

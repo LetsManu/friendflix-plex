@@ -5,10 +5,11 @@ import { MIGRATIONS } from '../../src/db.js';
 import { MemoryKV } from '../../src/kv.js';
 import type { MediaEvent } from '../../src/media/types.js';
 import { PlexClient } from '../../src/plex/client.js';
+import { PlexMediaServer } from '../../src/plex/service.js';
 import { migratePlex, PLEX_MIGRATIONS } from '../../src/plex/migrations.js';
 import { MISSING_PASSES } from '../../src/plex/sync.js';
 import { resetDb } from '../helpers.js';
-import { fixture, PLEX_TOKEN, PLEX_URL, PlexFake, plexServer } from '../plexfake.js';
+import { fixture, PLEX_TEST_SECRET, PLEX_TOKEN, PLEX_URL, PlexFake, plexServer } from '../plexfake.js';
 import { identity, item, kids, plexEnv, type PlexEnv } from './setup.js';
 
 let env: PlexEnv | null = null;
@@ -224,3 +225,88 @@ describe('sync robustness (fail closed, no wipe on a bad answer)', () => {
   });
 });
 
+
+// fork Task 8: a PLEX_URL saved for another Plex server (another machineIdentifier) must not leave the old server's mirror behind
+// (rating keys and section ids are per server: they would collide with the new one's); the same server under a new URL keeps it.
+describe('server guard (machineIdentifier)', () => {
+  const OLD = fixture('identity').MediaContainer.machineIdentifier as string;
+  const stored = async (pool: PlexEnv['pool']) => (await pool.query("select v #>> '{}' id from plex_sync_state where k = 'machine_identifier'")).rows[0]?.id;
+  /** a new PlexMediaServer on the same database, as a PLEX_* save builds one (`url`: the address it calls) */
+  const swap = (e: PlexEnv, fake: PlexFake, url = PLEX_URL) => {
+    const ms = new PlexMediaServer({ client: new PlexClient(url, PLEX_TOKEN, fake.fetch), db: e.pool, kv: e.kv, migrate: () => migratePlex(e.pool), websocket: false, secret: PLEX_TEST_SECRET });
+    const events: MediaEvent[] = [];
+    const warns: Array<[unknown, string]> = [];
+    (ms.sync as unknown as { rt: unknown }).rt = { dispatch: async (x: MediaEvent) => void events.push(x), log: { warn: (o: unknown, m: string) => void warns.push([o, m]), info: () => undefined } };
+    const close = e.close;
+    e.close = async () => { await ms.stop(); await close(); };
+    return { ms, events, warns };
+  };
+  /** another server: only a TV section (id 2, the same as the old one's) with one show of its own under colliding rating keys */
+  const otherServer = () => {
+    const f = new PlexFake();
+    f.machineIdentifier = 'another-plex-server-0000000000000000000';
+    f.sections = f.sections.filter((s) => s.title === 'TV');
+    for (const [k, m] of [...f.items]) if (m.librarySectionID === 1) f.items.delete(k);
+    f.items.get('3')!.title = 'Other Show';
+    return f;
+  };
+  const keys = async (pool: PlexEnv['pool']) => (await pool.query('select rating_key from plex_items order by rating_key')).rows.map((r) => String(r.rating_key));
+
+  it('the first pass stores the identifier; another server rebuilds the mirror (stale items gone, no events), logged once without the token', async () => {
+    env = await plexEnv();
+    expect(await stored(env.pool)).toBe(OLD);
+    expect(await keys(env.pool)).toContain('1'); // a movie of the old server
+    const { ms, events, warns } = swap(env, otherServer());
+    const r = await ms.sync.run();
+    expect(await stored(env.pool)).toBe('another-plex-server-0000000000000000000');
+    // the Movies section and its items are gone at once (no MISSING_PASSES grace: they belonged to the other server)
+    expect((await env.pool.query('select section_id, title from plex_sections')).rows).toEqual([{ section_id: 2, title: 'TV' }]);
+    expect((await env.pool.query("select count(*)::int n from plex_items where section_id = 1 or type in ('movie', 'collection')")).rows[0].n).toBe(0);
+    expect((await env.pool.query('select title from plex_items where rating_key = 3')).rows[0].title).toBe('Other Show');
+    expect((await env.pool.query('select count(*)::int n from plex_collection_items')).rows[0].n).toBe(0);
+    // rebuilt like a first pass: no itemAdded / itemRemoved storm
+    expect(r.removed).toEqual([]);
+    expect(events).toEqual([]);
+    expect(warns.filter(([, m]) => /server changed/.test(m))).toHaveLength(1);
+    expect(JSON.stringify(warns)).not.toContain(PLEX_TOKEN);
+    // later passes: same server, nothing cleared or logged again; changes are events again
+    const before = await keys(env.pool);
+    await ms.sync.run();
+    expect(await keys(env.pool)).toEqual(before);
+    expect(warns.filter(([, m]) => /server changed/.test(m))).toHaveLength(1);
+  });
+
+  it('the same server under a new URL keeps the mirror (no rebuild, no log)', async () => {
+    env = await plexEnv();
+    const before = await keys(env.pool);
+    const detailAt = (await env.pool.query('select max(detail_at) d from plex_items')).rows[0].d;
+    const { ms, events, warns } = swap(env, env.fake, 'http://plex.example.com:32400');
+    env.fake.calls.length = 0;
+    expect(await ms.sync.run()).toMatchObject({ added: [], removed: [], details: 0 });
+    expect(await keys(env.pool)).toEqual(before);
+    expect((await env.pool.query('select max(detail_at) d from plex_items')).rows[0].d).toEqual(detailAt);
+    expect(await stored(env.pool)).toBe(OLD);
+    expect(events).toEqual([]);
+    expect(warns).toEqual([]);
+  });
+
+  it('an identity fetch failure changes nothing (identifier and mirror kept); the next pass with an identity rebuilds', async () => {
+    env = await plexEnv();
+    const other = otherServer();
+    other.fail = { re: /^\/identity$/, status: 503 };
+    const { ms, warns } = swap(env, other);
+    await ms.sync.run();
+    expect(await stored(env.pool)).toBe(OLD);
+    // a normal pass: the old Movies section is only dropped after MISSING_PASSES passes, nothing was cleared
+    expect((await env.pool.query('select title from plex_sections order by section_id')).rows.map((x) => x.title)).toEqual(['Movies', 'TV']);
+    expect(await keys(env.pool)).toContain('1');
+    expect(warns.filter(([, m]) => /identity unknown/.test(m))).toHaveLength(1);
+    await ms.sync.run();
+    expect(warns.filter(([, m]) => /identity unknown/.test(m))).toHaveLength(1); // once, not every pass
+    expect(JSON.stringify(warns)).not.toContain(PLEX_TOKEN);
+    other.fail = null;
+    await ms.sync.run();
+    expect(await stored(env.pool)).toBe('another-plex-server-0000000000000000000');
+    expect((await env.pool.query('select title from plex_sections')).rows.map((x) => x.title)).toEqual(['TV']);
+  });
+});
