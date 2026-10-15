@@ -80,8 +80,15 @@ describe('Block 23 on Plex', () => {
       expect((await env.pool.query('select 1 from plex_identities where id = $1', ['f'.repeat(32)])).rowCount).toBe(0);
     });
 
-    it('the media server link is ok for an active and a locked account; a lost identity shows broken until a repair', async () => {
+    it('the media server link is ok for an active and a locked account; a lost identity (active or locked) shows broken until a repair', async () => {
       const { user, ids } = await account();
+      expect(await link(user.id)).toEqual({ ok: true, username: user.jellyfin_username });
+
+      // active account, identity lost: broken (Plex views() would answer [] and read ok); a repair brings it back
+      await env.pool.query('delete from plex_identities where id = $1', [ids[0]]);
+      expect((await link(user.id)).ok).toBe(false);
+      expect((await as('POST', `/api/admin/users/${user.id}/repair`)).json().jellyfin).toEqual({ identities: 2, failed: 0 });
+      expect((await policies(ids)).map((p) => p.disabled)).toEqual([false, false]);
       expect(await link(user.id)).toEqual({ ok: true, username: user.jellyfin_username });
 
       expect((await as('PATCH', `/api/admin/users/${user.id}`, { disabled: true })).statusCode).toBe(200);

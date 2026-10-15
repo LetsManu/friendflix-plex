@@ -139,8 +139,10 @@ async function liveSessions(ctx: Ctx, userId: string) {
  * check on the server, null (unknown) rather than false.
  */
 async function jellyfinLinkOk(ctx: Ctx, user: UserRow): Promise<boolean | null> {
-  if (!user.disabled) return ctx.jf.views(user).then(() => true, () => false);
   const exists = ctx.jf.admin.identityExists;
+  // fork: an active account whose identity is gone must not read ok (Plex views() fails closed with [], it never throws)
+  if (!user.disabled && exists && ctx.jf.kind === 'plex' && !(await exists.call(ctx.jf.admin, user.jellyfin_user_id).catch(() => false))) return false;
+  if (!user.disabled) return ctx.jf.views(user).then(() => true, () => false);
   if (!exists) return null;
   return exists.call(ctx.jf.admin, user.jellyfin_user_id).catch(() => false);
 }
