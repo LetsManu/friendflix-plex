@@ -18,28 +18,32 @@ const def = (key: string) => {
 describe('key classification', () => {
   it('every key of the config schema is in exactly one of SETTINGS, ENV_ONLY_KEYS, BOOTSTRAP_KEYS, BUILD_KEYS', () => {
     const keys = Object.keys(configSchema.shape);
-    expect(keys).toHaveLength(77);
+    expect(keys).toHaveLength(79); // fork: + PLEX_URL, PLEX_TOKEN
     const classes = [SETTINGS.map((s) => s.key), ENV_ONLY_KEYS, BOOTSTRAP_KEYS, BUILD_KEYS];
     for (const k of keys) expect(classes.filter((c) => c.includes(k)), k).toHaveLength(1);
     expect(classes.flat().sort()).toEqual([...keys].sort()); // nothing outside the schema, no duplicates
-    expect([BOOTSTRAP_KEYS.length, ENV_ONLY_KEYS.length, BUILD_KEYS.length, SETTINGS.length]).toEqual([4, 12, 4, 57]);
-    expect(SETTINGS.filter((s) => s.visible !== false)).toHaveLength(48);
+    expect([BOOTSTRAP_KEYS.length, ENV_ONLY_KEYS.length, BUILD_KEYS.length, SETTINGS.length]).toEqual([4, 12, 4, 59]);
+    expect(SETTINGS.filter((s) => s.visible !== false)).toHaveLength(50);
     expect(SETTINGS.filter((s) => s.visible === false).map((s) => s.key).sort()).toEqual([...PHASE3].sort());
   });
   it('each setting parses with the config schema field of the same key', () => {
     for (const s of SETTINGS) expect(s.schema, s.key).toBe(configSchema.shape[s.key as keyof typeof configSchema.shape]);
   });
-  it('the media module contributes the Jellyfin keys', () => {
+  it('the media module contributes the Jellyfin and (fork) Plex keys, each run-required for its kind only', () => {
     const m = mediaSettings();
-    expect(m.map((s) => [s.key, s.kind, s.group, s.probe])).toEqual([['JELLYFIN_URL', 'url', 'media', 'media'], ['JELLYFIN_ADMIN_API_KEY', 'secret', 'media', 'media']]);
-    const run = m[0]!.runRequired as (c: typeof cfg) => boolean;
-    expect(run(cfg)).toBe(true);
-    expect(run({ ...cfg, MEDIA_SERVER: 'plex' as never })).toBe(false);
-    expect(settingDef('JELLYFIN_URL')).toBe(SETTINGS.find((s) => s.key === 'JELLYFIN_URL'));
+    expect(m.map((s) => [s.key, s.kind, s.group, s.probe, s.apply, s.secret === true])).toEqual([
+      ['JELLYFIN_URL', 'url', 'media', 'media', 'live', false], ['JELLYFIN_ADMIN_API_KEY', 'secret', 'media', 'media', 'live', true],
+      ['PLEX_URL', 'url', 'media', 'media', 'live', false], ['PLEX_TOKEN', 'secret', 'media', 'media', 'live', true]]);
+    const plex = { ...cfg, MEDIA_SERVER: 'plex' as const };
+    const run = (key: string, c: typeof cfg) => (m.find((s) => s.key === key)!.runRequired as (c: typeof cfg) => boolean)(c);
+    for (const k of ['JELLYFIN_URL', 'JELLYFIN_ADMIN_API_KEY']) expect([run(k, cfg), run(k, plex)], k).toEqual([true, false]);
+    for (const k of ['PLEX_URL', 'PLEX_TOKEN']) expect([run(k, cfg), run(k, plex)], k).toEqual([false, true]);
+    for (const k of ['JELLYFIN_URL', 'PLEX_URL', 'PLEX_TOKEN']) expect(settingDef(k), k).toBe(SETTINGS.find((s) => s.key === k));
+    expect(def('PLEX_TOKEN').hint).toBeUndefined(); // write-only: not even the last 4 characters
   });
   it('secrets and last4 hints', () => {
     expect(SETTINGS.filter((s) => s.secret).map((s) => s.key).sort()).toEqual(['OIDC_CLIENT_SECRET', 'JELLYFIN_ADMIN_API_KEY', 'REQUESTS_API_KEY', 'DISCORD_WEBHOOK_URL',
-      'VAPID_PRIVATE_KEY', 'TMDB_API_KEY', 'OMDB_API_KEY', 'AUTHENTIK_API_TOKEN', 'GITHUB_TOKEN', 'PORTAINER_WEBHOOK_URL', 'PORTAINER_API_KEY', 'WEBHOOK_SECRET'].sort());
+      'VAPID_PRIVATE_KEY', 'TMDB_API_KEY', 'OMDB_API_KEY', 'AUTHENTIK_API_TOKEN', 'GITHUB_TOKEN', 'PORTAINER_WEBHOOK_URL', 'PORTAINER_API_KEY', 'WEBHOOK_SECRET', 'PLEX_TOKEN'].sort());
     expect(SETTINGS.filter((s) => s.hint === 'last4').map((s) => s.key).sort()).toEqual(['OMDB_API_KEY', 'TMDB_API_KEY']);
     for (const s of SETTINGS) expect(s.secret === true, s.key).toBe(s.kind === 'secret');
   });
@@ -66,7 +70,7 @@ describe('key classification', () => {
     expect(def('PUBLIC_URL')).toMatchObject({ kind: 'url', group: 'general', probe: 'publicUrl', runRequired: true, apply: 'live' });
     expect(['OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET'].map((k) => [def(k).group, def(k).runRequired, def(k).probe])).toEqual(Array(3).fill(['signin', true, 'oidc']));
     expect(SETTINGS.filter((s) => s.runRequired !== undefined).map((s) => s.key).sort())
-      .toEqual(['JELLYFIN_ADMIN_API_KEY', 'JELLYFIN_URL', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_ISSUER', 'PUBLIC_URL']);
+      .toEqual(['JELLYFIN_ADMIN_API_KEY', 'JELLYFIN_URL', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_ISSUER', 'PLEX_TOKEN', 'PLEX_URL', 'PUBLIC_URL']);
     expect(def('WEBHOOK_SECRET').generate).toBe('webhookSecret');
     expect([def('VAPID_PUBLIC_KEY').generate, def('VAPID_PRIVATE_KEY').generate]).toEqual(['vapidPair', 'vapidPair']);
     expect(def('HOME_NETWORKS')).toMatchObject({ kind: 'cidrList', group: 'playback' });

@@ -32,7 +32,8 @@ describe('media setup seam', () => {
 
   it('a kind without MEDIA_SETUP entry → state.media has keys from mediaSettings() and auto null', async () => {
     await withEntry(undefined, async () => {
-      const keys = mediaSettings().map((d) => d.key);
+      // fork: mediaSettings() also holds the Plex keys; the fallback lists the keys of cfg's kind (those run-required for it)
+      const keys = mediaSettings().filter((d) => typeof d.runRequired === 'function' && d.runRequired(cfg)).map((d) => d.key);
       expect((await env.app.inject('/api/setup/state')).json().media).toEqual({ keys, auto: null });
       expect(mediaSetupKeys(cfg)).toEqual(keys);
       // the gateway upstream falls back to the first url setting

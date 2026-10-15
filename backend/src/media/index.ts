@@ -34,9 +34,13 @@ export const MEDIA_FIELDS = {
 /** Registry entries of the media server settings (Admin -> Settings "media", wizard step 3); required once setup is complete for their kind. */
 export function mediaSettings(): SettingDef[] {
   const jellyfin = (c: Config) => c.MEDIA_SERVER === 'jellyfin';
+  const plex = (c: Config) => c.MEDIA_SERVER === 'plex';
   return [
     { key: 'JELLYFIN_URL', kind: 'url', group: 'media', schema: MEDIA_FIELDS.JELLYFIN_URL, apply: 'live', probe: 'media', runRequired: jellyfin },
     { key: 'JELLYFIN_ADMIN_API_KEY', kind: 'secret', group: 'media', schema: MEDIA_FIELDS.JELLYFIN_ADMIN_API_KEY, secret: true, apply: 'live', probe: 'media', runRequired: jellyfin },
+    // fork: the Plex server's address and token (encrypted at rest, write-only in the UI; env / PLEX_TOKEN_FILE still win and show locked)
+    { key: 'PLEX_URL', kind: 'url', group: 'media', schema: MEDIA_FIELDS.PLEX_URL, apply: 'live', probe: 'media', runRequired: plex },
+    { key: 'PLEX_TOKEN', kind: 'secret', group: 'media', schema: MEDIA_FIELDS.PLEX_TOKEN, secret: true, apply: 'live', probe: 'media', runRequired: plex },
   ];
 }
 

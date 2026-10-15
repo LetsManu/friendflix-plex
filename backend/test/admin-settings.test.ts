@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { encrypt } from '../src/crypto.js';
 import { pushEnabled } from '../src/push.js';
-import { CREDENTIAL_DESTINATIONS, generateVapidPair, generateWebhookSecret, NO_DESTINATION } from '../src/routes/adminSettings.js';
+import { CREDENTIAL_DESTINATIONS, generateVapidPair, generateWebhookSecret, NO_DESTINATION, needsReauth, redirectsSavedCredential } from '../src/routes/adminSettings.js';
 import { SETTINGS, settingDef } from '../src/settings/registry.js';
 import { ADMIN, cfg, ENC_KEY, fakeHttp, makeEnv, type Handler, type TestEnv } from './helpers.js';
 
@@ -380,6 +380,27 @@ describe('saved credentials never go to a new host without re-authentication', (
       expect(dests.length).toBeGreaterThan(0);
       for (const d of dests) expect(settingDef(d)?.kind).toBe('url');
     }
+  });
+
+  it('fork: a saved PLEX_TOKEN never goes to a new PLEX_URL without re-authentication', async () => {
+    expect(CREDENTIAL_DESTINATIONS.PLEX_TOKEN).toEqual(['PLEX_URL']);
+    expect(CREDENTIAL_DESTINATIONS.JELLYFIN_ADMIN_API_KEY).toEqual(['JELLYFIN_URL']); // per kind: no cross-kind pair
+    expect(needsReauth(['PLEX_URL'])).toBe(true);
+    expect(needsReauth(['PLEX_TOKEN'])).toBe(true);
+    const plex = { ...cfg, MEDIA_SERVER: 'plex' as const, PLEX_URL: 'http://plex.example.com:32400', PLEX_TOKEN: 'saved-plex-token' };
+    expect(redirectsSavedCredential(plex, { ...plex, PLEX_URL: `http://${EVIL}:32400` })).toBe(true);
+    expect(redirectsSavedCredential(plex, { ...plex, PLEX_URL: `http://${EVIL}:32400`, PLEX_TOKEN: 'typed-for-the-new-host' })).toBe(false);
+    expect(redirectsSavedCredential(plex, plex)).toBe(false);
+    // through the route: the token saved in the database, a stale session changes only the URL
+    await h.env.ctx.settings.save({ PLEX_URL: 'http://plex.example.com:32400', PLEX_TOKEN: 'saved-plex-token' }, null);
+    await stale();
+    h.hosts.length = 0;
+    h.probe = { 'GET .*': () => ({ json: {} }) };
+    expect((await h.put({ PLEX_URL: `http://${EVIL}:32400` })).statusCode).toBe(401);
+    expect((await test('media', { PLEX_URL: `http://${EVIL}:32400` })).statusCode).toBe(401);
+    expect(h.hosts).not.toContain(`${EVIL}:32400`);
+    expect(h.hosts).not.toContain(EVIL);
+    await h.env.ctx.settings.save({ PLEX_URL: null, PLEX_TOKEN: null }, null);
   });
 
   it('a typed dummy for an env/_FILE credential does not unlock a new destination (Test and PUT)', async () => {

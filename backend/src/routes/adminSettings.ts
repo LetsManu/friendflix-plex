@@ -139,7 +139,9 @@ const httpUrl = (v: unknown) => {
  */
 const mediaDefs = SETTINGS.filter((d) => d.group === 'media');
 export const CREDENTIAL_DESTINATIONS: Readonly<Record<string, readonly string[]>> = {
-  ...Object.fromEntries(mediaDefs.filter((d) => d.secret).map((d) => [d.key, mediaDefs.filter((u) => u.kind === 'url').map((u) => u.key)])),
+  // fork: a media credential goes to the URL of its own kind only (the defs of one kind share their runRequired predicate): PLEX_TOKEN ->
+  // PLEX_URL, JELLYFIN_ADMIN_API_KEY -> JELLYFIN_URL; a cross-kind pair would demand re-auth for a key that is never sent there
+  ...Object.fromEntries(mediaDefs.filter((d) => d.secret).map((d) => [d.key, mediaDefs.filter((u) => u.kind === 'url' && u.runRequired === d.runRequired).map((u) => u.key)])),
   REQUESTS_API_KEY: ['REQUESTS_URL'],
   AUTHENTIK_API_TOKEN: ['AUTHENTIK_URL'],
   PORTAINER_API_KEY: ['PORTAINER_URL'],

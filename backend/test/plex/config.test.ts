@@ -1,16 +1,20 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config.js';
-import { keyFromBase64 } from '../../src/crypto.js';
+import { decrypt, encrypt, keyFromBase64 } from '../../src/crypto.js';
 import { MemoryKV } from '../../src/kv.js';
-import { createMediaServer, mediaConfigProblems } from '../../src/media/index.js';
+import { createMediaServer, mediaConfigProblems, mediaSetupKeys, mediaUrlKey } from '../../src/media/index.js';
+import { MemorySettingsBus } from '../../src/settings/bus.js';
+import { resolveConfig } from '../../src/settings/resolve.js';
+import { createSettingsStore, SettingsError } from '../../src/settings/store.js';
+import { missingRunRequired } from '../../src/setup/state.js';
 import { PlexMediaServer } from '../../src/plex/service.js';
-import { cfg, ENC_KEY } from '../helpers.js';
+import { cfg, ENC_KEY, resetDb, TEST_DB } from '../helpers.js';
 import { PlexFake, PLEX_TOKEN, PLEX_URL } from '../plexfake.js';
 
 const BASE = {
@@ -18,24 +22,92 @@ const BASE = {
   OIDC_ISSUER: 'https://a.example.com', OIDC_CLIENT_ID: 'c', OIDC_CLIENT_SECRET: 's', REQUESTS_URL: 'http://s', REQUESTS_API_KEY: 'k', WEBHOOK_SECRET: 'w'.repeat(20),
 };
 
+const BASE_DB: NodeJS.ProcessEnv = { DATABASE_URL: TEST_DB, REDIS_URL: 'redis://x', APP_ENC_KEY: ENC_KEY, INTERNAL_SECRET: 'i'.repeat(20) };
+
 describe('MEDIA_SERVER=plex config', () => {
-  it('requires PLEX_URL and PLEX_TOKEN (empty counts as missing), not the Jellyfin settings', () => {
-    expect(() => loadConfig({ ...BASE, MEDIA_SERVER: 'plex' })).toThrow(/PLEX_URL/);
-    expect(() => loadConfig({ ...BASE, MEDIA_SERVER: 'plex', PLEX_URL: 'http://plex:32400' })).toThrow(/PLEX_TOKEN/);
-    expect(() => loadConfig({ ...BASE, MEDIA_SERVER: 'plex', PLEX_URL: 'http://plex:32400', PLEX_TOKEN: '' })).toThrow(/PLEX_TOKEN/);
+  it('without PLEX_URL / PLEX_TOKEN the instance starts in setup mode (no startup refusal); both are run-required for plex', () => {
+    for (const env of [{}, { PLEX_URL: '', PLEX_TOKEN: '' }, { PLEX_URL: 'http://plex:32400' }]) {
+      const c = loadConfig({ ...BASE, MEDIA_SERVER: 'plex', ...env });
+      expect(c.MEDIA_SERVER).toBe('plex');
+      expect(c.PLEX_TOKEN).toBeUndefined();
+      expect(missingRunRequired(c)).toContain('PLEX_TOKEN');
+      expect(missingRunRequired(c)).not.toContain('JELLYFIN_URL');
+      expect(missingRunRequired(c)).not.toContain('JELLYFIN_ADMIN_API_KEY');
+    }
+    const none = loadConfig({ ...BASE, MEDIA_SERVER: 'plex' });
+    expect(missingRunRequired(none)).toEqual(expect.arrayContaining(['PLEX_URL', 'PLEX_TOKEN']));
+    expect(missingRunRequired(none).filter((k) => /^(PLEX|JELLYFIN)_/.test(k))).toEqual(['PLEX_URL', 'PLEX_TOKEN']);
+    // a set value is still validated
     expect(() => loadConfig({ ...BASE, MEDIA_SERVER: 'plex', PLEX_URL: 'not a url', PLEX_TOKEN: 't' })).toThrow();
     const c = loadConfig({ ...BASE, MEDIA_SERVER: 'plex', PLEX_URL: 'http://plex:32400', PLEX_TOKEN: 'tok' });
     expect([c.MEDIA_SERVER, c.PLEX_URL, c.PLEX_TOKEN, c.JELLYFIN_URL]).toEqual(['plex', 'http://plex:32400', 'tok', undefined]);
+    expect(missingRunRequired(c).filter((k) => /^(PLEX|JELLYFIN)_/.test(k))).toEqual([]);
     expect(mediaConfigProblems(c)).toEqual([]);
   });
-  it('PLEX_TOKEN_FILE (Docker secret) is read', () => {
+  it('the wizard and the gateway see the Plex keys: mediaSetupKeys, mediaUrlKey, missingRunRequired (a fresh Plex install cannot complete setup without Plex)', () => {
+    const plex = { ...cfg, MEDIA_SERVER: 'plex' as const, JELLYFIN_URL: undefined, JELLYFIN_ADMIN_API_KEY: undefined, PLEX_URL: undefined, PLEX_TOKEN: undefined };
+    expect(mediaSetupKeys(plex)).toEqual(['PLEX_URL', 'PLEX_TOKEN']);
+    expect(mediaUrlKey(plex)).toBe('PLEX_URL');
+    expect(missingRunRequired(plex)).toEqual(['PLEX_URL', 'PLEX_TOKEN']);
+    expect(missingRunRequired({ ...plex, PLEX_URL, PLEX_TOKEN })).toEqual([]);
+    // the Jellyfin default is unchanged
+    expect(mediaSetupKeys(cfg)).toEqual(['JELLYFIN_URL', 'JELLYFIN_ADMIN_API_KEY']);
+    expect(mediaUrlKey(cfg)).toBe('JELLYFIN_URL');
+    expect(missingRunRequired({ ...cfg, JELLYFIN_URL: undefined })).toEqual(['JELLYFIN_URL']);
+  });
+  it('PLEX_TOKEN_FILE (Docker secret) and env PLEX_URL still win over saved values (existing installs keep working, shown locked)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ffplex-'));
-    writeFileSync(join(dir, 'tok'), 'from-file\n');
-    expect(loadConfig({ ...BASE, MEDIA_SERVER: 'plex', PLEX_URL: 'http://plex:32400', PLEX_TOKEN_FILE: join(dir, 'tok') }).PLEX_TOKEN).toBe('from-file');
+    try {
+      writeFileSync(join(dir, 'tok'), 'from-file\n');
+      expect(loadConfig({ ...BASE, MEDIA_SERVER: 'plex', PLEX_URL: 'http://plex:32400', PLEX_TOKEN_FILE: join(dir, 'tok') }).PLEX_TOKEN).toBe('from-file');
+      const env = { DATABASE_URL: 'postgres://x', REDIS_URL: 'redis://x', APP_ENC_KEY: ENC_KEY, INTERNAL_SECRET: 'i'.repeat(20), MEDIA_SERVER: 'plex',
+        PLEX_URL: 'http://plex-env:32400', PLEX_TOKEN_FILE: join(dir, 'tok') };
+      const rows = [
+        { key: 'PLEX_URL', value: 'http://plex-db:32400', enc: null, last4: null, updatedAt: new Date().toISOString(), updatedBy: null },
+        { key: 'PLEX_TOKEN', value: null, enc: encrypt(keyFromBase64(ENC_KEY), 'db-token'), last4: null, updatedAt: new Date().toISOString(), updatedBy: null },
+      ];
+      const r = resolveConfig({ env, rows, encKey: keyFromBase64(ENC_KEY) });
+      expect([r.cfg.PLEX_URL, r.cfg.PLEX_TOKEN]).toEqual(['http://plex-env:32400', 'from-file']);
+      expect([r.sources.PLEX_URL, r.sources.PLEX_TOKEN]).toEqual(['env', 'env']);
+      // without env the saved (decrypted) values apply
+      const db = resolveConfig({ env: { ...env, PLEX_URL: undefined, PLEX_TOKEN_FILE: undefined }, rows, encKey: keyFromBase64(ENC_KEY) });
+      expect([db.cfg.PLEX_URL, db.cfg.PLEX_TOKEN, db.sources.PLEX_URL, db.sources.PLEX_TOKEN]).toEqual(['http://plex-db:32400', 'db-token', 'db', 'db']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it('a saved PLEX_TOKEN is encrypted at rest (no plaintext value, no last4 hint); an env one locks the key', async () => {
+    const pool = await resetDb();
+    try {
+      const store = await createSettingsStore({ db: pool, encKey: keyFromBase64(ENC_KEY), env: { ...BASE_DB, MEDIA_SERVER: 'plex' }, bus: new MemorySettingsBus(), log: { warn: () => {} }, pollMs: 3_600_000 });
+      try {
+        await store.save({ PLEX_URL: 'http://plex:32400', PLEX_TOKEN }, null);
+        const row = (await pool.query("select value, enc, last4 from settings where key = 'PLEX_TOKEN'")).rows[0];
+        expect([row.value, row.last4]).toEqual([null, null]);
+        expect(decrypt(keyFromBase64(ENC_KEY), row.enc)).toBe(PLEX_TOKEN);
+        expect(JSON.stringify((await pool.query('select * from settings')).rows)).not.toContain(PLEX_TOKEN);
+        expect([store.current().PLEX_URL, store.current().PLEX_TOKEN]).toEqual(['http://plex:32400', PLEX_TOKEN]);
+      } finally {
+        await store.close();
+      }
+      const locked = await createSettingsStore({ db: pool, encKey: keyFromBase64(ENC_KEY), env: { ...BASE_DB, MEDIA_SERVER: 'plex', PLEX_TOKEN: 'env-token' }, bus: new MemorySettingsBus(), log: { warn: () => {} }, pollMs: 3_600_000 });
+      try {
+        expect(locked.sources().PLEX_TOKEN).toBe('env');
+        const err = await locked.save({ PLEX_TOKEN: 'other' }, null).catch((e: unknown) => e) as SettingsError;
+        expect(err).toBeInstanceOf(SettingsError);
+        expect(err.errors).toEqual({ PLEX_TOKEN: 'locked' });
+      } finally {
+        await locked.close();
+      }
+    } finally {
+      await pool.end();
+    }
   });
   it('the Jellyfin default is unaffected by empty PLEX_* lines in .env', () => {
     const c = loadConfig({ ...BASE, JELLYFIN_URL: 'http://j', JELLYFIN_ADMIN_API_KEY: 'k', PLEX_URL: '', PLEX_TOKEN: '' });
     expect([c.MEDIA_SERVER, c.PLEX_URL, c.PLEX_TOKEN]).toEqual(['jellyfin', undefined, undefined]);
+    expect(missingRunRequired(c).filter((k) => /^(PLEX|JELLYFIN)_/.test(k))).toEqual([]);
+    expect(missingRunRequired(loadConfig(BASE)).filter((k) => /^(PLEX|JELLYFIN)_/.test(k))).toEqual(['JELLYFIN_URL', 'JELLYFIN_ADMIN_API_KEY']);
   });
   it('the factory builds the Plex implementation on the shared pool (MediaDeps.db; token only in its request headers)', async () => {
     const fake = new PlexFake();
