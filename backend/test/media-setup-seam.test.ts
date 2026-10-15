@@ -84,11 +84,22 @@ describe('media setup seam', () => {
 
   it('no import cycle: media/setup.ts and jellyfin/setup.ts import media/index.ts for types only', () => {
     const src = new URL('../src/', import.meta.url).pathname;
-    for (const f of ['media/setup.ts', 'jellyfin/setup.ts']) {
+    for (const f of ['media/setup.ts', 'jellyfin/setup.ts', 'plex/setup.ts']) { // fork: plex/setup.ts
       const text = readFileSync(src + f, 'utf8');
       const runtime = [...text.matchAll(/^import (?!type )[^;]*from '([^']+)'/gm)].map((m) => m[1]);
       expect(runtime.filter((p) => /media\/index\.js$|^\.\/index\.js$/.test(p!)), f).toEqual([]);
     }
+  });
+
+  it('fork: MEDIA_SETUP.plex is the manual provider (PLEX_URL, PLEX_TOKEN; no auto) and imports no probes.ts', () => {
+    expect(MEDIA_SETUP.plex).toMatchObject({ kind: 'plex', keys: ['PLEX_URL', 'PLEX_TOKEN'], urlKey: 'PLEX_URL' });
+    expect(MEDIA_SETUP.plex!.auto).toBeUndefined();
+    const plexCfg = { ...cfg, MEDIA_SERVER: 'plex' as const };
+    expect(mediaSetupKeys(plexCfg)).toEqual(['PLEX_URL', 'PLEX_TOKEN']);
+    expect(mediaUrlKey(plexCfg)).toBe('PLEX_URL');
+    const text = readFileSync(new URL('../src/plex/setup.ts', import.meta.url).pathname, 'utf8');
+    const runtime = [...text.matchAll(/^import (?!type )[^;]*from '([^']+)'/gm)].map((m) => m[1]);
+    expect(runtime.filter((p) => /probes\.js$|media\/index\.js$|^\.\/index\.js$|service\.js$/.test(p!))).toEqual([]);
   });
 });
 

@@ -11,6 +11,7 @@ import { isOperational, isSetupComplete } from '../src/setup/state.js';
 import { runProbe } from '../src/settings/probes.js';
 import { updateMeta } from '../src/settings/repo.js';
 import { ADMIN, cfg, makeEnv, type TestEnv } from './helpers.js';
+import { PLEX_TOKEN, PlexFake } from './plexfake.js'; // fork
 
 // Block 25 Task 11 (spec Parts E1 and F): the setup gate, the setup-session endpoints and the publicUrl probe.
 type SetupSess = { cookies: Record<string, string>; csrf: string };
@@ -380,5 +381,75 @@ describe('links without a public URL (setup mode) do not throw', () => {
     env.ctx.cfg = { ...env.ctx.cfg, PUBLIC_URL: '' };
     const inv = await createInvite(env.ctx, uid, { role: 'friend', ttlHours: 1 });
     expect(inv.link).toBe(`/invite/${inv.token}`);
+  });
+});
+
+// fork: the setup wizard on Plex (MEDIA_SETUP.plex): manual step only, its probe runs on Test and on the save, a shared account's token
+// (no admin rights) is a warning that still saves, a wrong token is refused; the token never appears in an answer.
+describe('fork: the setup wizard on Plex', () => {
+  const fake = new PlexFake();
+  const SHARED = 'plex-shared-account-token-placeholder'; // a test placeholder, never a real token
+  const URL_ = 'http://plex.example.com:32400';
+  const probed: string[] = [];
+  let env: TestEnv;
+  let s: SetupSess;
+  beforeAll(async () => {
+    fake.sharedTokens.set(SHARED, 401);
+    env = await makeEnv({}, {
+      setupComplete: false, server: 'plex', plexFake: fake,
+      ctxPatch: (c) => { c.fetchImpl = (async (i: RequestInfo | URL, init?: RequestInit) => { probed.push(String(i)); return fake.fetch(i, init); }) as typeof fetch; },
+    });
+    s = await unlock(env);
+  });
+  afterAll(() => env.close());
+  const hdr = () => ({ 'x-ff-setup-csrf': s.csrf });
+  const test = (values: Record<string, unknown>) => env.app.inject({ method: 'POST', url: '/api/setup/test', cookies: s.cookies, headers: hdr(), payload: { group: 'media', values } });
+  const put = (values: Record<string, unknown>) => env.app.inject({ method: 'PUT', url: '/api/setup/settings', cookies: s.cookies, headers: hdr(), payload: { values } });
+  const noToken = (body: string) => {
+    expect(body).not.toContain(PLEX_TOKEN);
+    expect(body).not.toContain(SHARED);
+  };
+
+  it('GET /api/setup/state: mediaKind plex, the keys PLEX_URL and PLEX_TOKEN, auto null', async () => {
+    const st = await env.app.inject('/api/setup/state');
+    expect(st.json()).toMatchObject({ mediaKind: 'plex', media: { keys: ['PLEX_URL', 'PLEX_TOKEN'], auto: null } });
+    noToken(st.body);
+  });
+
+  it('POST /api/setup/media/auto: 400 not_supported, nothing sent anywhere', async () => {
+    probed.length = 0;
+    const r = await env.app.inject({ method: 'POST', url: '/api/setup/media/auto', cookies: s.cookies, headers: hdr(), payload: { url: URL_, username: 'a', password: 'b' } });
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toEqual({ error: 'not_supported' });
+    expect(probed).toEqual([]);
+  });
+
+  it('Test runs the Plex probe: ok, wrong token unauthorized, shared token a warning (not_admin)', async () => {
+    probed.length = 0;
+    const ok = await test({ PLEX_URL: URL_, PLEX_TOKEN });
+    expect(ok.json()).toEqual({ ok: true, code: 'ok', probe: 'media' });
+    expect(probed.map((u) => new URL(u).pathname)).toEqual(['/identity', '/library/sections', '/status/sessions']);
+    expect(probed.every((u) => u.startsWith(`${URL_}/`) && !u.includes('?'))).toBe(true);
+    expect((await test({ PLEX_URL: URL_, PLEX_TOKEN: 'wrong-token-placeholder' })).json()).toEqual({ ok: false, code: 'unauthorized', probe: 'media' });
+    const warn = await test({ PLEX_URL: URL_, PLEX_TOKEN: SHARED });
+    expect(warn.json()).toEqual({ ok: true, code: 'warning', detail: 'not_admin', probe: 'media' });
+    noToken(ok.body + warn.body);
+  });
+
+  it('the save runs the probe: a wrong token is refused (nothing saved), a shared token saves with the warning', async () => {
+    const bad = await put({ PLEX_URL: URL_, PLEX_TOKEN: 'wrong-token-placeholder' });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json()).toEqual({ error: 'probe_failed', group: 'media', probe: { ok: false, code: 'unauthorized' } });
+    expect(env.ctx.cfg.PLEX_URL).not.toBe(URL_);
+    probed.length = 0;
+    const r = await put({ PLEX_URL: URL_, PLEX_TOKEN: SHARED });
+    expect(r.statusCode).toBe(200);
+    expect(probed.map((u) => new URL(u).pathname)).toContain('/status/sessions');
+    expect(env.ctx.cfg.PLEX_URL).toBe(URL_);
+    expect(env.ctx.cfg.PLEX_TOKEN).toBe(SHARED);
+    noToken(r.body);
+    const st = await env.app.inject('/api/setup/state');
+    expect(st.json().steps.media).toBe('done');
+    noToken(st.body);
   });
 });

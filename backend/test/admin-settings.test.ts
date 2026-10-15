@@ -9,6 +9,7 @@ import { pushEnabled } from '../src/push.js';
 import { CREDENTIAL_DESTINATIONS, generateVapidPair, generateWebhookSecret, NO_DESTINATION, needsReauth, redirectsSavedCredential } from '../src/routes/adminSettings.js';
 import { SETTINGS, settingDef } from '../src/settings/registry.js';
 import { ADMIN, cfg, ENC_KEY, fakeHttp, makeEnv, type Handler, type TestEnv } from './helpers.js';
+import { PLEX_TOKEN, PLEX_URL, PlexFake } from './plexfake.js'; // fork
 
 // Admin -> Settings API (Block 25, spec Part I): write-only secrets, locked env keys, validation, probes against the candidate config,
 // re-authentication for sensitive keys, env import, generated secrets, audit with key names only, and no secret in any log line.
@@ -508,5 +509,98 @@ describe('logs', () => {
       expect(line).not.toContain(short);
       expect(line).not.toContain(generated);
     }
+  });
+});
+
+// fork: Admin -> Settings on Plex (MEDIA_SERVER=plex): Test and PUT run MEDIA_SETUP.plex's probe with the candidate values; a shared
+// account's token is a warning that saves, a wrong token or a redirect is refused (force does not help); the token never shows.
+describe('fork: the media probe on Plex', () => {
+  const fake = new PlexFake();
+  const SHARED = 'plex-shared-account-token-placeholder'; // a test placeholder, never a real token
+  const logs: string[] = [];
+  const seen: Array<{ url: string; token?: string }> = [];
+  let answer: ((path: string) => Response | undefined) | undefined;
+  let env: TestEnv;
+  let admin: Sess;
+  beforeAll(async () => {
+    fake.sharedTokens.set(SHARED, 403);
+    env = await makeEnv({}, {
+      server: 'plex', plexFake: fake,
+      ctxPatch: (c) => {
+        c.fetchImpl = (async (i: RequestInfo | URL, init: RequestInit = {}) => {
+          seen.push({ url: String(i), token: (init.headers as Record<string, string> | undefined)?.['X-Plex-Token'] });
+          return answer?.(new URL(String(i)).pathname) ?? fake.fetch(i, init);
+        }) as typeof fetch;
+      },
+      logger: { stream: { write: (m: string) => { logs.push(m); } }, level: 'trace' },
+    });
+    admin = await env.login(ADMIN);
+  });
+  afterAll(() => env.close());
+  const as = (method: string, url: string, payload?: unknown) => env.app.inject({ method: method as 'GET', url, cookies: admin.cookies, headers: { 'x-csrf-token': admin.csrf }, payload: payload as object });
+  const reauth = async () => {
+    const key = `sess:${admin.cookies.ff_sid}`;
+    await env.kv.set(key, JSON.stringify({ ...JSON.parse((await env.kv.get(key))!), reauthAt: Date.now() }), 600);
+  };
+  const test = (values?: Record<string, unknown>) => as('POST', '/api/admin/settings/test', { group: 'media', ...(values ? { values } : {}) });
+  const put = (values: Record<string, unknown>, force?: boolean) => as('PUT', '/api/admin/settings', { values, ...(force === undefined ? {} : { force }) });
+  const noToken = (body: string) => {
+    expect(body).not.toContain(PLEX_TOKEN);
+    expect(body).not.toContain(SHARED);
+  };
+
+  it('GET lists PLEX_TOKEN as set without its value', async () => {
+    const r = await as('GET', '/api/admin/settings');
+    expect(r.statusCode).toBe(200);
+    expect(JSON.stringify(r.json())).toContain('PLEX_TOKEN');
+    noToken(r.body);
+  });
+
+  it('Test runs the Plex probe with the saved values: ok; the token only in the X-Plex-Token header', async () => {
+    seen.length = 0;
+    const r = await test();
+    expect(r.json()).toEqual({ ok: true, code: 'ok', probe: 'media' });
+    expect(seen.map((x) => new URL(x.url).pathname)).toEqual(['/identity', '/library/sections', '/status/sessions']);
+    expect(seen.map((x) => x.token)).toEqual([undefined, PLEX_TOKEN, PLEX_TOKEN]);
+    for (const x of seen) expect(x.url.startsWith(`${PLEX_URL}/`) && !x.url.includes('?')).toBe(true);
+  });
+
+  it('Test with a candidate token: a shared account is a warning (not_admin), a wrong one unauthorized; nothing is saved', async () => {
+    await reauth();
+    const rev = env.ctx.settings.rev();
+    const warn = await test({ PLEX_TOKEN: SHARED });
+    expect(warn.json()).toEqual({ ok: true, code: 'warning', detail: 'not_admin', probe: 'media' });
+    expect((await test({ PLEX_TOKEN: 'wrong-token-placeholder' })).json()).toEqual({ ok: false, code: 'unauthorized', probe: 'media' });
+    expect(env.ctx.settings.rev()).toBe(rev);
+    expect(env.ctx.cfg.PLEX_TOKEN).toBe(PLEX_TOKEN);
+    noToken(warn.body);
+  });
+
+  it('PUT: a wrong token or a redirecting server is refused even with force; a shared token saves (the warning is no blocker)', async () => {
+    await reauth();
+    const rev = env.ctx.settings.rev();
+    const bad = await put({ PLEX_TOKEN: 'wrong-token-placeholder' }, true);
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json()).toEqual({ error: 'probe_failed', group: 'media', probe: { ok: false, code: 'unauthorized' } });
+    answer = (p) => (p === '/library/sections' ? new Response(null, { status: 302, headers: { location: 'http://elsewhere.example.com/' } }) : undefined);
+    try {
+      seen.length = 0;
+      const redirect = await put({ PLEX_URL: 'http://plex.example.com:32400' }, true);
+      expect(redirect.json()).toEqual({ error: 'probe_failed', group: 'media', probe: { ok: false, code: 'invalid', detail: 'redirect' } });
+      expect(seen.every((x) => new URL(x.url).host === 'plex.example.com:32400')).toBe(true);
+    } finally {
+      answer = undefined;
+    }
+    expect(env.ctx.settings.rev()).toBe(rev);
+    const ok = await put({ PLEX_TOKEN: SHARED });
+    expect(ok.statusCode).toBe(200);
+    expect(env.ctx.cfg.PLEX_TOKEN).toBe(SHARED);
+    noToken(ok.body);
+    expect((await put({ PLEX_TOKEN })).statusCode).toBe(200);
+  });
+
+  it('no log line carries a Plex token', () => {
+    expect(logs.length).toBeGreaterThan(0);
+    for (const line of logs) noToken(line);
   });
 });

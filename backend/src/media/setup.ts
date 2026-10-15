@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { jellyfinSetup } from '../jellyfin/setup.js';
+import { plexSetup } from '../plex/setup.js'; // fork
 import type { ProbeResult } from '../settings/probeKit.js';
 import type { MediaServerKind } from './index.js';
 
@@ -29,4 +30,5 @@ export interface MediaSetupProvider {
 
 export const MEDIA_SETUP: Partial<Record<MediaServerKind, MediaSetupProvider>> = {
   jellyfin: jellyfinSetup,
+  plex: plexSetup, // fork: manual only (no `auto`), see plex/setup.ts
 };
