@@ -51,7 +51,7 @@ test.describe('admin update channel (desktop)', () => {
   test('nightly build: version text with the sha in the footer and the version card; switching to stable shows FF_TAG=latest', async ({ page, api }) => {
     api.build = { sha: 'abc1234deadbeefabc1234deadbeefabc1234dea', build: 'nightly', channel: 'nightly', label: `${version}-nightly · abc1234` };
     await page.goto('/admin/update');
-    await expect(page.getByRole('contentinfo').getByRole('button', { name: `FriendFlix ${version}-nightly · abc1234` })).toBeVisible();
+    await expect(page.getByRole('contentinfo').getByRole('button', { name: `FriendFlix for Plex ${version}-nightly · abc1234` })).toBeVisible();
     const card = page.getByRole('region', { name: 'Update-Kanal' });
     await expect(card).toContainText('Nightly · Build c0be6c5'); // the installed sha of the update answer
     // selected stable (default) differs from the running nightly: the switch hint
@@ -62,7 +62,7 @@ test.describe('admin update channel (desktop)', () => {
 
   test('release build: the footer keeps "version · codename"', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('contentinfo').getByRole('button', { name: `FriendFlix ${version} · ${codename}` })).toBeVisible();
+    await expect(page.getByRole('contentinfo').getByRole('button', { name: `FriendFlix for Plex ${version} · ${codename}` })).toBeVisible();
   });
 
   test('up to date on the running channel: no snippet; a channel set in the environment cannot be switched', async ({ page, api }) => {
