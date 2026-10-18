@@ -4,6 +4,8 @@ All notable changes, grouped by what you notice. Each release has its own sectio
 
 ## [Unreleased]
 
+## [1.1.0] – Arancini – 2026-10-18
+
 ### FriendFlix for Plex (this fork)
 - **FriendFlix 1.1 on Plex:** the post-play screen, recommendation engine v2, the player fixes, the account security fixes and the cast parity work of upstream 1.1 run on Plex, released as 1.1.0 like upstream.
 - **Recommendation engine v2 on Plex:** the item index reads FriendFlix's mirror of the Plex library (`libraryFeatures`: genres, Plex labels as tags, studios, countries, up to 8 credited people, year, runtime, community and critics scores, Plex collections, summary and tagline; `libraryRoots`: an episode belongs to its show). Plex has no original language and no series status; those signals stay neutral. A title removed from Plex leaves the index at once. The engine card names v1 "classic" (on Plex v1 is FriendFlix's own genre and cast similarity).
