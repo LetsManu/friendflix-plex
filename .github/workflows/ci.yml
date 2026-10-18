@@ -3,9 +3,10 @@
 # CI flow: test + secrets scan + image build/scan, then (push only) publish.
 # Images are built exactly ONCE, in the `docker` job:
 #   pull_request     build with load:true (no push, forks cannot write packages) and scan the local image.
-#   push (main, v*)  build, push as ghcr.io/<owner>/friendflix-<svc>:ci-<git sha> and scan that exact digest with trivy.
+#   push (main, v*)  build, push as ghcr.io/<owner>/friendflix-plex-<svc>:ci-<git sha> and scan that exact digest with trivy.
 # publish.yml (called after test, secrets and docker all passed) does NOT rebuild: it only re-tags the already scanned
-# image (`docker buildx imagetools create`) to latest / short sha / semver. What gets released is what was scanned.
+# image (`docker buildx imagetools create`) to nightly (main) / latest (highest release) / short sha / semver. What gets
+# released is what was scanned.
 # A failed scan leaves only the unreleased `ci-<sha>` tag in GHCR (never latest); prune old ci-* tags from time to time.
 # Supply chain (push only): the candidate carries BuildKit SBOM (SPDX) + SLSA provenance (mode=max) attestations, Trivy
 # findings go to code scanning as SARIF, and publish.yml signs the promoted digest with cosign keyless (GitHub OIDC) and
@@ -196,7 +197,7 @@ jobs:
           driver-opts: image=${{ env.BUILDKIT_IMAGE }}
       - name: Image name (GHCR needs lowercase)
         id: img
-        run: repo="${GITHUB_REPOSITORY#*/}"; echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${repo,,}-${SERVICE}" >> "$GITHUB_OUTPUT"   # friendflix-<svc>; forks get <repo>-<svc>
+        run: repo="${GITHUB_REPOSITORY#*/}"; echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${repo,,}-${SERVICE}" >> "$GITHUB_OUTPUT"   # friendflix-plex-<svc>; forks get <repo>-<svc>
       # SOURCE_DATE_EPOCH = commit time: image/history timestamps, rewrite-timestamp, BUILD_TIME and the `created` label
       # all derive from it, never from the clock, so a rebuild of the commit reproduces them
       - name: Release version (version.json) and build time (commit time)
@@ -355,7 +356,7 @@ jobs:
             exit 1
           fi
           echo "### $SERVICE reproducible: two clean builds -> \`$a\`" >> "$GITHUB_STEP_SUMMARY"
-  # images are only published after every check above passed (main -> latest + sha, v* tags -> semver)
+  # images are only published after every check above passed (main -> nightly + sha, v* tags -> semver + latest for the highest)
   # signing/attesting (id-token, attestations) happens only here, i.e. only on push events
   publish:
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))

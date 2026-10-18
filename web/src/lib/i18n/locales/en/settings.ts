@@ -103,7 +103,7 @@ const settings: Translation<typeof de> = {
     PLEX_URL: { invalid_url: 'Please enter only the server address: starting with http:// or https://, without user name and password, and nothing after ? or #. The token goes in the Plex token field.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Automatic', LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatic', off: 'Off' } },
+  options: { auto: 'Automatic', UPDATE_CHANNEL: { stable: 'Stable', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatic', off: 'Off' } },
   keys: {
     PUBLIC_URL: { label: 'Public address', help: 'The address everyone uses to reach FriendFlix, e.g. https://friend.example.com. Links, sign-in and streaming are built on it.' },
     WEBHOOK_SECRET: { label: 'Webhook secret', help: 'Shared secret for the webhooks of the media server and the request service.' },
@@ -158,6 +158,7 @@ const settings: Translation<typeof de> = {
     PORTAINER_API_KEY: { label: 'Portainer API key', help: 'API key of a Portainer account allowed to update the stack.' },
     PORTAINER_STACK_ID: { label: 'Portainer stack ID', help: 'ID of the FriendFlix stack in Portainer.' },
     PORTAINER_ENDPOINT_ID: { label: 'Portainer environment ID', help: 'ID of the Portainer environment the stack runs in (usually 1).' },
+    UPDATE_CHANNEL: { label: 'Update channel', help: 'What Admin → Update compares with: Stable (releases) or Nightly (main). The images themselves follow FF_TAG in .env.' },
     PLAYBACK_CHECK_HOUR: { label: 'Playback check time', help: 'Hour (0–23, server time) of the nightly playback check. -1 = off.' },
     HEALTH_DISK_WARN_PCT: { label: 'Storage warning from (%)', help: 'From this usage the system health shows a warning.' },
     HEALTH_DISK_CRIT_PCT: { label: 'Storage critical from (%)', help: 'From this usage the system health shows an error. Must be above the warning level.' },

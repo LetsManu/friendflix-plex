@@ -79,7 +79,7 @@ Ports 80 und 443 vom Router an NPM weitergeleitet. Das FriendFlix-Backend ruft `
 
 ```bash
 sudo mkdir -p /opt/friendflix && sudo chown "$USER" /opt/friendflix
-git clone https://github.com/LetsManu/friendflix.git /opt/friendflix
+git clone https://github.com/LetsManu/friendflix-plex.git /opt/friendflix
 cd /opt/friendflix
 ```
 
@@ -342,7 +342,7 @@ Mehr: [operations.md](../operations.md) (Backups, Firewall, Updates), [integrati
 
 ## 14. Umstieg auf Einstellungen in der Datenbank
 
-Eine bestehende Installation aktualisiert wie jedes Update (`docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`); ihre `.env` funktioniert unverändert weiter. Was man wissen sollte:
+Eine bestehende Installation aktualisiert wie jedes Update (`docker compose -f compose.prod.yaml -f compose.plex.yaml pull && docker compose -f compose.prod.yaml -f compose.plex.yaml up -d`); ihre `.env` funktioniert unverändert weiter. Was man wissen sollte:
 
 1. **Der Dienst `bootstrap`** startet bei jedem `up` zuerst, kopiert `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `APP_ENC_KEY` und `INTERNAL_SECRET` aus der `.env` ins Volume `friendflix_bootstrap` und beendet sich. Sein Log zeigt nur Dateinamen und Aktionen:
 
@@ -385,10 +385,22 @@ chmod 600 .env
 | `WEB_PORT`, `BACKEND_PORT`, `GATEWAY_PORT` | – | `3080`, `3081`, `3082` (Standard); nur ändern, wenn belegt |
 | `TZ` | – | z. B. `Europe/Vienna`; Zeitpläne (Wochenrückblick, Wiedergabe-Check, Backups) |
 | `METRICS_TOKEN` | – | `openssl rand -hex 24`, wenn `/metrics` abgefragt wird ([monitoring.md](../monitoring.md)) |
-| `FF_REGISTRY`, `FF_TAG` | – | `ghcr.io/letsmanu`, `latest`; Version mit Commit-SHA oder `x.y.z` festlegen |
+| `FF_REGISTRY`, `FF_TAG` | – | `ghcr.io/letsmanu`, `latest`; `FF_TAG` ist der [Release-Kanal](#release-kanäle): `latest`, `nightly` oder `1` / `1.1` / `1.1.0` (oder Commit-SHA) zum Festnageln |
 | `OIDC_ALLOW_INSECURE` | – | `false`; `true` nur für Tests gegen ein `http://`-Authentik, nie im Betrieb |
 | `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `APP_ENC_KEY`, `INTERNAL_SECRET` | – | bei einer neuen Installation **weglassen** (werden erzeugt). Eine bestehende Installation behält sie, bis das Volume sie enthält ([Abschnitt 14](#14-umstieg-auf-einstellungen-in-der-datenbank)) |
 
 Alles andere (Wunsch-Dienst, Sitzungen, Downloads, Push, ntfy, Portainer) steht in der [Tabelle in der README](../../README.de.md#fortgeschritten-konfiguration-über-die-umgebung) und in der [.env.example](../../.env.example). Das Webhook-Geheimnis entsteht unter *Admin → Einstellungen → Allgemein → Webhook-Geheimnis → Neu erzeugen* (oder in den Extras des Assistenten) und wird einmal angezeigt. Solange es fehlt, antworten die Webhooks von Jellyfin und Wunsch-Dienst mit 403. Nach Änderungen an der `.env`: `docker compose -f compose.prod.yaml up -d` (erstellt nur neu, was sich geändert hat).
+
+### Release-Kanäle
+
+Welche Images der Stack zieht, entscheidet allein `FF_TAG` (`compose.prod.yaml`: `…/friendflix-<dienst>:${FF_TAG:-latest}`):
+
+| `FF_TAG` | Kanal | Was es zieht |
+|---|---|---|
+| `latest` (Default) | Stabil | das höchste veröffentlichte Release `vX.Y.Z`; Backports und Vorabversionen verschieben es nie |
+| `nightly` | Nightly | jeden Commit auf `main`, der CI (Tests, Scans, reproduzierbarer Build) bestanden hat; neuer, aber weniger erprobt |
+| `1` / `1.1` / `1.1.0` | festgenagelt | eine Hauptversion, eine Minor-Linie oder genau ein Release (ein Kurz-SHA nagelt genau einen Build fest) |
+
+Zum Wechseln `FF_TAG` in der `.env` ändern, dann `docker compose -f compose.prod.yaml -f compose.plex.yaml pull && docker compose -f compose.prod.yaml -f compose.plex.yaml up -d`. Der Wechsel gilt erst danach: FriendFlix greift nie selbst auf Docker zu (kein Docker-Socket, kein Updater-Container). *Admin → Update* zeigt, auf welchem Kanal die Installation tatsächlich läuft (ein Build ist ein Release, wenn sein Commit der Commit des Tags `v<Version>` ist, sonst ein Nightly-Build, angezeigt als `1.1.0-nightly · abc1234`); der Schalter *Stabil / Nightly* speichert `UPDATE_CHANNEL` in der Datenbank und legt fest, womit die Update-Prüfung vergleicht (Stabil: neuere Releases samt Notizen; Nightly: neuere Commits auf `main`). Weicht die Auswahl vom laufenden Kanal ab oder gibt es ein Update, zeigt die Seite die `.env`-Zeile und den Befehl zum Kopieren. Bis 1.1.0 folgte `latest` auch `main`: wer dabei bleiben will, setzt `FF_TAG=nightly`. Details: [operations.md, Release-Kanäle](../operations.md#release-kanäle).
 
 **Docker-Secrets statt `.env`** (optional): [`compose.secrets.yaml`](../../compose.secrets.yaml) liest `APP_ENC_KEY`, `INTERNAL_SECRET`, `WEBHOOK_SECRET`, `OIDC_CLIENT_SECRET`, `JELLYFIN_ADMIN_API_KEY`, `REQUESTS_API_KEY` (Datei `secrets/requests_api_key`) und `VAPID_PRIVATE_KEY` aus Dateien in `secrets/` (alle müssen existieren; ohne Push `touch secrets/vapid_private_key`). Start mit `docker compose -f compose.prod.yaml -f compose.secrets.yaml up -d`. Die Dateien haben Vorrang wie Werte aus der Umgebung (gesperrt unter *Admin → Einstellungen*); die Kopien von `APP_ENC_KEY` und `INTERNAL_SECRET`, die der Dienst `bootstrap` erzeugt, bleiben dann ungenutzt. Dann `secrets/` sichern.

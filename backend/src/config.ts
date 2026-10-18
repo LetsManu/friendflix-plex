@@ -180,7 +180,9 @@ export const configSchema = z.object({
   APP_VERSION: opt,
   APP_CODENAME: opt,
   /** GitHub repo checked for newer versions (Admin -> Update) */
-  UPDATE_REPO: z.string().regex(/^[\w.-]+\/[\w.-]+$/).default('LetsManu/friendflix'),
+  UPDATE_REPO: z.string().regex(/^[\w.-]+\/[\w.-]+$/).default('LetsManu/friendflix-plex'),
+  /** update channel shown in Admin -> Update: stable (releases) or nightly (main); it never switches images (FF_TAG does) */
+  UPDATE_CHANNEL: z.preprocess(emptyAsUnset, z.enum(['stable', 'nightly']).default('stable')),
   GITHUB_TOKEN: opt,
   /** one-click update: Portainer stack webhook, or API (URL + key + stack id) */
   PORTAINER_WEBHOOK_URL: opt,

@@ -107,7 +107,7 @@ const settings: Translation<typeof de> = {
     PLEX_URL: { invalid_url: 'Inserisci solo l’indirizzo del server: che inizi con http:// o https://, senza nome utente e password e senza nulla dopo ? o #. Il token va nel campo Token Plex.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Automatico', LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatico', off: 'Disattivato' } },
+  options: { auto: 'Automatico', UPDATE_CHANNEL: { stable: 'Stabile', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatico', off: 'Disattivato' } },
   keys: {
     PUBLIC_URL: { label: 'Indirizzo pubblico', help: 'L’indirizzo con cui tutti raggiungono FriendFlix, ad es. https://friend.example.com. Link, accesso e streaming si basano su di esso.' },
     WEBHOOK_SECRET: { label: 'Segreto webhook', help: 'Segreto condiviso per i webhook del media server e del servizio richieste.' },
@@ -162,6 +162,7 @@ const settings: Translation<typeof de> = {
     PORTAINER_API_KEY: { label: 'Chiave API di Portainer', help: 'Chiave API di un account Portainer autorizzato ad aggiornare lo stack.' },
     PORTAINER_STACK_ID: { label: 'ID dello stack Portainer', help: 'ID dello stack FriendFlix in Portainer.' },
     PORTAINER_ENDPOINT_ID: { label: 'ID dell’ambiente Portainer', help: 'ID dell’ambiente Portainer in cui gira lo stack (di solito 1).' },
+    UPDATE_CHANNEL: { label: 'Canale di aggiornamento', help: 'Con cosa confronta Admin → Aggiornamento: Stabile (release) o Nightly (main). Le immagini seguono FF_TAG nel .env.' },
     PLAYBACK_CHECK_HOUR: { label: 'Ora del test di riproduzione', help: 'Ora (0–23, ora del server) del test di riproduzione notturno. -1 = disattivato.' },
     HEALTH_DISK_WARN_PCT: { label: 'Avviso spazio da (%)', help: 'Da questo utilizzo lo stato del sistema mostra un avviso.' },
     HEALTH_DISK_CRIT_PCT: { label: 'Spazio critico da (%)', help: 'Da questo utilizzo lo stato del sistema mostra un errore. Deve essere sopra il livello di avviso.' },

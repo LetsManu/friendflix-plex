@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # FriendFlix portal stack - PRODUCTION variant: pulls the prebuilt images from ghcr.io (no build on the server).
 # Images come from .github/workflows/publish.yml. Private packages: docker login ghcr.io -u <user> (PAT with read:packages).
-# Pin a version with FF_TAG=<sha|x.y.z> in .env, other owner with FF_REGISTRY=ghcr.io/<owner> (both optional).
+# Channel / version with FF_TAG in .env: latest = stable releases (default), nightly = every green commit on main, 1 / 1.1 / 1.1.0
+# or a short sha to pin; other owner with FF_REGISTRY=ghcr.io/<owner> (both optional). Admin -> Update shows the line to set.
 # FriendFlix portal stack. A new install needs no .env: `up -d`, then the setup code from the backend log
 # (`logs backend | grep "setup code"`) opens the setup wizard (docs/setup.md); every setting lives in the database (Admin -> Settings).
 # The `bootstrap` service generates the internal secrets into the `bootstrap` volume (back it up, scripts/backup-bootstrap.sh).
@@ -30,7 +31,7 @@ services:
   # the gateway's copy of internal_secret into `bootstrap-gateway`. A new install sets none of them. Existing installs:
   # the four values below win when set in .env and are copied into the volume on every start. It logs file names only.
   bootstrap:
-    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-backend:${FF_TAG:-latest}
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-plex-backend:${FF_TAG:-latest}
     pull_policy: always
     command: ["node", "backend/dist/bootstrap.js"]
     user: "0:0" # owns the files; no capability but CHOWN (hands the group to 10001), no network
@@ -89,7 +90,7 @@ services:
       start_period: 20s
 
   backend:
-    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-backend:${FF_TAG:-latest}
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-plex-backend:${FF_TAG:-latest}
     pull_policy: always
     restart: unless-stopped
     read_only: true
@@ -138,7 +139,7 @@ services:
       AUTHENTIK_ENROLL_FLOW: ${AUTHENTIK_ENROLL_FLOW:-}
       AUTHENTIK_RECOVERY_FLOW: ${AUTHENTIK_RECOVERY_FLOW:-}
       AUTHENTIK_TOTP_SETUP_FLOW: ${AUTHENTIK_TOTP_SETUP_FLOW:-}
-      UPDATE_REPO: ${UPDATE_REPO:-LetsManu/friendflix}
+      UPDATE_REPO: ${UPDATE_REPO:-LetsManu/friendflix-plex}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       PORTAINER_WEBHOOK_URL: ${PORTAINER_WEBHOOK_URL:-}
       PORTAINER_URL: ${PORTAINER_URL:-}
@@ -195,7 +196,7 @@ services:
     networks: [front, db, media, egress] # egress: OIDC discovery + ntfy/Discord
 
   gateway:
-    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-gateway:${FF_TAG:-latest}
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-plex-gateway:${FF_TAG:-latest}
     pull_policy: always
     restart: unless-stopped
     read_only: true
@@ -220,7 +221,7 @@ services:
     networks: [front, media]
 
   web:
-    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-web:${FF_TAG:-latest}
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-plex-web:${FF_TAG:-latest}
     pull_policy: always
     restart: unless-stopped
     read_only: true

@@ -4,6 +4,11 @@ All notable changes, grouped by what you notice. Each release has its own sectio
 
 ## [Unreleased]
 
+### Versions & releases
+- **Heads-up: `latest` now only moves on releases; set FF_TAG=nightly to keep following main.** Until 1.1.0 every green commit on main also moved the `latest` image tag. Now main publishes `nightly` (plus the short sha) and never `latest`; a `vX.Y.Z` tag still publishes `X.Y.Z`, `X.Y`, `X` and, for the highest release only, `latest`. Images are still re-tagged from the scanned CI build, never rebuilt. `FF_TAG` picks the channel: `latest` = stable, `nightly`, or `1` / `1.1` / `1.1.0` to pin (docs/operations.md, "Release-Kanäle"; docs/setup.md, "Release channels").
+- **Update channels in *Admin → Update*:** the page shows which channel the install actually runs: a release when its build sha is the commit of the `vX.Y.Z` tag (looked up on GitHub, cached like the update check), else a nightly build, shown as "1.1.0-nightly · abc1234" there, in the footer and in `GET /api/version` (new fields `build`, `channel`, `label`). A *Stable / Nightly* switch saves the new database setting `UPDATE_CHANNEL` (default stable, also under *Admin → Settings → Updates*): stable reports an update only for a newer release, with its notes; nightly reports newer commits on main. When the selected channel differs from the running one, or an update exists, the page shows the `.env` line (`FF_TAG=nightly` or `FF_TAG=latest`) and the pull command to copy. The switch takes effect only after that command: FriendFlix never touches Docker itself.
+- **Fix:** image publishing sets `flavor: latest=false`, so `docker/metadata-action` can no longer add `latest` to a semver tag on its own (its default `latest=auto` does that for every plain release tag); only the explicit "highest release" rule moves `latest`, and a backport tag such as `v1.0.5` after `v1.1.0` never does.
+
 ## [1.1.0] – Arancini – 2026-10-18
 
 ### FriendFlix for Plex (this fork)

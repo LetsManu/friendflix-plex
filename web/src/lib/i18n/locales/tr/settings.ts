@@ -106,7 +106,7 @@ const settings: Translation<typeof de> = {
     PLEX_URL: { invalid_url: 'Lütfen yalnızca sunucu adresini gir: http:// veya https:// ile başlayan, kullanıcı adı ve parola içermeyen, ? veya # işaretinden sonra hiçbir şey olmayan bir adres. Token, Plex token’ı alanına girilir.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Otomatik', LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Otomatik', off: 'Kapalı' } },
+  options: { auto: 'Otomatik', UPDATE_CHANNEL: { stable: 'Kararlı', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Otomatik', off: 'Kapalı' } },
   keys: {
     PUBLIC_URL: { label: 'Genel adres', help: 'Herkesin FriendFlix’e ulaştığı adres, ör. https://friend.example.com. Bağlantılar, oturum açma ve yayın buna dayanır.' },
     WEBHOOK_SECRET: { label: 'Webhook sırrı', help: 'Medya sunucusu ve istek hizmetinin webhook’ları için ortak sır.' },
@@ -161,6 +161,7 @@ const settings: Translation<typeof de> = {
     PORTAINER_API_KEY: { label: 'Portainer API anahtarı', help: 'Stack’i güncelleyebilen bir Portainer hesabının API anahtarı.' },
     PORTAINER_STACK_ID: { label: 'Portainer stack kimliği', help: 'Portainer’daki FriendFlix stack’inin kimliği.' },
     PORTAINER_ENDPOINT_ID: { label: 'Portainer ortam kimliği', help: 'Stack’in çalıştığı Portainer ortamının kimliği (genellikle 1).' },
+    UPDATE_CHANNEL: { label: 'Güncelleme kanalı', help: 'Admin → Güncelleme neyle karşılaştırır: Kararlı (sürümler) veya Nightly (main). İmajlar .env içindeki FF_TAG’i izler.' },
     PLAYBACK_CHECK_HOUR: { label: 'Oynatma denetimi saati', help: 'Gece oynatma denetiminin saati (0–23, sunucu saati). -1 = kapalı.' },
     HEALTH_DISK_WARN_PCT: { label: 'Depolama uyarısı (%)', help: 'Bu doluluktan itibaren sistem durumu uyarı gösterir.' },
     HEALTH_DISK_CRIT_PCT: { label: 'Depolama kritik (%)', help: 'Bu doluluktan itibaren sistem durumu hata gösterir. Uyarı düzeyinin üstünde olmalı.' },

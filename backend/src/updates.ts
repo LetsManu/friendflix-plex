@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { buildInfo, channelUpdate, envLine, type BuildKind, type Channel } from './channel.js';
 import type { Ctx } from './ctx.js';
 import { appVersion, codenameFor, compareSemver, parseSemver } from './version.js';
 
@@ -15,8 +16,20 @@ export interface UpdateInfo {
   current: { sha: string; builtAt: string | null; version: string; codename: string };
   /** newest release; null when none is published yet (or its tag is not a version) */
   release: Release | null;
-  /** release-based answer; null = nothing to compare with, fall back to `behind` */
+  /** on the selected channel (stable: a newer release; nightly: newer commits on main); null = nothing to compare with */
   updateAvailable: boolean | null;
+  /** the selected channel (setting UPDATE_CHANNEL) and the one this build runs (derived from its commit, see channel.ts) */
+  channel: {
+    selected: Channel;
+    running: Channel | null;
+    build: BuildKind | null;
+    /** "1.1.0" or "1.1.0-nightly · abc1234" */
+    label: string;
+    /** UPDATE_CHANNEL is set in the environment: the switch cannot change it */
+    locked: boolean;
+    /** the `.env` line for the selected channel */
+    envLine: string;
+  };
   /** secondary: newest successful CI build on main and how many commits it is ahead of the installed build */
   latest: Latest | null;
   behind: number | null;
@@ -80,14 +93,22 @@ async function fetchLatest(ctx: Ctx): Promise<Fetched> {
 }
 
 /**
- * Installed vs newest release (primary) and vs the newest CI build on main (secondary: commits ahead, also the only
- * comparison before the first release). GitHub answers are cached for 10 min (unauthenticated limit: 60/h); an outage never throws.
+ * Installed vs newest release (stable channel) or vs the newest CI build on main (nightly channel: commits ahead; on stable
+ * secondary info, and the only comparison before the first release). GitHub answers are cached for 10 min (unauthenticated limit: 60/h); an outage never throws.
  */
 export async function updateInfo(ctx: Ctx, refresh = false): Promise<UpdateInfo> {
   const mode = portainerMode(ctx);
   const ver = appVersion(ctx.cfg);
   const base = { current: { sha: ctx.cfg.GIT_SHA, builtAt: ctx.cfg.BUILD_TIME ?? null, ...ver }, portainer: { configured: mode !== null, mode }, autoUpdateNote: true as const };
-  const withState = (f: Fetched): UpdateInfo => ({ ...base, ...f, updateAvailable: f.release ? compareSemver(f.release.version, ver.version) > 0 : null });
+  const selected: Channel = ctx.cfg.UPDATE_CHANNEL === 'nightly' ? 'nightly' : 'stable';
+  let locked = false;
+  try { locked = ctx.settings.sources().UPDATE_CHANNEL === 'env'; } catch { /* no store (tests): not locked */ }
+  const b = await buildInfo(ctx, { refresh });
+  const channel = { selected, running: b.channel, build: b.build, label: b.label, locked, envLine: envLine(selected) };
+  const withState = (f: Fetched): UpdateInfo => ({
+    ...base, ...f, channel,
+    updateAvailable: channelUpdate(selected, { releaseNewer: f.release ? compareSemver(f.release.version, ver.version) > 0 : null, behind: f.behind }),
+  });
   const key = `${CACHE_MS}${ctx.cfg.UPDATE_REPO}:${ctx.cfg.GIT_SHA}:${ver.version}`;
   if (!refresh) {
     const hit = await ctx.kv.get(key).catch(() => null);
@@ -98,7 +119,7 @@ export async function updateInfo(ctx: Ctx, refresh = false): Promise<UpdateInfo>
     await ctx.kv.set(key, JSON.stringify(f), TTL).catch(() => undefined);
     return withState(f);
   } catch (e) {
-    return { ...base, release: null, updateAvailable: null, latest: null, behind: null, commits: [], error: e instanceof Error && e.message.startsWith('GitHub ') ? e.message : 'github_unreachable' };
+    return { ...base, channel, release: null, updateAvailable: null, latest: null, behind: null, commits: [], error: e instanceof Error && e.message.startsWith('GitHub ') ? e.message : 'github_unreachable' };
   }
 }
 

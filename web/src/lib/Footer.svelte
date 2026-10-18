@@ -1,6 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { FOOTER_COLUMNS } from '#lib/menu';
   import { features, linkShown, serverCaps } from '#lib/capabilities';
   import Logo from '#lib/Logo.svelte';
@@ -8,6 +9,7 @@
   import { saveLanguage } from '#lib/stores';
   import VersionEgg from '#lib/version/VersionEgg.svelte';
   import { APP_CODENAME, APP_VERSION } from '#lib/version/codenames';
+  import { buildInfo, loadBuild, versionText } from '#lib/version/build';
   /** opens the help dialog of the layout */
   export let onHelp: () => void = () => undefined;
   /** kids profile: no link columns (party, lists, stats … are not for kids), language and help stay */
@@ -18,6 +20,8 @@
     langErr = false;
     try { await saveLanguage(l); } catch { langErr = true; sel.value = $locale; }
   }
+  // a nightly build shows "1.1.0-nightly · abc1234" (the backend knows whether its commit is the release tag)
+  onMount(() => loadBuild());
 </script>
 
 <footer class="foot" class:kids aria-label={$t('shell.footer.label')}>
@@ -36,7 +40,7 @@
       {#if langErr}<span class="err" role="alert">{$t('account.language.saveFailed')}</span>{/if}
       <button type="button" class="help" on:click={onHelp}>{$t('shell.footer.help')}</button>
       <span class="brand"><Logo size={18} label="" /> {$t('shell.footer.tagline')}</span>
-      <span class="version"><VersionEgg version={APP_VERSION} codename={APP_CODENAME} label="{$t('common.appName')} {APP_VERSION} · {APP_CODENAME}" /></span>
+      <span class="version"><VersionEgg version={APP_VERSION} codename={APP_CODENAME} label="{$t('common.appName')} {versionText(APP_VERSION, APP_CODENAME, $buildInfo)}" /></span>
     </div>
   </div>
 </footer>
