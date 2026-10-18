@@ -101,6 +101,13 @@ const GROUPS: Array<[string, Array<[string, Spec]>]> = [
     ['PREVIEW_WARM', { kind: 'bool', source: 'default', value: true }],
     ['HOME_NETWORKS', { kind: 'cidrList', source: 'default', value: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'] }],
   ]],
+  // the engine is saved (shadow, so the admin card shows the comparison); the reco card reads it (api.ts /api/admin/reco)
+  ['recommendations', [
+    ['RECO_ENGINE', { kind: 'enum', source: 'db', value: 'shadow', options: ['v1', 'v2', 'shadow'] }],
+    ['RECO_EXPLORE', { kind: 'number', source: 'default', value: 0, min: 0, max: 0.5 }],
+    ['RECO_HALF_LIFE_DAYS', { kind: 'number', source: 'default', value: 120, min: 1, max: 3650 }],
+    ['POSTPLAY_ENABLED', { kind: 'bool', source: 'default', value: true }],
+  ]],
   ['updates', [
     ['GITHUB_TOKEN', { kind: 'secret', source: 'unset', set: false }],
     ['UPDATE_CHANNEL', { kind: 'enum', source: 'default', value: 'stable', options: ['stable', 'nightly'] }],
@@ -126,7 +133,7 @@ const SERVER: Array<[string, Kind, Source, unknown]> = [
   ['PORT', 'int', 'default', 3000], ['DIGEST_DAY', 'int', 'default', 0], ['DIGEST_HOUR', 'int', 'default', 18], ['MEDIA_SERVER', 'string', 'default', 'jellyfin'],
   ['METRICS_TOKEN', 'secret', 'unset', null], ['ROLE_TEMPLATES', 'string', 'unset', null], ['OIDC_ALLOW_INSECURE', 'string', 'default', 'false'],
   ['PREVIEW_DIR', 'string', 'default', '/data/previews'], ['UPDATE_REPO', 'string', 'default', 'LetsManu/friendflix-plex'], ['DOWNLOAD_DIR', 'string', 'default', '/data/downloads'],
-  ['BACKGROUND_JOBS', 'string', 'env', 'true'], ['GATEWAY_URL', 'string', 'default', 'http://gateway:4000'],
+  ['BACKGROUND_JOBS', 'string', 'env', 'true'], ['GATEWAY_URL', 'string', 'default', 'http://gateway:4000'], ['RECO_COEFFS', 'string', 'unset', null],
   ['DATABASE_URL', 'secret', 'bootstrap', LEAK], ['REDIS_URL', 'secret', 'bootstrap', null], ['APP_ENC_KEY', 'secret', 'bootstrap', null], ['INTERNAL_SECRET', 'secret', 'bootstrap', null],
 ];
 

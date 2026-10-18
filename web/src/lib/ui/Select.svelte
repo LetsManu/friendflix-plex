@@ -39,6 +39,6 @@
   .wrap { position: relative; display: block; }
   select { width: 100%; appearance: none; -webkit-appearance: none; padding-right: 2.2rem; cursor: pointer; }
   .chev { position: absolute; right: .7rem; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--mut); }
-  .hint { font-size: .82rem; color: var(--mut); }
+  .hint { font-size: .82rem; color: var(--mut); overflow-wrap: anywhere; } /* long example URLs wrap at 320 px */
   .error { font-size: .85rem; color: var(--err); font-weight: 600; }
 </style>

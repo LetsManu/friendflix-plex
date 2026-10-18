@@ -9,7 +9,7 @@
    * still needs a sign-in shows an error instead of another round trip. An edited URL that still carries the backend's redaction
    * marker is refused before anything is sent (it would replace the real token).
    */
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '#lib/Icon.svelte';
   import { isReauthError, startReauth } from '#lib/account/reauth';
@@ -27,7 +27,7 @@
     type ProbeResult, type SettingGroup, type SettingsGroupView, type SettingsView, type SettingView,
   } from '#lib/admin/settings/api';
   import {
-    changedValues, clearPending, errorText, keyLabel, moveHint, probeText, redactedKeys, stashPending, takePending, type Draft, type PendingAction,
+    changedValues, clearPending, errorText, groupHelp, keyLabel, moveHint, probeText, redactedKeys, stashPending, takePending, type Draft, type PendingAction,
   } from '#lib/admin/settings/form';
 
   const RESUME = '/admin/settings?resume=1';
@@ -67,7 +67,10 @@
       u.searchParams.delete('resume');
       void goto(u.pathname + u.search + u.hash, { shallow: true, replace: true });
     }
-    if (!(await load()) || !resume) return;
+    const loaded = await load();
+    // a deep link to a group (e.g. /admin/settings#settings-recommendations from the recommendation card): the cards render after the load
+    if (loaded && u.hash.startsWith('#settings-')) { await tick(); document.getElementById(u.hash.slice(1))?.scrollIntoView({ block: 'start' }); }
+    if (!loaded || !resume) return;
     // back from the sign-in: restore what could be kept; repeat exactly the interrupted action, once, when nothing had to be left out
     const p = takePending();
     if (!p) return;
@@ -205,7 +208,7 @@
     {#each groups as g (g.id)}
       {@const dirty = Object.keys(changes[g.id] ?? {}).length > 0}
       {@const probe = probes[g.id]}
-      <AdminCard title={$t(`settings.groups.${g.id}`)}>
+      <AdminCard id="settings-{g.id}" title={$t(`settings.groups.${g.id}`)} description={groupHelp(g.id)}>
         <svelte:fragment slot="actions">
           {#if PROBE_GROUPS.has(g.id)}
             <Button variant="secondary" size="sm" icon="activity" pending={$busyKeys.has(`set:test:${g.id}`)} on:click={() => test(g.id)}>{$t('settings.test')}</Button>
@@ -262,6 +265,8 @@
 <style>
   .wrap { max-width: 760px; }
   .intro { margin: 0 0 1rem; }
+  /* a deep-linked group (#settings-<group>) does not end up under the sticky admin header */
+  .wrap :global(h2[id^='settings-']) { scroll-margin-top: 5rem; }
   form { display: grid; gap: .25rem; }
   .foot { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: .6rem; padding-top: .8rem; border-top: 1px solid var(--line); }
   .banner { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem .8rem; margin: 0 0 1rem; padding: .75rem .9rem; border-radius: 8px; background: var(--tone-info); border: 1px solid var(--line); }

@@ -63,8 +63,10 @@ export async function rankHomeRows(ctx: Pick<Ctx, 'cfg' | 'db' | 'kv' | 'jf'>, u
 
 export interface EngineStats { impressions: number; clicks: number; plays: number; dismisses: number; ctr: number | null; playRate: number | null }
 export interface RecoStats {
-  /** the configured RECO_ENGINE */
+  /** the configured RECO_ENGINE (live: Admin -> Settings, group recommendations, or env) */
   engine: string;
+  /** RECO_ENGINE comes from the environment: env wins, Admin -> Settings shows it locked */
+  locked: boolean;
   engines: Record<EngineName, EngineStats>;
   /** requests where v2 failed and v1 answered */
   fallbacks: number;
@@ -78,12 +80,12 @@ const rate = (n: number, d: number): number | null => (d > 0 ? Math.round((n / d
  * CTR = clicks / impressions, play rate = plays / impressions (a row shown that led to a started play), per engine, summed over all rows.
  * Computed from the Prometheus counters; they are per process, so the numbers restart with the backend (Prometheus keeps the history).
  */
-export async function recoStats(cfg: Pick<Ctx['cfg'], 'RECO_ENGINE'>): Promise<RecoStats> {
+export async function recoStats(cfg: Pick<Ctx['cfg'], 'RECO_ENGINE'>, opts: { locked?: boolean } = {}): Promise<RecoStats> {
   const sum = async (m: { get(): Promise<{ values: Array<{ value: number; labels: Record<string, unknown> }> }> }, engine?: EngineName) =>
     (await m.get()).values.filter((v) => !engine || v.labels.engine === engine).reduce((a, v) => a + v.value, 0);
   const one = async (engine: EngineName): Promise<EngineStats> => {
     const [impressions, clicks, plays, dismisses] = await Promise.all([recoImpressions, recoClicks, recoPlays, recoDismiss].map((m) => sum(m, engine)));
     return { impressions: impressions!, clicks: clicks!, plays: plays!, dismisses: dismisses!, ctr: rate(clicks!, impressions!), playRate: rate(plays!, impressions!) };
   };
-  return { engine: cfg.RECO_ENGINE, engines: { v1: await one('v1'), v2: await one('v2') }, fallbacks: await sum(recoFallback), since: STARTED };
+  return { engine: cfg.RECO_ENGINE, locked: opts.locked === true, engines: { v1: await one('v1'), v2: await one('v2') }, fallbacks: await sum(recoFallback), since: STARTED };
 }

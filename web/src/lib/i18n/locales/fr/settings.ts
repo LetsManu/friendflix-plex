@@ -8,8 +8,10 @@ const settings: Translation<typeof de> = {
   loadFailed: 'Impossible de charger les paramètres.',
   groups: {
     general: 'Général', signin: 'Connexion', media: 'Serveur multimédia', requests: 'Demandes', notifications: 'Notifications', push: 'Notifications push',
-    sources: 'Sources de données', downloads: 'Téléchargements', playback: 'Lecture', updates: 'Mises à jour', health: 'État du système', sessions: 'Sessions', server: 'Serveur',
+    sources: 'Sources de données', downloads: 'Téléchargements', playback: 'Lecture', recommendations: 'Recommandations', updates: 'Mises à jour', health: 'État du système', sessions: 'Sessions', server: 'Serveur',
   },
+  /** a group's note under its title (Admin → Settings) */
+  groupHelp: { recommendations: 'Les modifications s’appliquent immédiatement, sans redémarrage. Le réglage fin pour experts (RECO_COEFFS et les poids d’index RECO_W_*) se fait uniquement dans .env.' },
   serverHelp: 'Valeurs de l’environnement du conteneur. Lecture seule ; les identifiants ne sont jamais affichés.',
   source: { env: 'De l’environnement', db: 'Enregistré', default: 'Par défaut', bootstrap: 'Du fichier de démarrage', unset: 'Non défini' },
   locked: 'Vient de l’environnement (.env) et ne peut pas être modifié ici.',
@@ -107,7 +109,7 @@ const settings: Translation<typeof de> = {
     PLEX_URL: { invalid_url: 'Saisis seulement l’adresse du serveur : commençant par http:// ou https://, sans nom d’utilisateur ni mot de passe, et rien après ? ou #. Le jeton va dans le champ Jeton Plex.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Automatique', UPDATE_CHANNEL: { stable: 'Stable', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatique', off: 'Désactivé' } },
+  options: { auto: 'Automatique', RECO_ENGINE: { v1: 'v1 (classique)', v2: 'v2 (modèle de goûts propre)', shadow: 'Shadow (v2 à côté de v1)' }, UPDATE_CHANNEL: { stable: 'Stable', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatique', off: 'Désactivé' } },
   keys: {
     PUBLIC_URL: { label: 'Adresse publique', help: 'L’adresse par laquelle tout le monde accède à FriendFlix, p. ex. https://friend.example.com. Liens, connexion et streaming en dépendent.' },
     WEBHOOK_SECRET: { label: 'Secret de webhook', help: 'Secret partagé pour les webhooks du serveur multimédia et du service de demandes.' },
@@ -169,6 +171,10 @@ const settings: Translation<typeof de> = {
     HEALTH_DB_WARN_GB: { label: 'Avertissement base de données dès (Go)', help: 'À partir de cette taille de base de données, l’état du système affiche un avertissement.' },
     SESSION_TTL_SECONDS: { label: 'Durée maximale d’une session (secondes)', help: 'Ensuite, il faut se reconnecter, même en étant actif.' },
     SESSION_IDLE_SECONDS: { label: 'Fin de session après inactivité (secondes)', help: 'Sans activité, la session se termine après ce délai.' },
+    RECO_ENGINE: { label: 'Moteur de recommandations', help: 'v1 : les listes de « titres similaires » du serveur multimédia. v2 : le modèle de goûts propre à FriendFlix, par profil. Shadow : v2 est calculé à côté de v1 pour comparaison, tout le monde voit encore v1. Suivez la comparaison sur la carte des recommandations de l’aperçu admin et passez à v2 dès que ses chiffres sont au moins aussi bons.' },
+    RECO_EXPLORE: { label: 'Part d’exploration', help: 'Part des places d’une rangée (0–0,5) que le moteur v2 remplit avec un titre au score moyen pour mieux connaître les goûts. 0 = désactivé ; 0.1 = environ 1 titre sur 10.' },
+    RECO_HALF_LIFE_DAYS: { label: 'Demi-vie des goûts (jours)', help: 'Après ce nombre de jours, un signal de goût (p. ex. un pouce levé) ne compte plus qu’à moitié. Moteur v2 uniquement.' },
+    POSTPLAY_ENABLED: { label: 'Écran après la fin', help: 'Après un film ou le dernier épisode : « Vous êtes à jour », la suite et des suggestions. Désactivé, il disparaît pour tout le monde.' },
   },
 };
 export default settings;

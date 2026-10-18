@@ -115,7 +115,8 @@ export function homeRoutes(app: FastifyInstance, ctx: Ctx, hubs: { viewerHubs: (
     // homegen.ts: hidden resume entries, status, thumbs, ratings, admin edits), so those changes show at once
     const pid = req.profile!.id;
     const [ver, gens] = await Promise.all([ctx.jf.userDataVersion(req.jfUser!).catch(() => '0'), homeGens(ctx, pid)]);
-    const key = `home:${pid}:${ver}:${gens}`;
+    // ... and the engine (RECO_ENGINE is a live setting: a switch in Admin -> Settings must not serve the other engine's cached rows)
+    const key = `home:${pid}:${ver}:${gens}:${ctx.cfg.RECO_ENGINE}`;
     const hit = await ctx.kv.get(key).catch(() => null);
     if (hit) {
       try { return JSON.parse(hit) as HomeResponse; } catch { /* corrupt entry: recompute */ }

@@ -30,6 +30,9 @@ const dict: Translation<typeof de> = {
     since: 'Conteggio dal {date}',
     empty: '–',
     loadFailed: 'Impossibile caricare i numeri.',
+    change: 'Cambia motore',
+    activeLine: '{engine} è attivo · {source}',
+    source: { env: 'impostato nel file .env (RECO_ENGINE), bloccato nelle impostazioni', db: 'modificabile in Admin → Impostazioni' },
   },
 };
 

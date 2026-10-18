@@ -419,6 +419,12 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
       } : b, status));
       if (r) return r;
     }
+    // the recommendation card: the active engine and its lock follow the RECO_ENGINE setting (so a save in Admin → Settings shows up there)
+    if (p === '/api/admin/reco' && m === 'GET') {
+      const item = st.settings.groups.flatMap((g) => g.items).find((i) => i.key === 'RECO_ENGINE');
+      const r = adminRoute(st.admin, m, p, sp, body(), (b: any, status?: number) => J({ ...b, engine: item?.value ?? 'v1', locked: item?.source === 'env' }, status));
+      if (r) return r;
+    }
     if (p.startsWith('/api/admin/settings')) { const r = settingsRoute(st.settings, m, p, body(), J); if (r) return r; }
     if (p.startsWith('/api/admin/')) { const r = adminRoute(st.admin, m, p, sp, body(), J); if (r) return r; }
 

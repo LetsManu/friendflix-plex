@@ -305,7 +305,7 @@ What the preview implements (checked by the test suite against the fake Plex ser
 | Next episode on the TV (Chromecast queue, cast bar countdown, *Next episode*, lock-screen controls) | Works | The queued episode's token is bound to the cast it follows, as upstream; Plex's own stream count lets it overlap exactly that one cast, and its Plex session is reachable through the cast token only. See [Casting the next episode on Plex](#casting-the-next-episode-on-plex) |
 | Cast remote screen (artwork, episode card, device) | Works | Artwork through FriendFlix's own image paths and the Plex photo transcoder; no Plex address or token in any image URL |
 | Post-play screen (*You finished …*, *You're caught up*, *Episode N is still unwatched*) | Limited | Plex has no series status and no announced episodes: after the last available episode the screen always says *You're caught up* (never *You finished the series*), without a next air date or *Remind me*. See [Recommendation engine v2 and post-play on Plex](#recommendation-engine-v2-and-post-play-on-plex) |
-| Recommendation engine v2 (`RECO_ENGINE`, item index, crowd signals, explanations) | Works | The item index reads FriendFlix's mirror of the Plex library (genres, labels, studios, countries, people, year, runtime, ratings, collections, overview). Plex lacks original language and series status; those signals stay neutral |
+| Recommendation engine v2 (`RECO_ENGINE`, item index, crowd signals, explanations) | Works | Switchable in *Admin → Settings → Recommendations* (live; `.env` wins). The item index reads FriendFlix's mirror of the Plex library (genres, labels, studios, countries, people, year, runtime, ratings, collections, overview). Plex lacks original language and series status; those signals stay neutral |
 | TV mode, watch parties, recommendations, notifications, hubs | Works | FriendFlix features |
 | "Upcoming episodes" / calendar | Not available | Plex does not offer it |
 | Account page (*My space → Account*) | Works | Main profile only. Shows the account and its devices; nothing on the page comes from Plex |
@@ -377,6 +377,7 @@ Next episode, *Episode N is still unwatched*, collections and the visibility of 
 - **No "Creator" credit:** for shows Plex usually only lists actors; directors and writers count when Plex has them.
 - **Critics score** only when Plex marks `rating` as Rotten Tomatoes (as on the detail page).
 - **v1 stays FriendFlix's own similar titles** (shared genres and cast) on Plex, not Jellyfin's. The admin's engine card calls it "v1 (classic)".
+- **Where to switch:** `RECO_ENGINE` (v1, v2, shadow), `RECO_EXPLORE`, `RECO_HALF_LIFE_DAYS` and `POSTPLAY_ENABLED` are also editable in *Admin → Settings → Recommendations* and apply at once, without a restart. A value in the `.env` wins and locks the field; the admin recommendation card links to the group. `RECO_COEFFS` and `RECO_W_*` stay `.env`-only.
 
 ### Casting the next episode on Plex
 

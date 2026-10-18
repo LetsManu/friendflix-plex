@@ -28,7 +28,7 @@ import { SettingsError } from '../settings/store.js';
  */
 
 export const SETTING_GROUPS: readonly SettingGroup[] = ['general', 'signin', 'media', 'requests', 'notifications', 'push', 'sources',
-  'downloads', 'playback', 'updates', 'health', 'sessions'];
+  'downloads', 'playback', 'recommendations', 'updates', 'health', 'sessions'];
 
 export interface SettingView {
   key: string;

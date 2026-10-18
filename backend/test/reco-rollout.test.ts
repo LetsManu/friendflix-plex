@@ -8,6 +8,7 @@ import { FALLBACK_SURFACES, recoStats } from '../src/reco/engine.js';
 import { loadRowStats } from '../src/reco/rows.js';
 import { ratingAge } from '../src/reco/score.js';
 import { resetIndexCache } from '../src/reco/vectors.js';
+import { postplayEnabled } from '../src/routes/postplay.js';
 import { buildIndex, dto, fakeJf, H, keysOf, SPECS, type FakeState } from './reco-fixture.js';
 import { encrypt } from '../src/crypto.js';
 
@@ -323,6 +324,7 @@ describe('counters and the admin numbers', () => {
     expect(r.statusCode).toBe(200);
     const b = r.json();
     expect(b.engine).toBe('v2');
+    expect(b.locked).toBe(true); // the test override counts as an env value
     expect(b.engines.v1.impressions - s0.engines.v1.impressions).toBe(40);
     expect(b.engines.v2.clicks - s0.engines.v2.clicks).toBe(5);
     expect(b.engines.v2.dismisses - s0.engines.v2.dismisses).toBe(1);
@@ -339,5 +341,46 @@ describe('counters and the admin numbers', () => {
   it('rates are null (not NaN) without any impression', async () => {
     const s = await recoStats({ RECO_ENGINE: 'v1' });
     for (const e of Object.values(s.engines)) if (e.impressions === 0) { expect(e.ctr).toBeNull(); expect(e.playRate).toBeNull(); }
+  });
+});
+
+describe('RECO_ENGINE as a live setting (Admin -> Settings, group recommendations)', () => {
+  it('a value saved in the database switches the engine on the next request, without a restart; clearing it goes back to v1', async () => {
+    engine('v1'); // no override: the store's own value (the default v1) applies
+    expect(env.ctx.settings.sources().RECO_ENGINE).not.toBe('env');
+    const before = (await call(owner, 'GET', '/api/home')).json();
+    expect(before.parts.because.engine).toBe('v1');
+    expect((await call(owner, 'GET', '/api/admin/reco')).json()).toMatchObject({ engine: 'v1', locked: false });
+
+    await env.ctx.settings.save({ RECO_ENGINE: 'v2' }, null);
+    expect(env.ctx.settings.sources().RECO_ENGINE).toBe('db');
+    expect(env.ctx.cfg.RECO_ENGINE).toBe('v2');
+    // the home answer cached under v1 is not served: the cache key carries the engine
+    const h = (await call(owner, 'GET', '/api/home')).json();
+    expect(h.parts.because.engine).toBe('v2');
+    expect(h.parts.because.items[0].reason).toMatchObject({ seed: { name: 'SAGA2' } });
+    expect(h.parts.order).toContain('because');
+    expect((await call(owner, 'GET', '/api/admin/reco')).json()).toMatchObject({ engine: 'v2', locked: false });
+
+    await env.ctx.settings.save({ RECO_ENGINE: 'shadow' }, null);
+    const sh = (await call(owner, 'GET', '/api/library/because')).json();
+    expect(sh.engine).toBe('v1'); // shadow answers v1
+
+    await env.ctx.settings.save({ RECO_ENGINE: null }, null);
+    expect(env.ctx.cfg.RECO_ENGINE).toBe('v1');
+    expect((await call(owner, 'GET', '/api/home')).json().parts.because.engine).toBe('v1');
+  });
+
+  it('RECO_EXPLORE, RECO_HALF_LIFE_DAYS and POSTPLAY_ENABLED apply live too; out-of-range values are refused', async () => {
+    engine('v1');
+    await env.ctx.settings.save({ RECO_EXPLORE: 0.1, RECO_HALF_LIFE_DAYS: 30, POSTPLAY_ENABLED: false }, null);
+    expect([env.ctx.cfg.RECO_EXPLORE, env.ctx.cfg.RECO_HALF_LIFE_DAYS, env.ctx.cfg.POSTPLAY_ENABLED]).toEqual([0.1, 30, 'false']);
+    expect(postplayEnabled(env.ctx)).toBe(false);
+    expect((await call(owner, 'GET', `/api/items/${H('saga2')}/postplay`)).json()).toEqual({ error: 'disabled' });
+    await expect(env.ctx.settings.save({ RECO_EXPLORE: 0.9 }, null)).rejects.toMatchObject({ errors: { RECO_EXPLORE: 'too_big' } });
+    await expect(env.ctx.settings.save({ RECO_ENGINE: 'v3' }, null)).rejects.toMatchObject({ errors: { RECO_ENGINE: 'invalid_option' } });
+    await env.ctx.settings.save({ RECO_EXPLORE: null, RECO_HALF_LIFE_DAYS: null, POSTPLAY_ENABLED: null }, null);
+    expect([env.ctx.cfg.RECO_EXPLORE, env.ctx.cfg.RECO_HALF_LIFE_DAYS, env.ctx.cfg.POSTPLAY_ENABLED]).toEqual([0, 120, 'true']);
+    expect(postplayEnabled(env.ctx)).toBe(true);
   });
 });
