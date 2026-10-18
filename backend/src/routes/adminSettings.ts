@@ -247,6 +247,8 @@ function candidate(ctx: Ctx, values: Record<string, unknown>, opts: { allowedKey
   // reported on the level that was submitted (the warn level when both were)
   const level = 'HEALTH_DISK_WARN_PCT' in changes ? 'HEALTH_DISK_WARN_PCT' : 'HEALTH_DISK_CRIT_PCT';
   if (level in changes && cfg.HEALTH_DISK_WARN_PCT >= cfg.HEALTH_DISK_CRIT_PCT) errors[level] ??= 'warn_above_critical';
+  // the pinned channel needs its version (the updater would have no tag to install)
+  if (('UPDATE_CHANNEL' in changes || 'UPDATE_VERSION' in changes) && cfg.UPDATE_CHANNEL === 'pinned' && !cfg.UPDATE_VERSION) errors.UPDATE_VERSION ??= 'required';
   return { errors, cfg, changes };
 }
 

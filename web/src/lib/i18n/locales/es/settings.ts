@@ -109,7 +109,7 @@ const settings: Translation<typeof de> = {
     PLEX_URL: { invalid_url: 'Introduce solo la dirección del servidor: que empiece por http:// o https://, sin usuario ni contraseña y sin nada después de ? o #. El token va en el campo Token de Plex.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Automático', RECO_ENGINE: { v1: 'v1 (clásico)', v2: 'v2 (modelo de gustos propio)', shadow: 'Shadow (v2 junto a v1)' }, UPDATE_CHANNEL: { stable: 'Estable', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automático', off: 'Desactivado' } },
+  options: { auto: 'Automático', RECO_ENGINE: { v1: 'v1 (clásico)', v2: 'v2 (modelo de gustos propio)', shadow: 'Shadow (v2 junto a v1)' }, UPDATE_CHANNEL: { stable: 'Estable', nightly: 'Nightly', pinned: 'Versión fija' }, AUTO_UPDATE: { off: 'Desactivadas', 'nightly-window': 'Ventana nocturna' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automático', off: 'Desactivado' } },
   keys: {
     PUBLIC_URL: { label: 'Dirección pública', help: 'La dirección con la que todos acceden a FriendFlix, p. ej. https://friend.example.com. Enlaces, inicio de sesión y streaming dependen de ella.' },
     WEBHOOK_SECRET: { label: 'Secreto de webhook', help: 'Secreto compartido para los webhooks del servidor multimedia y del servicio de peticiones.' },
@@ -164,7 +164,10 @@ const settings: Translation<typeof de> = {
     PORTAINER_API_KEY: { label: 'Clave de API de Portainer', help: 'Clave de API de una cuenta de Portainer que puede actualizar el stack.' },
     PORTAINER_STACK_ID: { label: 'ID del stack de Portainer', help: 'ID del stack de FriendFlix en Portainer.' },
     PORTAINER_ENDPOINT_ID: { label: 'ID del entorno de Portainer', help: 'ID del entorno de Portainer en el que corre el stack (normalmente 1).' },
-    UPDATE_CHANNEL: { label: 'Canal de actualizaciones', help: 'Con qué compara Admin → Actualización: Estable (versiones) o Nightly (main). Las imágenes siguen FF_TAG en el .env.' },
+    UPDATE_CHANNEL: { label: 'Canal de actualizaciones', help: 'Con qué compara Admin → Actualización y qué instala el actualizador: Estable, Nightly o una versión fija. Sin el actualizador, las imágenes siguen FF_TAG en el .env.' },
+    UPDATE_VERSION: { label: 'Versión fija', help: 'Versión X.Y.Z para el canal «Versión fija».' },
+    AUTO_UPDATE: { label: 'Actualizaciones automáticas', help: 'Requiere el actualizador. Ventana nocturna: una vez por noche a la hora de abajo.' },
+    AUTO_UPDATE_TIME: { label: 'Hora de la actualización automática', help: 'HH:MM en la zona horaria del servidor. La actualización empieza dentro de los 30 minutos siguientes.' },
     PLAYBACK_CHECK_HOUR: { label: 'Hora de la prueba de reproducción', help: 'Hora (0–23, hora del servidor) de la prueba de reproducción nocturna. -1 = desactivada.' },
     HEALTH_DISK_WARN_PCT: { label: 'Aviso de almacenamiento desde (%)', help: 'A partir de este uso, el estado del sistema muestra un aviso.' },
     HEALTH_DISK_CRIT_PCT: { label: 'Almacenamiento crítico desde (%)', help: 'A partir de este uso, el estado del sistema muestra un error. Debe estar por encima del nivel de aviso.' },

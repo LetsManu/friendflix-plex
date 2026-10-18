@@ -305,8 +305,10 @@ A new install needs none of this: the setup wizard and *Admin → Settings* stor
 | `HEALTH_DB_WARN_GB` | `10` | Database size (GB) above which the status page warns |
 | `METRICS_TOKEN` | empty | Bearer token for `/metrics` |
 | `PORTAINER_WEBHOOK_URL` or `PORTAINER_URL` + `PORTAINER_API_KEY` + `PORTAINER_STACK_ID` | empty | One-click updates from *Admin → Update* (`PORTAINER_ENDPOINT_ID` default `1`) |
-| `UPDATE_REPO`, `GITHUB_TOKEN` | `LetsManu/friendflix-plex`, empty | Version check; the token only raises the GitHub rate limit |
-| `UPDATE_CHANNEL` | `stable` | Set with the *Stable / Nightly* switch under *Admin → Update* (stored in the database, no `.env` needed): what the update check compares with. It never switches images; `FF_TAG` does |
+| `UPDATE_REPO`, `GITHUB_TOKEN` | `LetsManu/friendflix-plex`, empty | Version check, and for the updater the expected images (`ghcr.io/<owner>/friendflix-plex-*`) and signer; the token only raises the GitHub rate limit |
+| `UPDATE_CHANNEL`, `UPDATE_VERSION` | `stable`, empty | Set with the *Stable / Nightly / Fixed version* switch under *Admin → Update* (stored in the database, no `.env` needed): what the update check compares with and, with the updater, what it installs. Without the updater it never switches images; `FF_TAG` does |
+| `UPDATER_URL`, `UPDATER_COMPOSE_FILES` | `http://updater:7070`, `compose.prod.yaml,compose.plex.yaml` | Opt-in updater (profile `updater`, [setup guide](docs/setup.md#updater-optional)): its internal address (env only) and the stack's compose files |
+| `AUTO_UPDATE`, `AUTO_UPDATE_TIME` | `off`, `04:00` | Automatic updates through the updater: `nightly-window` runs the update job once a night from this time (server time zone); set in *Admin → Update* |
 | `GRAFANA_ADMIN_PASSWORD`, `GRAFANA_PORT`, `PROMETHEUS_RETENTION` | – (required for the monitoring stack), `3083`, `30d` | Optional Prometheus + Grafana (`compose.monitoring.yaml`); no default password |
 | `BACKUP_PATH`, `BACKUP_HOUR`, `BACKUP_KEEP_DAYS`, `BACKUP_RUN_ON_START` | `./backups`, `3`, `14`, `false` | Backup sidecar (profile `backup`) |
 | `MEDIA_PATH` | `./media` | Media folder for the bundled Jellyfin (upstream profile `bundled`; not used with Plex) |

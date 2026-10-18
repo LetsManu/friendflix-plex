@@ -37,6 +37,8 @@
   $: texts = check ? check.warnings.map((c) => loginWarningText(c, flowName)).filter(Boolean) : [];
   const TONE = { ok: 'ok', missing: 'err', unsupported: 'warn' } as const;
   const ICON = { ok: 'check', missing: 'alert', unsupported: 'clock' } as const;
+  /** e-mail change is optional: a missing flow is shown as "optional", not as an error */
+  const isOptional = (f: { kind: string; state: string }) => f.kind === 'change-email' && f.state === 'missing';
 
   async function runRepair(again = true) {
     const token = repairToken.trim();
@@ -106,7 +108,11 @@
             <li>
               <span class="fn">{flowName(f.kind)}</span>
               <code class="slug">{f.slug}</code>
-              <StatusPill tone={TONE[f.state]} icon={ICON[f.state]} label={$t(`adminContent.login.states.${f.state}` as TKey)} />
+              {#if isOptional(f)}
+                <StatusPill tone="info" icon="info" label={$t('adminContent.login.states.optional')} />
+              {:else}
+                <StatusPill tone={TONE[f.state]} icon={ICON[f.state]} label={$t(`adminContent.login.states.${f.state}` as TKey)} />
+              {/if}
             </li>
           {/each}
         </ul>

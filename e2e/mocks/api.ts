@@ -6,6 +6,7 @@ import { pngFor } from './png.js';
 import { adminRoute, adminState, type AdminState } from './admin.js';
 import { settingsRoute, settingsState, type SettingsMock } from './settings.js';
 import { setupRoute, type SetupMock } from './setup.js';
+import { updaterRoute, type UpdaterMock } from './updater.js';
 
 /** Item whose reactions are locked (viewer has not seen it) / unlocked and contain an XSS probe. */
 export const LOCKED_ID = MOVIE.id;
@@ -29,6 +30,8 @@ export interface MockState {
   admin: AdminState;
   /** Admin → Settings (mocks/settings.ts) */
   settings: SettingsMock;
+  /** the opt-in updater (mocks/updater.ts); null = not installed */
+  updater: UpdaterMock | null;
   /** GET /api/version: what the running build is (backend/src/channel.ts); the default is a release build */
   build: { sha: string; build: 'release' | 'nightly' | 'dev' | null; channel: 'stable' | 'nightly' | null; label: string };
   /** /api/me reports an admin owner profile (admin pages, admin menu) */
@@ -94,6 +97,7 @@ export function freshState(): MockState {
     reco: [],
     admin: adminState(),
     settings: settingsState(),
+    updater: null,
     build: { sha: 'c0be6c5deadbeef', build: 'release', channel: 'stable', label: '1.0.0' },
     asAdmin: false,
     resumeGone: new Set(),
@@ -411,11 +415,12 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     // Admin → Update with the channel: the selection is the UPDATE_CHANNEL setting (so the switch's save shows up here)
     if (p === '/api/admin/update' && m === 'GET') {
       const item = st.settings.groups.flatMap((g) => g.items).find((i) => i.key === 'UPDATE_CHANNEL');
-      const selected = item?.value === 'nightly' ? 'nightly' : 'stable';
+      const selected = item?.value === 'nightly' || item?.value === 'pinned' ? item.value : 'stable';
+      const version = st.settings.groups.flatMap((g) => g.items).find((i) => i.key === 'UPDATE_VERSION')?.value ?? null;
       const r = adminRoute(st.admin, m, p, sp, body(), (b: any, status?: number) => J(b && typeof b === 'object' && 'current' in b ? {
         ...b,
         updateAvailable: selected === 'nightly' ? (b.behind == null ? null : b.behind > 0) : b.updateAvailable,
-        channel: { selected, running: st.build.channel, build: st.build.build, label: st.build.label, locked: item?.source === 'env', envLine: `FF_TAG=${selected === 'nightly' ? 'nightly' : 'latest'}` },
+        channel: { selected, version: selected === 'pinned' ? version : null, running: st.build.channel, build: st.build.build, label: st.build.label, locked: item?.source === 'env', envLine: `FF_TAG=${selected === 'nightly' ? 'nightly' : selected === 'pinned' && version ? version : 'latest'}` },
       } : b, status));
       if (r) return r;
     }
@@ -425,6 +430,7 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
       const r = adminRoute(st.admin, m, p, sp, body(), (b: any, status?: number) => J({ ...b, engine: item?.value ?? 'v1', locked: item?.source === 'env' }, status));
       if (r) return r;
     }
+    if (p.startsWith('/api/admin/updater') && st.asAdmin) { const r = updaterRoute(st.updater, st.settings, m, p, J); if (r) return r; }
     if (p.startsWith('/api/admin/settings')) { const r = settingsRoute(st.settings, m, p, body(), J); if (r) return r; }
     if (p.startsWith('/api/admin/')) { const r = adminRoute(st.admin, m, p, sp, body(), J); if (r) return r; }
 

@@ -21,12 +21,12 @@ const def = (key: string) => {
 describe('key classification', () => {
   it('every key of the config schema is in exactly one of SETTINGS, ENV_ONLY_KEYS, BOOTSTRAP_KEYS, BUILD_KEYS', () => {
     const keys = Object.keys(configSchema.shape);
-    expect(keys).toHaveLength(92); // fork: + PLEX_URL, PLEX_TOKEN
+    expect(keys).toHaveLength(96); // fork: + PLEX_URL, PLEX_TOKEN
     const classes = [SETTINGS.map((s) => s.key), ENV_ONLY_KEYS, BOOTSTRAP_KEYS, BUILD_KEYS];
     for (const k of keys) expect(classes.filter((c) => c.includes(k)), k).toHaveLength(1);
     expect(classes.flat().sort()).toEqual([...keys].sort()); // nothing outside the schema, no duplicates
-    expect([BOOTSTRAP_KEYS.length, ENV_ONLY_KEYS.length, BUILD_KEYS.length, SETTINGS.length]).toEqual([4, 20, 4, 64]); // fork: + PLEX_URL, PLEX_TOKEN
-    expect(SETTINGS.filter((s) => s.visible !== false)).toHaveLength(64);
+    expect([BOOTSTRAP_KEYS.length, ENV_ONLY_KEYS.length, BUILD_KEYS.length, SETTINGS.length]).toEqual([4, 21, 4, 67]); // fork: + PLEX_URL, PLEX_TOKEN
+    expect(SETTINGS.filter((s) => s.visible !== false)).toHaveLength(67);
     expect(SETTINGS.filter((s) => s.visible === false).map((s) => s.key)).toEqual([]);
   });
   it('each setting parses with the config schema field of the same key', () => {
@@ -92,8 +92,8 @@ describe('key classification', () => {
     expect(def('TMDB_API_KEY')).toMatchObject({ group: 'sources', probe: 'tmdb' });
     expect(settingDef('MEDIA_SERVER')).toBeUndefined();
   });
-  it('UPDATE_CHANNEL: a database setting in group updates, stable by default, stable | nightly', () => {
-    expect(def('UPDATE_CHANNEL')).toMatchObject({ kind: 'enum', group: 'updates', apply: 'live', default: 'stable', options: ['stable', 'nightly'] });
+  it('UPDATE_CHANNEL: a database setting in group updates, stable by default, stable | nightly | pinned', () => {
+    expect(def('UPDATE_CHANNEL')).toMatchObject({ kind: 'enum', group: 'updates', apply: 'live', default: 'stable', options: ['stable', 'nightly', 'pinned'] });
     expect(def('UPDATE_CHANNEL').secret).toBeUndefined();
     expect(loadConfig(BOOT).UPDATE_CHANNEL).toBe('stable');
     expect(loadConfig({ ...BOOT, UPDATE_CHANNEL: '' }).UPDATE_CHANNEL).toBe('stable');

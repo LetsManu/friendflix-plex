@@ -158,6 +158,8 @@ docker compose logs backend | grep "setup code"                           # the 
 
 Tip: `COMPOSE_FILE=compose.prod.yaml:compose.plex.yaml` in `.env` lets you use plain `docker compose up -d` / `ps` / `logs`.
 
+Optional updater: `docker compose -f compose.prod.yaml -f compose.plex.yaml --profile updater up -d` lets *Admin → Update* update the stack itself ([setup.md, Updater](setup.md#updater-optional)). `compose.plex.yaml` points it at this fork: images `friendflix-plex-*` (including `friendflix-plex-updater`), signatures from this repository's `publish.yml`, and both compose files (`UPDATER_COMPOSE_FILES=compose.prod.yaml,compose.plex.yaml`). It recreates bootstrap, backend, gateway and web only and never touches the Plex server.
+
 ### Setup wizard on Plex
 
 Open your FriendFlix address; while setup is incomplete every page leads to `/setup` (general steps: [setup.md](setup.md)). In the **media step** you enter:

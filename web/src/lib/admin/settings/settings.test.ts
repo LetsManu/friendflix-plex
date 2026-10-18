@@ -11,12 +11,13 @@ import {
   submitValue, takePending,
 } from './form';
 
-/** every visible setting of the registry (spec Part A: 48, plus the nine of phase 3, plus UPDATE_CHANNEL, plus the four recommendation settings) */
+/** every visible setting of the registry (spec Part A: 48, plus the nine of phase 3, plus UPDATE_CHANNEL, plus the four recommendation settings, plus the three updater settings) */
 const KEYS = ['PUBLIC_URL', 'WEBHOOK_SECRET', 'API_COMPRESSION', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'ADMIN_GROUP', 'AUTHENTIK_URL',
   'AUTHENTIK_API_TOKEN', 'AUTHENTIK_ENROLL_FLOW', 'AUTHENTIK_RECOVERY_FLOW', 'AUTHENTIK_TOTP_SETUP_FLOW', 'JELLYFIN_URL', 'JELLYFIN_ADMIN_API_KEY', 'REQUESTS_URL',
   'REQUESTS_API_KEY', 'NTFY_URL', 'NTFY_BASE_URL', 'DISCORD_WEBHOOK_URL', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT', 'TMDB_API_KEY', 'OMDB_API_KEY',
   'DOWNLOADS_ENABLED', 'DIRECT_PLAY_REQUIRES_DOWNLOAD', 'DOWNLOAD_CACHE_MAX_GB', 'DOWNLOAD_MIN_FREE_GB', 'DOWNLOAD_PREP_CONCURRENCY', 'DOWNLOAD_PAUSE_STREAMS',
   'DOWNLOAD_FILE_TTL_HOURS', 'DOWNLOAD_OFFLINE_GRACE_DAYS', 'DOWNLOAD_CREATE_PER_HOUR', 'CAST_ENABLED', 'PREVIEW_WARM', 'HOME_NETWORKS', 'GITHUB_TOKEN', 'UPDATE_CHANNEL',
+  'UPDATE_VERSION', 'AUTO_UPDATE', 'AUTO_UPDATE_TIME',
   'PORTAINER_WEBHOOK_URL', 'PORTAINER_URL', 'PORTAINER_API_KEY', 'PORTAINER_STACK_ID', 'PORTAINER_ENDPOINT_ID', 'PLAYBACK_CHECK_HOUR', 'HEALTH_DISK_WARN_PCT',
   'HEALTH_DISK_CRIT_PCT', 'HEALTH_DB_WARN_GB', 'SESSION_TTL_SECONDS', 'SESSION_IDLE_SECONDS',
   'LOGIN_UI', 'AUTHENTIK_LOGIN_FLOW', 'AUTHENTIK_INVALIDATION_FLOW', 'PASSKEYS_IN_APP', 'LOGIN_COVER_WALL',
@@ -31,7 +32,7 @@ afterEach(async () => { vi.unstubAllGlobals(); await setLocale('de'); });
 
 describe('settings texts', () => {
   it('every visible setting has a label and a help text; the request service is never named after a product', async () => {
-    expect(KEYS).toHaveLength(62);
+    expect(KEYS).toHaveLength(65);
     for (const k of KEYS) {
       expect(hasKey(`settings.keys.${k}.label`), k).toBe(true);
       expect(hasKey(`settings.keys.${k}.help`), k).toBe(true);

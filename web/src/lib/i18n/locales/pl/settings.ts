@@ -110,7 +110,7 @@ const settings: Translation<typeof de> = {
     PLEX_URL: { invalid_url: 'Wpisz tylko adres serwera: zaczynający się od http:// lub https://, bez nazwy użytkownika i hasła i bez niczego po ? lub #. Token wpisz w pole Token Plex.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Automatycznie', RECO_ENGINE: { v1: 'v1 (klasyczny)', v2: 'v2 (własny model gustu)', shadow: 'Shadow (v2 obok v1)' }, UPDATE_CHANNEL: { stable: 'Stabilny', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatycznie', off: 'Wyłączone' } },
+  options: { auto: 'Automatycznie', RECO_ENGINE: { v1: 'v1 (klasyczny)', v2: 'v2 (własny model gustu)', shadow: 'Shadow (v2 obok v1)' }, UPDATE_CHANNEL: { stable: 'Stabilny', nightly: 'Nightly', pinned: 'Stała wersja' }, AUTO_UPDATE: { off: 'Wyłączone', 'nightly-window': 'Okno nocne' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatycznie', off: 'Wyłączone' } },
   keys: {
     PUBLIC_URL: { label: 'Adres publiczny', help: 'Adres, pod którym wszyscy otwierają FriendFlix, np. https://friend.example.com. Opierają się na nim linki, logowanie i streaming.' },
     WEBHOOK_SECRET: { label: 'Sekret webhooka', help: 'Wspólny sekret dla webhooków serwera multimediów i usługi próśb.' },
@@ -165,7 +165,10 @@ const settings: Translation<typeof de> = {
     PORTAINER_API_KEY: { label: 'Klucz API Portainer', help: 'Klucz API konta Portainer, które może aktualizować stos.' },
     PORTAINER_STACK_ID: { label: 'ID stosu Portainer', help: 'ID stosu FriendFlix w Portainer.' },
     PORTAINER_ENDPOINT_ID: { label: 'ID środowiska Portainer', help: 'ID środowiska Portainer, w którym działa stos (zwykle 1).' },
-    UPDATE_CHANNEL: { label: 'Kanał aktualizacji', help: 'Z czym porównuje Admin → Aktualizacja: Stabilny (wydania) lub Nightly (main). Obrazy wybiera FF_TAG w .env.' },
+    UPDATE_CHANNEL: { label: 'Kanał aktualizacji', help: 'Z czym porównuje Admin → Aktualizacja i co instaluje aktualizator: Stabilny, Nightly lub stała wersja. Bez aktualizatora obrazy wybiera FF_TAG w .env.' },
+    UPDATE_VERSION: { label: 'Stała wersja', help: 'Wersja X.Y.Z dla kanału „Stała wersja”.' },
+    AUTO_UPDATE: { label: 'Automatyczne aktualizacje', help: 'Wymaga aktualizatora. Okno nocne: raz na noc o godzinie poniżej.' },
+    AUTO_UPDATE_TIME: { label: 'Godzina automatycznej aktualizacji', help: 'HH:MM w strefie czasowej serwera. Aktualizacja startuje w ciągu 30 minut od tej godziny.' },
     PLAYBACK_CHECK_HOUR: { label: 'Godzina testu odtwarzania', help: 'Godzina (0–23, czas serwera) nocnego testu odtwarzania. -1 = wyłączony.' },
     HEALTH_DISK_WARN_PCT: { label: 'Ostrzeżenie o miejscu od (%)', help: 'Od tego zajęcia stan systemu pokazuje ostrzeżenie.' },
     HEALTH_DISK_CRIT_PCT: { label: 'Krytyczne miejsce od (%)', help: 'Od tego zajęcia stan systemu pokazuje błąd. Musi być powyżej poziomu ostrzeżenia.' },

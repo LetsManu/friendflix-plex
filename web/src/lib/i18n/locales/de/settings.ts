@@ -103,7 +103,7 @@ export default {
     PLEX_URL: { invalid_url: 'Bitte nur die Serveradresse eingeben: mit http:// oder https://, ohne Benutzername und Passwort und ohne etwas nach ? oder #. Der Token gehört in das Feld Plex-Token.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Automatisch', RECO_ENGINE: { v1: 'v1 (klassisch)', v2: 'v2 (eigenes Geschmacksmodell)', shadow: 'Shadow (v2 neben v1)' }, UPDATE_CHANNEL: { stable: 'Stabil', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatisch', off: 'Aus' } },
+  options: { auto: 'Automatisch', RECO_ENGINE: { v1: 'v1 (klassisch)', v2: 'v2 (eigenes Geschmacksmodell)', shadow: 'Shadow (v2 neben v1)' }, UPDATE_CHANNEL: { stable: 'Stabil', nightly: 'Nightly', pinned: 'Feste Version' }, AUTO_UPDATE: { off: 'Aus', 'nightly-window': 'Nachtfenster' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatisch', off: 'Aus' } },
   keys: {
     PUBLIC_URL: { label: 'Öffentliche Adresse', help: 'Unter dieser Adresse erreichen alle FriendFlix, z. B. https://friend.example.com. Links, Anmeldung und Streaming bauen darauf auf.' },
     WEBHOOK_SECRET: { label: 'Webhook-Geheimnis', help: 'Gemeinsames Geheimnis für die Webhooks von Mediaserver und Anfragen-Dienst.' },
@@ -158,7 +158,10 @@ export default {
     PORTAINER_API_KEY: { label: 'Portainer-API-Schlüssel', help: 'API-Schlüssel eines Portainer-Kontos, das den Stack aktualisieren darf.' },
     PORTAINER_STACK_ID: { label: 'Portainer-Stack-ID', help: 'ID des FriendFlix-Stacks in Portainer.' },
     PORTAINER_ENDPOINT_ID: { label: 'Portainer-Umgebungs-ID', help: 'ID der Portainer-Umgebung, in der der Stack läuft (meist 1).' },
-    UPDATE_CHANNEL: { label: 'Update-Kanal', help: 'Womit Admin → Update vergleicht: Stabil (Releases) oder Nightly (main). Die Images selbst wählt FF_TAG in der .env.' },
+    UPDATE_CHANNEL: { label: 'Update-Kanal', help: 'Womit Admin → Update vergleicht und was der Updater installiert: Stabil, Nightly oder eine feste Version. Ohne Updater wählt FF_TAG in der .env die Images.' },
+    UPDATE_VERSION: { label: 'Feste Version', help: 'Version X.Y.Z für den Kanal „Feste Version“.' },
+    AUTO_UPDATE: { label: 'Automatische Updates', help: 'Braucht den Updater. Nachtfenster: einmal pro Nacht zur Uhrzeit unten.' },
+    AUTO_UPDATE_TIME: { label: 'Uhrzeit des automatischen Updates', help: 'HH:MM in der Zeitzone des Servers. Das Update startet innerhalb von 30 Minuten ab dieser Zeit.' },
     PLAYBACK_CHECK_HOUR: { label: 'Uhrzeit des Wiedergabe-Checks', help: 'Stunde (0–23, Serverzeit) für den nächtlichen Wiedergabe-Check. -1 = aus.' },
     HEALTH_DISK_WARN_PCT: { label: 'Speicher-Warnung ab (%)', help: 'Ab dieser Belegung zeigt der Systemzustand eine Warnung.' },
     HEALTH_DISK_CRIT_PCT: { label: 'Speicher kritisch ab (%)', help: 'Ab dieser Belegung zeigt der Systemzustand einen Fehler. Muss über der Warnstufe liegen.' },

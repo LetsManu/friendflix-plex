@@ -7,6 +7,7 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY backend/package.json backend/
 COPY gateway/package.json gateway/
 COPY web/package.json web/
+COPY updater/package.json updater/
 RUN npm ci
 COPY gateway gateway
 RUN npm run build -w gateway

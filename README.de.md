@@ -312,8 +312,10 @@ Eine neue Installation braucht davon nichts: Einrichtungsassistent und *Admin �
 | `HEALTH_DB_WARN_GB` | `10` | Datenbankgröße (GB), ab der die Status-Seite warnt |
 | `METRICS_TOKEN` | leer | Bearer-Token für `/metrics` |
 | `PORTAINER_WEBHOOK_URL` oder `PORTAINER_URL` + `PORTAINER_API_KEY` + `PORTAINER_STACK_ID` | leer | Updates per Knopfdruck unter *Admin → Update* (`PORTAINER_ENDPOINT_ID` Standard `1`) |
-| `UPDATE_REPO`, `GITHUB_TOKEN` | `LetsManu/friendflix-plex`, leer | Versionsprüfung; das Token hebt nur das GitHub-Limit an |
-| `UPDATE_CHANNEL` | `stable` | Wird mit dem Schalter *Stabil / Nightly* unter *Admin → Update* gesetzt (in der Datenbank, keine `.env` nötig): womit die Update-Prüfung vergleicht. Wechselt nie Images, das macht `FF_TAG` |
+| `UPDATE_REPO`, `GITHUB_TOKEN` | `LetsManu/friendflix-plex`, leer | Versionsprüfung, für den Updater auch die erwarteten Images (`ghcr.io/<owner>/friendflix-plex-*`) und der Signierer; das Token hebt nur das GitHub-Limit an |
+| `UPDATE_CHANNEL`, `UPDATE_VERSION` | `stable`, leer | Wird mit dem Schalter *Stabil / Nightly / Feste Version* unter *Admin → Update* gesetzt (in der Datenbank, keine `.env` nötig): womit die Update-Prüfung vergleicht und, mit dem Updater, was er installiert. Ohne Updater wechselt es nie Images, das macht `FF_TAG` |
+| `UPDATER_URL`, `UPDATER_COMPOSE_FILES` | `http://updater:7070`, `compose.prod.yaml,compose.plex.yaml` | Opt-in-Updater (Profil `updater`, [Installationsanleitung](docs/de/setup.md#updater-optional)): seine interne Adresse (nur Umgebung) und die Compose-Dateien des Stacks |
+| `AUTO_UPDATE`, `AUTO_UPDATE_TIME` | `off`, `04:00` | Automatische Updates über den Updater: `nightly-window` startet den Update-Auftrag einmal pro Nacht ab dieser Uhrzeit (Zeitzone des Servers); unter *Admin → Update* einstellbar |
 | `GRAFANA_ADMIN_PASSWORD`, `GRAFANA_PORT`, `PROMETHEUS_RETENTION` | – (Pflicht für den Monitoring-Stack), `3083`, `30d` | Optionales Prometheus + Grafana (`compose.monitoring.yaml`); kein Standardpasswort |
 | `BACKUP_PATH`, `BACKUP_HOUR`, `BACKUP_KEEP_DAYS`, `BACKUP_RUN_ON_START` | `./backups`, `3`, `14`, `false` | Backup-Sidecar (Profil `backup`) |
 | `MEDIA_PATH` | `./media` | Medienordner für das mitgelieferte Jellyfin (Profil `bundled` im Original; mit Plex nicht verwendet) |

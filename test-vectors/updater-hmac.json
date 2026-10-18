@@ -1,0 +1,31 @@
+{
+  "_comment": "Shared by the updater and backend tests so both ends of the backend -> updater signing (updater/src/protocol.ts, backend/src/updater.ts) can never drift apart. key = HMAC-SHA256(secret, 'friendflix-updater/v1'); signature = 'v1=' + hex HMAC-SHA256(key, METHOD\\nPATH\\nTS\\nNONCE\\nhex(SHA256(body))).",
+  "secret": "test-internal-secret-0123456789",
+  "key": "9c19d5648b8a3f8956d76d75602e905d9140350ed4a87b90a306a1a4073f9c71",
+  "cases": [
+    {
+      "method": "GET",
+      "path": "/v1/status",
+      "body": "",
+      "ts": "1760800000000",
+      "nonce": "00112233445566778899aabbccddeeff",
+      "signature": "v1=1dbd32610251e3eae850509e1c42fca91eb7315217b42aa8c6a13181ecfd4c35"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/channel",
+      "body": "{\"channel\":\"pinned\",\"version\":\"1.2.3\"}",
+      "ts": "1760800001234",
+      "nonce": "ffeeddccbbaa99887766554433221100",
+      "signature": "v1=84dd3425a15da6e064a32675991b79457ff9eb49a579d98a1b35cf876e656f62"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/update",
+      "body": "",
+      "ts": "1760800005000",
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "v1=3b37b5dc4ecddbdd95e8cefc2b3d9429deb098534aa84b924b028a58ae39fd7b"
+    }
+  ]
+}

@@ -40,9 +40,11 @@ describe('build info (footer, /api/version)', () => {
 
 describe('update channel', () => {
   it('the .env line and the pull command of the production stack', () => {
-    expect(CHANNELS).toEqual(['stable', 'nightly']);
+    expect(CHANNELS).toEqual(['stable', 'nightly', 'pinned']);
     expect(envLineFor('stable')).toBe('FF_TAG=latest');
     expect(envLineFor('nightly')).toBe('FF_TAG=nightly');
+    expect(envLineFor('pinned', '1.2.3')).toBe('FF_TAG=1.2.3');
+    expect(envLineFor('pinned')).toBe('FF_TAG=latest');
     expect(PULL_COMMAND).toBe('docker compose -f compose.prod.yaml -f compose.plex.yaml pull && docker compose -f compose.prod.yaml -f compose.plex.yaml up -d');
   });
   it('the snippet: selection differs from the running channel, or an update exists', () => {
@@ -56,6 +58,11 @@ describe('update channel', () => {
     expect(showSnippet({ updateAvailable: false, channel: ch({ running: null, build: null, selected: 'nightly' }) })).toBe(false);
     expect(showSnippet({ updateAvailable: null, channel: ch({ running: null, build: 'dev' }) })).toBe(false);
     expect(showSnippet({ updateAvailable: true })).toBe(false); // older backend
+    // a fixed version: a switch only when it is not the installed one (a release build runs on stable)
+    const pin = (updateAvailable: boolean | null) => ({ updateAvailable, channel: ch({ selected: 'pinned', version: '1.1.0', envLine: 'FF_TAG=1.1.0' }) });
+    expect(showSnippet(pin(false))).toBe(false);
+    expect(showSnippet(pin(true))).toBe(true);
+    expect(snippetReason(pin(true))).toBe('switch');
   });
   it('up to date on the selected channel; older backends fall back to the commit comparison', () => {
     expect(isUpToDate({ updateAvailable: false, behind: 7 })).toBe(true); // stable: main moving on is no update
@@ -66,20 +73,21 @@ describe('update channel', () => {
   });
   it('arrow keys move through the segmented switch', () => {
     expect(stepChannel('stable', 'ArrowRight')).toBe('nightly');
-    expect(stepChannel('nightly', 'ArrowRight')).toBe('stable');
-    expect(stepChannel('stable', 'ArrowLeft')).toBe('nightly');
+    expect(stepChannel('nightly', 'ArrowRight')).toBe('pinned');
+    expect(stepChannel('pinned', 'ArrowRight')).toBe('stable');
+    expect(stepChannel('stable', 'ArrowLeft')).toBe('pinned');
     expect(stepChannel('stable', 'Enter')).toBeNull();
   });
   it('every string exists in all seven languages', async () => {
     const keys = ['title', 'label', 'stable', 'nightly', 'running', 'runningStable', 'runningNightly', 'runningDev', 'runningUnknown', 'stableHint', 'nightlyHint',
-      'locked', 'saved', 'nightlyBuild', 'switchLead', 'updateLead', 'envLabel', 'cmdLabel', 'note'];
+      'locked', 'saved', 'nightlyBuild', 'switchLead', 'updateLead', 'envLabel', 'cmdLabel', 'note', 'pinned', 'pinnedHint', 'versionLabel', 'versionSave', 'versionInvalid', 'updaterNote'];
     const de = Object.fromEntries(keys.map((k) => [k, tr(`admin.update.channel.${k}` as 'admin.update.channel.title')]));
     for (const l of ['en', 'es', 'fr', 'it', 'pl', 'tr']) {
       await setLocale(l);
       for (const k of keys) {
         expect(hasKey(`admin.update.channel.${k}`), `${l} ${k}`).toBe(true);
-        // "Nightly" and "Nightly · Build {sha}" are the same everywhere; everything else is translated
-        if (!['nightly', 'nightlyBuild', 'runningNightly'].includes(k)) expect(tr(`admin.update.channel.${k}` as 'admin.update.channel.title'), `${l} ${k}`).not.toBe(de[k]);
+        // "Nightly", "Nightly · Build {sha}" and "Version (X.Y.Z)" may be the same; everything else is translated
+        if (!['nightly', 'nightlyBuild', 'runningNightly', 'versionLabel'].includes(k)) expect(tr(`admin.update.channel.${k}` as 'admin.update.channel.title'), `${l} ${k}`).not.toBe(de[k]);
       }
     }
     await setLocale('en');

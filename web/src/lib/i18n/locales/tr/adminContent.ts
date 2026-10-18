@@ -382,7 +382,7 @@ const dict: Translation<typeof de> = {
       'change-password': 'Parolayı değiştir',
       'change-email': 'E-posta adresini değiştir',
     },
-    states: { ok: 'Tamam', missing: 'Eksik', unsupported: 'Desteklenmiyor' },
+    states: { ok: 'Tamam', missing: 'Eksik', unsupported: 'Desteklenmiyor', optional: 'İsteğe bağlı' },
     steps: 'Adımlar: {list}',
     passkeys: 'Passkey',
     passkeysIn: 'FriendFlix içinde',

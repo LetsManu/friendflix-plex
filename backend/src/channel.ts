@@ -5,12 +5,14 @@ import { appVersion } from './version.js';
 
 /**
  * Update channels (docs/operations.md "Release-Kanäle"). The images decide what runs: `FF_TAG=latest` follows the releases
- * (stable), `FF_TAG=nightly` every green commit on main. FriendFlix never pulls or switches images itself (no Docker socket,
- * no updater container): the UPDATE_CHANNEL setting only chooses what Admin -> Update compares against and which `.env`
- * line it suggests. The channel a build actually runs is derived from its commit: a release build is exactly the commit of
+ * (stable), `FF_TAG=nightly` every green commit on main, `FF_TAG=X.Y.Z` a fixed version (pinned). The backend never gets the
+ * Docker socket: without the opt-in updater (updater.ts) the UPDATE_CHANNEL setting only chooses what Admin -> Update compares
+ * against and which `.env` line it suggests; with it, the updater installs that channel's tag. The channel a build actually runs is derived from its commit: a release build is exactly the commit of
  * the tag v<version> (the image is re-tagged, never rebuilt, so the sha is the same); any other CI build is a nightly one.
  */
-export type Channel = 'stable' | 'nightly';
+export type Channel = 'stable' | 'nightly' | 'pinned';
+/** a channel a build can run on (a pinned version is a release, so it runs on stable) */
+export type RunningChannel = 'stable' | 'nightly';
 /** release = the commit of tag v<version>; nightly = another CI image build; dev = a local build without a commit sha */
 export type BuildKind = 'release' | 'nightly' | 'dev';
 
@@ -29,7 +31,7 @@ export function buildKind(sha: string, tagSha: string | null | undefined): Build
 }
 
 /** the channel a build kind belongs to; a dev build belongs to none */
-export const runningChannel = (kind: BuildKind | null): Channel | null => (kind === 'release' ? 'stable' : kind === 'nightly' ? 'nightly' : null);
+export const runningChannel = (kind: BuildKind | null): RunningChannel | null => (kind === 'release' ? 'stable' : kind === 'nightly' ? 'nightly' : null);
 
 /** "1.1.0" for a release, a dev build and when unknown; "1.1.0-nightly · abc1234" for a nightly build */
 export function versionLabel(version: string, sha: string, kind: BuildKind | null): string {
@@ -38,15 +40,18 @@ export function versionLabel(version: string, sha: string, kind: BuildKind | nul
 
 /**
  * Is there an update on this channel? stable: a newer release than the installed version (null before the first release).
- * nightly: newer commits on main than the installed sha (null when unknown).
+ * nightly: newer commits on main than the installed sha (null when unknown). pinned: a different version than the installed one
+ * (null without a version).
  */
-export function channelUpdate(channel: Channel, s: { releaseNewer: boolean | null; behind: number | null }): boolean | null {
+export function channelUpdate(channel: Channel, s: { releaseNewer: boolean | null; behind: number | null; pinnedDiffers?: boolean | null }): boolean | null {
   if (channel === 'stable') return s.releaseNewer;
+  if (channel === 'pinned') return s.pinnedDiffers ?? null;
   return s.behind === null ? null : s.behind > 0;
 }
 
-/** the `.env` line that selects a channel (compose.prod.yaml: image tag ${FF_TAG:-latest}) */
-export const envLine = (channel: Channel): string => `FF_TAG=${channel === 'nightly' ? 'nightly' : 'latest'}`;
+/** the `.env` line that selects a channel (compose.prod.yaml: image tag ${FF_TAG:-latest}); pinned without a version: the stable line */
+export const envLine = (channel: Channel, version?: string | null): string =>
+  `FF_TAG=${channel === 'nightly' ? 'nightly' : channel === 'pinned' && version ? version : 'latest'}`;
 
 async function ghJson<T>(ctx: Ctx, path: string): Promise<T | null> {
   const headers: Record<string, string> = { accept: 'application/vnd.github+json', 'user-agent': 'friendflix' };
@@ -100,7 +105,7 @@ export async function tagCommit(ctx: Ctx, version: string, refresh = false): Pro
   return p;
 }
 
-export interface BuildInfo { sha: string; version: string; codename: string; build: BuildKind | null; channel: Channel | null; label: string }
+export interface BuildInfo { sha: string; version: string; codename: string; build: BuildKind | null; channel: RunningChannel | null; label: string }
 
 /**
  * What this build is. A dev build asks GitHub nothing. `waitMs` bounds the wait for an uncached GitHub answer (the public

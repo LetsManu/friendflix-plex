@@ -49,3 +49,8 @@ dae644181e1532bd6f73fe7de5332de9bcfeb6a8:backend/test/settings-store.test.ts:gen
 4def4878e30076df56d51e0ebdf7893918df70af:backend/src/reco/sources.ts:airtable-api-key:6
 # identifier `pairTablesFor` in an import line misread as an Airtable key (renamed to tablesOfViewer in a later commit)
 5322b5272d306812a1f88f918484635073798c4c:backend/src/reco/sources.ts:airtable-api-key:6
+# updater: the published test-only secret and derived key of the shared HMAC vectors, and the backend test's copy of the test
+# helpers' INTERNAL_SECRET (backend/test/helpers.ts)
+d91da1dd0416136bf6b26d2bbb2a50c258a82d20:test-vectors/updater-hmac.json:generic-api-key:3
+d91da1dd0416136bf6b26d2bbb2a50c258a82d20:test-vectors/updater-hmac.json:generic-api-key:4
+17c1d04a7a678fee8baa33c89b185cbf25194330:backend/test/updater.test.ts:generic-api-key:17

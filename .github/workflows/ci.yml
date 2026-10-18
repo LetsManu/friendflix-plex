@@ -61,11 +61,11 @@ jobs:
             echo "## Test coverage"
             echo "| Package | Statements | Branches | Functions | Lines |"
             echo "|---|---|---|---|---|"
-            for pkg in backend gateway web; do
+            for pkg in backend gateway web updater; do
               jq -r --arg p "$pkg" '.total | "| \($p) | \(.statements.pct)% | \(.branches.pct)% | \(.functions.pct)% | \(.lines.pct)% |"' "$pkg/coverage/coverage-summary.json"
             done
-            # overall: covered / total summed over the three packages
-            jq -s -r 'def pct(k): (([.[].total[k].covered] | add) * 10000 / ([.[].total[k].total] | add) | floor) / 100; "| **overall** | \(pct("statements"))% | \(pct("branches"))% | \(pct("functions"))% | \(pct("lines"))% |"' backend/coverage/coverage-summary.json gateway/coverage/coverage-summary.json web/coverage/coverage-summary.json
+            # overall: covered / total summed over the four packages
+            jq -s -r 'def pct(k): (([.[].total[k].covered] | add) * 10000 / ([.[].total[k].total] | add) | floor) / 100; "| **overall** | \(pct("statements"))% | \(pct("branches"))% | \(pct("functions"))% | \(pct("lines"))% |"' backend/coverage/coverage-summary.json gateway/coverage/coverage-summary.json web/coverage/coverage-summary.json updater/coverage/coverage-summary.json
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: matrix.node == 26
@@ -75,6 +75,7 @@ jobs:
             backend/coverage/
             gateway/coverage/
             web/coverage/
+            updater/coverage/
           retention-days: 14
       - name: Dependency audit (prod, high+)
         if: matrix.node == 22
@@ -155,7 +156,8 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-  # A new install needs no .env, an existing one keeps working with its .env: both compose files must render either way
+  # A new install needs no .env, an existing one keeps working with its .env: both compose files must render either way,
+  # with and without the opt-in profiles (backup, bundled, updater)
   compose:
     runs-on: ubuntu-latest
     steps:
@@ -167,7 +169,10 @@ jobs:
           docker compose -f compose.yaml --profile backup --profile bundled config -q
           docker compose -f compose.prod.yaml config -q
           docker compose -f compose.prod.yaml --profile backup --profile bundled config -q
+          docker compose -f compose.prod.yaml --profile updater config -q
+          docker compose -f compose.prod.yaml --profile backup --profile bundled --profile updater config -q
           docker compose -f compose.prod.yaml -f compose.plex.yaml config -q # fork:
+          docker compose -f compose.prod.yaml -f compose.plex.yaml --profile updater config -q # fork:
       - name: Compose config with .env.example
         run: |
           cp .env.example .env
@@ -175,7 +180,10 @@ jobs:
           docker compose -f compose.yaml --profile backup --profile bundled config -q
           docker compose -f compose.prod.yaml config -q
           docker compose -f compose.prod.yaml --profile backup --profile bundled config -q
+          docker compose -f compose.prod.yaml --profile updater config -q
+          docker compose -f compose.prod.yaml --profile backup --profile bundled --profile updater config -q
           docker compose -f compose.prod.yaml -f compose.plex.yaml config -q # fork:
+          docker compose -f compose.prod.yaml -f compose.plex.yaml --profile updater config -q # fork:
           rm .env
   docker:
     runs-on: ubuntu-latest
@@ -185,7 +193,7 @@ jobs:
       packages: write # literal on purpose: permissions don't accept expressions; PRs never push and fork PRs get a read-only token anyway
       security-events: write # Trivy SARIF upload (push only, same reasoning)
     strategy:
-      matrix: { service: [backend, gateway, web] }
+      matrix: { service: [backend, gateway, web, updater] }
     env:
       SERVICE: ${{ matrix.service }}
       # push (main / v* tags) or a dispatch on main / a v* tag: push the candidate to GHCR; everything else builds locally
@@ -326,7 +334,7 @@ jobs:
     permissions: { contents: read, packages: read }
     strategy:
       fail-fast: false
-      matrix: { service: [backend, gateway, web] }
+      matrix: { service: [backend, gateway, web, updater] }
     env:
       SERVICE: ${{ matrix.service }}
       PUBLISHABLE: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) }}

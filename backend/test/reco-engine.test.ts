@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recoShadowOverlap, recoShadowRuns, recoShadowScoreDelta } from '../src/metrics.js';
 import { gatherCandidates, SOURCES, type CandidateSource, type SourceInput } from '../src/reco/candidates.js';
 import type { Taste } from '../src/reco/profile.js';
@@ -227,6 +227,10 @@ describe('RECO_ENGINE', () => {
     (await m.get()).values.filter((v) => filter(v.labels, v.metricName)).reduce((a, v) => a + v.value, 0);
   const runs = (result: string) => metric(recoShadowRuns, (l) => l.result === result);
   const hist = (h: typeof recoShadowOverlap) => metric(h, (_l, n) => n?.endsWith('_count') ?? false);
+  // libraryBecause() calls recommend() without `now`, so the engine reads the clock: pin it to the fixture's NOW
+  // (only Date is faked; timers stay real for the shadow runs)
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(NOW); });
+  afterEach(() => { vi.useRealTimers(); });
 
   async function because(cfg: Partial<Ctx['cfg']>, f: ReturnType<typeof fakeJf>) {
     const ctx = engineCtx(env, f.jf, cfg) as Ctx;
