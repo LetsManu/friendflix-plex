@@ -23,6 +23,12 @@ on:
   push: { branches: [main], tags: ["v*"] }
   pull_request:
   workflow_dispatch:
+# A newer run on the same branch or PR supersedes an older one. Pull requests cancel the run in progress; main never
+# cancels a running publish, it only drops a run still waiting (the newer commit publishes nightly anyway). Every tag
+# keeps its own group, so each release is published.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions: { contents: read }
 env:
   # BuildKit that builds every image, here and in scripts/reproduce-image.sh (which reads this line): the same commit only
