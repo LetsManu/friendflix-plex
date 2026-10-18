@@ -10,11 +10,11 @@ import { blocksDirectStream, createGateway, normalizeCastPath, normalizePath, sa
 import { internalSecret } from '../src/env.js';
 import { createRemoteConfig } from '../src/remoteConfig.js';
 import { bindUpstream, checkUpstreamConfig, jellyfinUpstream, remoteKeys, selectUpstream, UPSTREAMS } from '../src/upstream/index.js';
-import { createPlexUpstream, decodePlexId, plexOpaqueErrors, plexUpstream, verifyChSig, verifyPartSig, verifySession, verifyTpSig } from '../src/upstream/plex.js';
+import { createPlexUpstream, decodePlexId, plexOpaqueErrors, plexUpstream, verifyChSig, verifyPartSig, verifyQueuedSession, verifySession, verifyTpSig } from '../src/upstream/plex.js';
 
 interface Vectors {
   secret: string; token: string; allow: string[]; deny: string[]; direct: string[]; cast: { allow: string[]; deny: string[] };
-  signatures: { part: Array<{ item: string; part: string; sig: string }>; trickplay: Array<{ item: string; part: string; sig: string }>; session: Array<{ item: string; nonce: string; session: string }>; chapter: Array<{ item: string; media: string; sig: string }> };
+  signatures: { part: Array<{ item: string; part: string; sig: string }>; trickplay: Array<{ item: string; part: string; sig: string }>; session: Array<{ item: string; nonce: string; session: string }>; queued: Array<{ item: string; nonce: string; session: string }>; chapter: Array<{ item: string; media: string; sig: string }> };
   authorize: Array<{ path: string; query: string; allow: boolean }>;
   rewrite: Array<{ path: string; query: string; upstream: string }>;
 }
@@ -72,6 +72,19 @@ describe('shared vectors (test-vectors/media-paths.plex.json, plex-ids.json)', (
     expect(verifyChSig(V.secret, s.item, `${s.media}1`, s.sig)).toBe(false);
     expect(verifyChSig(V.secret, s.item === I ? I2 : I, s.media, s.sig)).toBe(false);
     expect(verifyPartSig(V.secret, s.item, s.media, s.sig)).toBe(false);
+  });
+  // fork (1.1): a queued next episode's cast session has its own domain and passes on the cast route only
+  it.each(V.signatures.queued)('queued next episode session %# (own domain, cast path only)', async (s) => {
+    expect(verifyQueuedSession(V.secret, s.item, s.session)).toBe(true);
+    expect(verifySession(V.secret, s.item, s.session)).toBe(false);
+    expect(verifyQueuedSession(V.secret, s.item === I ? I2 : I, s.session)).toBe(false);
+    const path = `/Videos/${s.item}/hls/${s.session}/index.m3u8`;
+    const ctx = (cast: boolean) => ({ path, query: new URLSearchParams(), cast, checkItem: async (id: string) => id === s.item });
+    expect(await up.authorize!(ctx(true))).toBe(true);
+    expect(await up.authorize!(ctx(false))).toBe(false);
+    // a player session still works both ways
+    const normal = V.signatures.session.find((x) => x.item === s.item)!.session;
+    for (const cast of [true, false]) expect(await up.authorize!({ ...ctx(cast), path: `/Videos/${s.item}/hls/${normal}/00001.ts` })).toBe(true);
   });
   it('a chapter still without media never reaches Plex', () => {
     expect(() => up.rewrite!(`/Items/${I}/Images/Chapter/1`, new URLSearchParams())).toThrow();

@@ -34,6 +34,8 @@ export const MISSING_PASSES = 3;
 type Log = MediaRuntime['log'];
 const noLog: Log = { warn: () => undefined, info: () => undefined };
 
+const REMOVED_TYPE: Record<string, string> = { movie: 'Movie', show: 'Series', episode: 'Episode' };
+
 export interface SyncResult { added: string[]; removed: string[]; details: number; sections: number }
 
 export class PlexSync {
@@ -88,6 +90,8 @@ export class PlexSync {
     const sectionIds = sections.map((s) => Number(s.key));
     const added: string[] = [];
     const removed: string[] = [];
+    /** fork (1.1): the type of each removed item (the rows are gone at emit time), so itemRemoved names Movie / Series / Episode */
+    const removedType = new Map<string, string>();
     let details: number;
     try {
       await db.query(
@@ -150,8 +154,9 @@ export class PlexSync {
         }
         const gone = trustEmpty ? [...before.keys()].filter((k) => !seen.has(k)) : [];
         if (gone.length) {
-          const del = await db.query<{ rating_key: string }>('delete from plex_items where rating_key = any($1::bigint[]) returning rating_key', [gone]);
+          const del = await db.query<{ rating_key: string; type: string }>('delete from plex_items where rating_key = any($1::bigint[]) returning rating_key, type', [gone]);
           removed.push(...del.rows.map((r) => String(r.rating_key)));
+          for (const r of del.rows) removedType.set(String(r.rating_key), r.type);
         }
       }
 
@@ -167,6 +172,7 @@ export class PlexSync {
           const goneSections = await db.query<{ rating_key: string; type: string }>(
             'delete from plex_items where section_id = any($1::int[]) returning rating_key, type', [drop]);
           removed.push(...goneSections.rows.filter((r) => r.type !== 'clip').map((r) => String(r.rating_key)));
+          for (const r of goneSections.rows) removedType.set(String(r.rating_key), r.type);
           await db.query('delete from plex_sections where section_id = any($1::int[])', [drop]);
         }
       }
@@ -188,7 +194,7 @@ export class PlexSync {
     if (initial) {
       await db.query(`insert into plex_sync_state(k, v) values ('initialized', to_jsonb(now())) on conflict (k) do nothing`);
     } else {
-      await this.emit(added, removed);
+      await this.emit(added, removed, removedType);
     }
     await db.query(`insert into plex_sync_state(k, v) values ('last_sync', to_jsonb(now())) on conflict (k) do update set v = excluded.v`);
     return { added, removed, details, sections: sections.length };
@@ -280,7 +286,7 @@ export class PlexSync {
     return r.rows[0]?.section_id ?? null;
   }
 
-  private async emit(added: string[], removed: string[]): Promise<void> {
+  private async emit(added: string[], removed: string[], removedType = new Map<string, string>()): Promise<void> {
     if (!this.rt) return;
     const events: MediaEvent[] = [];
     if (added.length) {
@@ -297,7 +303,11 @@ export class PlexSync {
         }
       }
     }
-    for (const k of removed) events.push({ type: 'itemRemoved', itemId: encodePlexId('item', k) });
+    // fork (1.1): with its type, so the recommendation index drops a removed film / show at once (reco/indexJob.ts)
+    for (const k of removed) {
+      const t = REMOVED_TYPE[removedType.get(k) ?? ''];
+      events.push({ type: 'itemRemoved', itemId: encodePlexId('item', k), ...(t ? { itemType: t } : {}) });
+    }
     for (const e of events) await this.rt.dispatch(e).catch((err) => this.log.warn({ err: String(err), itemId: e.itemId }, 'plex: media event failed'));
   }
 

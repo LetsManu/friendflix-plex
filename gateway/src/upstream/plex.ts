@@ -43,6 +43,9 @@ export const verifyChSig = (secret: string, item: string, media: string, sig: st
   /^[0-9a-f]{32}$/.test(sig) && /^\d{1,18}$/.test(media) && same(mac(secret, `ch|${item}|${media}`).slice(0, 32), sig);
 export const verifySession = (secret: string, item: string, s: string) =>
   /^[0-9a-f]{16}-[0-9a-f]{24}$/.test(s) && same(`${s.slice(0, 16)}-${mac(secret, `hls|${item}|${s.slice(0, 16)}`).slice(0, 24)}`, s);
+/** fork (1.1): a queued next episode's cast session (own domain `hlsq`): accepted on the cast path only, never with a cookie */
+export const verifyQueuedSession = (secret: string, item: string, s: string) =>
+  /^[0-9a-f]{16}-[0-9a-f]{24}$/.test(s) && same(`${s.slice(0, 16)}-${mac(secret, `hlsq|${item}|${s.slice(0, 16)}`).slice(0, 24)}`, s);
 
 // ---- public shapes
 const ITEM = '9f1e0[0-9a-f]{27}';
@@ -194,7 +197,9 @@ export function createPlexUpstream(o: PlexUpstreamOptions = {}): Upstream {
   async function authorize(c: AuthorizeContext): Promise<boolean> {
     let m: RegExpExecArray | null;
     if ((m = HLS.exec(c.path))) {
-      if (!verifySession(secret(), m[1]!, m[2]!)) return false;
+      // a queued next episode's session only through its cast token: the backend gates that token to the preload overlap while the
+      // cast it follows still plays (backend cast.ts nextOverlap), so the Plex stream limit's one allowed overlap stays bounded
+      if (!verifySession(secret(), m[1]!, m[2]!) && !(c.cast && verifyQueuedSession(secret(), m[1]!, m[2]!))) return false;
       return c.checkItem(m[1]!, 'media');
     }
     if ((m = STREAM.exec(c.path))) {

@@ -24,7 +24,7 @@ const dict: Translation<typeof de> = {
     title: 'Silnik rekomendacji',
     intro: 'Współczynnik kliknięć i odtworzeń dla każdego silnika, liczony z liczników tego serwera. Liczniki zaczynają od zera po każdym restarcie.',
     active: 'Aktywny: {engine}',
-    engine: { v1: 'v1 (Jellyfin)', v2: 'v2 (własny model)', shadow: 'Shadow (v2 działa równolegle)' },
+    engine: { v1: 'v1 (klasyczny)', v2: 'v2 (własny model)', shadow: 'Shadow (v2 działa równolegle)' },
     col: { engine: 'Silnik', shown: 'Wyświetlone', clicks: 'Kliknięte', plays: 'Odtworzone', dismissed: 'Odrzucone', ctr: 'Współczynnik kliknięć', playRate: 'Współczynnik odtworzeń' },
     fallbacks: 'Powroty do v1: {n}',
     since: 'Liczone od {date}',

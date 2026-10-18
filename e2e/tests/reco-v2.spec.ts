@@ -183,7 +183,7 @@ test.describe('engine v2: admin card (desktop)', () => {
     await expect(card.getByRole('heading', { name: 'Empfehlungs-Engine' })).toBeVisible();
     await expect(card.getByText('Aktiv: Shadow (v2 läuft nebenher)')).toBeVisible();
     const v1 = card.locator('tr[data-engine="v1"]');
-    await expect(v1.getByRole('rowheader')).toHaveText('v1 (Jellyfin)');
+    await expect(v1.getByRole('rowheader')).toHaveText('v1 (klassisch)'); // fork: on Plex v1 is FriendFlix's own genre + cast similarity, not Jellyfin's
     await expect(v1.locator('td').nth(0)).toHaveText('400');
     await expect(v1.locator('td.ctr')).toHaveText('10 %');
     await expect(v1.locator('td.pr')).toHaveText('5 %');

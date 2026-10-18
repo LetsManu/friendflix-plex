@@ -9,6 +9,7 @@
  * gateway share anyway). A visible item id plus a foreign part id / session therefore never verifies.
  *
  *   HLS (player + cast)   /media/Videos/<item>/hls/<session>/index.m3u8   session = <16 hex nonce>-<24 hex mac(item, nonce)>
+ *                         (a queued next episode's cast session: own domain 'hlsq', cast path only; see verifyQueuedSession)
  *                         Plex playlists are relative (NNNNN.ts) and resolve to /media/Videos/<item>/hls/<session>/NNNNN.ts
  *   direct play           /media/Videos/<item>/stream?MediaSourceId=<part id32>&sig=<mac(item, part)>
  *   trickplay (BIF)       /media/Videos/<item>/<part id32>/Trickplay/<interval ms>/{n}.jpg?sig=<mac('tp', item, part)>
@@ -38,12 +39,24 @@ export const verifyChSig = (secret: string, itemId: string, mediaId: string, sig
 
 export const SESSION_RE = /^[0-9a-f]{16}-[0-9a-f]{24}$/;
 /** Plex transcode session id bound to an item (no 32-hex run, so the gateway's cast scope check sees the item id only). */
-export function sessionFor(secret: string, itemId: string, nonce = randomBytes(8).toString('hex')): string {
-  return `${nonce}-${mac(secret, `hls|${itemId}|${nonce}`).slice(0, 24)}`;
+export function sessionFor(secret: string, itemId: string, nonce = randomBytes(8).toString('hex'), domain: 'hls' | 'hlsq' = 'hls'): string {
+  return `${nonce}-${mac(secret, `${domain}|${itemId}|${nonce}`).slice(0, 24)}`;
 }
+/** A player / cast session (the cookie and the cast path). */
 export function verifySession(secret: string, itemId: string, session: string): boolean {
   if (!SESSION_RE.test(session)) return false;
   return same(sessionFor(secret, itemId, session.slice(0, 16)), session);
+}
+/**
+ * fork (1.1 cast parity): a queued next episode's session (PlaybackOptions.after) has its own signature domain `hlsq`. The gateway
+ * accepts it on the cast path only, where its token is gated by cast.ts nextOverlap (served within NEXT_OVERLAP_MS while the
+ * predecessor still plays, refused after that until the predecessor is over). A cookie request can never fetch it, so the one
+ * session the Plex stream limit lets overlap its predecessor is never a stream past maxStreams.
+ */
+export const queuedSessionFor = (secret: string, itemId: string, nonce?: string) => sessionFor(secret, itemId, nonce, 'hlsq');
+export function verifyQueuedSession(secret: string, itemId: string, session: string): boolean {
+  if (!SESSION_RE.test(session)) return false;
+  return same(queuedSessionFor(secret, itemId, session.slice(0, 16)), session);
 }
 
 export const hlsUrl = (itemId: string, session: string) => `/media/Videos/${itemId}/hls/${session}/index.m3u8`;

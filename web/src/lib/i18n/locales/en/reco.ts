@@ -24,7 +24,7 @@ const dict: Translation<typeof de> = {
     title: 'Recommendation engine',
     intro: 'Click rate and play rate per engine, calculated from this server’s counters. The counters start again with every restart.',
     active: 'Active: {engine}',
-    engine: { v1: 'v1 (Jellyfin)', v2: 'v2 (own model)', shadow: 'Shadow (v2 runs alongside)' },
+    engine: { v1: 'v1 (classic)', v2: 'v2 (own model)', shadow: 'Shadow (v2 runs alongside)' },
     col: { engine: 'Engine', shown: 'Shown', clicks: 'Clicked', plays: 'Played', dismissed: 'Dismissed', ctr: 'Click rate', playRate: 'Play rate' },
     fallbacks: 'Fallbacks to v1: {n}',
     since: 'Counted since {date}',

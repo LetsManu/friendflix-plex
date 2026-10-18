@@ -110,7 +110,7 @@ describe('PlexSync', () => {
     events.length = 0;
     fake.remove(m);
     await ms.sync.run();
-    expect(events).toEqual([{ type: 'itemRemoved', itemId: item(m) }]);
+    expect(events).toEqual([{ type: 'itemRemoved', itemId: item(m), itemType: 'Movie' }]); // fork (1.1): with its type
   });
 
   it('a vanished section takes its items along; a new one is picked up', async () => {

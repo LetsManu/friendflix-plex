@@ -1,5 +1,5 @@
 {
-  "_comment": "Plex adapter (fork). Shared by backend (backend/src/plex/mediapaths.ts) and gateway (gateway/src/upstream/plex.ts) tests. 'allow'/'deny' = cookie allowlist, 'direct' = original streams, 'cast' = Chromecast subset, 'signatures' = HMAC bindings with 'secret' (part = direct stream, trickplay = BIF frames, chapter = chapter stills of one media version: separate domains), 'authorize' = adapter decision when the backend allows the item (checkItem true), 'rewrite' = public path + query -> Plex request.",
+  "_comment": "Plex adapter (fork). Shared by backend (backend/src/plex/mediapaths.ts) and gateway (gateway/src/upstream/plex.ts) tests. 'allow'/'deny' = cookie allowlist, 'direct' = original streams, 'cast' = Chromecast subset, 'signatures' = HMAC bindings with 'secret' (part = direct stream, queued = a queued next episode's cast-only HLS session (fork 1.1), trickplay = BIF frames, chapter = chapter stills of one media version: separate domains), 'authorize' = adapter decision when the backend allows the item (checkItem true), 'rewrite' = public path + query -> Plex request.",
   "secret": "vector-secret-vector-secret",
   "token": "PLEXTOKEN-must-never-leak",
   "signatures": {
@@ -59,6 +59,18 @@
         "item": "9f1e0000000000000000000000000025",
         "media": "11",
         "sig": "f44690e55d3edf6984f23798840e56cc"
+      }
+    ],
+    "queued": [
+      {
+        "item": "9f1e0000000000000000000000000001",
+        "nonce": "0123456789abcdef",
+        "session": "0123456789abcdef-a9c4ff7cd65eba4a00cd3046"
+      },
+      {
+        "item": "9f1e0000000000000000000000000025",
+        "nonce": "fedcba9876543210",
+        "session": "fedcba9876543210-a3b1a6c27185853d0b4c1e3d"
       }
     ]
   },

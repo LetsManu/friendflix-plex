@@ -7,7 +7,7 @@ import { MediaError, type ItemDto, type MediaUser } from '../../src/media/types.
 import { PlexClient } from '../../src/plex/client.js';
 import { fmp4Playlist, splitFmp4, VIRTUAL_RE } from '../../src/plex/downloads.js';
 import { encodePlexId } from '../../src/plex/ids.js';
-import { chapterImageUrl, chSig, partSig, sessionFor, tpSig, verifyChSig, verifyPartSig, verifySession, verifyTpSig } from '../../src/plex/mediapaths.js';
+import { chapterImageUrl, chSig, partSig, queuedSessionFor, sessionFor, tpSig, verifyChSig, verifyPartSig, verifyQueuedSession, verifySession, verifyTpSig } from '../../src/plex/mediapaths.js';
 import { langMatches, PlexPlayback, plexPlaybackFactory } from '../../src/plex/playback.js';
 import { decodeText, srtToVtt } from '../../src/plex/subtitles.js';
 import { parseBifHeader } from '../../src/plex/trickplay.js';
@@ -18,7 +18,7 @@ import { bifHeader, FakeFfmpeg, STREAM_TOKEN, TranscoderFake } from './streamfak
 const SECRET = 'x'.repeat(32); // test-only HMAC key
 const vectors = JSON.parse(readFileSync(new URL('../../../test-vectors/media-paths.plex.json', import.meta.url), 'utf8')) as {
   secret: string;
-  signatures: { part: Array<{ item: string; part: string; sig: string }>; trickplay: Array<{ item: string; part: string; sig: string }>; session: Array<{ item: string; nonce: string; session: string }>; chapter: Array<{ item: string; media: string; sig: string }> };
+  signatures: { part: Array<{ item: string; part: string; sig: string }>; trickplay: Array<{ item: string; part: string; sig: string }>; session: Array<{ item: string; nonce: string; session: string }>; queued: Array<{ item: string; nonce: string; session: string }>; chapter: Array<{ item: string; media: string; sig: string }> };
 };
 const MOVIE = encodePlexId('item', 1); // mkv h264/aac, audio 2 (eng, default) + 3 (jpn), subs 4 (embedded srt) + 5 (sidecar srt), BIF
 const EP = encodePlexId('item', 5);
@@ -62,6 +62,12 @@ describe('shared vectors: signatures and sessions', () => {
     expect(verifyChSig(vectors.secret, v.item, v.media, v.sig)).toBe(true);
     expect(verifyTpSig(vectors.secret, v.item, v.media, v.sig)).toBe(false);
     expect(chapterImageUrl(vectors.secret, v.item, v.media, 3)).toBe(`/media/Items/${v.item}/Images/Chapter/3?media=${v.media}&sig=${v.sig}&maxWidth=320`);
+  });
+  it.each(vectors.signatures.queued)('queued next episode session %# (fork 1.1: own domain)', (v) => {
+    expect(queuedSessionFor(vectors.secret, v.item, v.nonce)).toBe(v.session);
+    expect(verifyQueuedSession(vectors.secret, v.item, v.session)).toBe(true);
+    expect(verifySession(vectors.secret, v.item, v.session)).toBe(false);
+    expect(verifyQueuedSession(vectors.secret, MOVIE === v.item ? EP : MOVIE, v.session)).toBe(false);
   });
   it.each(vectors.signatures.session)('session %#', (v) => {
     expect(sessionFor(vectors.secret, v.item, v.nonce)).toBe(v.session);

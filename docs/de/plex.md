@@ -302,6 +302,10 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | Vorschaubilder beim Spulen | Eingeschränkt | Einzelbilder aus Plex' BIF-Index, nur wenn Vorschaubilder erzeugt sind |
 | Offline-Downloads | Funktioniert | Originaldatei, wenn sie schon MP4/H.264/AAC ist, sonst von Plex transkodiert und von FriendFlix umverpackt |
 | Chromecast | Funktioniert | HLS; Text-Untertitel über signierte FriendFlix-Untertitel-URLs |
+| Nächste Folge auf dem TV (Chromecast-Warteschlange, Countdown in der Cast-Leiste, *Nächste Folge*, Sperrbildschirm-Steuerung) | Funktioniert | Das Token der vorgemerkten Folge ist wie im Original an den Cast gebunden, dem es folgt; Plex' eigene Stream-Zählung lässt es genau diesen einen Cast überlappen, und seine Plex-Sitzung ist nur über das Cast-Token erreichbar. Siehe [Nächste Folge casten unter Plex](#nächste-folge-casten-unter-plex) |
+| Cast-Fernbedienung (Bild, Folgenkarte, Gerät) | Funktioniert | Bilder über FriendFlix' eigene Bildpfade und Plex' Foto-Transcoder; keine Plex-Adresse und kein Token in einer Bild-URL |
+| Bildschirm nach dem Ende (*Du hast … beendet*, *Du bist auf dem neuesten Stand*, *Folge N ist noch ungesehen*) | Eingeschränkt | Plex kennt keinen Serienstatus und keine angekündigten Folgen: Nach der letzten vorhandenen Folge heißt es immer *Du bist auf dem neuesten Stand* (nie *Serie beendet*), ohne Ausstrahlungstermin und ohne *Erinnere mich*. Siehe [Empfehlungs-Engine v2 und Nach-dem-Ende-Bildschirm unter Plex](#empfehlungs-engine-v2-und-nach-dem-ende-bildschirm-unter-plex) |
+| Empfehlungs-Engine v2 (`RECO_ENGINE`, Titel-Index, Signale anderer Konten, Begründungen) | Funktioniert | Der Titel-Index liest FriendFlix' Spiegel der Plex-Bibliothek (Genres, Labels, Studios, Länder, Personen, Jahr, Laufzeit, Bewertungen, Sammlungen, Inhaltsangabe). Originalsprache und Serienstatus fehlen in Plex; diese Signale bleiben neutral |
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen, Hubs | Funktioniert | FriendFlix-Funktionen |
 | „Kommende Folgen“ / Kalender | Nicht verfügbar | Plex bietet das nicht |
 | Kontoseite (*Mein Bereich → Konto*) | Funktioniert | Nur das Hauptprofil. Zeigt Konto und Geräte; nichts auf der Seite stammt von Plex |
@@ -354,6 +358,35 @@ Die Anmeldung in der App, die Passwort-Wiederherstellung, der Abschnitt *Sicherh
   | leer, `NR`, `Not Rated`, `Unrated` | – | nein, nie |
 
   Als zweite Prüfung muss FriendFlix' eigene Freigabe-Tabelle ([Altersfreigaben](#5-altersfreigaben)) den Wert bei 0 bis 12 Jahren einordnen, deshalb erscheint auch ein einfaches `U` (ohne Land) nicht. Folgen und Staffeln kommen nie auf die Wand, eine Serie zählt mit ihrer eigenen Freigabe. Eine in Plex geänderte Freigabe gilt nach dem nächsten Abgleich. Ist der Spiegel leer (direkt nach der Einrichtung) oder passt kein Titel, zeigt die Anmeldung stattdessen erzeugte Grafiken.
+
+### Empfehlungs-Engine v2 und Nach-dem-Ende-Bildschirm unter Plex
+
+Die Engine v2 und der Bildschirm nach dem Ende aus FriendFlix 1.1 nutzen drei optionale Medienserver-Hooks; die Plex-Implementierung beantwortet alle aus FriendFlix' Spiegel der Plex-Bibliothek (`backend/src/plex/service.ts`, `features.ts`), nie mit einer Plex-Anfrage je Titel:
+
+- **`libraryFeatures`** (der Titel-Index, `item_features`): alle Filme und Serien des Spiegels, seitenweise nach Rating-Key. Genres, Plex-**Labels** als Tags, Studios, Länder, bis zu 8 Personen (2 Regie, 2 Drehbuch, dann Darsteller in Abspann-Reihenfolge; die IDs sind FriendFlix-Personen-IDs, nie Plex-URLs), Jahr, Laufzeit (`duration`), Community- und Kritiker-Wertung der Detailseite (`audienceRating` / `rating`), die Plex-Sammlung, Inhaltsangabe und Tagline. Eine Synchronisierung meldet neue und entfernte Titel an den Index (entfernte mit ihrem Typ, damit die Zeile sofort geht).
+- **`libraryRoots`**: Eine Folge gehört zu ihrer Serie (`grandparentRatingKey` im Spiegel), ein Film oder eine Serie zu sich selbst. Die Aggregate „Was andere danach schauen“ und das gemeinsame Schauen nutzen das.
+- **`seriesStatus`**: Plex speichert keinen Status, die Antwort ist für jede sichtbare Serie „unbekannt“ (sonst `404`).
+
+Nächste Folge, *Folge N ist noch ungesehen*, Sammlungen und die Sichtbarkeit jeder Reihe kommen aus derselben Plex-Implementierung wie im Rest der App; Bibliothekszugriff, Altersgrenzen und Kinderprofile gelten genau wie beim Stöbern (Engine und Index lesen den Spiegel nie direkt). Kinderprofile bekommen nie die Reihen von Freunden, gemeinsamem Schauen oder „danach geschaut“ (Regel aus dem Original).
+
+**Bekannte Grenzen unter Plex**
+
+- **Nie „Serie beendet“:** Ohne Serienstatus heißt es nach der letzten vorhandenen Folge *Du bist auf dem neuesten Stand*. Plex listet auch keine angekündigten Folgen, also gibt es dort keinen Ausstrahlungstermin und kein *Erinnere mich*.
+- **Originalsprache unbekannt:** Plex hat kein Feld dafür; die Sprachvorliebe der Engine bleibt neutral (wie bei Jellyfin, das sie auch nicht meldet).
+- **Tags sind Plex-Labels:** Plex kennt keine Schlagwörter; Labels werden meist von Hand gesetzt, in den meisten Bibliotheken ist das Tag-Signal leer, und Genres, Personen und Inhaltsangabe tragen die Ähnlichkeit.
+- **Keine „Creator“-Angabe:** Bei Serien listet Plex meist nur Darsteller; Regie und Drehbuch zählen, wenn Plex sie hat.
+- **Kritiker-Wertung** nur, wenn Plex `rating` als Rotten Tomatoes kennzeichnet (wie auf der Detailseite).
+- **v1 bleibt unter Plex FriendFlix' eigene Ähnlichkeit** (gemeinsame Genres und Besetzung), nicht die von Jellyfin. Die Engine-Karte im Admin nennt sie „v1 (klassisch)“.
+
+### Nächste Folge casten unter Plex
+
+Das Original merkt ab 1.1 die nächste Folge auf dem Chromecast vor: Ab dem Abspann holt der Sender das Cast-Token der nächsten Folge (`POST /api/cast/session` mit `next`), gebunden an den laufenden Cast, dem sie folgt (`castPredecessor`, auf dem Server bestimmt, nie vom Client übernommen). Das Gateway liefert es, solange dieser Cast noch läuft, nur im 180-s-Vorladefenster (`NEXT_OVERLAP_MS`) und zählt es nie als zweiten Stream; eine Stopp-Meldung entschuldigt das alte Token höchstens 120 s (`DRAIN_MS`). Das alles läuft unter Plex unverändert. Plex hat zusätzlich eine eigene Stream-Zählung (laufende Plex-Transkodierungen je Profil, [Rollengrenzen](#rollengrenzen)), die der Fork genauso bindet:
+
+- Die Plex-Transkodierung der vorgemerkten Folge darf genau neben ihrem Vorgänger starten (`PlaybackOptions.after`); jede andere laufende Sitzung zählt weiter, und ab dem Start zählt sie selbst, es startet also kein dritter Stream.
+- Ihre Plex-Sitzung hat eine eigene Signatur (`hlsq`): Das Gateway nimmt sie **nur über ihr Cast-Token** an, nie mit dem Cookie des Browsers; das 180-s-Fenster des Tokens lässt sich so nicht umgehen.
+- Eine vorgemerkte Folge je Vorgänger: Eine neue Anfrage (andere oder dieselbe Folge) beendet zuerst die frühere vorgemerkte Plex-Transkodierung.
+
+Bekannte Grenze: Der Sender merkt die nächste Folge bis zu 40 Minuten vor dem Ende vor (`QUEUE_WITHIN_S`), und ihre Plex-Transkodierung startet mit dem Token (Plex hat keinen verzögerten Start, den FriendFlix nutzen könnte). Plex beendet eine Transkodierung, die niemand abruft, nach einer Weile; ist die wartende beendet, wenn der Empfänger sie vorlädt, kann er nicht selbst weiterspringen, und der Sender lädt die nächste Folge nach etwa 20 Sekunden selbst (`ADVANCE_WAIT_MS`), wie vor 1.1. Nicht mit einem echten Plex-Server geprüft: wie lange Plex eine wartende Transkodierung behält.
 
 ### Empfehlungs-Messung unter Plex
 

@@ -243,6 +243,8 @@ Die FriendFlix-Oberfläche ist dieselbe; unterschiedlich ist, was Plex liefern k
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen | Funktioniert | FriendFlix-Funktionen, unabhängig vom Medienserver |
 | „Demnächst erscheinende Folgen“ | Nicht verfügbar | Plex bietet das nicht |
 | Anmeldung in der App, Passwort-Wiederherstellung, Kontosicherheit, Cover-Wand | Funktioniert | Zwischen FriendFlix und Authentik; Plex ist nicht beteiligt. Die Cover-Wand zeigt Plex-Poster nur von Titeln, deren eigene Plex-Altersfreigabe auf der Erlaubt-Liste steht (bis 12, nichts ohne Freigabe), siehe [docs/de/plex.md](docs/de/plex.md#anmeldung-und-kontosicherheit-unter-plex) |
+| Bildschirm nach dem Ende, Empfehlungs-Engine v2 | Eingeschränkt | Der Titel-Index liest FriendFlix' Spiegel der Plex-Bibliothek. Plex kennt keinen Serienstatus und keine angekündigten Folgen: Nach der letzten Folge heißt es *Du bist auf dem neuesten Stand*, nie *beendet*, und es gibt keinen Termin; siehe [docs/de/plex.md](docs/de/plex.md#empfehlungs-engine-v2-und-nach-dem-ende-bildschirm-unter-plex) |
+| Nächste Folge auf dem TV (Chromecast-Warteschlange), Cast-Fernbedienung | Funktioniert | Die vorgemerkte Folge überlappt nur den Cast, dem sie folgt, auch in Plex' eigener Stream-Zählung; siehe [docs/de/plex.md](docs/de/plex.md#nächste-folge-casten-unter-plex) |
 | Wünsche / Wunsch-Dienst | Funktioniert | Jedes FriendFlix-Konto bekommt beim ersten Wunsch einen eigenen lokalen Wunsch-Dienst-Nutzer (nur Wunsch-Recht) |
 | nginx-„Plan B“ für Medien | Nicht verfügbar | Mit Plex nicht unterstützt |
 

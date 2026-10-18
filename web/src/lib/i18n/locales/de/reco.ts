@@ -22,7 +22,7 @@ export default {
     title: 'Empfehlungs-Engine',
     intro: 'Klickrate und Abspielrate je Engine, berechnet aus den Zählern dieses Servers. Die Zähler beginnen bei jedem Neustart neu.',
     active: 'Aktiv: {engine}',
-    engine: { v1: 'v1 (Jellyfin)', v2: 'v2 (eigenes Modell)', shadow: 'Shadow (v2 läuft nebenher)' },
+    engine: { v1: 'v1 (klassisch)', v2: 'v2 (eigenes Modell)', shadow: 'Shadow (v2 läuft nebenher)' },
     col: { engine: 'Engine', shown: 'Angezeigt', clicks: 'Geklickt', plays: 'Abgespielt', dismissed: 'Abgelehnt', ctr: 'Klickrate', playRate: 'Abspielrate' },
     fallbacks: 'Rückfälle auf v1: {n}',
     since: 'Gezählt seit {date}',

@@ -24,7 +24,7 @@ const dict: Translation<typeof de> = {
     title: 'Öneri motoru',
     intro: 'Motor başına tıklama ve oynatma oranı, bu sunucunun sayaçlarından hesaplanır. Sayaçlar her yeniden başlatmada sıfırdan başlar.',
     active: 'Etkin: {engine}',
-    engine: { v1: 'v1 (Jellyfin)', v2: 'v2 (kendi modelimiz)', shadow: 'Shadow (v2 yanında çalışır)' },
+    engine: { v1: 'v1 (klasik)', v2: 'v2 (kendi modelimiz)', shadow: 'Shadow (v2 yanında çalışır)' },
     col: { engine: 'Motor', shown: 'Gösterilen', clicks: 'Tıklanan', plays: 'Oynatılan', dismissed: 'Reddedilen', ctr: 'Tıklama oranı', playRate: 'Oynatma oranı' },
     fallbacks: 'v1’e geri dönüşler: {n}',
     since: '{date} tarihinden beri sayılıyor',

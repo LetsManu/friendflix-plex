@@ -24,7 +24,7 @@ const dict: Translation<typeof de> = {
     title: 'Moteur de recommandations',
     intro: 'Taux de clic et taux de lecture par moteur, calculés à partir des compteurs de ce serveur. Les compteurs repartent de zéro à chaque redémarrage.',
     active: 'Actif : {engine}',
-    engine: { v1: 'v1 (Jellyfin)', v2: 'v2 (modèle propre)', shadow: 'Shadow (v2 tourne en parallèle)' },
+    engine: { v1: 'v1 (classique)', v2: 'v2 (modèle propre)', shadow: 'Shadow (v2 tourne en parallèle)' },
     col: { engine: 'Moteur', shown: 'Affichées', clicks: 'Cliquées', plays: 'Lues', dismissed: 'Écartées', ctr: 'Taux de clic', playRate: 'Taux de lecture' },
     fallbacks: 'Replis sur v1 : {n}',
     since: 'Compté depuis le {date}',

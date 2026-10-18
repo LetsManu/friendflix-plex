@@ -50,7 +50,8 @@ export function castRoutes(app: FastifyInstance, ctx: Ctx) {
       const ceiling = remote ? remoteBitrateCap(role) : role.maxBitrate;
       const maxBitrate = Math.min(ceiling, CAST_MAX_BITRATE, b.maxBitrate ?? CAST_MAX_BITRATE);
       const maxHeight = Math.min(role.maxHeight ?? CAST_MAX_HEIGHT, CAST_MAX_HEIGHT);
-      const opts = { maxBitrate, maxHeight, startTicks, audioIndex: b.audioIndex, cast: true };
+      // fork: `after` = the predecessor's play session (server-resolved), so the Plex stream limit lets the queued episode overlap only that one
+      const opts = { maxBitrate, maxHeight, startTicks, audioIndex: b.audioIndex, cast: true, ...(pred ? { after: pred.playSessionId } : {}) };
       let info = await ctx.jf.playbackInfo(req.jfUser!, b.itemId, opts);
       if (ctx.jf.preparePlayback) info = await ctx.jf.preparePlayback(req.jfUser!, info, opts);
       const ttl = castTtlSeconds(info.runtimeTicks, startTicks);

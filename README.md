@@ -236,6 +236,8 @@ The FriendFlix interface is the same; what differs is what Plex can deliver. Sta
 | TV mode, watch parties, recommendations, notifications | Works | FriendFlix features, independent of the media server |
 | "Upcoming episodes" | Not available | Plex does not offer it |
 | In-app sign-in, password recovery, account security, cover wall | Works | Between FriendFlix and Authentik; Plex is not involved. The cover wall shows Plex posters only for titles whose own Plex age rating is on the allow-list (up to 12, nothing unrated), see [docs/plex.md](docs/plex.md#sign-in-and-account-security-on-plex) |
+| Post-play screen, recommendation engine v2 | Limited | The item index reads FriendFlix's mirror of the Plex library. Plex has no series status and no announced episodes, so after the last episode it says *You're caught up*, never *finished*, and offers no air date; see [docs/plex.md](docs/plex.md#recommendation-engine-v2-and-post-play-on-plex) |
+| Next episode on the TV (Chromecast queue), cast remote screen | Works | The queued episode overlaps only the cast it follows, also in Plex's own stream count; see [docs/plex.md](docs/plex.md#casting-the-next-episode-on-plex) |
 | Wishes / request service | Works | Each FriendFlix account gets its own local request-service user (request permission only), created on the first wish |
 | nginx "Plan B" media path | Not available | Not supported with Plex |
 
