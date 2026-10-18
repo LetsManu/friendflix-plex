@@ -1,7 +1,11 @@
 <!-- SPDX-FileCopyrightText: 2026 Manuel Weißböck -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
-  /** Admin → Update: version card, check, update with confirm + progress steps (Portainer redeploy), changelog. */
+  /**
+   * Admin → Update: version card, update channel (stable / nightly switch, the .env line to switch), check, update with
+   * confirm + progress steps (Portainer redeploy), changelog. The channel switch only saves UPDATE_CHANNEL: FriendFlix never
+   * touches Docker, the images follow FF_TAG.
+   */
   import { onDestroy, onMount } from 'svelte';
   import { api } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
@@ -9,6 +13,11 @@
   import Rich from '#lib/i18n/Rich.svelte';
   import AdminCard from '#lib/adminContent/AdminCard.svelte';
   import { busyKeys, errorText, runAction } from '#lib/ui/action';
+  import { saveSettings } from '#lib/admin/settings/api';
+  import { CHANNELS, PULL_COMMAND, envLineFor, isUpToDate, showSnippet, snippetReason, stepChannel, type ChannelInfo } from '#lib/admin/updateChannel';
+  import type { Channel } from '#lib/version/build';
+  import CopyField from '#lib/ui/CopyField.svelte';
+  import { toast } from '#lib/ui/toast';
   import { confirm } from '#lib/ui/confirm';
   import Button from '#lib/ui/Button.svelte';
   import DataTable from '#lib/ui/DataTable.svelte';
@@ -32,6 +41,8 @@
     error?: string;
     portainer: { configured: boolean };
     commits: Commit[];
+    /** older backends send no channel */
+    channel?: ChannelInfo;
   }
 
   /** hint for a network error code / name of the failed Portainer step (undefined when unknown) */
@@ -58,8 +69,43 @@
   const dt = (d?: string | null) => (d ? fmtDateTime(d) : tr('admin.update.unknown'));
   /** release-based when a release exists, else the commit comparison with main (older backends send no release fields) */
   $: byRelease = u?.updateAvailable === true || u?.updateAvailable === false;
-  $: upToDate = byRelease ? u?.updateAvailable === false && !u?.behind : u?.behind === 0;
-  $: notes = u?.release?.notes ? parseNotes(u.release.notes) : [];
+  $: upToDate = u ? isUpToDate(u) : false;
+  $: sel = u?.channel?.selected ?? 'stable';
+  $: nightly = sel === 'nightly';
+  $: notes = u?.release?.notes && !nightly ? parseNotes(u.release.notes) : [];
+  $: snippet = u ? showSnippet(u) : false;
+  /** a save in flight ignores further picks; the buttons stay enabled so arrow-key focus is never lost */
+  let savingChannel = false;
+  let segBtns: Record<string, HTMLButtonElement> = {};
+  const channelName = (c: Channel) => tr(c === 'nightly' ? 'admin.update.channel.nightly' : 'admin.update.channel.stable');
+  function runningText(ch: ChannelInfo, cur: Info['current']): string {
+    if (ch.build === 'dev') return tr('admin.update.channel.runningDev');
+    if (ch.running === 'stable') return tr('admin.update.channel.runningStable', { version: cur.version ?? '' });
+    if (ch.running === 'nightly') return tr('admin.update.channel.runningNightly', { sha: sha7(cur.sha) });
+    return tr('admin.update.channel.runningUnknown');
+  }
+  /** saves UPDATE_CHANNEL (same store, audit and environment lock as Admin → Settings), then re-reads the comparison */
+  async function pick(c: Channel) {
+    if (!u?.channel || u.channel.locked || savingChannel || c === u.channel.selected) return;
+    const before = u.channel;
+    savingChannel = true;
+    try {
+      await saveSettings({ UPDATE_CHANNEL: c });
+      u = { ...u, channel: { ...before, selected: c, envLine: envLineFor(c) } };
+      toast.success(tr('admin.update.channel.saved', { channel: channelName(c) }));
+      try { u = await api<Info>('/api/admin/update'); } catch { /* the saved selection stays shown */ }
+    } catch (e) {
+      toast.error(errorText(e));
+    }
+    savingChannel = false;
+  }
+  function segKey(e: KeyboardEvent) {
+    const next = stepChannel(sel, e.key);
+    if (!next) return;
+    e.preventDefault();
+    segBtns[next]?.focus();
+    void pick(next);
+  }
   const verLabel = (v: string, c?: string | null) => (c ? `${v} · ${c}` : v);
   $: busy = $busyKeys.has('update:check') || $busyKeys.has('update:start');
   $: running = phase === 'started' || phase === 'restarting' || phase === 'newversion';
@@ -71,7 +117,7 @@
   function check() {
     void runAction({
       key: 'update:check', run: () => api<Info>('/api/admin/update?refresh=1'),
-      success: (r) => (r?.updateAvailable ? tr('admin.update.updateAvailable')
+      success: (r) => (r?.updateAvailable ? (r.channel?.selected === 'nightly' && r.behind ? tr('admin.update.behind', { n: r.behind }) : tr('admin.update.updateAvailable'))
         : r?.updateAvailable === false || r?.behind === 0 ? tr('adminContent.update.checkedUpToDate')
           : r?.behind ? tr('admin.update.behind', { n: r.behind }) : tr('adminContent.update.checked')),
     }).then((res) => { if (res.ok && res.value) u = res.value; });
@@ -127,7 +173,7 @@
     </svelte:fragment>
     <dl class="ver">
       <div><dt>{$t('admin.update.installed')}</dt><dd>
-        {#if u.current.version}<span class="v"><VersionEgg version={u.current.version} codename={u.current.codename ?? ''} label={verLabel(u.current.version, u.current.codename)} /></span>
+        {#if u.current.version}<span class="v"><VersionEgg version={u.current.version} codename={u.current.codename ?? ''} label={u.channel?.build === 'nightly' ? u.channel.label : verLabel(u.current.version, u.current.codename)} /></span>
           <span class="muted">{$t('admin.update.buildSha', { sha: sha7(u.current.sha) })}</span>
         {:else}<code>{sha7(u.current.sha)}</code>{/if}
         <span class="muted">{$t('admin.update.builtAt', { date: dt(u.current.builtAt) })}</span></dd></div>
@@ -135,10 +181,11 @@
         <div><dt>{$t('admin.update.latestRelease')}</dt><dd><span class="v">{verLabel(u.release.version, u.release.codename)}</span>{#if u.release.publishedAt} <span class="muted">{$t('admin.update.builtAt', { date: dt(u.release.publishedAt) })}</span>{/if}{#if u.release.url}<span aria-hidden="true"> · </span><a href={u.release.url} target="_blank" rel="noopener">{$t('admin.update.releaseLink')}</a>{/if}</dd></div>
       {/if}
       {#if u.latest}
-        <div><dt>{$t('admin.update.latest')}</dt><dd><code>{sha7(u.latest.sha)}</code> <span class="muted">{$t('admin.update.builtAt', { date: dt(u.latest.date) })}</span>{#if u.latest.runUrl}<span aria-hidden="true"> · </span><a href={u.latest.runUrl} target="_blank" rel="noopener">{$t('admin.update.ciRun')}</a>{/if}</dd></div>
+        <div><dt>{$t('admin.update.latest')}</dt><dd>{#if nightly}<span class="v">{$t('admin.update.channel.nightlyBuild', { sha: sha7(u.latest.sha) })}</span>{:else}<code>{sha7(u.latest.sha)}</code>{/if} <span class="muted">{$t('admin.update.builtAt', { date: dt(u.latest.date) })}</span>{#if u.latest.runUrl}<span aria-hidden="true"> · </span><a href={u.latest.runUrl} target="_blank" rel="noopener">{$t('admin.update.ciRun')}</a>{/if}</dd></div>
       {/if}
       <div><dt>{$t('adminContent.update.state')}</dt><dd>
-        {#if u.updateAvailable}<StatusPill tone="warn" icon="download" label={$t('admin.update.updateAvailable')} />
+        {#if u.updateAvailable && nightly && u.behind}<StatusPill tone="warn" icon="download" label={$t('admin.update.behind', { n: u.behind })} />
+        {:else if u.updateAvailable}<StatusPill tone="warn" icon="download" label={$t('admin.update.updateAvailable')} />
         {:else if u.updateAvailable === false}<StatusPill tone="ok" label={$t('admin.update.upToDate')} />
         {:else if !u.latest}<StatusPill tone="muted" label={$t('admin.update.unknownState')} />
         {:else if upToDate}<StatusPill tone="ok" label={$t('admin.update.upToDate')} />
@@ -146,7 +193,7 @@
         {:else}<StatusPill tone="muted" label={$t('admin.update.unknownState')} />{/if}
       </dd></div>
     </dl>
-    {#if byRelease && u.behind}<p class="muted small">{$t('admin.update.mainAhead', { n: u.behind })}</p>{/if}
+    {#if byRelease && u.behind && !nightly}<p class="muted small">{$t('admin.update.mainAhead', { n: u.behind })}</p>{/if}
     {#if !u.release && !u.error && u.latest}<p class="muted small">{$t('admin.update.noRelease')}</p>{/if}
     {#if !u.latest && !u.release}<p class="err small" role="alert">{$t('admin.update.latestFailed', { error: u.error ?? $t('admin.update.unknown') })}</p>{/if}
     {#if u.release && notes.length}
@@ -163,6 +210,30 @@
     {/if}
     {#if u.current.sha === 'dev'}<p class="muted small">{$t('admin.update.devBuild')}</p>{/if}
   </AdminCard>
+
+  {#if u.channel}
+    <AdminCard title={$t('admin.update.channel.title')}>
+      <dl class="ver">
+        <div><dt>{$t('admin.update.channel.running')}</dt><dd data-running={u.channel.running ?? u.channel.build ?? 'unknown'}>{runningText(u.channel, u.current)}</dd></div>
+      </dl>
+      <div class="seg" role="radiogroup" aria-label={$t('admin.update.channel.label')}>
+        {#each CHANNELS as c (c)}
+          <button type="button" role="radio" bind:this={segBtns[c]} aria-checked={sel === c} tabindex={sel === c ? 0 : -1} class:on={sel === c}
+            disabled={u.channel.locked} aria-busy={savingChannel && sel !== c ? 'true' : undefined} on:click={() => pick(c)} on:keydown={segKey}>{channelName(c)}</button>
+        {/each}
+      </div>
+      <p class="muted small">{nightly ? $t('admin.update.channel.nightlyHint') : $t('admin.update.channel.stableHint')}</p>
+      {#if u.channel.locked}<p class="muted small" role="note">{$t('admin.update.channel.locked')}</p>{/if}
+      {#if snippet}
+        <div class="snippet" data-snippet>
+          <p class="lead">{snippetReason(u) === 'switch' ? $t('admin.update.channel.switchLead', { channel: channelName(sel) }) : $t('admin.update.channel.updateLead')}</p>
+          <CopyField label={$t('admin.update.channel.envLabel')} value={u.channel.envLine} />
+          <CopyField label={$t('admin.update.channel.cmdLabel')} value={PULL_COMMAND} />
+          <p class="muted small">{$t('admin.update.channel.note')}</p>
+        </div>
+      {/if}
+    </AdminCard>
+  {/if}
 
   <AdminCard title={$t('adminContent.update.applyTitle')}>
     {#if !u.portainer.configured}
@@ -230,5 +301,13 @@
   .state { display: flex; flex-direction: column; align-items: center; gap: .6rem; text-align: center; padding: 2rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
   .state p { margin: 0; } .state :global(svg) { color: var(--err); }
   time { color: var(--mut); white-space: nowrap; font-size: .9rem; }
+  .seg { display: inline-flex; margin-top: 1rem; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 3px; max-width: 100%; }
+  .seg button { min-height: 44px; min-width: 0; padding: .3rem 1.1rem; border-radius: 999px; background: transparent; border: 0; color: var(--mut); font-weight: 600; }
+  .seg button.on { background: var(--fg); color: var(--bg, #101418); }
+  .seg button:not(.on):hover:not(:disabled) { color: var(--fg); background: rgba(255,255,255,.07); }
+  .seg button:disabled { cursor: not-allowed; opacity: .7; }
+  .snippet { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .9rem; display: grid; gap: .8rem; min-width: 0; max-width: 40rem; }
+  .snippet .lead { margin: 0; }
+  .snippet .small { margin: 0; }
   @media (max-width: 560px) { .ver > div { grid-template-columns: minmax(0, 1fr); gap: .2rem; } }
 </style>

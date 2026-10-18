@@ -103,6 +103,7 @@ const GROUPS: Array<[string, Array<[string, Spec]>]> = [
   ]],
   ['updates', [
     ['GITHUB_TOKEN', { kind: 'secret', source: 'unset', set: false }],
+    ['UPDATE_CHANNEL', { kind: 'enum', source: 'default', value: 'stable', options: ['stable', 'nightly'] }],
     ['PORTAINER_WEBHOOK_URL', { kind: 'secret', source: 'unset', set: false }],
     ['PORTAINER_URL', { kind: 'url', source: 'unset' }],
     ['PORTAINER_API_KEY', { kind: 'secret', source: 'unset', set: false }],
@@ -124,7 +125,7 @@ const GROUPS: Array<[string, Array<[string, Spec]>]> = [
 const SERVER: Array<[string, Kind, Source, unknown]> = [
   ['PORT', 'int', 'default', 3000], ['DIGEST_DAY', 'int', 'default', 0], ['DIGEST_HOUR', 'int', 'default', 18], ['MEDIA_SERVER', 'string', 'default', 'jellyfin'],
   ['METRICS_TOKEN', 'secret', 'unset', null], ['ROLE_TEMPLATES', 'string', 'unset', null], ['OIDC_ALLOW_INSECURE', 'string', 'default', 'false'],
-  ['PREVIEW_DIR', 'string', 'default', '/data/previews'], ['UPDATE_REPO', 'string', 'default', 'LetsManu/friendflix'], ['DOWNLOAD_DIR', 'string', 'default', '/data/downloads'],
+  ['PREVIEW_DIR', 'string', 'default', '/data/previews'], ['UPDATE_REPO', 'string', 'default', 'LetsManu/friendflix-plex'], ['DOWNLOAD_DIR', 'string', 'default', '/data/downloads'],
   ['BACKGROUND_JOBS', 'string', 'env', 'true'], ['GATEWAY_URL', 'string', 'default', 'http://gateway:4000'],
   ['DATABASE_URL', 'secret', 'bootstrap', LEAK], ['REDIS_URL', 'secret', 'bootstrap', null], ['APP_ENC_KEY', 'secret', 'bootstrap', null], ['INTERNAL_SECRET', 'secret', 'bootstrap', null],
 ];

@@ -60,11 +60,11 @@ ufw deny 8096,8920,5055/tcp
 Prüfung von außen: `nmap -p 8096,8920,5055 <öffentliche-IP>` → alle `filtered/closed`.
 
 ## Updates
-Produktions-Stack (`compose.prod.yaml`): `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`; die `.env` bleibt unverändert gültig. Selbst gebauter Stack (`compose.yaml`): `git pull && docker compose build --pull && docker compose up -d`. Migrationen laufen beim Start (Advisory-Lock, transaktional). Umstieg einer älteren Installation auf Einstellungen in der Datenbank und das Volume `bootstrap`: [de/setup.md §14](de/setup.md#14-umstieg-auf-einstellungen-in-der-datenbank).
+Produktions-Stack (`compose.prod.yaml`): `docker compose -f compose.prod.yaml -f compose.plex.yaml pull && docker compose -f compose.prod.yaml -f compose.plex.yaml up -d`; die `.env` bleibt unverändert gültig. Selbst gebauter Stack (`compose.yaml`): `git pull && docker compose build --pull && docker compose up -d`. Migrationen laufen beim Start (Advisory-Lock, transaktional). Umstieg einer älteren Installation auf Einstellungen in der Datenbank und das Volume `bootstrap`: [de/setup.md §14](de/setup.md#14-umstieg-auf-einstellungen-in-der-datenbank).
 Nach Jellyfin-Updates: `JELLYFIN_URL=… ./scripts/gen-jellyfin-client.sh` und Diff prüfen (Pfade ändern sich zwischen Versionen; der Client probiert alte/neue Pfade für Views/Resume/Item/Favoriten/Gesehen).
 
 ## Updates aus dem Portal
-*Admin → Update* vergleicht die installierte Version (`APP_VERSION`/`APP_CODENAME` aus `version.json` und `GIT_SHA`, beim Image-Build eingebacken) mit dem neuesten GitHub-Release von `UPDATE_REPO` (*Update verfügbar*, Notizen unter *Was ist neu*) und zeigt zusätzlich, wie viele Commits der letzte erfolgreiche CI-Lauf auf `main` weiter ist (vor dem ersten Release ist das der einzige Vergleich). Das Portainer-Stack lässt sich sofort neu ziehen. Portainer selbst zieht Images ohnehin alle 12 Stunden. Der Knopf bleibt deaktiviert, solange eine der beiden Varianten fehlt:
+*Admin → Update* vergleicht die installierte Version (`APP_VERSION`/`APP_CODENAME` aus `version.json` und `GIT_SHA`, beim Image-Build eingebacken) je nach [Release-Kanal](#release-kanäle) mit dem neuesten GitHub-Release von `UPDATE_REPO` (Stabil: *Update verfügbar*, Notizen unter *Was ist neu*) oder mit dem letzten erfolgreichen CI-Lauf auf `main` (Nightly: wie viele Commits er weiter ist; auf Stabil Zusatzinfo und vor dem ersten Release der einzige Vergleich). Das Portainer-Stack lässt sich sofort neu ziehen. Portainer selbst zieht Images ohnehin alle 12 Stunden. Der Knopf bleibt deaktiviert, solange eine der beiden Varianten fehlt:
 
 - **Webhook (einfach):** In Portainer → Stacks → *dein Stack* → *Stack-Webhook* aktivieren, URL kopieren und als `PORTAINER_WEBHOOK_URL` setzen. Die URL enthält ein Token und ist ein Secret (auch als `PORTAINER_WEBHOOK_URL_FILE` möglich).
 - **API:** In Portainer → *My account* → *Access tokens* ein Token anlegen (`PORTAINER_API_KEY`), `PORTAINER_URL` (intern erreichbar vom Backend), `PORTAINER_STACK_ID` (steht in der URL des Stacks, `…/stacks/<id>`) und ggf. `PORTAINER_ENDPOINT_ID` (Default 1) setzen. Das Portal liest den Stack (Git- oder Datei-Stack), behält dessen Umgebungsvariablen unverändert und löst ein Redeploy mit Image-Pull aus.
@@ -144,10 +144,32 @@ Der Push ist atomar: scheitert er, entstehen weder Commit noch Tag noch Release.
 
 **Abgebrochenes Release wiederaufnehmen:** Ist der Tag schon gepusht, aber z. B. das GitHub-Release oder der CI-Start fehlgeschlagen, den Lauf mit *Re-run jobs* wiederholen oder neu mit `bump: none` starten. Zeigt der Tag auf einen Commit, dessen `version.json` genau diese Version enthält, überspringt der Workflow Bump, Commit und Push, legt nur das fehlende GitHub-Release an (Notizen aus dem `CHANGELOG.md` am Tag) und startet CI. Jeder andere schon existierende Tag wird abgelehnt. Von Hand geht es so: `gh release create vX.Y.Z --verify-tag --title "vX.Y.Z Codename" --notes-file <(node scripts/release.mjs notes X.Y.Z)` und `gh workflow run ci.yml --ref vX.Y.Z`. Ist dagegen gar nichts gepusht worden, einfach neu starten – lokal ändert der Workflow nichts dauerhaft.
 
-**Auf einer Hauptversion bleiben:** In der `.env` des Stacks `FF_TAG=1` setzen (`compose.prod.yaml` nutzt `…/friendflix-<dienst>:${FF_TAG:-latest}`). Dann ziehen Portainer bzw. `docker compose pull` alle 1.x-Releases, aber nie 2.0. `FF_TAG=1.4` bleibt auf 1.4.x, `FF_TAG=1.4.2` friert genau eine Version ein. `latest` folgt `main` (auch Commits zwischen Releases) und dem höchsten Release-Tag.
+**Auf einer Hauptversion bleiben:** In der `.env` des Stacks `FF_TAG=1` setzen (`compose.prod.yaml` nutzt `…/friendflix-<dienst>:${FF_TAG:-latest}`). Dann ziehen Portainer bzw. `docker compose pull` alle 1.x-Releases, aber nie 2.0. `FF_TAG=1.4` bleibt auf 1.4.x, `FF_TAG=1.4.2` friert genau eine Version ein. `latest` folgt nur dem höchsten Release-Tag, Commits auf `main` erscheinen als `nightly` (siehe [Release-Kanäle](#release-kanäle)).
+
+## Release-Kanäle
+Welche Images ein Stack zieht, entscheidet allein `FF_TAG` in der `.env` (`compose.prod.yaml`: `…/friendflix-<dienst>:${FF_TAG:-latest}`):
+
+| `FF_TAG` | Kanal | Was es zieht |
+|---|---|---|
+| `latest` (Default) | Stabil | das höchste veröffentlichte Release `vX.Y.Z`; Backports und Vorabversionen verschieben es nie |
+| `nightly` | Nightly | jeden Commit auf `main`, der CI (Tests, Scans, reproduzierbarer Build) bestanden hat; neuer, aber weniger erprobt |
+| `1` / `1.1` / `1.1.0` | festgenagelt | eine Hauptversion, eine Minor-Linie oder genau ein Release (ein Kurz-SHA nagelt genau einen Build fest) |
+
+`publish.yml` baut dafür nichts neu: Ein Push auf `main` taggt das geprüfte Image als `nightly` + Kurz-SHA, ein Tag `vX.Y.Z` als `X.Y.Z`, `X.Y`, `X` + Kurz-SHA und, nur wenn es die höchste Version ist, als `latest`. Ein Release-Image ist also dasselbe Image wie der Nightly-Build seines Commits.
+
+**Kanal wechseln:** `FF_TAG` in der `.env` ändern, dann `docker compose -f compose.prod.yaml -f compose.plex.yaml pull && docker compose -f compose.prod.yaml -f compose.plex.yaml up -d` (in Portainer: Variable im Stack ändern und mit *Re-pull image* neu deployen). Der Wechsel gilt erst danach: FriendFlix greift nie selbst auf Docker zu (kein Docker-Socket, kein Updater-Container).
+
+**Admin → Update** zeigt, auf welchem Kanal die Installation tatsächlich läuft: Ein Build ist ein Release, wenn sein `GIT_SHA` der Commit des Tags `v<Version>` ist (über die GitHub-API nachgeschlagen, 10 Minuten gecacht wie die Update-Prüfung), sonst ein Nightly-Build. Nightly-Builds heißen dort, in der Fußzeile und in `/api/version` z. B. `1.1.0-nightly · abc1234`; ein lokaler Build ohne Commit (`GIT_SHA=dev`) behält seine Versionsangabe. Der Schalter *Stabil / Nightly* speichert die Einstellung `UPDATE_CHANNEL` in der Datenbank (Default `stable`) und legt fest, womit verglichen wird:
+
+- **Stabil:** *Update verfügbar* nur bei einem neueren Release, mit seinen Notizen. Commits auf `main` sind nur Zusatzinfo.
+- **Nightly:** neuere Commits auf `main` als der installierte Build (Liste der Änderungen), dazu *Nightly · Build abc1234* für den neuesten Build.
+
+Weicht der gewählte Kanal vom laufenden ab oder gibt es ein Update, zeigt die Seite die passende `.env`-Zeile (`FF_TAG=nightly` bzw. `FF_TAG=latest`) und den Befehl zum Kopieren. Der Knopf *Jetzt aktualisieren* (Portainer) zieht dieselben Tags neu, wechselt also ebenfalls keinen Kanal.
+
+**Umstieg ab 1.1.x:** Bis 1.1.0 folgte `latest` auch `main`. Wer weiter jedem Commit auf `main` folgen will, setzt `FF_TAG=nightly`; ohne Änderung bleibt der Stack ab jetzt auf den Releases.
 
 ## Images prüfen: Signatur, SBOM, Provenienz
-Jedes veröffentlichte Image (`ghcr.io/<owner>/friendflix-{backend,gateway,web}`, Tags `latest`, Kurz-SHA, `x.y.z`, `x.y`, `x`) ist
+Jedes veröffentlichte Image (`ghcr.io/<owner>/friendflix-{backend,gateway,web}`, Tags `latest`, `nightly`, Kurz-SHA, `x.y.z`, `x.y`, `x`) ist
 - mit **cosign keyless** signiert: kein Schlüssel, kein Secret. Der Publish-Job holt sich per GitHub-OIDC ein kurzlebiges Zertifikat von Sigstore (Fulcio), die Signatur steht im öffentlichen Transparenz-Log (Rekor). Die Identität im Zertifikat ist der Workflow, der signiert hat: `https://github.com/<Owner>/<Repo>/.github/workflows/publish.yml@refs/heads/main` bzw. `@refs/tags/vX.Y.Z`.
 - mit **GitHub-Attestations** versehen: SLSA-Provenienz (welcher Commit, welcher Workflow-Lauf) und die SBOM (SPDX, von BuildKit beim Build erzeugt), beide auch in GHCR neben dem Image abgelegt.
 - zusätzlich mit den BuildKit-Attestations (SBOM + Provenienz `mode=max`) direkt im Image-Index.
@@ -184,7 +206,7 @@ flowchart TB
   DEV --> CI
   CI -->|"ci-&lt;sha&gt;"| TR
   TR -->|sauber| PB
-  PB -->|"latest · sha · x.y.z"| GH
+  PB -->|"nightly · latest · sha · x.y.z"| GH
   GH -->|"pull_policy: always"| DH
   PT -.->|neu deployen| DH
   VER -.-> GH
@@ -203,23 +225,23 @@ flowchart TB
 
 **Prüfen** (cosign ≥ 3, `gh` ≥ 2.60; Owner im Image-Namen klein geschrieben, in der Identität so wie auf GitHub – das Regex unterscheidet Groß-/Kleinschreibung):
 ```bash
-IMG=ghcr.io/letsmanu/friendflix-backend:latest      # bzw. :<sha> oder :<x.y.z>, gateway / web genauso
+IMG=ghcr.io/letsmanu/friendflix-plex-backend:latest      # bzw. :nightly, :<sha> oder :<x.y.z>, gateway / web genauso
 
 # Signatur: muss aus einem Workflow dieses Repos stammen, ausgestellt für GitHub Actions
 cosign verify "$IMG" \
-  --certificate-identity-regexp '^https://github.com/LetsManu/friendflix/.github/workflows/' \
+  --certificate-identity-regexp '^https://github.com/LetsManu/friendflix-plex/.github/workflows/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # Provenienz (Standard-Prädikat SLSA) und SBOM (gh lädt die Attestations aus der GitHub-API, braucht `gh auth login`)
-gh attestation verify "oci://$IMG" --repo LetsManu/friendflix
-gh attestation verify "oci://$IMG" --repo LetsManu/friendflix --predicate-type https://spdx.dev/Document/v2.3
+gh attestation verify "oci://$IMG" --repo LetsManu/friendflix-plex
+gh attestation verify "oci://$IMG" --repo LetsManu/friendflix-plex --predicate-type https://spdx.dev/Document/v2.3
 #   ohne GitHub-Login: --bundle-from-oci (liest die Attestations aus GHCR)
 
 # SBOM / Provenienz ansehen
 docker buildx imagetools inspect "$IMG" --format '{{ json .SBOM.SPDX }}' | jq '.packages | length'
 docker buildx imagetools inspect "$IMG" --format '{{ json .Provenance.SLSA }}' | jq . | head -40
 ```
-Strenger (nur `main` und Versions-Tags): `--certificate-identity-regexp '^https://github\.com/LetsManu/friendflix/\.github/workflows/publish\.yml@refs/(heads/main|tags/v.+)$'`.
+Strenger (nur `main` und Versions-Tags): `--certificate-identity-regexp '^https://github\.com/LetsManu/friendflix-plex/\.github/workflows/publish\.yml@refs/(heads/main|tags/v.+)$'`.
 
 **Forks** (z. B. die Plex-Variante) brauchen keine Anpassung an den Workflows: Image-Namen und Signatur-Identität leiten sich vom Repo ab, in dem der Workflow läuft. Beim Prüfen `letsmanu`/`LetsManu/friendflix` durch den eigenen Owner bzw. `<owner>/<repo>` ersetzen.
 
@@ -227,8 +249,8 @@ Strenger (nur `main` und Versions-Tags): `--certificate-identity-regexp '^https:
 
 **Reproduzierbar nachbauen:** Jedes Image lässt sich aus dem Quellcode bitgenau nachbauen (gleicher Digest des linux/amd64-Image-Manifests), z. B. für ein Release:
 ```bash
-git clone https://github.com/LetsManu/friendflix && cd friendflix
-scripts/reproduce-image.sh backend --ref v1.4.0 --compare ghcr.io/letsmanu/friendflix-backend:1.4.0
+git clone https://github.com/LetsManu/friendflix-plex && cd friendflix-plex
+scripts/reproduce-image.sh backend --ref v1.4.0 --compare ghcr.io/letsmanu/friendflix-plex-backend:1.4.0
 ```
 Das Skript baut aus `git archive` mit `SOURCE_DATE_EPOCH` = Commit-Zeit, `rewrite-timestamp=true`, ohne Cache und mit der in `ci.yml` gepinnten BuildKit-Version. Was verglichen wird, was nicht (Attestations, Index-Digest) und wo die Grenze liegt (Alpine-Pakete): [reproducible-builds.md](reproducible-builds.md). Der CI-Job `reproducible` prüft das bei jedem PR (zwei saubere Builds) und jedem Push (Nachbau gegen den gepushten Kandidaten); `publish` wartet auf ihn.
 

@@ -29,6 +29,8 @@ export interface MockState {
   admin: AdminState;
   /** Admin → Settings (mocks/settings.ts) */
   settings: SettingsMock;
+  /** GET /api/version: what the running build is (backend/src/channel.ts); the default is a release build */
+  build: { sha: string; build: 'release' | 'nightly' | 'dev' | null; channel: 'stable' | 'nightly' | null; label: string };
   /** /api/me reports an admin owner profile (admin pages, admin menu) */
   asAdmin: boolean;
   /** ids removed from Weiterschauen (DELETE /api/library/resume/:id), left out of GET /api/library/resume */
@@ -92,6 +94,7 @@ export function freshState(): MockState {
     reco: [],
     admin: adminState(),
     settings: settingsState(),
+    build: { sha: 'c0be6c5deadbeef', build: 'release', channel: 'stable', label: '1.0.0' },
     asAdmin: false,
     resumeGone: new Set(),
     account: { name: 'Tester', email: 'tester@example.com', avatar: 'blue', mfa: { totp: true, webauthn: false, static: true }, manageUrl: 'https://login.example.com/if/user/#/settings', reauthUntil: null },
@@ -403,6 +406,19 @@ export async function installApi(ctx: BrowserContext, st: MockState): Promise<vo
     if (p === '/api/profiles') return J({ profiles: PROFILES, max: 5, activeId: 'p1' });
     if ((mm = p.match(/^\/api\/profiles\/([^/]+)\/select$/)) && m === 'POST') return J({ ok: true });
 
+    // public build info (footer, update page): the version itself comes from version.json in the bundle
+    if (p === '/api/version' && m === 'GET') return J({ version: '1.0.0', codename: 'Arancini', ...st.build });
+    // Admin → Update with the channel: the selection is the UPDATE_CHANNEL setting (so the switch's save shows up here)
+    if (p === '/api/admin/update' && m === 'GET') {
+      const item = st.settings.groups.flatMap((g) => g.items).find((i) => i.key === 'UPDATE_CHANNEL');
+      const selected = item?.value === 'nightly' ? 'nightly' : 'stable';
+      const r = adminRoute(st.admin, m, p, sp, body(), (b: any, status?: number) => J(b && typeof b === 'object' && 'current' in b ? {
+        ...b,
+        updateAvailable: selected === 'nightly' ? (b.behind == null ? null : b.behind > 0) : b.updateAvailable,
+        channel: { selected, running: st.build.channel, build: st.build.build, label: st.build.label, locked: item?.source === 'env', envLine: `FF_TAG=${selected === 'nightly' ? 'nightly' : 'latest'}` },
+      } : b, status));
+      if (r) return r;
+    }
     if (p.startsWith('/api/admin/settings')) { const r = settingsRoute(st.settings, m, p, body(), J); if (r) return r; }
     if (p.startsWith('/api/admin/')) { const r = adminRoute(st.admin, m, p, sp, body(), J); if (r) return r; }
 

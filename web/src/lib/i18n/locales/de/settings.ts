@@ -101,7 +101,7 @@ export default {
     PLEX_URL: { invalid_url: 'Bitte nur die Serveradresse eingeben: mit http:// oder https://, ohne Benutzername und Passwort und ohne etwas nach ? oder #. Der Token gehört in das Feld Plex-Token.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Automatisch', LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatisch', off: 'Aus' } },
+  options: { auto: 'Automatisch', UPDATE_CHANNEL: { stable: 'Stabil', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatisch', off: 'Aus' } },
   keys: {
     PUBLIC_URL: { label: 'Öffentliche Adresse', help: 'Unter dieser Adresse erreichen alle FriendFlix, z. B. https://friend.example.com. Links, Anmeldung und Streaming bauen darauf auf.' },
     WEBHOOK_SECRET: { label: 'Webhook-Geheimnis', help: 'Gemeinsames Geheimnis für die Webhooks von Mediaserver und Anfragen-Dienst.' },
@@ -156,6 +156,7 @@ export default {
     PORTAINER_API_KEY: { label: 'Portainer-API-Schlüssel', help: 'API-Schlüssel eines Portainer-Kontos, das den Stack aktualisieren darf.' },
     PORTAINER_STACK_ID: { label: 'Portainer-Stack-ID', help: 'ID des FriendFlix-Stacks in Portainer.' },
     PORTAINER_ENDPOINT_ID: { label: 'Portainer-Umgebungs-ID', help: 'ID der Portainer-Umgebung, in der der Stack läuft (meist 1).' },
+    UPDATE_CHANNEL: { label: 'Update-Kanal', help: 'Womit Admin → Update vergleicht: Stabil (Releases) oder Nightly (main). Die Images selbst wählt FF_TAG in der .env.' },
     PLAYBACK_CHECK_HOUR: { label: 'Uhrzeit des Wiedergabe-Checks', help: 'Stunde (0–23, Serverzeit) für den nächtlichen Wiedergabe-Check. -1 = aus.' },
     HEALTH_DISK_WARN_PCT: { label: 'Speicher-Warnung ab (%)', help: 'Ab dieser Belegung zeigt der Systemzustand eine Warnung.' },
     HEALTH_DISK_CRIT_PCT: { label: 'Speicher kritisch ab (%)', help: 'Ab dieser Belegung zeigt der Systemzustand einen Fehler. Muss über der Warnstufe liegen.' },

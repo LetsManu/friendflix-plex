@@ -136,7 +136,7 @@ describe('settings probes', () => {
 
   it('github: the token must be accepted for the update repository', async () => {
     const gh = withCfg({ GITHUB_TOKEN: 'ghp_x' });
-    const w = world({ 'GET /repos/LetsManu/friendflix': (_u, init) => ((init.headers as Record<string, string>).authorization === 'Bearer ghp_x' ? { json: {} } : { status: 401 }) });
+    const w = world({ 'GET /repos/LetsManu/friendflix-plex': (_u, init) => ((init.headers as Record<string, string>).authorization === 'Bearer ghp_x' ? { json: {} } : { status: 401 }) });
     expect(await runProbe(w.ctx, 'github', gh)).toEqual({ ok: true, code: 'ok' });
     expect(w.calls[0]!.host).toBe('api.github.com');
     expect(await runProbe(w.ctx, 'github', withCfg({ GITHUB_TOKEN: 'bad' }))).toEqual({ ok: false, code: 'unauthorized' });

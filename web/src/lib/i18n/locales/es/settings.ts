@@ -107,7 +107,7 @@ const settings: Translation<typeof de> = {
     PLEX_URL: { invalid_url: 'Introduce solo la dirección del servidor: que empiece por http:// o https://, sin usuario ni contraseña y sin nada después de ? o #. El token va en el campo Token de Plex.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Automático', LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automático', off: 'Desactivado' } },
+  options: { auto: 'Automático', UPDATE_CHANNEL: { stable: 'Estable', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automático', off: 'Desactivado' } },
   keys: {
     PUBLIC_URL: { label: 'Dirección pública', help: 'La dirección con la que todos acceden a FriendFlix, p. ej. https://friend.example.com. Enlaces, inicio de sesión y streaming dependen de ella.' },
     WEBHOOK_SECRET: { label: 'Secreto de webhook', help: 'Secreto compartido para los webhooks del servidor multimedia y del servicio de peticiones.' },
@@ -162,6 +162,7 @@ const settings: Translation<typeof de> = {
     PORTAINER_API_KEY: { label: 'Clave de API de Portainer', help: 'Clave de API de una cuenta de Portainer que puede actualizar el stack.' },
     PORTAINER_STACK_ID: { label: 'ID del stack de Portainer', help: 'ID del stack de FriendFlix en Portainer.' },
     PORTAINER_ENDPOINT_ID: { label: 'ID del entorno de Portainer', help: 'ID del entorno de Portainer en el que corre el stack (normalmente 1).' },
+    UPDATE_CHANNEL: { label: 'Canal de actualizaciones', help: 'Con qué compara Admin → Actualización: Estable (versiones) o Nightly (main). Las imágenes siguen FF_TAG en el .env.' },
     PLAYBACK_CHECK_HOUR: { label: 'Hora de la prueba de reproducción', help: 'Hora (0–23, hora del servidor) de la prueba de reproducción nocturna. -1 = desactivada.' },
     HEALTH_DISK_WARN_PCT: { label: 'Aviso de almacenamiento desde (%)', help: 'A partir de este uso, el estado del sistema muestra un aviso.' },
     HEALTH_DISK_CRIT_PCT: { label: 'Almacenamiento crítico desde (%)', help: 'A partir de este uso, el estado del sistema muestra un error. Debe estar por encima del nivel de aviso.' },

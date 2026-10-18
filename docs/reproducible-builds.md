@@ -15,12 +15,12 @@ nothing an attacker slipped into the build machine. CI checks it for every pull 
 You need git, jq and Docker with buildx (Linux or macOS; on Apple silicon the amd64 build runs emulated and is slow).
 
 ```bash
-git clone https://github.com/LetsManu/friendflix && cd friendflix
+git clone https://github.com/LetsManu/friendflix-plex && cd friendflix-plex
 git checkout v1.4.0                       # the release (or commit) you want to check
 
-IMG=ghcr.io/letsmanu/friendflix-backend:1.4.0       # gateway / web the same way; :latest, :<short sha> work too
+IMG=ghcr.io/letsmanu/friendflix-plex-backend:1.4.0       # gateway / web the same way; :latest, :<short sha> work too
 scripts/reproduce-image.sh backend --ref v1.4.0 --compare "$IMG"
-# reproduce-image: OK: rebuilt backend is identical to ghcr.io/letsmanu/friendflix-backend:1.4.0 (sha256:…)
+# reproduce-image: OK: rebuilt backend is identical to ghcr.io/letsmanu/friendflix-plex-backend:1.4.0 (sha256:…)
 ```
 
 What the script does (it is short – read it before you trust it):

@@ -140,6 +140,8 @@ export const SETTINGS: readonly SettingDef[] = [
   setting('HOME_NETWORKS', { kind: 'cidrList', group: 'playback' }),
   // updates
   setting('GITHUB_TOKEN', { kind: 'secret', group: 'updates', probe: 'github' }),
+  // the channel Admin -> Update compares against (stable | nightly); a database setting, the images still follow FF_TAG
+  setting('UPDATE_CHANNEL', { kind: 'enum', group: 'updates' }),
   setting('PORTAINER_WEBHOOK_URL', { kind: 'secret', ...portainer }), // the URL is the credential
   setting('PORTAINER_URL', { kind: 'url', ...portainer }),
   setting('PORTAINER_API_KEY', { kind: 'secret', ...portainer }),
