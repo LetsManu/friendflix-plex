@@ -82,6 +82,7 @@ const setup: Translation<typeof de> = {
     retry: 'Yeniden dene',
     leftoversTitle: 'Elle yapılacaklar',
     leftovers: {
+      emailChange: 'E-posta değiştirme: posta şablonunu Authentik\'in /templates klasörüne bağla, sonra Yönetim → Durum altında "Authentik kurulumunu onar"ı kullan.',
       smtp: 'Davetlerin ve parola e-postalarının ulaşması için Authentik’te e-posta gönderimini (SMTP) kur.',
       mfa: 'Authentik’in kimlik doğrulama akışında iki adımlı oturum açmayı etkinleştir (kılavuz: docs/authentik.md, bölüm 6).',
       templates: 'FriendFlix e-posta şablonlarını Authentik sunucusunda /templates altına koy (dosya bağlama).',

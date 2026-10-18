@@ -21,11 +21,13 @@
   import RecoveryCodes from './RecoveryCodes.svelte';
   import EmailSent from './EmailSent.svelte';
   import TotpSetup from './TotpSetup.svelte';
-  import { cancelFlow, classicHref, flowConfig, FlowRefused, startFlow, type FlowReply, type ThenKind } from './flow';
+  import { cancelFlow, classicHref, flowConfig, FlowRefused, startFlow, type FlowReply, type ThenKind, type UnavailableReason } from './flow';
   import './auth.css';
 
   /** the follow-up flow; none = only a fresh sign-in (the parent then repeats its action) */
   export let then: ThenKind | undefined = undefined;
+  /** Authentik's own settings page: where an account change continues when it cannot run here (null: not known) */
+  export let manageUrl: string | null = null;
 
   const dispatch = createEventDispatcher<{ done: void; close: void }>();
   const portal = (node: HTMLElement) => { document.body.appendChild(node); return { destroy() { node.remove(); } }; };
@@ -36,7 +38,23 @@
   /** null while loading */
   let view: FlowReply | null = null;
   let finished = false;
-  let classic = classicHref();
+  let classic = then && manageUrl ? manageUrl : classicHref();
+  /** the label of the fallback link: Authentik's settings page for an account change, else its sign-in page */
+  $: classicLabel = (then && manageUrl && classic === manageUrl ? 'login.sec.manageClassic' : null) as TKey | null;
+  /** a precise text for the notice (a refusal or an unavailable reason); null keeps the notice's own */
+  let noticeText: TKey | null = null;
+  const UNAVAILABLE_TEXT: Record<UnavailableReason, TKey> = {
+    timeout: 'login.notice.unavailableTimeout', unreachable: 'login.notice.unavailableUnreachable',
+    service_token: 'login.notice.unavailableServiceToken', error: 'login.notice.unavailableText',
+  };
+  /** what a refused start means for the person (codes from the backend; anything else is "not possible right now") */
+  const REFUSED: Record<string, { stage: 'classic' | 'unavailable' | 'expired'; text: TKey | null }> = {
+    classic: { stage: 'classic', text: 'login.sec.refused.classic' },
+    flow_not_configured: { stage: 'classic', text: 'login.sec.refused.flow_not_configured' },
+    authentik_user_not_found: { stage: 'unavailable', text: 'login.sec.refused.authentik_user_not_found' },
+    step_used: { stage: 'expired', text: null },
+    csrf: { stage: 'expired', text: null },
+  };
   let ended = false;
   let dlg: HTMLElement;
 
@@ -44,6 +62,7 @@
 
   async function begin() {
     view = null;
+    noticeText = null;
     try {
       await flowConfig();
       show(await startFlow('reauth', then ? { then } : {}));
@@ -51,10 +70,15 @@
       if (e instanceof FlowRefused && e.code === 'passkey_classic') {
         classic = '/auth/flow/classic/webauthn-setup';
         view = { stage: 'classic', reason: 'passkey_origin' };
+      } else if (e instanceof FlowRefused && REFUSED[e.code]) {
+        const r = REFUSED[e.code]!;
+        noticeText = r.text;
+        view = r.stage === 'classic' ? { stage: 'classic', reason: 'unsupported_stage' } : { stage: r.stage };
       } else view = { stage: 'unavailable' };
     }
   }
   function show(r: FlowReply) {
+    if (r.stage === 'unavailable') noticeText = UNAVAILABLE_TEXT[r.reason ?? 'error'] ?? null;
     if (r.stage !== 'done') view = r;
     else if (then) finished = true;
     else { ended = true; dispatch('done'); }
@@ -102,7 +126,7 @@
   {:else if view.stage === 'identify'}
     <Notice kind="classic" classicHref={classic} />
   {:else if view.stage === 'denied' || view.stage === 'locked' || view.stage === 'expired' || view.stage === 'unavailable' || view.stage === 'classic'}
-    <Notice kind={view.stage} classicHref={classic} on:retry={begin} on:restart={begin} />
+    <Notice kind={view.stage} classicHref={classic} text={noticeText} {classicLabel} on:retry={begin} on:restart={begin} />
   {/if}
 </div>
 

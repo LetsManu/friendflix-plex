@@ -27,8 +27,15 @@ export class AkError extends Error {
   }
 }
 
-/** Blueprints imported after the built-in steps (step 7, extraFlows); Block 23 phase 3 appends the e-mail change flow. */
-export const AK_EXTRA_BLUEPRINTS: Array<{ id: string; file: string; context?: (cfg: Config) => Record<string, string> }> = [];
+/**
+ * Blueprints imported after the built-in steps (step 7, extraFlows). The e-mail change flow (Block 23 phase 3) needs its mail template,
+ * a file in Authentik's /templates folder that no API can write: it is imported only once Authentik lists that template
+ * (`GET stages/email/templates/`), else the step reports `template_missing` and nothing is created (an e-mail stage without its template
+ * would fail the whole import, and a stock template would send a link that does not lead back into FriendFlix).
+ */
+export const AK_EXTRA_BLUEPRINTS: Array<{ id: string; file: string; context?: (cfg: Config) => Record<string, string>; template?: string }> = [
+  { id: 'emailChange', file: 'friendflix-email-change.yaml', template: 'friendflix-email-change.html' },
+];
 
 /** deploy/authentik/ (the repository in development, /app/deploy/authentik/ in the image: the Dockerfile copies the files there) */
 export const AK_BLUEPRINT_DIR = fileURLToPath(new URL('../../../deploy/authentik/', import.meta.url));
@@ -54,8 +61,8 @@ const cancel = (r: Response) => void r.body?.cancel().catch(() => undefined);
 
 interface Client {
   base: URL;
-  /** GET: the JSON of a 2xx answer; null for a 404 when `optional` */
-  json(path: string, opts?: { optional?: boolean; anonymous?: boolean }): Promise<Obj | null>;
+  /** GET: the JSON of a 2xx answer (an array only with `list`); null for a 404 when `optional` */
+  json(path: string, opts?: { optional?: boolean; anonymous?: boolean; list?: boolean }): Promise<Obj | null>;
   /** a request whose answer has no body that matters (2xx or an AkError) */
   send(method: 'POST' | 'PATCH', path: string, body: unknown): Promise<void>;
   /** the raw answer to a multipart POST (blueprint import), mapped like json() but 400 left to the caller */
@@ -90,9 +97,10 @@ function client(url: string, token: string, fetchImpl: typeof fetch): Client {
     }
     return r;
   };
-  const read = async (r: Response, max: number): Promise<Obj> => {
+  const read = async (r: Response, max: number, list = false): Promise<Obj> => {
     // the deadline also covers the body: a server that stalls or resets after the headers is unreachable
     const body = await smallJson(r, max).catch(() => { throw new AkError('unreachable'); });
+    if (list && Array.isArray(body)) return body as unknown as Obj;
     const o = obj(body);
     if (!o) throw new AkError('unexpected');
     return o;
@@ -110,7 +118,7 @@ function client(url: string, token: string, fetchImpl: typeof fetch): Client {
         cancel(r);
         throw new AkError('unexpected');
       }
-      return read(r, 256 * 1024);
+      return read(r, 256 * 1024, opts.list);
     },
     async send(method, path, body) {
       const r = await call(method, path, { body: JSON.stringify(body), json: true });
@@ -229,11 +237,11 @@ function providerMatches(p: Obj, publicUrl?: string): boolean {
 class Steps {
   readonly list: AkStep[] = [];
   failed = false;
-  async run<T>(id: AkStepId, fn: () => Promise<{ state: AkStep['state']; value?: T }>): Promise<T | undefined> {
+  async run<T>(id: AkStepId, fn: () => Promise<{ state: AkStep['state']; value?: T; detail?: string }>): Promise<T | undefined> {
     if (this.failed) return undefined;
     try {
       const r = await fn();
-      this.list.push({ id, state: r.state });
+      this.list.push({ id, state: r.state, ...(r.detail ? { detail: r.detail } : {}) });
       return r.value;
     } catch (e) {
       if (!(e instanceof AkError)) throw e;
@@ -280,8 +288,29 @@ export async function planAuthentik(input: { url: string; token: string; publicU
     if (!brand && !stage) return { state: 'skip' };
     return { state: (brand && !brand.flow_recovery) || (stage && !stage.recovery_flow) ? 'create' : 'exists' };
   });
-  await s.run('extraFlows', async () => ({ state: AK_EXTRA_BLUEPRINTS.length ? 'update' : 'skip' }));
+  await s.run('extraFlows', async () => {
+    if (!AK_EXTRA_BLUEPRINTS.length) return { state: 'skip' };
+    const r = await extraFlowsPlan(ak);
+    return r.missing.length ? { state: r.ready.length ? 'update' : 'skip', detail: 'template_missing' } : { state: 'update' };
+  });
   return s.list;
+}
+
+/** the extra blueprints that can be imported now, and those still waiting for their mail template */
+async function extraFlowsPlan(c: Client): Promise<{ ready: typeof AK_EXTRA_BLUEPRINTS; missing: typeof AK_EXTRA_BLUEPRINTS }> {
+  const needs = AK_EXTRA_BLUEPRINTS.some((b) => b.template);
+  const listed = needs ? await c.json('/api/v3/stages/email/templates/', { optional: true, list: true }) : null;
+  const names = new Set((Array.isArray(listed) ? listed : []).map((t) => str(obj(t)?.name)).filter(Boolean));
+  const ready = AK_EXTRA_BLUEPRINTS.filter((b) => !b.template || names.has(b.template));
+  return { ready, missing: AK_EXTRA_BLUEPRINTS.filter((b) => !ready.includes(b)) };
+}
+
+/** step 7: the extra blueprints whose preconditions hold; `skip` + `template_missing` when one still waits for its mail template */
+async function extraFlows(c: Client, deps: Deps & { cfg?: Config }): Promise<{ state: AkStep['state']; detail?: string }> {
+  if (!AK_EXTRA_BLUEPRINTS.length) return { state: 'skip' };
+  const { ready, missing } = await extraFlowsPlan(c);
+  for (const b of ready) await importWith(c, { file: b.file, context: deps.cfg && b.context ? b.context(deps.cfg) : {} }, deps);
+  return missing.length ? { state: ready.length ? 'ok' : 'skip', detail: 'template_missing' } : { state: 'ok' };
 }
 
 /**
@@ -367,11 +396,7 @@ export async function applyAuthentik(
   });
 
   // step 7: phase 3's flows
-  await s.run('extraFlows', async () => {
-    if (!AK_EXTRA_BLUEPRINTS.length) return { state: 'skip' };
-    for (const b of AK_EXTRA_BLUEPRINTS) await imported(b.file, deps.cfg && b.context ? b.context(deps.cfg) : {});
-    return { state: 'ok' };
-  });
+  await s.run('extraFlows', () => extraFlows(ak, deps));
 
   if (s.failed || !read) return { steps: s.list };
   return {
@@ -387,4 +412,33 @@ export async function applyAuthentik(
       AUTHENTIK_RECOVERY_FLOW: RECOVERY_FLOW,
     },
   };
+}
+
+/**
+ * "Repair / upgrade the Authentik setup" (Admin → Status → Sign-in): the parts an existing install may lack after an update, with a
+ * one-time superuser token like the wizard's (never stored or logged). It re-applies the service account blueprint (its permissions grow
+ * with new releases: phase 3 added the device deletes and two reads; an install set up before never got them), imports the extra flows
+ * whose preconditions hold (the e-mail change once its template is mounted) and reads the service token back. Groups, provider,
+ * application, enrollment and recovery flows are left alone (an admin may have adapted them). `values.AUTHENTIK_API_TOKEN` is the
+ * service token after the run: the caller saves it when it differs from the one in use (a deleted token is created anew by the import).
+ */
+export async function repairAuthentik(input: { url: string; token: string }, deps: Deps & { cfg?: Config }): Promise<{ steps: AkStep[]; values?: { AUTHENTIK_API_TOKEN: string } }> {
+  const s = new Steps();
+  let c: Client | undefined;
+  await s.run('check', async () => {
+    c = client(input.url, input.token, deps.fetchImpl);
+    await check(c);
+    return { state: 'ok' };
+  });
+  if (!c) return { steps: s.list };
+  const ak = c;
+  await s.run('serviceAccount', async () => (await importWith(ak, { file: BLUEPRINTS.serviceAccount, context: {} }, deps), { state: 'ok' }));
+  await s.run('extraFlows', () => extraFlows(ak, deps));
+  const key = await s.run('readback', async () => {
+    const k = str((await ak.json(`/api/v3/core/tokens/${SERVICE_TOKEN}/view_key/`))?.key);
+    if (!k) throw new AkError('unexpected');
+    return { state: 'ok', value: k };
+  });
+  if (s.failed || !key) return { steps: s.list };
+  return { steps: s.list, values: { AUTHENTIK_API_TOKEN: key } };
 }

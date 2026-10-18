@@ -40,6 +40,25 @@ export async function getLive(ctx: Pick<Ctx, 'kv'>, userId: string, ps: string):
 export async function clearLive(ctx: Pick<Ctx, 'kv'>, userId: string, ps: string) {
   await ctx.kv.del(key(userId, ps));
 }
+/**
+ * A play session whose stop was reported: a cast receiver may still fetch its token's buffered segments until the new
+ * token is loaded (and the old one revoked). Within DRAIN_MS of the stop its sliding refresh (cast.ts touch) does not count it
+ * as live again; after that a token still fetched counts again (a stop report is no way to stream uncounted). A new `start`
+ * of the same play session clears the mark.
+ */
+export const DRAIN_MS = 120_000;
+const stopKey = (userId: string, ps: string) => `pstop:${userId}:${ps}`;
+export async function markStopped(ctx: Pick<Ctx, 'kv'>, userId: string, ps: string) {
+  await ctx.kv.set(stopKey(userId, ps), String(Date.now()), 6 * 3600);
+}
+export async function clearStopped(ctx: Pick<Ctx, 'kv'>, userId: string, ps: string) {
+  await ctx.kv.del(stopKey(userId, ps));
+}
+/** the stop of this play session was reported less than DRAIN_MS ago */
+export async function draining(ctx: Pick<Ctx, 'kv'>, userId: string, ps: string): Promise<boolean> {
+  const at = Number(await ctx.kv.get(stopKey(userId, ps)));
+  return Number.isFinite(at) && at > 0 && Date.now() - at <= DRAIN_MS;
+}
 export async function listLive(ctx: Pick<Ctx, 'kv'>): Promise<Live[]> {
   const keys = await ctx.kv.keys('play:');
   const out: Live[] = [];

@@ -74,6 +74,11 @@ export interface MediaCapabilities {
    * per account, found by the stored id or by email, else created with the REQUEST permission (seerr/service.ts).
    */
   requestUsers?: 'jellyfin-import' | 'local';
+  /**
+   * R1 (recommendation index): the server implements libraryFeatures() (library-wide metadata pages for the item feature index).
+   * Optional; absent = false, and the index job stays idle.
+   */
+  libraryFeatures?: boolean;
 }
 
 /** JSON form of the capabilities (sets as arrays), as sent to the web in /api/me and /api/server. */
@@ -255,6 +260,8 @@ export interface ItemAboutDto {
   countries: string[]; studios: string[]; tags: string[]; communityRating?: number; criticRating?: number;
 }
 /** A collection (box set) the item belongs to. `parts` = only what the viewer can see, in release order (premiere date, year, name). */
+/** Airing status of a series; null = unknown (never treat it as ended). */
+export type SeriesStatus = 'continuing' | 'ended' | null;
 export interface MediaCollection { id: string; name: string; parts: Array<{ item: ItemDto; tmdbId?: string }> }
 
 /** Metadata FriendFlix classifies on (e.g. "is this an anime"): genres, tags, production countries. */
@@ -265,6 +272,22 @@ export interface Segment { type: string; start: number; end: number }
 export interface SubtitleHit { id: string; name: string; provider: string; format?: string; downloads?: number; rating?: number }
 /** Audio / subtitle languages of one library item (raw codes, normalised by the caller); `seriesId` for episodes. */
 export interface ItemStreams { id?: string; seriesId?: string; audio: string[]; subtitles: string[] }
+/**
+ * R1: neutral library metadata of one film or series for the item feature index (recommendation engine v2). Library facts only: no paths,
+ * URLs, tokens, user data or image tags. Episodes never appear here: their series carries the metadata (episodes roll up into it).
+ * `people` = ids of the top 8 credited people (directors, writers / creators, then actors in billing order).
+ */
+export interface ItemFeatures {
+  id: string; type: 'Movie' | 'Series';
+  genres: string[]; tags: string[]; studios: string[]; people: string[]; countries: string[];
+  year?: number; runtimeMin?: number; communityRating?: number; criticRating?: number;
+  /** ISO 639 code of the original language when the server knows it (Jellyfin does not report it) */
+  originalLanguage?: string;
+  /** box set (collection) the item belongs to */
+  collectionId?: string;
+  seriesStatus?: 'continuing' | 'ended';
+  overview?: string; tagline?: string;
+}
 /** Playback the server reports that FriendFlix did not start (other apps): "Läuft gerade". */
 export interface ExternalSession {
   sessionId: string; serverUserId: string; positionTicks: number; isPaused: boolean;
@@ -455,6 +478,13 @@ export interface MediaServer {
   /** collections containing the item, with the parts the viewer can see (hidden parts are omitted, never reported as missing); [] = none */
   itemCollections?(user: MediaUser, id: string): Promise<MediaCollection[]>;
 
+  // ---- 1.1 post-play (optional): series status. Absent = the status counts as unknown (a series is then never called finished).
+  /**
+   * Airing status of a series the viewer can see: 'continuing', 'ended', or null when the server does not know it (no status set).
+   * MediaError(404) when the series is not visible to the viewer.
+   */
+  seriesStatus?(user: MediaUser, seriesId: string): Promise<SeriesStatus>;
+
   // ---- Block 22 (optional): admin care. Absent = hygiene page "not supported" / no "refresh metadata" button.
   /**
    * one page of neutral hygiene facts of the whole library (admin key), stable order, a short page = the end;
@@ -463,6 +493,20 @@ export interface MediaServer {
   libraryHygiene?(type: 'Movie' | 'Series' | 'Episode', page: { start: number; limit: number; savedSince?: string }): Promise<HygieneFacts[]>;
   /** asks the server to refresh one item's metadata and images (admin key); MediaError(404) for an unknown id */
   refreshMetadata?(id: string): Promise<void>;
+
+  // ---- R1 (optional): recommendation index. Absent = no item feature index (capabilities.libraryFeatures false).
+  /**
+   * one page of the neutral features of the whole library's films and series (admin key, sorted by name then id), a short page = the end.
+   * Offset pages taken while the library changes can skip or repeat an item; the index job re-checks what a full pass did not see before
+   * it deletes anything. `opts.ids` = only these films / series (callers roll an episode up to its seriesId; unknown ids and episodes are
+   * left out), `opts.savedSince` (ISO) = only items saved at or after it.
+   */
+  libraryFeatures?(start: number, limit: number, opts?: { ids?: string[]; savedSince?: string }): Promise<ItemFeatures[]>;
+  /**
+   * The film or series behind each id (an episode -> its series, a film / series -> itself), library-wide (admin key, no viewer), for the
+   * cross-user aggregates (reco/aggregates.ts). Ids the library does not know are absent. Absent hook: only the hygiene scan's episode rows map.
+   */
+  libraryRoots?(ids: string[]): Promise<Map<string, string>>;
 
   // ---- user data
   forgetItems(serverUserId?: string): void;

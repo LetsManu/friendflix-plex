@@ -39,6 +39,7 @@ class FakeVideo extends EventTarget {
   currentTime = 0;
   paused = false;
   duration = Number.NaN;
+  ended = false;
   error: { code: number; message: string } | null = null;
   src = 'blob:hlsjs';
   parent: FakeBody | null = { drop: () => undefined } as unknown as FakeBody; // inside the Player's stage
@@ -95,15 +96,20 @@ async function setup(o: { started?: boolean } = {}) {
     now = end;
   };
   const hides = new Set<() => void>();
+  const wakes = new Set<() => void>();
+  /** the title's segments (GET /api/items/{id}/segments as the engine gets them) */
+  const segs: Record<string, Array<{ type: string; start: number; end: number }>> = {};
+  let hiddenNow = false;
   const toast = vi.fn();
   const body = new FakeBody();
   const deps: EngineDeps = {
     api: api as unknown as EngineDeps['api'],
     item: vi.fn(async (id: string) => { const it = items[id]; if (!it) throw new Error('404'); return it as Item; }),
-    cast: { castState: writable({}), onCastEvent: vi.fn(), loadOnCast: vi.fn(), castPlayPause: vi.fn(), castSeek: vi.fn(), castStop: vi.fn(), castSetSubtitle: vi.fn() } as unknown as EngineDeps['cast'],
+    cast: { castState: writable({}), onCastEvent: vi.fn(), loadOnCast: vi.fn(), castPlayPause: vi.fn(), castSeek: vi.fn(), castStop: vi.fn(), castSetSubtitle: vi.fn(), queueOnCast: vi.fn(async () => null), castQueueRemove: vi.fn(), castQueueNext: vi.fn() } as unknown as EngineDeps['cast'],
     air: vi.fn() as unknown as EngineDeps['air'],
     body: () => body as unknown as HTMLElement,
     onPageHide: vi.fn((fn: () => void) => { hides.add(fn); return () => { hides.delete(fn); }; }),
+    segments: vi.fn(async (id: string) => segs[id] ?? []), hidden: () => hiddenNow, onWake: vi.fn((fn: () => void) => { wakes.add(fn); return () => { wakes.delete(fn); }; }),
     toast, prefs: () => ({ ...DEFAULT_PREFS }), timers: timerDeps,
   };
   const out = writable<CastSession | null>(null);
@@ -132,7 +138,7 @@ async function setup(o: { started?: boolean } = {}) {
   const srcBefore = video.src;
   return {
     engine, out, deps, calls, order, posts, api, toast, hides, body, video, probe, air, player, spy, handoff, srcBefore,
-    advance, pending: () => timers.length,
+    advance, segs, wakes, hide: (on: boolean) => { hiddenNow = on; }, wake: () => wakes.forEach((fn) => fn()), pending: () => timers.length,
     adopt: async (over: Partial<PlayerHandoff> = {}) => { engine.adopt({ ...handoff, ...over }); await flush(); },
     reports: () => calls.filter((c) => c.path.startsWith('/api/playback/')).map((c) => c.path.slice('/api/playback/'.length)),
     deletes: () => calls.filter((c) => c.init.method === 'DELETE').map((c) => c.path.slice('/api/cast/session/'.length)),
@@ -671,5 +677,47 @@ describe('cast engine: AirPlay end and stop', () => {
     expect(env.spy.destroy).toHaveBeenCalledTimes(1);
     expect(env.deletes()).toEqual(['a1']);
     expect(get(env.out)).toMatchObject({ kind: 'chromecast' });
+  });
+});
+
+describe('cast engine: AirPlay next episode without a receiver queue', () => {
+  it('ended while the page was hidden (locked phone): the next episode starts at once, no countdown nobody saw', async () => {
+    const env = await setup();
+    await env.adopt({ itemId: 'ep1', isEpisode: true });
+    env.hide(true);
+    env.video.fire('ended');
+    await flush();
+    await env.advance(0);
+    expect(env.tokenPosts().at(-1)!.init.body).toMatchObject({ itemId: 'ep2', via: 'airplay' });
+    expect(get(env.out)).toMatchObject({ itemId: 'ep2' });
+    expect(env.engineLog()).toContain('switch: ended while hidden');
+  });
+
+  it('an end the sleeping page never got as an event is found on wake and handled as a late one', async () => {
+    const env = await setup();
+    await env.adopt({ itemId: 'ep1', isEpisode: true });
+    env.wake(); // not ended: nothing
+    expect(get(env.out)?.state).toBe('playing');
+    env.video.ended = true;
+    env.wake();
+    await flush();
+    await env.advance(0);
+    expect(env.reports()).toEqual(['stop']);
+    expect(get(env.out)).toMatchObject({ itemId: 'ep2' });
+  });
+
+  it('credits: the countdown switches while the TV still plays (the AirPlay route never reaches the end of the media)', async () => {
+    const env = await setup();
+    await env.adopt({ itemId: 'ep1', isEpisode: true });
+    env.video.duration = 1800;
+    env.video.currentTime = 1780;
+    env.video.fire('timeupdate');
+    await flush();
+    expect(get(env.out)).toMatchObject({ state: 'playing', next: { itemId: 'ep2' } });
+    await env.advance(10_000);
+    expect(env.tokenPosts().at(-1)!.init.body).toMatchObject({ itemId: 'ep2', via: 'airplay' });
+    expect(env.spy.switchItem).toHaveBeenCalled();
+    expect(env.reports().at(-1)).toBe('stop'); // ep1's (after the 10 s progress)
+    expect(get(env.out)).toMatchObject({ itemId: 'ep2' });
   });
 });

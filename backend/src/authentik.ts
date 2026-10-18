@@ -11,6 +11,7 @@
 import type { Config } from './config.js';
 import type { Ctx } from './ctx.js';
 import { secretTag } from './crypto.js';
+import { AkUpstreamError, deniedClass, endpointOf, fetchFailClass, noteAkFailure } from './akdiag.js';
 import { akBase } from './invites.js';
 import { HttpError } from './users.js';
 
@@ -35,20 +36,36 @@ async function call(ctx: AkCtx, path: string, init: RequestInit = {}, expect: Pa
   const { AUTHENTIK_URL: url, AUTHENTIK_API_TOKEN: tok } = ctx.cfg;
   if (!url || !tok) throw new HttpError(503, 'authentik_unavailable');
   let r: Response;
+  const endpoint = endpointOf(path);
   try {
     r = await ctx.fetchImpl(new URL(path, akBase(url) + '/'), {
       ...init,
       headers: { authorization: `Bearer ${tok}`, accept: 'application/json', ...(init.body ? { 'content-type': 'application/json' } : {}) },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-  } catch {
-    throw new HttpError(503, 'authentik_unavailable'); // the cause may quote the request (headers): never attached
+  } catch (err) {
+    // the cause may quote the request (headers): only its class is kept
+    const failure = { area: 'api' as const, cls: fetchFailClass(err), endpoint };
+    await noteAkFailure(ctx, failure);
+    throw new AkUpstreamError(503, 'authentik_unavailable', failure);
   }
   if (r.ok) return r;
-  await r.body?.cancel().catch(() => undefined);
   const mapped = expect[r.status];
-  if (mapped) throw mapped;
-  throw new HttpError(502, r.status === 401 || r.status === 403 ? 'authentik_token_rejected' : 'authentik_error');
+  if (mapped) {
+    await r.body?.cancel().catch(() => undefined);
+    throw mapped;
+  }
+  if (r.status === 401 || r.status === 403) {
+    // Authentik's `detail` tells a bad token from a missing permission; it is compared here and never kept or logged
+    const detail = await r.json().then((b: { detail?: unknown }) => b?.detail, () => undefined);
+    const failure = { area: 'api' as const, cls: deniedClass(r.status, detail), status: r.status, endpoint };
+    await noteAkFailure(ctx, failure);
+    throw new AkUpstreamError(502, 'authentik_token_rejected', failure);
+  }
+  await r.body?.cancel().catch(() => undefined);
+  const failure = { area: 'api' as const, cls: r.status === 404 ? 'not_found' as const : 'http_error' as const, status: r.status, endpoint };
+  await noteAkFailure(ctx, failure);
+  throw new AkUpstreamError(502, 'authentik_error', failure);
 }
 
 async function json<T>(ctx: AkCtx, path: string, init?: RequestInit, expect?: Partial<Record<number, HttpError>>): Promise<T> {
@@ -286,10 +303,10 @@ export async function akFlowExists(ctx: AkCtx, slug: string): Promise<boolean> {
  * for the sign-in status check. null: not found, not configured or Authentik did not answer. `'forbidden'`: the token lacks
  * `view_oauth2provider` (Authentik answers 403), so the card can say so instead of showing nothing. Not cached (the check caches itself).
  */
-export async function akOauthProvider(ctx: AkCtx, clientId: string): Promise<{ authorizationFlow: string | null; grantTypes: string[] | null } | 'forbidden' | null> {
+export async function akOauthProvider(ctx: AkCtx, clientId: string): Promise<{ authorizationFlow: string | null; grantTypes: string[] | null; subMode?: string } | 'forbidden' | null> {
   if (!configured(ctx)) return null;
   try {
-    const r = await json<Page<{ authorization_flow?: string; authorization_flow_obj?: { slug?: string }; grant_types?: unknown }>>(
+    const r = await json<Page<{ authorization_flow?: string; authorization_flow_obj?: { slug?: string }; grant_types?: unknown; sub_mode?: unknown }>>(
       ctx, `api/v3/providers/oauth2/?${new URLSearchParams({ client_id: clientId })}`, undefined, { 403: new HttpError(403, 'forbidden') });
     const p = r.results[0];
     if (!p) return null;
@@ -297,6 +314,7 @@ export async function akOauthProvider(ctx: AkCtx, clientId: string): Promise<{ a
     return {
       authorizationFlow: typeof slug === 'string' ? slug : null,
       grantTypes: Array.isArray(p.grant_types) ? p.grant_types.map((g) => (typeof g === 'string' ? g : (g as { name?: string } | null)?.name ?? '')) : null,
+      ...(typeof p.sub_mode === 'string' ? { subMode: p.sub_mode } : {}),
     };
   } catch (e) {
     return e instanceof HttpError && e.statusCode === 403 ? 'forbidden' : null;
@@ -385,6 +403,37 @@ export async function akUpdateUser(ctx: AkCtx, sub: string, patch: { name?: stri
   await patchUser(ctx, sub, patch, { 400: new HttpError(400, 'invalid_input') });
 }
 
+/** Authentik's username rules (the User model's UnicodeUsernameValidator, max_length 150): letters, digits and @ . + - _ only */
+export const USERNAME_RE = /^[\p{L}\p{M}\p{N}_.@+-]{1,150}$/u;
+
+/**
+ * Whether another Authentik user already has this username, compared case-insensitively (Authentik's own check is case-sensitive, but
+ * the identification stage matches case-insensitively: "Anna" next to "anna" would be ambiguous at sign-in). `ownPk` is left out.
+ */
+export async function akUsernameTaken(ctx: AkCtx, username: string, ownPk: number): Promise<boolean> {
+  if (!configured(ctx)) throw new HttpError(503, 'authentik_unavailable');
+  const lower = username.toLowerCase();
+  const pages = [
+    await json<Page<RawUser>>(ctx, `api/v3/core/users/?${new URLSearchParams({ include_groups: 'false', username })}`),
+    await json<Page<RawUser>>(ctx, `api/v3/core/users/?${new URLSearchParams({ include_groups: 'false', search: username, page_size: '100' })}`),
+  ];
+  return pages.some((p) => p.results.some((u) => u.pk !== ownPk && u.username.toLowerCase() === lower));
+}
+
+/**
+ * Renames the Authentik user (`PATCH core/users/<pk>/ {username}`; the service account's `change_user`, which the name change already
+ * needs: Authentik has no narrower permission for one field). 400 (Authentik refuses the value, e.g. taken meanwhile) → 409
+ * `username_taken`. The cached lookup is dropped: the next one reads the new name.
+ */
+export async function akChangeUsername(ctx: AkCtx, sub: string, username: string): Promise<void> {
+  if (!configured(ctx)) throw new HttpError(503, 'authentik_unavailable');
+  try {
+    await patchUser(ctx, sub, { username }, { 400: new HttpError(409, 'username_taken') });
+  } finally {
+    await akForget(ctx, sub);
+  }
+}
+
 /**
  * Activates / deactivates the Authentik user (account deletion deactivates, never deletes). Other failures throw.
  * A user already in the wanted state (is_active from the lookup; the caller drops the cached lookup first) is done without a
@@ -432,3 +481,55 @@ export async function akSendMfaSetup(ctx: AkCtx, _sub: string): Promise<void> {
 
 /** Whether the Authentik actions can be offered at all (the UI hides them otherwise). */
 export const akActions = (ctx: AkCtx) => ({ recovery: configured(ctx), mfaSetup: false });
+
+/**
+ * The read permissions the service account needs (docs/authentik.md §8.2), each with a list endpoint that answers 403 without it. The
+ * change and delete permissions cannot be tested without changing something; the two reads phase 3 added stand in for its blueprint
+ * version (an install whose service account predates phase 3 lacks `view_authenticatorvalidatestage` and `view_oauth2provider`, and the
+ * device deletes with them).
+ */
+export const SERVICE_READS: ReadonlyArray<readonly [string, string]> = [
+  ['view_user', 'api/v3/core/users/?page_size=1&include_groups=false'],
+  ['view_flow', 'api/v3/flows/instances/?page_size=1'],
+  ['view_flowstagebinding', 'api/v3/flows/bindings/?page_size=1'],
+  ['view_emailstage', 'api/v3/stages/email/?page_size=1'],
+  ['view_invitation', 'api/v3/stages/invitation/invitations/?page_size=1'],
+  ['view_totpdevice', 'api/v3/authenticators/admin/totp/?page_size=1'],
+  ['view_staticdevice', 'api/v3/authenticators/admin/static/?page_size=1'],
+  ['view_webauthndevice', 'api/v3/authenticators/admin/webauthn/?page_size=1'],
+  ['view_authenticatorvalidatestage', 'api/v3/stages/authenticator/validate/?page_size=1'],
+  ['view_oauth2provider', 'api/v3/providers/oauth2/?page_size=1'],
+];
+
+/** `token`: whether Authentik accepts the service token at all; `missing`: the read permissions it answered 403 for */
+export interface ServiceCheck { token: 'ok' | 'invalid' | 'unreachable'; missing: string[] }
+
+/**
+ * Checks the service token and its read permissions (the sign-in status card; the card caches the result). Plain GETs with the token,
+ * statuses only, no body is read. Never throws.
+ */
+export async function akServiceCheck(ctx: AkCtx): Promise<ServiceCheck | null> {
+  if (!configured(ctx)) return null;
+  const get = async (path: string): Promise<Response | null> => {
+    try {
+      return await ctx.fetchImpl(new URL(path, akBase(ctx.cfg.AUTHENTIK_URL!) + '/'), {
+        headers: { authorization: `Bearer ${ctx.cfg.AUTHENTIK_API_TOKEN}`, accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+    } catch {
+      return null;
+    }
+  };
+  const me = await get('api/v3/core/users/me/');
+  if (!me) return { token: 'unreachable', missing: [] };
+  await me.body?.cancel().catch(() => undefined);
+  // a valid token may always read its own user: a refusal here is the token itself (deleted, expired, mistyped or another one in .env)
+  if (me.status === 401 || me.status === 403) return { token: 'invalid', missing: [] };
+  if (!me.ok) return { token: 'unreachable', missing: [] };
+  const missing: string[] = [];
+  for (const [perm, path] of SERVICE_READS) {
+    const r = await get(path);
+    await r?.body?.cancel().catch(() => undefined);
+    if (r?.status === 403) missing.push(perm);
+  }
+  return { token: 'ok', missing };
+}

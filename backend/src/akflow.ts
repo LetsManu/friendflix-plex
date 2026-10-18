@@ -15,6 +15,7 @@ import type { Config } from './config.js';
 import type { Ctx } from './ctx.js';
 import { decrypt, encrypt, sha256 } from './crypto.js';
 import type { FlowStep } from './flowSteps.js';
+import { AkUpstreamError, type AkFailClass, endpointOf, fetchFailClass, noteAkFailure } from './akdiag.js';
 import { akBase } from './invites.js';
 import { HttpError } from './users.js';
 
@@ -315,12 +316,19 @@ const resolveUrl = (to: string | null, base: URL): URL | null => {
   }
 };
 
+/** an executor failure: kept for the status card (class, status, endpoint path; never the URL, a cookie or the body) and thrown */
+async function execFail(ctx: FlowCtx, statusCode: 502 | 503, cls: AkFailClass, endpoint: string, status?: number): Promise<never> {
+  const failure = { area: 'executor' as const, cls, endpoint, ...(status !== undefined ? { status } : {}) };
+  await noteAkFailure(ctx, failure);
+  throw new AkUpstreamError(statusCode, statusCode === 503 ? 'authentik_unavailable' : 'authentik_error', failure);
+}
+
 /** fetch that turns every network failure (refused, DNS, timeout) into 503 without its cause, which may quote the request */
 async function send(ctx: FlowCtx, url: URL, init: RequestInit): Promise<Response> {
   try {
     return await ctx.fetchImpl(url, { ...init, redirect: 'manual' });
-  } catch {
-    throw new HttpError(503, 'authentik_unavailable');
+  } catch (err) {
+    return execFail(ctx, 503, fetchFailClass(err), endpointOf(url.pathname));
   }
 }
 
@@ -337,6 +345,7 @@ async function send(ctx: FlowCtx, url: URL, init: RequestInit): Promise<Response
 export async function akExec(ctx: FlowCtx, jar: Jar, method: 'GET' | 'POST', body?: object, clientIp?: string): Promise<{ challenge: RawChallenge; jar: Jar }> {
   const root = akRoot(ctx.cfg);
   const path = `${root.pathname}api/v3/flows/executor/${encodeURIComponent(jar.slug)}/`;
+  const endpoint = endpointOf(path);
   let url = new URL(`${path}?query=${encodeURIComponent(jar.query)}`, root);
   const app = jar.forwardHost ? publicUrl(ctx.cfg) : null;
   const signal = AbortSignal.timeout(EXEC_TIMEOUT_MS);
@@ -359,26 +368,31 @@ export async function akExec(ctx: FlowCtx, jar: Jar, method: 'GET' | 'POST', bod
     if (r.status >= 300 && r.status < 400) {
       await r.body?.cancel().catch(() => undefined);
       const to = resolveUrl(r.headers.get('location'), url);
-      if (!to || to.origin !== root.origin || to.pathname !== path) throw new HttpError(502, 'authentik_error');
+      if (!to || to.origin !== root.origin || to.pathname !== path) return execFail(ctx, 502, 'redirect', endpoint, r.status);
       url = to;
       m = 'GET';
       continue;
     }
-    if (r.status >= 400 || !/json/i.test(r.headers.get('content-type') ?? '') || tooLarge(r)) {
+    if (r.status >= 400) {
       await r.body?.cancel().catch(() => undefined);
-      throw new HttpError(502, 'authentik_error');
+      return execFail(ctx, 502, r.status === 404 ? 'not_found' : r.status === 401 || r.status === 403 ? 'permission' : 'http_error', endpoint, r.status);
+    }
+    if (!/json/i.test(r.headers.get('content-type') ?? '') || tooLarge(r)) {
+      await r.body?.cancel().catch(() => undefined);
+      return execFail(ctx, 502, tooLarge(r) ? 'too_large' : 'non_json', endpoint, r.status);
     }
     let challenge: RawChallenge;
     try {
       challenge = (await r.json()) as RawChallenge;
-    } catch {
-      throw new HttpError(502, 'authentik_error');
+    } catch (err) {
+      // a body that stalls past the deadline is a timeout; anything else is no JSON
+      return execFail(ctx, err && fetchFailClass(err) === 'timeout' ? 503 : 502, err && fetchFailClass(err) === 'timeout' ? 'timeout' : 'non_json', endpoint, r.status);
     }
-    if (!challenge || typeof challenge !== 'object' || typeof challenge.component !== 'string') throw new HttpError(502, 'authentik_error');
+    if (!challenge || typeof challenge !== 'object' || typeof challenge.component !== 'string') return execFail(ctx, 502, 'bad_answer', endpoint, r.status);
     jar.challenges = (jar.challenges ?? 0) + 1;
     return { challenge, jar };
   }
-  throw new HttpError(502, 'authentik_error'); // a redirect loop
+  return execFail(ctx, 502, 'bad_answer', endpoint); // a redirect loop
 }
 
 /**

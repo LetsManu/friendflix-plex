@@ -54,6 +54,9 @@ const login: Translation<typeof de> = {
     passkeyText: 'Confirme la connexion avec ta clé d’accès.',
   },
   notice: {
+    unavailableTimeout: 'Le service de connexion a mis trop de temps à répondre. Réessaie dans un instant.',
+    unavailableUnreachable: 'FriendFlix ne joint pas le service de connexion pour le moment. Réessaie dans un instant.',
+    unavailableServiceToken: 'Le service de connexion refuse l\'accès de FriendFlix. Un admin peut le réparer dans Admin → État → Connexion.',
     classicTitle: 'Continuer sur la page de connexion',
     classicText: 'Cette étape ne fonctionne que sur la page de connexion.',
     classic: 'Continuer sur la page de connexion',
@@ -85,6 +88,35 @@ const login: Translation<typeof de> = {
   },
   /** account security and the e-mail change (Block 23 phase 3, Task 11) */
   sec: {
+    manageClassic: 'Continuer sur la page de connexion',
+    refused: {
+      classic: 'La connexion dans FriendFlix est désactivée : cette modification se fait donc sur la page de connexion.',
+      flow_not_configured: 'Ce n\'est pas encore configuré dans le service de connexion. Un admin peut le configurer dans Admin → État → Connexion.',
+      authentik_user_not_found: 'Ton compte est introuvable dans le service de connexion. Demande à un admin.',
+    },
+    problem: {
+      service_token: 'Tes réglages de sécurité ne peuvent pas être lus pour le moment : le service de connexion refuse l\'accès de FriendFlix. Un admin peut le réparer dans Admin → État → Connexion.',
+      unreachable: 'Tes réglages de sécurité ne peuvent pas être lus pour le moment : le service de connexion ne répond pas.',
+      error: 'Tes réglages de sécurité ne peuvent pas être lus pour le moment.',
+      not_configured: 'FriendFlix n\'est pas relié à l\'API du service de connexion : ces réglages se gèrent donc sur la page de connexion.',
+    },
+    username: {
+      title: 'Nom d\'utilisateur',
+      text: 'Tu te connectes avec ce nom ou ton adresse e-mail.',
+      unknown: 'Illisible pour le moment',
+      change: 'Modifier',
+      label: 'Nouveau nom d\'utilisateur',
+      hint: 'Uniquement des lettres, des chiffres et @ . + - _, 150 caractères au plus.',
+      save: 'Enregistrer',
+      cancel: 'Annuler',
+      done: 'Ton nom d\'utilisateur est désormais « {name} ».',
+      fixed: 'Le nom d\'utilisateur ne peut pas être modifié ici : le service de connexion reconnaît ton compte grâce à lui.',
+      errors: {
+        username_invalid: 'Uniquement des lettres, des chiffres et @ . + - _ (150 caractères au plus).',
+        username_taken: 'Ce nom d\'utilisateur est déjà pris.',
+        rate_limited: 'Tu as changé ton nom d\'utilisateur trop souvent. Réessaie demain.',
+      },
+    },
     dialog: 'Se reconnecter',
     close: 'Fermer',
     loading: 'Un instant …',

@@ -7,9 +7,9 @@
    */
   import { onDestroy, onMount } from 'svelte';
   import Icon from '#lib/Icon.svelte';
-  import { fmtNumber, fmtTime, t, tr } from '#lib/i18n';
+  import { fmtNumber, fmtRelative, fmtTime, t, tr, type TFn } from '#lib/i18n';
   import { poll } from '#lib/adminContent/poll';
-  import { refreshSummary, summary, summaryFailed } from '#lib/admin/summary';
+  import { refreshSummary, summary, summaryFailed, type AdminSummary } from '#lib/admin/summary';
   import { loadErrors, loadHealth, loadStreams, type ErrorList, type HealthSnapshot, type StreamsView } from '#lib/admin/health';
   import { refreshBanner } from '#lib/admin/banner';
   import ServiceLights from '#lib/admin/ServiceLights.svelte';
@@ -46,6 +46,14 @@
       void refreshBanner(); // the banner shows the new state now, not after its next 60 s poll
     } catch (e) { toast.error(errorText(e)); }
     checking = false;
+  }
+  type Tr = TFn;
+  /** "Updated 3 hours ago" / "Building…" / "Not built yet" / "Not supported by the media server" */
+  function recoHint(tt: Tr, r: AdminSummary['recoIndex']): string {
+    if (!r) return '';
+    if (!r.supported) return tt('adminContent.status.recoIndexOff');
+    if (r.updatedAt) return tt('adminContent.status.recoIndexUpdated', { when: fmtRelative(r.updatedAt) });
+    return tt(r.running ? 'adminContent.status.recoIndexBuilding' : 'adminContent.status.recoIndexNever');
   }
   const reloadSummary = async () => { refreshing = true; await refreshSummary(); refreshing = false; };
   const slow = () => { void loadSnap(); void loadErr(); void refreshSummary(); };
@@ -96,6 +104,7 @@
       <StatTile icon="monitor" label={$t('admin.status.pendingDevices')} value={s ? fmtNumber(s.pending.devices) : null} href="/admin/devices" tone={s?.pending.devices ? 'warn' : 'default'} />
       <StatTile icon="vote" label={$t('admin.status.pendingPolls')} value={s ? fmtNumber(s.pending.polls) : null} href="/admin/polls" tone={s?.pending.polls ? 'warn' : 'default'} />
       <StatTile icon="inbox" label={$t('adminContent.status.pendingRequests')} value={!s ? null : s.pending.requests === null ? '–' : fmtNumber(s.pending.requests)} href="/admin/requests" tone={s?.pending.requests ? 'warn' : 'default'} />
+      <StatTile icon="search" label={$t('adminContent.status.recoIndex')} value={s?.recoIndex ? (s.recoIndex.supported ? fmtNumber(s.recoIndex.items) : '–') : s ? '–' : null} hint={recoHint($t, s?.recoIndex)} />
       <StatTile icon="image" label={$t('admin.dash.svc.previews')} value={s ? fmtNumber(s.pending.previewsFailed) : null} href="/admin/previews" hint={s ? $t('admin.dash.state.failed', { n: s.pending.previewsFailed }) : ''} tone={s?.pending.previewsFailed ? 'err' : 'default'} />
     </div>
   {/if}

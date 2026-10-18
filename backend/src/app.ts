@@ -13,6 +13,7 @@ import { recordError } from './errorlog.js';
 import { HttpError } from './users.js';
 import { accountRoutes } from './routes/account.js';
 import { accountSecurityRoutes } from './routes/accountSecurity.js';
+import { authentikRepairRoutes } from './routes/authentikRepair.js';
 import { adminRoutes, inviteRoutes } from './routes/admin.js';
 import { adminSettingsRoutes } from './routes/adminSettings.js';
 import { adminUserRoutes } from './routes/adminUsers.js';
@@ -22,6 +23,7 @@ import { castRoutes } from './routes/cast.js';
 import { internalRoutes } from './routes/internal.js';
 import { downloadRoutes } from './routes/downloads.js';
 import { discoverRoutes } from './routes/discover.js';
+import { postplayRoutes } from './routes/postplay.js';
 import { digestRoutes } from './routes/digest.js';
 import { listRoutes } from './routes/lists.js';
 import { partyRoutes } from './routes/party.js';
@@ -67,7 +69,7 @@ export interface Extra {
 }
 
 /** routes whose bodies hold secrets or one-time credentials (spec Part E3; the in-app sign-in's passwords and codes): never logged with an error */
-const SENSITIVE_BODY = /^\/(api\/(setup\/|admin\/settings)|auth\/flow\/)/;
+const SENSITIVE_BODY = /^\/(api\/(setup\/|admin\/settings|admin\/authentik\/)|auth\/flow\/)/;
 
 /**
  * What answers while setup is incomplete (spec Part E1, rulings D23): matched by the route pattern, so an unknown or encoded path is
@@ -239,6 +241,7 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   prefsRoutes(app, ctx);
   profileRoutes(app, ctx);
   discoverRoutes(app, ctx);
+  postplayRoutes(app, ctx);
   digestRoutes(app, ctx);
   sceneRoutes(app, ctx);
   tvRoutes(app, ctx);
@@ -260,6 +263,7 @@ export async function buildApp(ctx: Ctx, extra: Extra = {}): Promise<FastifyInst
   sourceRoutes(app, ctx, testSourceKey);
   aboutRoutes(app, ctx);
   healthRoutes(app, ctx);
+  authentikRepairRoutes(app, ctx);
   hygieneRoutes(app, ctx);
   usageRoutes(app, ctx);
   for (const r of extra.register ?? []) await r(app, ctx);

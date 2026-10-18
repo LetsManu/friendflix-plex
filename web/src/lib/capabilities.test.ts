@@ -38,8 +38,9 @@ describe('server capabilities', () => {
 describe('instance features', () => {
   it('default: everything on (before /api/me, older backends); only an explicit false turns requests off', () => {
     expect(get(features)).toEqual(ALL_FEATURES);
-    for (const raw of [undefined, null, 'x', {}, { requests: 'no' }, { requests: true }]) expect(featuresFrom(raw)).toEqual({ requests: true });
-    expect(featuresFrom({ requests: false })).toEqual({ requests: false });
+    for (const raw of [undefined, null, 'x', {}, { requests: 'no' }, { requests: true }]) expect(featuresFrom(raw)).toEqual({ requests: true, postplay: true });
+    expect(featuresFrom({ requests: false })).toEqual({ requests: false, postplay: true });
+    expect(featuresFrom({ postplay: false })).toEqual({ requests: true, postplay: false });
   });
   it('without a request service the upcoming and admin requests links are hidden; /requests stays (reminders)', () => {
     const off = featuresFrom({ requests: false });

@@ -109,21 +109,22 @@ describe('recommendations, friends rated, thumbs', () => {
     expect((await call('GET', '/api/library/friends-rated')).json().items).toEqual([]);
   });
   it('thumbs: up seeds "because", down hides titles from similar rows', async () => {
-    expect((await call('PUT', `/api/items/${A}/thumb`, { value: 1 })).json()).toEqual({ value: 1 });
+    expect((await call('PUT', `/api/items/${A}/thumb`, { value: 1 })).json()).toEqual({ value: 1, previous: 0 });
     expect((await call('GET', `/api/items/${A}`)).json().thumb).toBe(1);
     await call('PUT', `/api/items/${E}/thumb`, { value: -1 });
     const b = (await call('GET', '/api/library/because')).json();
     expect(b.because).toMatchObject({ id: A, name: 'Alpha', liked: true });
     expect(b.items.map((i: any) => i.name)).toEqual(['Delta', 'Beta']); // Epsilon removed
-    expect((await call('PUT', `/api/items/${A}/thumb`, { value: 0 })).json()).toEqual({ value: 0 });
+    expect((await call('PUT', `/api/items/${A}/thumb`, { value: 0 })).json()).toEqual({ value: 0, previous: 1 }); // what it replaced (Undo puts it back)
     expect((await call('PUT', `/api/items/${A}/thumb`, { value: 5 })).statusCode).toBe(400);
   });
   it('thumbs: 2 ("Geliebt") is stored, read back and also seeds "because"', async () => {
-    expect((await call('PUT', `/api/items/${A}/thumb`, { value: 2 })).json()).toEqual({ value: 2 });
+    expect((await call('PUT', `/api/items/${A}/thumb`, { value: 2 })).json()).toEqual({ value: 2, previous: 0 });
     expect((await call('GET', `/api/items/${A}`)).json().thumb).toBe(2);
     const b = (await call('GET', '/api/library/because')).json();
     expect(b.because).toMatchObject({ id: A, liked: true });
-    expect((await call('PUT', `/api/items/${A}/thumb`, { value: 0 })).json()).toEqual({ value: 0 });
+    expect((await call('PUT', `/api/items/${A}/thumb`, { value: -1 })).json()).toEqual({ value: -1, previous: 2 });
+    expect((await call('PUT', `/api/items/${A}/thumb`, { value: 0 })).json()).toEqual({ value: 0, previous: -1 });
   });
 });
 

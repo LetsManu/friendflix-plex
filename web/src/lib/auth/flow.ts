@@ -43,6 +43,8 @@ export interface PasskeyCreate {
 }
 export type PromptFieldType = 'text' | 'username' | 'email' | 'password';
 export interface PromptField { key: string; type: PromptFieldType; label: string; required: boolean }
+/** why Authentik is not usable right now (backend flowSteps.ts): too slow, unreachable, FriendFlix's service token refused, anything else */
+export type UnavailableReason = 'timeout' | 'unreachable' | 'service_token' | 'error';
 export type ClassicReason = 'unsupported_stage' | 'external_redirect' | 'consent' | 'passkey_origin';
 
 export type FlowStep =
@@ -56,7 +58,7 @@ export type FlowStep =
   | { stage: 'recovery-codes'; step: string; codes: string[] }
   | { stage: 'denied' }
   | { stage: 'classic'; reason: ClassicReason }
-  | { stage: 'expired' } | { stage: 'unavailable' }
+  | { stage: 'expired' } | { stage: 'unavailable'; reason?: UnavailableReason }
   | { stage: 'locked' }
   | { stage: 'done'; next: string };
 export type FlowStage = FlowStep['stage'];

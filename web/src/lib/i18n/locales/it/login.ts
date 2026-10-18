@@ -54,6 +54,9 @@ const login: Translation<typeof de> = {
     passkeyText: 'Conferma l’accesso con la tua passkey.',
   },
   notice: {
+    unavailableTimeout: 'Il servizio di accesso ha impiegato troppo tempo a rispondere. Riprova tra un momento.',
+    unavailableUnreachable: 'Al momento FriendFlix non raggiunge il servizio di accesso. Riprova tra un momento.',
+    unavailableServiceToken: 'Il servizio di accesso rifiuta l\'accesso di FriendFlix. Un admin può ripararlo in Admin → Stato → Accesso.',
     classicTitle: 'Continua nella pagina di accesso',
     classicText: 'Questo passaggio funziona solo nella pagina di accesso.',
     classic: 'Continua nella pagina di accesso',
@@ -85,6 +88,35 @@ const login: Translation<typeof de> = {
   },
   /** account security and the e-mail change (Block 23 phase 3, Task 11) */
   sec: {
+    manageClassic: 'Continua sulla pagina di accesso',
+    refused: {
+      classic: 'L\'accesso dentro FriendFlix è disattivato, quindi questa modifica si fa sulla pagina di accesso.',
+      flow_not_configured: 'Non è ancora configurato nel servizio di accesso. Un admin può configurarlo in Admin → Stato → Accesso.',
+      authentik_user_not_found: 'Il tuo account non è stato trovato nel servizio di accesso. Chiedi a un admin.',
+    },
+    problem: {
+      service_token: 'Al momento le tue impostazioni di sicurezza non si possono leggere: il servizio di accesso rifiuta l\'accesso di FriendFlix. Un admin può ripararlo in Admin → Stato → Accesso.',
+      unreachable: 'Al momento le tue impostazioni di sicurezza non si possono leggere: il servizio di accesso non risponde.',
+      error: 'Al momento le tue impostazioni di sicurezza non si possono leggere.',
+      not_configured: 'FriendFlix non è collegato all\'API del servizio di accesso, quindi queste impostazioni si gestiscono sulla pagina di accesso.',
+    },
+    username: {
+      title: 'Nome utente',
+      text: 'Accedi con questo nome o con il tuo indirizzo e-mail.',
+      unknown: 'Non leggibile al momento',
+      change: 'Cambia',
+      label: 'Nuovo nome utente',
+      hint: 'Solo lettere, cifre e @ . + - _, al massimo 150 caratteri.',
+      save: 'Salva',
+      cancel: 'Annulla',
+      done: 'Il tuo nome utente ora è «{name}».',
+      fixed: 'Il nome utente non si può cambiare qui: il servizio di accesso riconosce il tuo account da esso.',
+      errors: {
+        username_invalid: 'Solo lettere, cifre e @ . + - _ (al massimo 150 caratteri).',
+        username_taken: 'Questo nome utente è già in uso.',
+        rate_limited: 'Hai cambiato il nome utente troppe volte. Riprova domani.',
+      },
+    },
     dialog: 'Accedi di nuovo',
     close: 'Chiudi',
     loading: 'Un momento …',

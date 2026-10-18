@@ -17,6 +17,8 @@ export interface KV {
   del(key: string): Promise<void>;
   /** Atomic compare-and-delete: deletes the key only while it still holds `value` (a lock released by its owner only). True if deleted. */
   delIfEquals(key: string, value: string): Promise<boolean>;
+  /** Atomic compare-and-refresh: renews the ttl only while the key still holds `value` (a lock heartbeat never takes over another owner's lock). True if renewed. */
+  refreshIfEquals(key: string, value: string, ttlSeconds: number): Promise<boolean>;
   /** Atomic counter: increments (creating it at 1 with the ttl on first use) and returns the new value. */
   incr(key: string, ttlSeconds: number): Promise<number>;
   /** Atomic decrement of an existing positive counter, keeping its ttl (a reservation given back); never creates the key. The new value, or 0. */
@@ -52,6 +54,10 @@ export class RedisKV implements KV {
   async delIfEquals(key: string, value: string) {
     const lua = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
     return (await this.redis.eval(lua, 1, key, value)) === 1;
+  }
+  async refreshIfEquals(key: string, value: string, ttl: number) {
+    const lua = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end";
+    return (await this.redis.eval(lua, 1, key, value, String(ttl))) === 1;
   }
   async incr(key: string, ttl: number) {
     // one atomic call: INCR and EXPIRE as two calls could leave a counter without a TTL after a crash in between (a permanent
@@ -116,6 +122,11 @@ export class MemoryKV implements KV {
   async delIfEquals(key: string, value: string) {
     if (this.live(key) !== value) return false;
     this.m.delete(key);
+    return true;
+  }
+  async refreshIfEquals(key: string, value: string, ttl: number) {
+    if (this.live(key) !== value) return false;
+    this.m.set(key, { v: value, exp: Date.now() + ttl * 1000 });
     return true;
   }
   async incr(key: string, ttl: number) {

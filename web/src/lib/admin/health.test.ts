@@ -76,4 +76,17 @@ describe('sign-in card texts', () => {
     expect(loginWarningText('something_new', name)).toBe('');
     expect(loginWarningText('permission:other', name)).toBe('');
   });
+
+  it('the service token, permission, executor and e-mail change codes have texts that name what to check', async () => {
+    const { failClassText, loginWarningText } = await import('./health');
+    expect(loginWarningText('token:invalid', name)).toContain('AUTHENTIK_API_TOKEN');
+    expect(loginWarningText('permission:view_user', name)).toContain('view_user');
+    expect(loginWarningText('executor:non_json', name)).toContain('AUTHENTIK_URL');
+    expect(loginWarningText('executor:non_json', name)).toContain(failClassText('non_json'));
+    expect(loginWarningText('optional:change-email', name)).toContain('/templates');
+    for (const c of ['network', 'timeout', 'token_invalid', 'permission', 'not_found', 'http_error', 'non_json', 'too_large', 'redirect', 'bad_answer']) {
+      expect(failClassText(c), c).not.toBe(c);
+    }
+    expect(failClassText('brand_new')).toBe('brand_new');
+  });
 });

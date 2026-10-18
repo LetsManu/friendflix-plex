@@ -35,12 +35,14 @@ import {
 import {
   akDeleteDevice, akDevices, akFlowExists, akFlowUrl, akForget, akUserByUsername, akUserBySub, akUsersByEmail,
 } from '../authentik.js';
+import { AkUpstreamError, akLogFields } from '../akdiag.js';
 import { audit } from '../audit.js';
 import { secureCookies } from '../config.js';
 import type { Ctx } from '../ctx.js';
 import { encrypt, randomToken, sha256 } from '../crypto.js';
 import {
   FlowFieldError, type FlowError, type FlowInternal, type FlowStage, type FlowStep, MAX_PENDING_USER, stepErrors, toAnswer, toStep,
+  type UnavailableReason,
 } from '../flowSteps.js';
 import { lookupInvite } from '../invites.js';
 import { type LoginOutcome, resolveLogin } from '../loginFinish.js';
@@ -89,7 +91,20 @@ const sameToken = (a: string, b: string) => {
 
 const badRequest = () => new HttpError(400, 'bad_request');
 const csrfError = () => new HttpError(403, 'csrf');
-const AK_DOWN: ReadonlySet<string> = new Set(['authentik_unavailable', 'authentik_error']);
+const AK_DOWN: ReadonlySet<string> = new Set(['authentik_unavailable', 'authentik_error', 'authentik_token_rejected']);
+
+/** the reason an Authentik failure gives the browser (a class only; the admin sees the details on the status card and in the log) */
+export function unavailableReason(err: unknown): UnavailableReason {
+  if (err instanceof AkUpstreamError) {
+    const { cls, area } = err.failure;
+    if (cls === 'timeout') return 'timeout';
+    if (cls === 'network') return 'unreachable';
+    if (area === 'api' && (cls === 'token_invalid' || cls === 'permission')) return 'service_token';
+    return 'error';
+  }
+  if (err instanceof HttpError && err.message === 'authentik_token_rejected') return 'service_token';
+  return err instanceof HttpError && err.statusCode === 503 ? 'unreachable' : 'error';
+}
 
 /** what a re-authentication may continue with (the setup kinds and the account changes are reachable only through it) */
 const THEN_KINDS = ['setup-totp', 'setup-static', 'setup-webauthn', 'change-password', 'change-email'] as const;
@@ -282,8 +297,8 @@ export async function completeFlow(ctx: Ctx, req: FastifyRequest, reply: Fastify
     return outcomeStep(await resolveLogin(ctx, req, reply, got.claims, { invite: jar.invite, ui: 'app' }));
   } catch (err) {
     // OIDC unavailable (503), Authentik down, a refused code exchange, a provisioning failure: no session, codes only in the log
-    req.log.warn({ route: req.routeOptions.url ?? 'unmatched', code: errCode(err) }, 'flow completion failed');
-    return jar.kind === 'email-confirm' ? { stage: 'expired' } : { stage: 'unavailable' };
+    req.log.warn({ route: req.routeOptions.url ?? 'unmatched', code: errCode(err), ...akLogFields(err) }, 'flow completion failed');
+    return jar.kind === 'email-confirm' ? { stage: 'expired' } : { stage: 'unavailable', reason: unavailableReason(err) };
   } finally {
     await endAkSession(ctx, jar);
     await dropJar(ctx, flowId);
@@ -366,7 +381,7 @@ export function authFlowRoutes(app: FastifyInstance, ctx: Ctx) {
       if (then === 'setup-static') {
         const user = await getUserById(ctx, jar.userId!);
         const devices = user ? await akDevices(ctx, user.authentik_sub) : null;
-        if (!devices) return await fail({ stage: 'unavailable' });
+        if (!devices) return await fail({ stage: 'unavailable', reason: 'error' });
         oldStatic = devices.filter((d) => d.type === 'static').map((d) => d.id);
       }
       const next = continueJar(ctx.cfg, jar, then);
@@ -398,8 +413,8 @@ export function authFlowRoutes(app: FastifyInstance, ctx: Ctx) {
         }
         if (err instanceof HttpError) {
           const code = /^[a-z0-9_]{1,64}$/.test(err.message) ? err.message : 'internal';
-          req.log.warn({ route, code }, 'flow request refused');
-          if (AK_DOWN.has(code) && err.statusCode >= 500) return reply.code(200).send({ stage: 'unavailable' });
+          req.log.warn({ route, code, ...akLogFields(err) }, 'flow request refused');
+          if (AK_DOWN.has(code) && err.statusCode >= 500) return reply.code(200).send({ stage: 'unavailable', reason: unavailableReason(err) });
           return reply.code(err.statusCode).send({ error: code });
         }
         req.log.warn({ route, code: 'internal' }, 'flow request failed');
@@ -465,20 +480,38 @@ export function authFlowRoutes(app: FastifyInstance, ctx: Ctx) {
     const user = req.user!;
     if (then === 'setup-webauthn' && !(await passkeysInApp(ctx))) throw new HttpError(409, 'passkey_classic');
     if (then === 'change-email' && !(await akFlowExists(ctx, flowSlug(ctx.cfg, 'change-email')!))) throw new HttpError(409, 'flow_not_configured');
-    const ak = await akUserBySub(ctx, user.authentik_sub);
-    if (!ak) throw new HttpError(404, 'authentik_user_not_found');
+    const identifier = await reauthIdentifier(req, user);
     const old = await forgetPrevious(req);
-    const jar = await createJar(ctx, 'reauth', { userId: user.id, identifier: ak.username, ...(then ? { then } : {}), step: randomToken(16) });
+    const jar = await createJar(ctx, 'reauth', { userId: user.id, identifier, ...(then ? { then } : {}), step: randomToken(16) });
     const flowId = randomToken();
     let { challenge } = await akExec(ctx, jar, 'GET', undefined, req.ip);
     // an identification stage with the password inline cannot be answered without it: the person sees it (the sub check at the end holds anyway)
     if (challenge.component === 'ak-stage-identification' && challenge.password_fields !== true) {
-      ({ challenge } = await akExec(ctx, jar, 'POST', { uid_field: ak.username }, req.ip));
+      ({ challenge } = await akExec(ctx, jar, 'POST', { uid_field: identifier }, req.ip));
     }
     const { out, live } = await advance(req, reply, flowId, jar, challenge, true);
     if (live) setFlowCookie(reply, flowId);
     else if (old) clearFlowCookie(reply);
     return out;
+  }
+
+  /**
+   * What a re-authentication answers Authentik's identification with: the Authentik username (looked up with the service token), else
+   * the account's e-mail address, which the default identification stage accepts too. The fallback keeps the password change and the
+   * setup flows working while the service token is refused or the lookup fails (the status card names that); the end of the flow
+   * checks the person by `sub` either way (stampReauth), so an identifier never decides whose session is stamped.
+   */
+  async function reauthIdentifier(req: FastifyRequest, user: { authentik_sub: string; email: string | null }): Promise<string> {
+    try {
+      const ak = await akUserBySub(ctx, user.authentik_sub);
+      if (ak) return ak.username;
+    } catch (err) {
+      if (!(err instanceof HttpError)) throw err;
+      req.log.warn({ route: req.routeOptions.url ?? 'unmatched', code: errCode(err), ...akLogFields(err) }, 'reauth user lookup failed');
+      if (!user.email) throw err;
+    }
+    if (user.email) return user.email;
+    throw new HttpError(404, 'authentik_user_not_found');
   }
 
   // The button on /reset?token= (Ruling 11: the page itself never calls this): continues Authentik's recovery flow with the e-mail

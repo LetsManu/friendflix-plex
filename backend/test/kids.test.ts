@@ -199,7 +199,7 @@ describe('kids profiles', () => {
       expect([r.statusCode, r.json().error], `${m} ${u}`).toEqual([403, 'kids_profile']);
     }
     // personal things stay: thumbs (onboarding), watch status
-    expect((await call(k, 'PUT', `/api/items/${A}/thumb`, { value: 1 })).json()).toEqual({ value: 1 });
+    expect((await call(k, 'PUT', `/api/items/${A}/thumb`, { value: 1 })).json()).toMatchObject({ value: 1 });
     expect((await call(k, 'GET', `/api/items/${A}/status`)).statusCode).toBe(200);
     // the same routes still work for a grown-up profile
     const o = await switchTo(k, (await env.pool.query('select id from profiles where is_owner')).rows[0].id);

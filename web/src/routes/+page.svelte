@@ -18,7 +18,9 @@
   let resume: Item[] | null = null, next: Item[] | null = null, latest: Item[] | null = null, mine: Item[] | null = null;
   let trending: Item[] | null = null, recs: Item[] | null = null, friendsRated: Item[] | null = null;
   let top: Item[] | null = null, because: { name: string } | null = null, becauseItems: Item[] | null = null;
-  let moreRaw: Array<{ because: { id: string; name: string }; items: Item[] }> = [];
+  let moreRaw: Array<{ because: { id: string; name: string }; items: Item[]; engine?: 'v1' | 'v2' }> = [];
+  // engine v2: which engine built the "because" row, and the row ranker's order of the recommendation rows (null = the fixed layout)
+  let becauseEngine: 'v1' | 'v2' = 'v1', homeOrder: string[] | null = null;
   let featured: FeaturedList[] = [];
   let hubs: Hub[] = [], themed: ThemedList[] = [];
   // titles an admin set a removal date for (only those the viewer can see; the row stays hidden while empty)
@@ -62,7 +64,7 @@
       void cached('friends', () => load('/api/library/friends-rated').then((r) => r.items as Item[]), (v) => (friendsRated = v), () => (friendsRated = []));
     },
     because: () => {
-      void cached('because', () => load('/api/library/because'), (r: { because: { name: string } | null; items: Item[] }) => { because = r.because; becauseItems = r.items; }, () => (becauseItems = []));
+      void cached('because', () => load('/api/library/because'), (r: { because: { name: string } | null; items: Item[]; engine?: 'v1' | 'v2' }) => { because = r.because; becauseItems = r.items; becauseEngine = r.engine ?? 'v1'; homeOrder = null; }, () => (becauseItems = []));
       // more "Because you watched" rows (2-3 further recent titles); they only appear in between the other rows below the fold
       void cached('becauseMore', () => load('/api/library/because-more').then((r) => r.rows as typeof moreRaw), (v) => (moreRaw = v), () => (moreRaw = []));
     },
@@ -78,7 +80,7 @@
     if (!bad.has('nextup')) next = p.nextup;
     if (!bad.has('leaving')) leaving = p.leaving;
     if (!bad.has('recs')) { recs = p.recs.items; friendsRated = p.recs.friends; }
-    if (!bad.has('because')) { because = p.because.because; becauseItems = p.because.items; moreRaw = p.because.more; }
+    if (!bad.has('because')) { because = p.because.because; becauseItems = p.because.items; moreRaw = p.because.more; becauseEngine = p.because.engine ?? 'v1'; homeOrder = Array.isArray(p.order) ? p.order : null; }
     if (!bad.has('hubs')) hubs = p.hubs as Hub[];
     if (!bad.has('themed')) themed = p.themed as ThemedList[];
     for (const n of bad) loaders[n]();
@@ -119,6 +121,16 @@
   // the extra rows never repeat what "Weiterschauen" / "Nächste Folge" / the first "Weil du ..." row already show (episodes count as their series)
   $: taken = new Set([...(resume ?? []), ...(next ?? []), ...(becauseItems ?? [])].flatMap((i) => [i.id, i.seriesId ?? i.id]));
   $: more = moreRaw.map((r) => ({ ...r, items: r.items.filter((i) => !taken.has(i.id)) })).filter((r) => r.items.length >= 4);
+  // engine v2: the recommendation rows in the order the server chose (friends, because, more:<n>); a row without titles is skipped by <Row>
+  type OrderedRow = { key: string; title: string; items: Item[]; tag: { row: 'friends' | 'because' | 'because_more'; engine: 'v1' | 'v2' } };
+  $: ordered = (homeOrder ?? []).flatMap((key): OrderedRow[] => {
+    if (key === 'friends') return [{ key, title: $t('home.rows.friendsRated'), items: friendsRated ?? [], tag: { row: 'friends', engine: becauseEngine } }];
+    if (key === 'because') return because ? [{ key, title: $t('home.rows.because', { name: because.name }), items: becauseItems ?? [], tag: { row: 'because', engine: becauseEngine } }] : [];
+    const m = /^more:(\d+)$/.exec(key) ? moreRaw[Number(key.slice(5))] : undefined;
+    const left = m ? m.items.filter((i) => !taken.has(i.id)) : [];
+    // the same floor as the v1 path: a "more" row that shrinks below 4 titles after removing what the first rows show is skipped
+    return m && left.length >= 4 ? [{ key, title: $t('together.because', { name: m.because.name }), items: left, tag: { row: 'because_more', engine: m.engine ?? becauseEngine } }] : [];
+  });
   // the first visible row loads its images eagerly with high priority
   $: firstRow = firstNonEmptyTab(['resume', 'next', 'recs', 'friends'] as const, { resume, next: nextOnly, recs, friends: friendsRated });
   const viewLoader = (id: string) => () => items({ parentId: id, sort: 'DateCreated', desc: 'true', limit: '24' });
@@ -136,14 +148,22 @@
   <ThemedListRows lists={themed} />
   {#if leaving?.length}<Row title={$t('fresh.row.leaving')} items={leaving} />{/if}
   <Row title={$t('home.rows.recs')} items={recs} priority={firstRow === 'recs'} />
+  {#if homeOrder}
+    {#each ordered as r (r.key)}<Row title={r.title} items={r.items} reco={r.tag} />{/each}
+    <Row title={$t('home.rows.latest')} items={latest} href="/new" />
+    <Row title={$t('home.rows.trending')} items={trending} ranked />
+    {#each featured as f (f.id)}<Row title={$t('home.rows.featured', { name: f.name, owner: f.owner.name })} items={f.items} href="/lists/{f.id}" />{/each}
+    <Row title={$t('home.rows.myList')} items={mine} href="/watchlist" />
+  {:else}
   <Row title={$t('home.rows.friendsRated')} items={friendsRated} priority={firstRow === 'friends'} />
-  {#if because}<Row title={$t('home.rows.because', { name: because.name })} items={becauseItems} reco={{ row: 'because', engine: 'v1' }} />{/if}
+  {#if because}<Row title={$t('home.rows.because', { name: because.name })} items={becauseItems} reco={{ row: 'because', engine: becauseEngine }} />{/if}
   <Row title={$t('home.rows.latest')} items={latest} href="/new" />
   <Row title={$t('home.rows.trending')} items={trending} ranked />
-  {#if more[0]}<Row title={$t('together.because', { name: more[0].because.name })} items={more[0].items} reco={{ row: 'because_more', engine: 'v1' }} />{/if}
+  {#if more[0]}<Row title={$t('together.because', { name: more[0].because.name })} items={more[0].items} reco={{ row: 'because_more', engine: more[0].engine ?? becauseEngine }} />{/if}
   {#each featured as f (f.id)}<Row title={$t('home.rows.featured', { name: f.name, owner: f.owner.name })} items={f.items} href="/lists/{f.id}" />{/each}
   <Row title={$t('home.rows.myList')} items={mine} href="/watchlist" />
-  {#if more[1]}<Row title={$t('together.because', { name: more[1].because.name })} items={more[1].items} reco={{ row: 'because_more', engine: 'v1' }} />{/if}
+  {#if more[1]}<Row title={$t('together.because', { name: more[1].because.name })} items={more[1].items} reco={{ row: 'because_more', engine: more[1].engine ?? becauseEngine }} />{/if}
+  {/if}
   <UpcomingRow type="movie" title={$t('home.rows.upcomingWish')} />
   <!-- the second ranked row never directly follows the first one -->
   {#each views as v, i (v.id)}
@@ -153,7 +173,7 @@
   {#if !views.length}<Row title={$t('home.rows.top10')} items={top} ranked />{/if}
   {#each genres as g, i (g)}
     <LazyRow title={g} href="/browse/movies?genre={encodeURIComponent(g)}" cacheKey="genre:{g}" load={genreLoader(g)} />
-    {#if i === 0 && more[2]}<Row title={$t('together.because', { name: more[2].because.name })} items={more[2].items} reco={{ row: 'because_more', engine: 'v1' }} />{/if}
+    {#if i === 0 && !homeOrder && more[2]}<Row title={$t('together.because', { name: more[2].because.name })} items={more[2].items} reco={{ row: 'because_more', engine: more[2].engine ?? becauseEngine }} />{/if}
   {/each}
 </div>
 

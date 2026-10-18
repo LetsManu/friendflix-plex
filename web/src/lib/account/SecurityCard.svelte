@@ -6,14 +6,14 @@
    * inside FriendFlix. Adding or changing something always goes through the in-app re-authentication (ReauthDialog with the follow-up
    * flow); removing a device asks the backend first and opens the dialog on 401 `reauth_required`, then repeats the removal once.
    */
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { api, ApiError, type Account, type AccountSecurity, type Me } from '#lib/api';
   import { isReauthError } from './reauth';
   import EmailChange from './EmailChange.svelte';
   import ReauthDialog from '#lib/auth/ReauthDialog.svelte';
   import type { ThenKind } from '#lib/auth/flow';
   import Icon from '#lib/Icon.svelte';
-  import { t, tr } from '#lib/i18n';
+  import { t, tr, type TKey } from '#lib/i18n';
   import Button from '#lib/ui/Button.svelte';
   import { confirm } from '#lib/ui/confirm';
   import { errorText } from '#lib/ui/action';
@@ -27,8 +27,20 @@
   let sec: AccountSecurity | null = null;
   let failed = false, isAdmin = false, err = '';
   let dialog: { then?: ThenKind; opener?: HTMLElement } | null = null;
-  /** a removal waiting for the re-authentication */
+  /** a removal or rename waiting for the re-authentication */
   let retry: (() => Promise<void>) | null = null;
+  /** the username form (open while editing) */
+  let naming = false, newName = '', nameErr = '', nameBusy = false;
+  let nameInput: HTMLInputElement;
+  const NAME_ERRORS: Record<string, TKey> = {
+    username_invalid: 'login.sec.username.errors.username_invalid', username_taken: 'login.sec.username.errors.username_taken',
+    username_is_subject: 'login.sec.username.fixed', rate_limited: 'login.sec.username.errors.rate_limited',
+    authentik_token_rejected: 'login.sec.problem.service_token', authentik_unavailable: 'login.sec.problem.unreachable',
+  };
+  const PROBLEM: Record<string, TKey> = {
+    service_token: 'login.sec.problem.service_token', unreachable: 'login.sec.problem.unreachable', error: 'login.sec.problem.error',
+    not_configured: 'login.sec.problem.not_configured',
+  };
 
   $: totp = (sec?.devices ?? []).filter((d) => d.type === 'totp');
   $: keys = (sec?.devices ?? []).filter((d) => d.type === 'webauthn');
@@ -57,6 +69,29 @@
     else { await load(); dispatch('changed'); }
   }
 
+  async function editName() {
+    newName = sec?.username ?? '';
+    nameErr = '';
+    naming = true;
+    await tick();
+    nameInput?.focus();
+  }
+  async function saveName(again = true) {
+    const name = newName.trim();
+    if (!name || nameBusy) return;
+    nameBusy = true; nameErr = '';
+    try {
+      const r = await api<{ username: string }>('/api/account/security/username', { method: 'PUT', body: { username: name } });
+      naming = false;
+      toast.success(tr('login.sec.username.done', { name: r.username }));
+      await load();
+    } catch (e) {
+      if (isReauthError(e) && again) { retry = () => saveName(false); dialog = {}; return; }
+      const code = e instanceof ApiError ? (e.body as { error?: string } | null)?.error ?? '' : '';
+      nameErr = NAME_ERRORS[code] ? tr(NAME_ERRORS[code]!) : errorText(e);
+    } finally { nameBusy = false; }
+  }
+
   async function remove(d: Device) {
     const name = d.name || tr(`login.sec.type.${d.type}`);
     if (!(await confirm({ title: tr('login.sec.remove.confirm', { name }), body: tr('login.sec.remove.body'), danger: true, confirmLabel: tr('login.sec.remove.action') }))) return;
@@ -79,6 +114,32 @@
 <section class="panel card" aria-labelledby="acc-security">
   <h2 id="acc-security">{$t('account.account.security.title')}</h2>
   {#if err}<p class="err" role="alert">{err}</p>{/if}
+  {#if sec?.problem}<p class="note problem" role="status"><Icon name="alert" size={16} /> {$t(PROBLEM[sec.problem] ?? 'login.sec.problem.error')}</p>{/if}
+
+  <div class="row" data-row="username">
+    <div class="what">
+      <h3 id="sec-user">{$t('login.sec.username.title')}</h3>
+      <p class="muted note">{$t('login.sec.username.text')}</p>
+      {#if sec}<p class="uname"><span class="nm">{sec.username ?? $t('login.sec.username.unknown')}</span></p>{/if}
+      {#if sec?.username && sec.usernameChange === false}<p class="muted note">{$t('login.sec.username.fixed')}</p>{/if}
+      {#if naming}
+        <form class="nameform" on:submit|preventDefault={() => saveName()}>
+          <label for="sec-user-new">{$t('login.sec.username.label')}</label>
+          <input id="sec-user-new" bind:this={nameInput} bind:value={newName} type="text" autocomplete="username" autocapitalize="none" spellcheck="false"
+            maxlength="150" required aria-describedby="sec-user-hint{nameErr ? ' sec-user-err' : ''}" aria-invalid={nameErr ? 'true' : undefined} disabled={nameBusy} />
+          <p class="muted note" id="sec-user-hint">{$t('login.sec.username.hint')}</p>
+          {#if nameErr}<p class="err" id="sec-user-err" role="alert">{nameErr}</p>{/if}
+          <div class="formacts">
+            <Button size="sm" type="submit" pending={nameBusy}>{$t('login.sec.username.save')}</Button>
+            <Button variant="ghost" size="sm" disabled={nameBusy} on:click={() => { naming = false; nameErr = ''; }}>{$t('login.sec.username.cancel')}</Button>
+          </div>
+        </form>
+      {/if}
+    </div>
+    {#if sec?.username && sec.usernameChange && !naming}
+      <div class="acts"><Button variant="secondary" size="sm" aria-describedby="sec-user" on:click={editName}>{$t('login.sec.username.change')}</Button></div>
+    {/if}
+  </div>
 
   <div class="row">
     <div class="what"><h3 id="sec-pw">{$t('login.sec.password.title')}</h3><p class="muted note">{$t('login.sec.password.text')}</p></div>
@@ -139,7 +200,7 @@
 </section>
 
 {#if dialog}
-  <ReauthDialog then={dialog.then} on:done={() => closed(true)} on:close={() => closed(false)} />
+  <ReauthDialog then={dialog.then} manageUrl={account.manageUrl} on:done={() => closed(true)} on:close={() => closed(false)} />
 {/if}
 
 <style>
@@ -153,6 +214,13 @@
   .devs li { display: flex; align-items: center; justify-content: space-between; gap: .6rem; min-height: 36px; padding: .2rem .2rem .2rem .8rem; background: var(--surface-2); border-radius: 8px; }
   .devs li.muted { background: none; padding-left: 0; }
   .nm { min-width: 0; overflow-wrap: anywhere; }
+  .uname { margin: .4rem 0 0; font-weight: 600; }
+  .problem { display: flex; gap: .4rem; align-items: flex-start; padding: .55rem .7rem; border-radius: 8px; background: var(--tone-warn); margin: 0; }
+  .problem :global(svg) { flex: none; margin-top: .15rem; }
+  .nameform { display: grid; gap: .35rem; margin-top: .6rem; max-width: 24rem; }
+  .nameform label { font-weight: 600; font-size: .9rem; }
+  .nameform input { min-height: 44px; padding: 0 .7rem; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); font: inherit; min-width: 0; }
+  .formacts { display: flex; gap: .5rem; flex-wrap: wrap; }
   .ext { display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; color: #54b9c5; font-weight: 600; align-self: flex-start; }
   .ext:hover { text-decoration: underline; }
   @media (max-width: 600px) {

@@ -107,6 +107,9 @@ export const publicUrlSchema = z.string().transform((v, ctx) => {
   return u.origin;
 });
 
+/** a RECO_W_* weight: 0 to 10, compose passes '' for an unset variable */
+const recoWeight = (dflt: number) => z.preprocess(emptyAsUnset, z.coerce.number().min(0).max(10).default(dflt));
+
 /**
  * Every key FriendFlix reads from its environment. This literal object is the type source of Config; settings/registry.ts classifies
  * each key (setting / env-only / bootstrap / build) and uses the field schemas below for settings as well.
@@ -209,6 +212,31 @@ export const configSchema = z.object({
     if (bad.length) ctx.addIssue({ code: 'custom', params: { code: 'invalid_cidr' }, message: `HOME_NETWORKS: invalid CIDR ${bad.map((b) => `'${b}'`).join(', ')} (expected e.g. 192.168.0.0/16 or fd00::/8)` });
     return list;
   }),
+  /** recommendation index (docs/discovery.md): weight of each feature group when item vectors are combined; 0 switches a group off */
+  RECO_W_GENRES: recoWeight(1),
+  RECO_W_TAGS: recoWeight(0.6),
+  RECO_W_STUDIOS: recoWeight(0.4),
+  RECO_W_PEOPLE: recoWeight(0.8),
+  RECO_W_TEXT: recoWeight(1),
+  RECO_W_NUMERIC: recoWeight(0.3),
+  RECO_W_COLLECTION: recoWeight(1.5),
+  /** R2: which recommendation engine answers "because you watched": v1 (Jellyfin similar), v2 (own taste model), shadow (v2 computed beside v1, v1 returned) */
+  RECO_ENGINE: z.preprocess(emptyAsUnset, z.enum(['v1', 'v2', 'shadow']).default('v1')),
+  /** R2: half-life (days) of the recency decay of a taste signal */
+  RECO_HALF_LIFE_DAYS: z.preprocess(emptyAsUnset, z.coerce.number().min(1).max(3650).default(120)),
+  /** R3b: exploration share of the slots in a row (0 = off, the default; 0.1 = about 1 in 10 titles drawn from medium-score candidates, logged as aggregate counters) */
+  RECO_EXPLORE: z.preprocess(emptyAsUnset, z.coerce.number().min(0).max(0.5).default(0)),
+  /** R2: JSON object with coefficient overrides by dotted name (reco/weights.ts lists them), e.g. {"signal.thumbUp":2,"surface.because.seed":0.5}; empty = defaults */
+  RECO_COEFFS: z.preprocess(emptyAsUnset, z.string().max(4000).optional().superRefine((v, ctx) => {
+    if (v === undefined) return;
+    try {
+      const o = JSON.parse(v) as unknown;
+      if (o && typeof o === 'object' && !Array.isArray(o)) return;
+    } catch {
+      // falls through to the issue below
+    }
+    ctx.addIssue({ code: 'custom', message: 'expected a JSON object', params: { code: 'invalid_json' } });
+  })),
   BACKGROUND_JOBS: z.enum(['true', 'false']).default('true'),
   /** gzip/brotli for JSON API responses >= 1 KB (off when a reverse proxy already compresses) */
   API_COMPRESSION: z.enum(['true', 'false']).default('true'),
@@ -230,6 +258,8 @@ export const configSchema = z.object({
   AUTHENTIK_EMAIL_CHANGE_FLOW: later('friendflix-email-change'),
   PASSKEYS_IN_APP: z.preprocess(emptyAsUnset, z.enum(['auto', 'off']).default('auto')),
   LOGIN_COVER_WALL: z.preprocess(emptyAsUnset, z.enum(['true', 'false']).default('true')),
+  /** 1.1: the post-play screen ("caught up", suggestions after the last episode / a film); false = off for everybody */
+  POSTPLAY_ENABLED: z.preprocess(emptyAsUnset, z.enum(['true', 'false']).default('true')),
 });
 
 export type Config = z.infer<typeof configSchema>;

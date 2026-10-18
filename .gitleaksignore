@@ -45,3 +45,7 @@ dae644181e1532bd6f73fe7de5332de9bcfeb6a8:backend/test/settings-store.test.ts:gen
 4a3d2c2322807c48a50c14f978dde99f39c60d28:backend/test/core.test.ts:generic-api-key:146
 4a3d2c2322807c48a50c14f978dde99f39c60d28:backend/test/core.test.ts:generic-api-key:149
 4a3d2c2322807c48a50c14f978dde99f39c60d28:backend/test/helpers.ts:generic-api-key:19
+# false positive: a code identifier (transitionSignals) in an import line matches the airtable rule
+4def4878e30076df56d51e0ebdf7893918df70af:backend/src/reco/sources.ts:airtable-api-key:6
+# identifier `pairTablesFor` in an import line misread as an Airtable key (renamed to tablesOfViewer in a later commit)
+5322b5272d306812a1f88f918484635073798c4c:backend/src/reco/sources.ts:airtable-api-key:6

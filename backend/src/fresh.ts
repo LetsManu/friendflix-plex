@@ -74,7 +74,7 @@ const SERIES_TTL = 900;
 export const SERIES_LABELS_PER_REQUEST = 12;
 
 /** Label of one series, cached for 15 min (the label depends on the library only, never on the viewer). */
-async function labelForSeries(ctx: Ctx, user: JfUser, item: ItemDto, continuing: Set<string> | null, now: number, budget: { left: number }): Promise<FreshLabel | null> {
+async function labelForSeries(ctx: Pick<Ctx, 'kv' | 'jf'>, user: JfUser, item: ItemDto, continuing: Set<string> | null, now: number, budget: { left: number }): Promise<FreshLabel | null> {
   const key = `fresh:s:${item.id}`;
   const hit = await ctx.kv.get(key).catch(() => null);
   if (hit !== null && hit !== undefined) return hit === '' ? null : (hit as FreshLabel);
@@ -101,7 +101,7 @@ const CONT_MAX = 50_000;
  * continuingSeries(), cached PER VIEWER (a restricted viewer's partial list must never decide for everybody else).
  * null = unknown (then a finale is never claimed).
  */
-async function continuingIds(ctx: Ctx, user: JfUser): Promise<Set<string> | null> {
+export async function continuingIds(ctx: Pick<Ctx, 'kv' | 'jf'>, user: JfUser): Promise<Set<string> | null> {
   const lib = ctx.jf.libraryContinuingSeriesIds?.bind(ctx.jf);
   const key = lib ? 'fresh:continuing:lib' : `fresh:continuing:u:${user.jellyfin_user_id}`;
   const hit = await ctx.kv.get(key).catch(() => null);
@@ -167,7 +167,7 @@ export interface Badge { fresh?: FreshLabel; daysLeft?: number }
  * Badges for cards. `items` are what the viewer may see (callers fetched them with the viewer's identity, so an invisible id simply
  * has no entry and reveals nothing). Episodes get no fresh label (their series' leaving date still applies).
  */
-export async function badgesFor(ctx: Ctx, user: JfUser, items: ItemDto[], now = Date.now()): Promise<Record<string, Badge>> {
+export async function badgesFor(ctx: Pick<Ctx, 'db' | 'kv' | 'jf'>, user: JfUser, items: ItemDto[], now = Date.now()): Promise<Record<string, Badge>> {
   const out: Record<string, Badge> = {};
   const leaving = await leavingFor(ctx, [...new Set(items.flatMap((i) => (i.type === 'Episode' && i.seriesId ? [i.seriesId] : [i.id])))]);
   const seriesTodo: ItemDto[] = [];

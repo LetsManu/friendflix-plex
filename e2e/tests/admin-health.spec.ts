@@ -60,6 +60,22 @@ test.describe('admin health page', () => {
     }
   });
 
+  test('recommendation index tile: size and age; building, not built and unsupported are worded', async ({ page, api }) => {
+    await page.goto('/admin/status');
+    const tile = page.getByText('Empfehlungs-Index').locator('xpath=ancestor::*[contains(@class,"tile")][1]');
+    await expect(tile).toContainText('1.234');
+    await expect(tile).toContainText('Aktualisiert');
+    api.admin.recoIndex = { supported: true, running: true, items: 0, updatedAt: null };
+    await page.getByRole('button', { name: 'Aktualisieren' }).click();
+    await expect(tile).toContainText('Wird aufgebaut');
+    api.admin.recoIndex = { supported: true, running: false, items: 0, updatedAt: null };
+    await page.getByRole('button', { name: 'Aktualisieren' }).click();
+    await expect(tile).toContainText('Noch nicht aufgebaut');
+    api.admin.recoIndex = { supported: false, running: false, items: 0, updatedAt: null };
+    await page.getByRole('button', { name: 'Aktualisieren' }).click();
+    await expect(tile).toContainText('Vom Medienserver nicht unterstützt');
+  });
+
   test('Jetzt prüfen calls ?refresh=1 once, shows the new state and reloads the banner', async ({ page, api }) => {
     await page.goto('/admin/status');
     const health = page.getByRole('region', { name: 'Systemzustand' });
@@ -168,6 +184,34 @@ test.describe('admin health page', () => {
     await expect(sw).not.toBeChecked();
     expect(api.settings.puts).toEqual([{ values: { LOGIN_COVER_WALL: false } }]);
     await expect(page.getByRole('region', { name: 'Hinweise' }).getByText('Gespeichert.')).toBeVisible();
+  });
+
+  test('sign-in card: a refused service token, the executor check, the last error and the one-click repair', async ({ page, api }) => {
+    api.admin.loginCheck = {
+      ...loginCheckOk(), warnings: ['token:invalid', 'executor:non_json'],
+      serviceToken: { token: 'invalid', missing: [] },
+      executor: { ok: false, cls: 'non_json', status: 200, endpoint: 'api/v3/flows/executor/default-authentication-flow/' },
+      lastFailures: [{ area: 'api', cls: 'token_invalid', status: 403, endpoint: 'api/v3/core/users/', at: '2026-10-18T08:00:00.000Z' }],
+    };
+    await page.goto('/admin/status');
+    const card = page.getByRole('region', { name: 'Anmeldung', exact: true });
+    await expect(card.getByText('Von Authentik abgelehnt')).toBeVisible();
+    await expect(card.getByText(/Fehler: keine JSON-Antwort .* \(HTTP 200\) bei api\/v3\/flows\/executor\/default-authentication-flow\//)).toBeVisible();
+    await expect(card.getByText(/Authentik-API: Token abgelehnt \(HTTP 403\), api\/v3\/core\/users\//)).toBeVisible();
+    await expect(card.getByText(/Authentik lehnt das Dienst-Token \(AUTHENTIK_API_TOKEN\) ab/)).toBeVisible();
+    await expect(card.getByText(/Prüf, ob AUTHENTIK_URL die Adresse ist/)).toBeVisible();
+    const form = card.getByRole('form', { name: 'Authentik-Einrichtung reparieren' });
+    const run = form.getByRole('button', { name: 'Reparieren' });
+    await expect(run).toBeDisabled();
+    await form.getByLabel('Authentik-Admin-Token (Superuser, einmalig)').fill('ak-admin-placeholder-e2e');
+    await run.click();
+    await expect(form.getByRole('status')).toHaveText('Authentik-Einrichtung repariert. Das neue Dienst-Token wurde gespeichert.');
+    await expect(form.getByRole('list')).toContainText('Dienstkonto für Einladungen');
+    await expect(form.getByLabel('Authentik-Admin-Token (Superuser, einmalig)')).toHaveValue(''); // used once, never kept
+    expect(api.admin.repairs).toEqual([{ token: 'ak-admin-placeholder-e2e' }]);
+    // the card shows the state after the repair
+    await expect(card.getByText('Alles in Ordnung.')).toBeVisible();
+    await expect(card.getByText('Von Authentik abgelehnt')).toHaveCount(0);
   });
 
   test('sign-in card: a cover switch from the environment is locked', async ({ page, api }) => {

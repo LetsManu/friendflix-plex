@@ -129,6 +129,12 @@ const it: Translation<typeof de> = {
     tvHint: 'Niente AirPlay né Chromecast sul televisore? Apri {url} nel browser della TV e associa il telefono come telecomando.',
   },
   /** the bar while a title plays on a TV (cast engine) */
+  /** the watch page as the TV's remote (device chip, short stop, next episode) */
+  castRemote: {
+    changeDevice: 'Cambia dispositivo',
+    stopShort: 'Interrompi',
+    playNow: 'Riproduci ora',
+  },
   castBar: {
     region: 'In riproduzione sulla TV',
     failed: 'Impossibile riprodurre «{title}» su {device}.',

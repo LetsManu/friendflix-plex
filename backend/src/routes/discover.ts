@@ -7,13 +7,16 @@ import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
 import { MediaError, type ItemDto, type MediaTraits } from '../media/types.js';
 import { audit } from '../audit.js';
+import { friendsRatedFor, inPool, itemsByIds, recommendationsFor } from '../discoverData.js';
 import { badgesFor, instanceToday, leavingFor, LEAVING_ROW_DAYS, storySoFar } from '../fresh.js';
 import { m } from '../i18n.js';
-import { bumpHomeAll, bumpHome } from '../homegen.js';
+import { bumpHomeAll, bumpHome, homeGens } from '../homegen.js';
 import { notify } from '../notify.js';
 import { clipPath, previews } from '../previews.js';
 import { loadPrefs } from './prefs.js';
 import { requireGrownUp } from '../kids.js';
+import { countFallback, recoProfileOf, v2Active, withReason, type EngineName } from '../reco/engine.js';
+import { recommend, shadowCompare } from '../reco/recommend.js';
 import { requireAdmin, requireUser } from '../session.js';
 import { portalStatus, requestsClient } from '../seerr/client.js';
 import type { JfUser, UserRow } from '../types.js';
@@ -22,57 +25,7 @@ import { id32, wrap as sharedWrap } from './_shared.js';
 
 const wrap = <T extends (...a: any[]) => Promise<any>>(fn: T): T => sharedWrap(fn, { seerr: true, passthrough: [404] });
 
-/**
- * Fetches items by id in chunks of 40 (keeps URLs short), up to 4 chunks in parallel, with the viewer's own token, so library
- * permissions apply. Jellyfin errors count as "not visible" unless `strict` (then they throw). Keeps the requested order.
- */
-export async function itemsByIds(ctx: Ctx, user: JfUser, ids: string[], strict = false): Promise<ItemDto[]> {
-  const chunks: string[][] = [];
-  for (let i = 0; i < ids.length; i += 40) chunks.push(ids.slice(i, i + 40));
-  const parts = await inPool(chunks, 4, async (c) =>
-    (await ctx.jf.items(user, { ids: c, types: 'Movie,Series,Episode,BoxSet', limit: 40 }).catch((e) => { if (strict) throw e; return { items: [] as ItemDto[] }; })).items);
-  const byId = new Map(parts.flat().map((i) => [i.id, i]));
-  return ids.map((i) => byId.get(i)).filter((x): x is ItemDto => Boolean(x));
-}
-
-/** Runs `fn` over `xs` with at most `n` calls in flight; results keep the input order. The first error rejects. */
-export async function inPool<T, R>(xs: T[], n: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(xs.length);
-  let next = 0;
-  await Promise.all(Array.from({ length: Math.min(n, xs.length) }, async () => {
-    while (next < xs.length) {
-      const i = next++;
-      out[i] = await fn(xs[i]!, i);
-    }
-  }));
-  return out;
-}
-
-/** Data of GET /api/recommendations (also part of GET /api/home): what friends recommended to this user, newest unseen first. */
-export async function recommendationsFor(ctx: Ctx, jfUser: JfUser, userId: string) {
-  const rows = (await ctx.db.query<{ id: string; item_id: string; note: string | null; from_name: string }>(
-    `select r.id, r.item_id, r.note, u.name from_name from recommendations r join users u on u.id=r.from_user
-      where r.to_user=$1 and r.created_at > now() - interval '60 days' order by r.seen, r.created_at desc limit 30`, [userId])).rows;
-  const items = await itemsByIds(ctx, jfUser, [...new Set(rows.map((r) => r.item_id))]);
-  const meta = new Map(rows.map((r) => [r.item_id, `Von ${r.from_name}${r.note ? `: ${r.note}` : ''}`]));
-  const shown = new Set(items.map((i) => i.id));
-  return { items: items.map((i) => ({ ...i, caption: meta.get(i.id) })), recIds: rows.filter((r) => shown.has(r.item_id)).map((r) => Number(r.id)) }; // recIds: send back to /seen
-}
-
-/** Data of GET /api/library/friends-rated (also part of GET /api/home). */
-export async function friendsRatedFor(ctx: Ctx, jfUser: JfUser, userId: string, profileId: string) {
-  const rows = (await ctx.db.query<{ item_id: string; names: string[]; avg: string }>(
-    `select r.item_id, array_agg(u.name || ' ' || r.stars || '★' order by r.created_at desc) names, avg(r.stars) avg
-       from ratings r join users u on u.id = r.user_id left join user_prefs p on p.user_id = r.user_id
-      where r.user_id <> $1 and r.stars >= 4 and r.created_at > now() - interval '90 days' and not u.disabled
-        and coalesce((p.data->>'shareRatings')::boolean, true)
-        and r.item_id not in (select item_id from ratings where user_id = $1)
-        and r.item_id not in (select item_id from thumbs where profile_id = $2 and value = -1)
-      group by r.item_id order by max(r.created_at) desc limit 24`, [userId, profileId])).rows;
-  const items = await itemsByIds(ctx, jfUser, rows.map((r) => r.item_id));
-  const cap = new Map(rows.map((r) => [r.item_id, r.names.slice(0, 2).join(', ')]));
-  return { items: items.filter((i) => !i.played).map((i) => ({ ...i, caption: cap.get(i.id) })) };
-}
+export { friendsRatedFor, inPool, itemsByIds, recommendationsFor } from '../discoverData.js';
 
 /** Data of GET /api/library/leaving (also part of GET /api/home): home row "Bald nicht mehr verfügbar", only titles the viewer can see. */
 export async function leavingRow(ctx: Ctx, jfUser: JfUser) {
@@ -83,6 +36,8 @@ export async function leavingRow(ctx: Ctx, jfUser: JfUser) {
 
 /** "Weil du ... gesehen hast" cache lifetime (seconds). */
 export const BECAUSE_TTL = 600;
+/** v2 "because" rows being computed in this process, by cache key (concurrent callers share one recommend()) */
+const becauseV2 = new Map<string, Promise<ItemDto[]>>();
 
 /**
  * Data of GET /api/library/because: seed = the profile's latest thumbs-up item, else the last finished title; then Jellyfin's
@@ -92,7 +47,7 @@ export const BECAUSE_TTL = 600;
  * thumbs-up re-seeds at once and thumbs-down filtering always uses fresh rows. Plays made outside the portal without the webhook
  * plugin show up after the TTL.
  */
-export async function libraryBecause(ctx: Ctx, jfUser: JfUser, profileId: string): Promise<{ because: { id: string; name: string; liked: boolean } | null; items: ItemDto[] }> {
+export async function libraryBecause(ctx: Ctx, jfUser: JfUser, profileId: string): Promise<{ because: { id: string; name: string; liked: boolean } | null; items: ItemDto[]; engine?: EngineName }> {
   const [upRow, downRows, ver] = await Promise.all([
     ctx.db.query<{ item_id: string }>('select item_id from thumbs where profile_id=$1 and value>=1 order by created_at desc limit 1', [profileId]).then((r) => r.rows[0]),
     ctx.db.query<{ item_id: string }>('select item_id from thumbs where profile_id=$1 and value=-1', [profileId]).then((r) => r.rows),
@@ -121,7 +76,34 @@ export async function libraryBecause(ctx: Ctx, jfUser: JfUser, profileId: string
   }
   if (!entry.because) return { because: null, items: [] };
   const down = new Set(downRows.map((r) => r.item_id));
-  return { because: entry.because, items: entry.items.filter((i) => !down.has(i.id)) };
+  const v1 = entry.items.filter((i) => !down.has(i.id));
+  const engine = ctx.cfg.RECO_ENGINE;
+  if (engine === 'v1') return { because: entry.because, items: v1, engine: 'v1' };
+  const profile = await recoProfileOf(ctx, profileId);
+  if (!profile) return { because: entry.because, items: v1, engine: 'v1' };
+  if (engine === 'shadow') {
+    // v2 runs beside v1 (metrics only, not awaited); the answer is v1
+    void shadowCompare(ctx, jfUser, profile, { seed: entry.because.id, surface: 'because', v1: v1.map((i) => i.id), guardKey: `${profileId}:${ver}:${entry.because.id}` });
+    return { because: entry.because, items: v1, engine: 'v1' };
+  }
+  try {
+    // the v2 row is cached like the Jellyfin part (plus the home generations, which every thumb, list or reset change bumps) and
+    // shared while it is computed: the home page and because-more ask for it at the same time
+    const because = entry.because;
+    const v2Key = `because:v2:${jfUser.jellyfin_user_id}:${profileId}:${ver}:${await homeGens(ctx, profileId)}:${because.id}`;
+    const cached = await ctx.kv.get(v2Key).catch(() => null);
+    if (cached) { try { return { because, items: JSON.parse(cached) as ItemDto[], engine: 'v2' }; } catch { /* recompute */ } }
+    let run = becauseV2.get(v2Key);
+    if (!run) {
+      run = recommend(ctx, jfUser, profile, { seed: because.id, surface: 'because', limit: 24 }).then((r) => r.items.map(withReason));
+      becauseV2.set(v2Key, run);
+      void run.then((items) => ctx.kv.set(v2Key, JSON.stringify(items), BECAUSE_TTL).catch(() => undefined), () => undefined).finally(() => becauseV2.delete(v2Key));
+    }
+    return { because, items: await run, engine: 'v2' };
+  } catch {
+    countFallback('because');
+    return { because: entry.because, items: v1, engine: 'v1' }; // v2 failing never empties the row
+  }
 }
 
 /** Extra "Weil du X geschaut hast" rows: how many, items per row and the smallest row worth showing. */
@@ -135,14 +117,15 @@ const BECAUSE_MORE_MIN = 4;
  * profile already finished, thumbed down, or shows in an earlier row (rows never repeat a title or show a seed). The Jellyfin part is
  * cached like libraryBecause (key carries the user-data version); played / thumbs filtering always uses fresh data. The seed lookups run in parallel.
  */
-export async function libraryBecauseMore(ctx: Ctx, jfUser: JfUser, profileId: string): Promise<{ rows: Array<{ because: { id: string; name: string }; items: ItemDto[] }> }> {
+export async function libraryBecauseMore(ctx: Ctx, jfUser: JfUser, profileId: string): Promise<{ rows: Array<{ because: { id: string; name: string }; items: ItemDto[]; engine?: EngineName }> }> {
   const [main, downRows, ver] = await Promise.all([
     libraryBecause(ctx, jfUser, profileId).catch(() => null),
     ctx.db.query<{ item_id: string }>('select item_id from thumbs where profile_id=$1 and value=-1', [profileId]).then((r) => r.rows),
     ctx.jf.userDataVersion(jfUser),
   ]);
-  const key = `becausemore:${jfUser.jellyfin_user_id}:${profileId}:${ver}`;
-  type Entry = { mainId: string | null; rows: Array<{ because: { id: string; name: string }; items: ItemDto[] }> };
+  const v2 = v2Active(ctx.cfg);
+  const key = `becausemore:${jfUser.jellyfin_user_id}:${profileId}:${ver}${v2 ? ':v2' : ''}`;
+  type Entry = { mainId: string | null; rows: Array<{ because: { id: string; name: string }; items: ItemDto[]; engine?: EngineName }> };
   let entry: Entry | null = null;
   const hit = await ctx.kv.get(key).catch(() => null);
   if (hit) {
@@ -164,17 +147,29 @@ export async function libraryBecauseMore(ctx: Ctx, jfUser: JfUser, profileId: st
       seeds.push({ id, name: i.type === 'Episode' && i.seriesName ? i.seriesName : i.name });
       if (seeds.length >= BECAUSE_MORE_ROWS + 2) break; // a little spare: a seed can end up with too few titles
     }
-    const similar = await Promise.all(seeds.map((s) => ctx.jf.similar(jfUser, s.id, 30).catch(() => [] as ItemDto[])));
-    entry = { mainId, rows: seeds.map((s, n) => ({ because: s, items: similar[n]!.filter((i) => i.id !== s.id) })) };
+    const profile = v2 ? await recoProfileOf(ctx, profileId) : undefined;
+    // v2 (RECO_ENGINE=v2): every seed row comes from recommend(); a row whose v2 call throws is answered by Jellyfin's similar() and counted
+    const rowFor = async (s: { id: string; name: string }): Promise<{ items: ItemDto[]; engine: EngineName }> => {
+      if (profile) {
+        try {
+          return { items: (await recommend(ctx, jfUser, profile, { seed: s.id, surface: 'because', limit: 30, row: 'because_more' })).items.map(withReason), engine: 'v2' };
+        } catch {
+          countFallback('because_more');
+        }
+      }
+      return { items: await ctx.jf.similar(jfUser, s.id, 30).catch(() => [] as ItemDto[]), engine: 'v1' };
+    };
+    const lists = await Promise.all(seeds.map(rowFor));
+    entry = { mainId, rows: seeds.map((s, n) => ({ because: s, items: lists[n]!.items.filter((i) => i.id !== s.id), engine: lists[n]!.engine })) };
     await ctx.kv.set(key, JSON.stringify(entry), BECAUSE_TTL).catch(() => undefined);
   }
   const skip = new Set([...downRows.map((r) => r.item_id), ...entry.rows.map((r) => r.because.id), ...(main?.items ?? []).map((i) => i.id)]);
-  const rows: Array<{ because: { id: string; name: string }; items: ItemDto[] }> = [];
+  const rows: Array<{ because: { id: string; name: string }; items: ItemDto[]; engine?: EngineName }> = [];
   for (const r of entry.rows) {
     const items = r.items.filter((i) => !i.played && !skip.has(i.id)).slice(0, BECAUSE_MORE_ITEMS);
     if (items.length < BECAUSE_MORE_MIN) continue;
     items.forEach((i) => skip.add(i.id));
-    rows.push({ because: r.because, items });
+    rows.push({ because: r.because, items, ...(r.engine ? { engine: r.engine } : {}) });
     if (rows.length >= BECAUSE_MORE_ROWS) break;
   }
   return { rows };
@@ -276,10 +271,12 @@ export function discoverRoutes(app: FastifyInstance, ctx: Ctx) {
   app.put('/api/items/:id/thumb', pre, wrap(async (req) => {
     const id = id32.parse((req.params as { id: string }).id);
     const { value } = z.object({ value: z.union([z.literal(-1), z.literal(0), z.literal(1), z.literal(2)]) }).parse(req.body);
+    // the value it replaces (0 = none): an Undo ("Not interested" on post-play) puts back exactly that
+    const previous = (await ctx.db.query<{ value: number }>('select value from thumbs where profile_id=$1 and item_id=$2', [req.profile!.id, id])).rows[0]?.value ?? 0;
     if (value === 0) {
       await ctx.db.query('delete from thumbs where profile_id=$1 and item_id=$2', [req.profile!.id, id]);
       await bumpHome(ctx, req.profile!.id);
-      return { value: 0 };
+      return { value: 0, previous };
     }
     const item = await ctx.jf.item(req.jfUser!, id);
     await ctx.db.query(
@@ -288,7 +285,7 @@ export function discoverRoutes(app: FastifyInstance, ctx: Ctx) {
       [req.profile!.id, req.user!.id, id, value, item.name],
     );
     await bumpHome(ctx, req.profile!.id);
-    return { value };
+    return { value, previous };
   }));
 
   // ---- Cast panel, hover trailer, collections, studios ----
@@ -372,7 +369,7 @@ const QUALITY_PARALLEL = 4;
 /** the viewer's visible, sorted id list of one quality browse is kept this long (seconds): paging does not re-scan */
 const QUALITY_LIST_TTL = 180;
 /** per session (cookie) limits of the two heavier Block 17 routes; IP as the fallback for cookie-less callers (they get 401 anyway) */
-const perSession = (max: number) => ({ rateLimit: { max, timeWindow: '1 minute', keyGenerator: (req: { cookies?: Record<string, string | undefined>; ip: string }) => `s:${req.cookies?.ff_sid ?? req.ip}` } });
+export const perSession = (max: number) => ({ rateLimit: { max, timeWindow: '1 minute', keyGenerator: (req: { cookies?: Record<string, string | undefined>; ip: string }) => `s:${req.cookies?.ff_sid ?? req.ip}` } });
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => {
   const t = Date.parse(`${v}T00:00:00Z`);
   return Number.isFinite(t) && new Date(t).toISOString().startsWith(v); // 2026-02-30 rolls over: refused

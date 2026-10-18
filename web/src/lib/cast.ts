@@ -35,11 +35,20 @@ interface CastContextT {
 interface CastSessionT {
   getCastDevice(): { friendlyName: string };
   loadMedia(r: unknown): Promise<string | undefined>;
-  getMediaSession(): { editTracksInfo(r: unknown, ok: () => void, err: (e: unknown) => void): void } | null;
+  getMediaSession(): MediaT | null;
+}
+/** chrome.cast.media.Media: the receiver's media session (updated in place by the SDK) */
+interface MediaT {
+  idleReason?: string | null;
+  items?: Array<{ itemId: number; media?: { contentId?: string } | null }> | null;
+  editTracksInfo(r: unknown, ok: () => void, err: (e: unknown) => void): void;
+  queueInsertItems(r: unknown, ok: () => void, err: (e: unknown) => void): void;
+  queueRemoveItems(r: unknown, ok: () => void, err: (e: unknown) => void): void;
+  queueNext(ok: () => void, err: (e: unknown) => void): void;
 }
 interface RemotePlayerT {
   isConnected: boolean; isPaused: boolean; isMediaLoaded: boolean; currentTime: number; duration: number; volumeLevel: number; isMuted: boolean;
-  playerState: string | null; mediaInfo: unknown;
+  playerState: string | null; mediaInfo: { contentId?: string } | null;
 }
 interface RemotePlayerControllerT {
   addEventListener(t: string, fn: () => void): void;
@@ -56,6 +65,9 @@ interface ChromeCast {
     TvShowMediaMetadata: new () => Record<string, unknown>;
     Track: new (id: number, type: string) => Record<string, unknown>;
     EditTracksInfoRequest: new (ids: number[]) => unknown;
+    QueueItem: new (m: unknown) => Record<string, unknown>;
+    QueueInsertItemsRequest: new (items: unknown[]) => Record<string, unknown>;
+    QueueRemoveItemsRequest: new (ids: number[]) => unknown;
     StreamType: { BUFFERED: string };
     HlsSegmentFormat: { TS: string };
     MetadataType: { MOVIE: number; TV_SHOW: number };
@@ -93,8 +105,12 @@ export interface CastState {
   muted: boolean;
   /** a media is loaded on the receiver */
   loaded: boolean;
+  /** the receiver's media (its content URL, '' = unknown): a queued next title shows up here once the receiver moved on */
+  contentId: string;
+  /** why the receiver went idle (FINISHED / CANCELLED / INTERRUPTED / ERROR; null = unknown or not idle) */
+  idleReason: string | null;
 }
-const initial: CastState = { available: false, connected: false, deviceName: '', state: 'idle', currentTime: 0, duration: 0, paused: true, volume: 1, muted: false, loaded: false };
+const initial: CastState = { available: false, connected: false, deviceName: '', state: 'idle', currentTime: 0, duration: 0, paused: true, volume: 1, muted: false, loaded: false, contentId: '', idleReason: null };
 export const castState = writable<CastState>(initial);
 
 export type CastEvent = 'session-start' | 'session-end' | 'media-end';
@@ -111,8 +127,12 @@ let initStarted = false;
 let ctxT: CastContextT | null = null;
 let player: RemotePlayerT | null = null;
 let controller: RemotePlayerControllerT | null = null;
+/** subtitle index -> cast track id, per content URL (the loaded title and a queued one) */
+const trackMaps = new Map<string, Map<number, number>>();
 let trackIds = new Map<number, number>();
 let lastLoaded = false;
+/** the receiver's media session as last seen: the SDK may drop it before the idle update reaches the RemotePlayer */
+let lastMedia: MediaT | null = null;
 
 /** Chromium only (Chrome, Edge, Opera, Samsung ...), never iOS (all iOS browsers are WebKit), never a paired TV. */
 export function castCapableBrowser(): boolean {
@@ -151,6 +171,10 @@ function sync() {
   if (!p || !c) return;
   const sess = c.getCurrentSession();
   const loaded = p.isConnected && p.isMediaLoaded;
+  const ms = sess?.getMediaSession() ?? null;
+  if (ms) lastMedia = ms;
+  const contentId = p.mediaInfo?.contentId ?? '';
+  if (contentId && trackMaps.has(contentId)) trackIds = trackMaps.get(contentId)!;
   castState.update((s) => ({
     ...s,
     connected: p.isConnected,
@@ -162,6 +186,8 @@ function sync() {
     volume: p.volumeLevel,
     muted: p.isMuted,
     loaded,
+    contentId,
+    idleReason: lastMedia?.idleReason ?? null,
   }));
   // media ended on the receiver: it was loaded, and now IDLE (the Default Media Receiver reports IDLE + FINISHED)
   if (lastLoaded && !loaded && p.isConnected && (p.playerState === 'IDLE' || p.playerState === null)) emit('media-end');
@@ -204,11 +230,8 @@ export async function requestCastSession(): Promise<boolean> {
 }
 export const castConnected = () => get(castState).connected;
 
-/** Loads the cast stream on the receiver; resolves false on failure. */
-/** loads the token on the receiver; `autoplay` false: it stays paused at the start (a renewal while the TV is paused) */
-export async function loadOnCast(info: CastInfo, activeSubtitle = -1, autoplay = true): Promise<boolean> {
-  const sess = ctxT?.getCurrentSession(), ch = window.chrome?.cast;
-  if (!sess || !ch) return false;
+/** the receiver's MediaInfo for a cast token (metadata, subtitle tracks); its track map is kept by content URL */
+function mediaOf(info: CastInfo, ch: ChromeCast): Record<string, unknown> {
   const m = ch.media;
   const media = new m.MediaInfo(info.contentUrl, info.contentType);
   media.streamType = m.StreamType.BUFFERED;
@@ -220,10 +243,10 @@ export async function loadOnCast(info: CastInfo, activeSubtitle = -1, autoplay =
   if (info.seriesName) meta.seriesTitle = info.seriesName;
   if (info.imageUrl) meta.images = [new ch.Image(info.imageUrl)];
   media.metadata = meta;
-  trackIds = new Map();
+  const ids = new Map<number, number>();
   media.tracks = info.subtitles.map((s, i) => {
     const t = new m.Track(i + 1, m.TrackType.TEXT);
-    trackIds.set(s.index, i + 1);
+    ids.set(s.index, i + 1);
     t.trackContentId = s.url;
     t.trackContentType = 'text/vtt';
     t.subtype = m.TextTrackType.SUBTITLES;
@@ -231,7 +254,19 @@ export async function loadOnCast(info: CastInfo, activeSubtitle = -1, autoplay =
     t.language = s.language?.slice(0, 2) || 'und';
     return t;
   });
-  const req = new m.LoadRequest(media);
+  if (trackMaps.size > 8) trackMaps.clear();
+  trackMaps.set(info.contentUrl, ids);
+  return media;
+}
+
+/** loads the token on the receiver; `autoplay` false: it stays paused at the start (a renewal while the TV is paused); false on failure */
+export async function loadOnCast(info: CastInfo, activeSubtitle = -1, autoplay = true): Promise<boolean> {
+  const sess = ctxT?.getCurrentSession(), ch = window.chrome?.cast;
+  if (!sess || !ch) return false;
+  const media = mediaOf(info, ch);
+  trackIds = trackMaps.get(info.contentUrl)!;
+  lastMedia = null; // a new media session: the previous one's idle reason is not this one's
+  const req = new ch.media.LoadRequest(media);
   req.currentTime = info.startTime;
   req.autoplay = autoplay;
   const active = trackIds.get(activeSubtitle);
@@ -241,6 +276,41 @@ export async function loadOnCast(info: CastInfo, activeSubtitle = -1, autoplay =
   } catch {
     return false;
   }
+}
+
+/** a queued title starts loading this many seconds before the playing one ends (seamless move on, also without the sender) */
+export const QUEUE_PRELOAD_S = 30;
+/**
+ * Puts the next title into the receiver's queue after the playing one (autoplay, its resume position): the receiver moves on
+ * by itself at the end, even when the phone sleeps. Resolves the queue item id, or null (no media session, refused).
+ */
+export async function queueOnCast(info: CastInfo): Promise<number | null> {
+  const ms = ctxT?.getCurrentSession()?.getMediaSession(), ch = window.chrome?.cast;
+  if (!ms || !ch) return null;
+  const m = ch.media;
+  // an SDK / receiver without the queue API: null (the engine's countdown loads the next episode instead)
+  const ok = await new Promise<boolean>((done) => {
+    try {
+      const item = new m.QueueItem(mediaOf(info, ch));
+      item.autoplay = true;
+      item.startTime = info.startTime;
+      item.preloadTime = QUEUE_PRELOAD_S;
+      ms.queueInsertItems(new m.QueueInsertItemsRequest([item]), () => done(true), () => done(false));
+    } catch { done(false); }
+  });
+  if (!ok) return null;
+  return ms.items?.find((q) => q.media?.contentId === info.contentUrl)?.itemId ?? null;
+}
+/** drops a queued title (its countdown was cancelled, another title plays) */
+export function castQueueRemove(itemId: number) {
+  const ms = ctxT?.getCurrentSession()?.getMediaSession(), ch = window.chrome?.cast;
+  if (!ms || !ch) return;
+  try { ms.queueRemoveItems(new ch.media.QueueRemoveItemsRequest([itemId]), () => undefined, () => undefined); } catch { /* gone with its session */ }
+}
+/** the receiver jumps to the queued title now (end of the countdown) */
+export function castQueueNext() {
+  const ms = ctxT?.getCurrentSession()?.getMediaSession();
+  try { ms?.queueNext(() => undefined, () => undefined); } catch { /* gone with its session */ }
 }
 
 export const castPlayPause = () => controller?.playOrPause();

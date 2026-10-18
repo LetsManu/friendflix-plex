@@ -12,7 +12,8 @@
   import Footer from '#lib/Footer.svelte';
   import CastBar from '#lib/cast/CastBar.svelte';
   import { barVisible } from '#lib/cast/bar';
-  import { castSession } from '#lib/cast/engine';
+  import { castEngine, castSession } from '#lib/cast/engine';
+  import { bindCastMediaSession } from '#lib/cast/mediasession';
   import { avatarBg, initial } from '#lib/avatars';
   import { cachedCalm, loadList, loadPrefs, prefs } from '#lib/stores';
   import { kidsMode } from '#lib/kids';
@@ -311,6 +312,8 @@
   function outside(e: MouseEvent) { if (!(e.target as HTMLElement).closest('.pop-anchor')) { menu = false; bell = false; cats = false; } }
 
   let stops: Array<() => void> = [];
+  // lock screen / Control Center / notification drive what plays on the TV
+  onMount(() => bindCastMediaSession(castSession, castEngine));
   onMount(() => {
     const onNotes = () => void loadNotes();
     window.addEventListener('ff-notes', onNotes);

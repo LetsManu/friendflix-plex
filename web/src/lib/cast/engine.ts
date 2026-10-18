@@ -13,18 +13,26 @@
  * on the same element (`switchItem`); the controller keeps its grace / settle / breaker logic. A sustained route loss
  * leaves the session in `reconnect`: a tap on the bar (`reconnect()`) opens the picker inside the gesture.
  *
- * End of an episode on the TV: the bar shows the next episode (`next`); with autoplay allowed it starts after the player's
- * countdown (`playOnTv`, resume position). Without a next episode the session ends `ENDED_HIDE_MS` later; an offered episode
- * nobody starts ends it after `ENDED_IDLE_MS`.
+ * End of an episode on the TV, like the player's own "next up": from the credits (Outro segment, else the last 25 s) the bar /
+ * remote shows the next episode (`next`); with autoplay allowed it starts after the countdown (`playOnTv`, resume position),
+ * cancelable. At the very end (no credits countdown ran) the same offer follows the end. Without a next episode the session ends
+ * `ENDED_HIDE_MS` later; an offered episode nobody starts ends it after `ENDED_IDLE_MS`.
+ * The countdown runs in page JS, which a locked phone / backgrounded browser suspends. So the TV moves on by itself where it can:
+ * Chromecast gets the next episode (own token, `next: true`) in the receiver's queue once the end is within `QUEUE_WITHIN_S`
+ * (autoplay allowed for the expected end time); the receiver advances at the end and the engine follows (`advanced`).
+ * AirPlay has no receiver queue: an `ended` while the page is hidden, or found on wake (`onWake`), starts the next one at once.
+ * Intro / recap segments offer `skip` (seek past it).
  */
 import { get, writable, type Readable, type Writable } from 'svelte/store';
 import { api, cachedItem, secToTicks, ticksToSec, type Item, type ItemDetail } from '#lib/api';
-import { castPlayPause, castSeek, castSetSubtitle, castState, castStop, loadOnCast, onCastEvent, type CastEvent, type CastInfo, type CastState } from '#lib/cast';
+import { castPlayPause, castQueueNext, castQueueRemove, castSeek, castSetSubtitle, castState, castStop, loadOnCast, onCastEvent, queueOnCast, type CastEvent, type CastInfo, type CastState } from '#lib/cast';
+import { segmentShown, serverCaps } from '#lib/capabilities';
 import { tr } from '#lib/i18n';
 import { createAirPlay, type AirPlayController, type AirPlayDeps, type AirPlayState } from '#lib/player/airplay';
 import { airLog } from '#lib/player/airplayLog';
 import { barTitles, firstInfoBody } from '#lib/player/bar';
-import { COUNTDOWN_SECONDS, mayAutoplay } from '#lib/player/nextup';
+import { episodeLabel } from './remoteview';
+import { COUNTDOWN_SECONDS, creditsStart, mayAutoplay, type Segment } from '#lib/player/nextup';
 import { consumeAutoplay, noteAutoplay, noteInteraction, shouldAsk } from '#lib/stillwatching';
 import { prefs, type Prefs } from '#lib/stores';
 import { toast } from '#lib/ui/toast';
@@ -39,8 +47,10 @@ export interface CastSession {
   position: number; duration: number; paused: boolean; buffering: boolean; state: CastPhase;
   /** the title's tracks for the remote's tracks menu (another title: no audio list, its token's subtitles) and the current choice */
   audioTracks: CastTrack[]; subtitles: CastTrack[]; audioIndex?: number; subIndex: number;
-  /** set in `ended` when a next episode follows; startsAt = epoch ms of the autoplay (null = button only) */
+  /** from the credits (playing) or in `ended` when a next episode follows; startsAt = epoch ms of the autoplay (null = button only) */
   next?: { itemId: string; label: string; startsAt: number | null };
+  /** the intro / recap segment the TV is in (`skipSegment()` seeks to its end) */
+  skip?: { type: string; end: number };
 }
 export interface PlayerHandoff {
   kind: CastKind; itemId: string; seriesId?: string; title: string; subtitle: string; isEpisode: boolean;
@@ -59,8 +69,10 @@ export interface CastEngine {
   playOnTv(itemId: string, startAt?: number): Promise<void>;
   /** plays the next episode now (from a tap): the known one in `ended`, else the episode after the playing one */
   next(): Promise<void>;
-  /** from a tap: the next episode's autoplay countdown stops, the episode stays offered */
+  /** from a tap: the next episode's autoplay countdown stops, the episode stays offered (and leaves the receiver's queue) */
   cancelNext(): void;
+  /** from a tap: past the intro / recap the TV is in */
+  skipSegment(): void;
   stop(): Promise<void>;
   /** from a tap on the bar in `reconnect`: Chromecast retries the last token request once */
   reconnect(): void;
@@ -73,9 +85,15 @@ export interface CastEngine {
   pick(): void;
   readonly airState: Readable<AirPlayState | null>;
 }
-export type CastFns = Pick<typeof import('#lib/cast'), 'castState' | 'onCastEvent' | 'loadOnCast' | 'castPlayPause' | 'castSeek' | 'castStop' | 'castSetSubtitle'>;
+export type CastFns = Pick<typeof import('#lib/cast'), 'castState' | 'onCastEvent' | 'loadOnCast' | 'castPlayPause' | 'castSeek' | 'castStop' | 'castSetSubtitle' | 'queueOnCast' | 'castQueueRemove' | 'castQueueNext'>;
 export interface EngineDeps {
   api: typeof api; item(id: string): Promise<Item>; cast: CastFns; air: typeof createAirPlay;
+  /** the title's skip / credits segments the server offers ([] = none or unknown) */
+  segments(itemId: string): Promise<Segment[]>;
+  /** the page is hidden (locked phone, other app): timers may not run */
+  hidden(): boolean;
+  /** the page is shown again (visibilitychange / pageshow) */
+  onWake(fn: () => void): () => void;
   body(): HTMLElement; onPageHide(fn: () => void): () => void; toast(kind: 'info' | 'error', msg: string): void;
   prefs(): Prefs; timers: { set(fn: () => void, ms: number): unknown; clear(t: unknown): void; now(): number };
 }
@@ -88,6 +106,10 @@ export const RENEW_BEFORE_MS = 10 * 60_000;
 export const ENDED_HIDE_MS = 5_000;
 /** an offered next episode nobody starts (no autoplay, or its countdown cancelled): the session ends after this */
 export const ENDED_IDLE_MS = 30 * 60_000;
+/** Chromecast: the next episode goes into the receiver's queue once the end is this near (its token's idle lifetime is 45 min) */
+export const QUEUE_WITHIN_S = 40 * 60;
+/** the receiver was told to move on to the queued episode (or reported the end with one queued): load it ourselves after this */
+export const ADVANCE_WAIT_MS = 20_000;
 
 /** marks the AirPlay `<video>` the engine owns (in `document.body`) */
 export const CAST_VIDEO_ATTR = 'data-cast-engine';
@@ -137,13 +159,28 @@ interface Live {
   /** after the end: ends the session (its stop is reported, its token revoked) */
   close?: () => void;
   air?: AirLive;
+  /** the title's intro / recap / credits segments */
+  segs: Segment[];
+  /** the credits of this title were reached: its next episode is offered (once) */
+  credits: boolean;
+  /** the offered next episode (`next`) */
+  offered?: Item;
+  /** the next episode whose countdown was cancelled: nothing autoplays into it */
+  noAuto?: string;
+  /** Chromecast: the next episode in the receiver's queue (its own token) and whether it was asked for this title */
+  queued?: { ci: CastInfo; it: Item; qid: number };
+  queueAsked: boolean;
+  /** the countdown (not the receiver alone) moved on: the autoplay is already counted */
+  going: boolean;
+  /** fallback timer while the receiver should move on to the queued episode */
+  wait?: unknown;
 }
 
 /** a cast token's subtitles as remote tracks (without their URLs) */
 const subsOf = (ci: CastInfo): CastTrack[] => ci.subtitles.map(({ index, title, language }) => ({ index, title, language }));
 
-/** the bar's label of the next episode: "S1:E2 · Name", the name alone without season / episode numbers */
-const nextLabel = (it: Item): string => (it.parentIndexNumber != null && it.indexNumber != null ? `S${it.parentIndexNumber}:E${it.indexNumber} · ${it.name}` : it.name);
+/** the bar's label of the next episode: "S1:E2 · Name", the name alone without season / episode numbers (the header's format) */
+const nextLabel = (it: Item): string => episodeLabel(it);
 
 /** the Player's texts for a failed token request */
 function castErr(e: unknown, kind: CastKind = 'chromecast'): string {
@@ -189,16 +226,35 @@ export function createCastEngine(deps: EngineDeps, out: Writable<CastSession | n
     s.offs = [];
     timers.clear(s.loop);
     if (s.hide !== undefined) timers.clear(s.hide);
+    if (s.wait !== undefined) timers.clear(s.wait);
+    dequeue(s);
     out.set(null);
+  };
+  /** the queued next episode leaves the receiver's queue; its token (never reported, never started) is revoked */
+  const dequeue = (s: Live, keepalive = false) => {
+    const q = s.queued;
+    if (!q) return;
+    s.queued = undefined;
+    cast.castQueueRemove(q.qid);
+    revoke(q.ci, keepalive);
+  };
+  /** the title's segments (intro / recap skip, credits) */
+  const loadSegs = (s: Live) => {
+    const id = s.view.itemId;
+    void deps.segments(id).then((x) => { if (cur === s && s.view.itemId === id) s.segs = x; }, () => undefined);
   };
 
   function tick(s: Live, st: CastState) {
     if (cur !== s) return;
     const device = st.connected ? st.deviceName || 'Chromecast' : s.view.device;
     if (!s.ci || s.busy) { patch(s, { device }); return; }
+    // the receiver moved on to the queued next episode (its end, or the countdown's castQueueNext): that token is the live one now
+    if (st.loaded && s.queued && st.contentId === s.queued.ci.contentUrl && st.contentId !== s.ci.contentUrl) advanced(s);
+    else if (st.loaded && st.contentId && st.contentId !== s.ci.contentUrl) { patch(s, { device }); return; } // other media: not ours
     const p: Partial<CastSession> = { device, buffering: !st.loaded || st.state === 'buffering' };
     const begins = st.loaded && !s.started && (st.state === 'playing' || (s.hold && st.state === 'paused'));
-    if (st.loaded) {
+    // an idle receiver's time is no position (the SDK resets it to 0 around the end): the end check needs the last real one
+    if (st.loaded && st.state !== 'idle') {
       p.position = st.currentTime;
       if (st.duration) p.duration = st.duration;
       p.paused = st.paused;
@@ -209,12 +265,119 @@ export function createCastEngine(deps: EngineDeps, out: Writable<CastSession | n
     if (begins) { s.started = true; s.hold = false; void report(s, 'start', s.ci); }
     else if (s.started && s.lastPaused !== null && s.lastPaused !== st.paused) void report(s, 'progress', s.ci);
     s.lastPaused = st.paused;
+    atPosition(s);
+  }
+
+  /** a position update while the TV plays: skip offer, credits (next episode offered), Chromecast queue */
+  function atPosition(s: Live) {
+    const v = s.view;
+    if (cur !== s || !s.ci || s.busy || v.state !== 'playing') return;
+    const seg = s.segs.find((x) => (x.type === 'intro' || x.type === 'recap') && v.position >= x.start && v.position < x.end - 1);
+    if (seg?.end !== v.skip?.end) patch(s, { skip: seg ? { type: seg.type, end: seg.end } : undefined });
+    if (!v.isEpisode || !(v.duration > 0)) return;
+    const at = creditsStart(s.segs, v.duration);
+    if (!s.credits && v.position >= at) { s.credits = true; void credits(s); }
+    else if (s.credits && v.position < at - 2) {
+      // seeked back out of the credits: the offer (and its countdown) goes, it comes again at the credits
+      s.credits = false; s.offered = undefined;
+      if (s.hide !== undefined) { timers.clear(s.hide); s.hide = undefined; }
+      if (v.next) patch(s, { next: undefined });
+    }
+    if (!s.air && !s.queueAsked && v.duration - v.position <= QUEUE_WITHIN_S) { s.queueAsked = true; void prequeue(s); }
+  }
+
+  /** the credits began: the next episode is offered, with the countdown when autoplay is allowed */
+  async function credits(s: Live) {
+    const my = seq;
+    const it = s.queued?.it ?? (await nextOf(s.view.itemId));
+    if (!it || cur !== s || my !== seq || !s.credits || s.view.state !== 'playing') return;
+    offerNext(s, it, false);
+  }
+
+  /** `next` for `it`: autoplay (countdown, or at once when the end passed unseen) when allowed, else button only */
+  function offerNext(s: Live, it: Item, now0: boolean) {
+    const now = timers.now(), p = deps.prefs();
+    const auto = s.noAuto !== it.id && mayAutoplay({ kind: 'episode', autoplayNext: p.autoplayNext, sleepAfterEpisode: s.sleepAfterEpisode, askStill: shouldAsk(now, p) });
+    if (s.hide !== undefined) timers.clear(s.hide);
+    s.offered = it;
+    const wait = now0 ? 0 : COUNTDOWN_SECONDS * 1000;
+    s.hide = auto ? timers.set(() => goNext(s, it), wait) : s.close ? timers.set(s.close, ENDED_IDLE_MS) : undefined;
+    patch(s, { next: { itemId: it.id, label: nextLabel(it), startsAt: auto ? now + wait : null } });
+  }
+
+  /** the countdown ran out: the receiver plays its queued episode, else the next token is loaded */
+  function goNext(s: Live, it: Item) {
+    if (cur !== s) return;
+    s.hide = undefined;
+    noteAutoplay();
+    consumeAutoplay(); // the chain counts; the watch page's one-shot flag is for its own countdown only
+    const q = s.queued;
+    if (q && q.it.id === it.id && s.ci && !s.busy) {
+      s.going = true;
+      cast.castQueueNext();
+      s.wait = timers.set(() => { if (cur === s && s.queued === q) void swap(s, it.id, undefined, true); }, ADVANCE_WAIT_MS);
+      return;
+    }
+    void swap(s, it.id, undefined, true);
+  }
+
+  /**
+   * Chromecast: the next episode into the receiver's queue (own token, `next: true` after the playing token: it may fill the
+   * stream limit the playing one holds; the server serves it only as that one's successor), when autoplay is allowed for the expected end time. The receiver then moves on by itself, also with the phone asleep.
+   * Any failure leaves the countdown path.
+   */
+  async function prequeue(s: Live) {
+    const v = s.view, my = seq, p = deps.prefs();
+    const endAt = timers.now() + Math.max(0, v.duration - v.position) * 1000;
+    if (!mayAutoplay({ kind: 'episode', autoplayNext: p.autoplayNext, sleepAfterEpisode: s.sleepAfterEpisode, askStill: shouldAsk(endAt, p) })) return;
+    const stale = () => cur !== s || my !== seq || s.busy || !s.ci;
+    const it = await nextOf(v.itemId);
+    if (!it || stale() || s.noAuto === it.id) return;
+    let ci: CastInfo;
+    try {
+      ci = await call<CastInfo>('/api/cast/session', { method: 'POST', body: { itemId: it.id, maxBitrate: s.maxBitrate ?? firstInfoBody(deps.prefs()).maxBitrate, next: true, after: s.ci!.castId } });
+    } catch { return; }
+    if (stale() || s.noAuto === it.id) { revoke(ci); return; }
+    const qid = await cast.queueOnCast(ci);
+    if (qid === null || stale() || s.noAuto === it.id) { if (qid !== null) cast.castQueueRemove(qid); revoke(ci); return; }
+    s.queued = { ci, it, qid };
+  }
+
+  /** the receiver plays the queued episode: the ended one's stop is reported (at its end) and its token revoked */
+  function advanced(s: Live) {
+    const q = s.queued!, old = s.ci;
+    s.queued = undefined;
+    if (s.hide !== undefined) { timers.clear(s.hide); s.hide = undefined; }
+    if (s.wait !== undefined) { timers.clear(s.wait); s.wait = undefined; }
+    s.close = undefined;
+    if (s.view.duration > 0) s.view = { ...s.view, position: s.view.duration };
+    const stopped = stopReport(s);
+    void stopped.then(() => revoke(old));
+    if (!s.going) { noteAutoplay(); consumeAutoplay(); } // the receiver moved on alone (no countdown here): an autoplay all the same
+    seq++; // an older async step (credits, queue) of the ended title gives up
+    s.ci = q.ci; s.started = false; s.lastPaused = null; s.going = false; s.hold = false;
+    s.audioIndex = undefined; s.subIndex = -1; s.sleepAfterEpisode = false; s.noAuto = undefined;
+    s.segs = []; s.credits = false; s.queueAsked = false; s.offered = undefined;
+    const { title, sub } = barTitles(q.it);
+    patch(s, { itemId: q.it.id, title, subtitle: sub, seriesId: q.it.seriesId, posterId: q.it.id, isEpisode: q.it.type === 'Episode', state: 'connecting',
+      position: q.ci.startTime, ...(q.ci.runtimeTicks ? { duration: ticksToSec(q.ci.runtimeTicks) } : {}), paused: false, buffering: true,
+      next: undefined, skip: undefined, audioTracks: [], subtitles: subsOf(q.ci), audioIndex: undefined, subIndex: -1 });
+    loadSegs(s);
   }
 
   function onEvent(s: Live, e: CastEvent) {
     if (cur !== s) return;
-    // the receiver went idle well before the end (playback error, stopped by another sender): not finished
-    const finished = e === 'media-end' && s.view.duration > 0 && s.view.position >= s.view.duration - 20;
+    // FINISHED is the end; CANCELLED / INTERRUPTED (stopped by another sender, other media) never is; otherwise (unknown, ERROR on
+    // the last segment) the position decides: idle well before the end (playback error) is not finished
+    const why = get(cast.castState).idleReason;
+    const finished = e === 'media-end' && (why === 'FINISHED' || (why !== 'CANCELLED' && why !== 'INTERRUPTED' && s.view.duration > 0 && s.view.position >= s.view.duration - 20));
+    if (finished && s.ci && !s.busy && s.queued) {
+      // the receiver moves on to the queued episode by itself; it is loaded from here if it did not after ADVANCE_WAIT_MS
+      advanced(s);
+      const ci = s.ci;
+      s.wait = timers.set(() => { if (cur === s && s.ci === ci && !s.started) void cast.loadOnCast(ci, -1, true); }, ADVANCE_WAIT_MS);
+      return;
+    }
     if (e === 'session-end' || (e === 'media-end' && s.ci && !s.busy && !finished)) {
       const ci = s.ci, stopped = stopReport(s);
       s.ci = null;
@@ -225,7 +388,7 @@ export function createCastEngine(deps: EngineDeps, out: Writable<CastSession | n
       const ci = s.ci, stopped = stopReport(s);
       s.ci = null;
       void stopped.then(() => revoke(ci));
-      afterEnd(s, () => { end(s); cast.castStop(); });
+      afterEnd(s, () => { end(s); cast.castStop(); }, deps.hidden());
     }
   }
 
@@ -238,27 +401,28 @@ export function createCastEngine(deps: EngineDeps, out: Writable<CastSession | n
    * unless a next episode follows; that one is shown in the bar and, when autoplay is allowed, starts after the countdown.
    * Without autoplay (or after `cancelNext`) the session ends after `ENDED_IDLE_MS`.
    */
-  function afterEnd(s: Live, close: () => void) {
+  function afterEnd(s: Live, close: () => void, late = false) {
     s.close = close;
+    if (s.hide !== undefined) timers.clear(s.hide);
+    patch(s, { skip: undefined });
+    const shown = s.view.next, it0 = s.offered;
+    if (shown && it0) {
+      // the credits already offered it: a running countdown goes on (at once when the end passed unseen), a cancelled one idles
+      s.hide = shown.startsAt === null ? timers.set(close, ENDED_IDLE_MS) : timers.set(() => goNext(s, it0), late ? 0 : Math.max(0, shown.startsAt - timers.now()));
+      return;
+    }
     s.hide = timers.set(close, ENDED_HIDE_MS);
     if (!s.view.isEpisode) return;
     const my = seq;
     void nextOf(s.view.itemId).then((it) => {
       if (!it || cur !== s || my !== seq) return; // none, or the session moved on (switch, stop, end) meanwhile
-      timers.clear(s.hide);
-      const now = timers.now(), p = deps.prefs();
-      const auto = mayAutoplay({ kind: 'episode', autoplayNext: p.autoplayNext, sleepAfterEpisode: s.sleepAfterEpisode, askStill: shouldAsk(now, p) });
-      s.hide = auto ? timers.set(() => {
-        noteAutoplay();
-        consumeAutoplay(); // the chain counts; the watch page's one-shot flag is for its own countdown only
-        void swap(s, it.id, undefined, true);
-      }, COUNTDOWN_SECONDS * 1000) : timers.set(close, ENDED_IDLE_MS);
-      patch(s, { next: { itemId: it.id, label: nextLabel(it), startsAt: auto ? now + COUNTDOWN_SECONDS * 1000 : null } });
+      offerNext(s, it, late);
     });
   }
 
   function onPageHide(s: Live) {
     if (cur !== s) return;
+    dequeue(s, true);
     void stopReport(s, true);
     if (s.air) {
       s.air.leaving = true;
@@ -353,16 +517,7 @@ export function createCastEngine(deps: EngineDeps, out: Writable<CastSession | n
     const v = a.video;
     if (type === 'error') { if (v.error && v.error.code !== 1) a.ctl.videoError(v.error.code, v.error.message); return; }
     if (!s.ci || s.busy) return;
-    if (type === 'ended') {
-      patch(s, { state: 'ended', position: s.view.duration || s.view.position, paused: true, buffering: false });
-      // the ended token goes now (after its stop), not only when the controller replaces or drops it
-      const ci = s.ci, stopped = stopReport(s);
-      s.ci = null;
-      a.revoked.add(ci.castId);
-      void stopped.then(() => revoke(ci));
-      afterEnd(s, () => { airNote(s, 'stop', 'ended'); end(s); dropAir(a); });
-      return;
-    }
+    if (type === 'ended') { airEnded(s, a, deps.hidden()); return; }
     const start = type === 'playing' && !s.started && a.ctl.state.active;
     const p: Partial<CastSession> = { paused: v.paused };
     if (s.started || start) p.position = v.currentTime; // before that the element may still be at 0 (the switch's start counts)
@@ -373,6 +528,30 @@ export function createCastEngine(deps: EngineDeps, out: Writable<CastSession | n
     patch(s, p);
     if (start) { s.started = true; void report(s, 'start', s.ci); }
     else if ((type === 'play' || type === 'pause') && s.started) void report(s, 'progress', s.ci);
+    if (type === 'timeupdate' && s.started) atPosition(s);
+  }
+
+  /**
+   * The TV played the title to its end. `late`: that happened while the page was hidden (its JS asleep, e.g. a locked phone):
+   * an allowed next episode starts at once instead of after a countdown nobody saw.
+   */
+  function airEnded(s: Live, a: AirLive, late: boolean) {
+    if (!s.ci) return;
+    airNote(s, 'switch', late ? 'ended while hidden' : 'ended');
+    patch(s, { state: 'ended', position: s.view.duration || s.view.position, paused: true, buffering: false });
+    // the ended token goes now (after its stop), not only when the controller replaces or drops it
+    const ci = s.ci, stopped = stopReport(s);
+    s.ci = null;
+    a.revoked.add(ci.castId);
+    void stopped.then(() => revoke(ci));
+    afterEnd(s, () => { airNote(s, 'stop', 'ended'); end(s); dropAir(a); }, late);
+  }
+
+  /** the page is shown again: an AirPlay end the hidden page missed (no `ended` delivered) is handled now, as a late one */
+  function onWake(s: Live) {
+    const a = s.air;
+    if (cur !== s || !a || !s.ci || s.busy) return;
+    if (a.video.ended) airEnded(s, a, true);
   }
 
   function adoptAir(s: Live, a: AirLive) {
@@ -438,13 +617,17 @@ export function createCastEngine(deps: EngineDeps, out: Writable<CastSession | n
   async function swap(s: Live, itemId: string, startAt: number | undefined, fresh: boolean, hold = !fresh && s.view.paused): Promise<void> {
     const my = ++seq;
     if (s.hide !== undefined) { timers.clear(s.hide); s.hide = undefined; }
+    if (s.wait !== undefined) { timers.clear(s.wait); s.wait = undefined; }
     s.close = undefined;
+    dequeue(s); // a new load replaces the receiver's queue; asked again for the new token
+    s.credits = false; s.queueAsked = false; s.offered = undefined; s.going = false;
+    if (fresh) { s.segs = []; s.noAuto = undefined; }
     const old = s.ci;
     void stopReport(s);
     const stopped = s.stopping; // also a stop an earlier, superseded switch still waits for
     s.ci = null; s.busy = true; s.retry = null; s.lastPaused = null; s.hold = hold;
     if (fresh) { s.audioIndex = undefined; s.subIndex = -1; s.sleepAfterEpisode = false; } // "sleep after" meant the ended episode
-    patch(s, { itemId, state: 'connecting', position: startAt ?? 0, paused: hold, buffering: true, next: undefined,
+    patch(s, { itemId, state: 'connecting', position: startAt ?? 0, paused: hold, buffering: true, next: undefined, skip: undefined,
       ...(fresh ? { audioTracks: [], subtitles: [], audioIndex: undefined, subIndex: -1 } : {}) });
     const meta = fresh ? deps.item(itemId).catch(() => null) : Promise.resolve(null);
     const a = s.air;
@@ -452,6 +635,7 @@ export function createCastEngine(deps: EngineDeps, out: Writable<CastSession | n
     if (!a) revoke(old); // AirPlay: the controller revokes the old token once the new one is on the element
     if (my !== seq) return;
     if (it) { const { title, sub } = barTitles(it); patch(s, { title, subtitle: sub, seriesId: it.seriesId, posterId: it.id, isEpisode: it.type === 'Episode' }); }
+    if (fresh) loadSegs(s);
     if (a) { await airSwap(s, a, my, itemId, startAt, fresh, it, hold); return; }
     let ci: CastInfo;
     try {
@@ -512,7 +696,7 @@ export function createCastEngine(deps: EngineDeps, out: Writable<CastSession | n
           audioTracks: h.audioTracks ?? [], subtitles: h.subtitles ?? [], audioIndex: h.audioIndex, subIndex: h.subIndex },
         ci: h.cast, started: h.started, busy: false, stopping: Promise.resolve(), lastPaused: null, hold: false,
         audioIndex: h.audioIndex, subIndex: h.subIndex, maxBitrate: h.maxBitrate, sleepAfterEpisode: h.sleepAfterEpisode,
-        retry: null, offs: [],
+        retry: null, offs: [], segs: [], credits: false, queueAsked: false, going: false,
       };
       cur = s;
       out.set(s.view);
@@ -520,7 +704,8 @@ export function createCastEngine(deps: EngineDeps, out: Writable<CastSession | n
         s.air = { video: h.video, ctl: h.air, probe: h.probe ?? null, want: null, op: Promise.resolve(), opSeq: null, resume: false, leaving: false, revoked: new Set() };
         adoptAir(s, s.air);
       } else s.offs.push(cast.castState.subscribe((st) => tick(s, st)), cast.onCastEvent((e) => onEvent(s, e)));
-      s.offs.push(deps.onPageHide(() => onPageHide(s)));
+      s.offs.push(deps.onPageHide(() => onPageHide(s)), deps.onWake(() => onWake(s)));
+      loadSegs(s);
       arm(s);
     },
     playPause() {
@@ -540,15 +725,25 @@ export function createCastEngine(deps: EngineDeps, out: Writable<CastSession | n
       if (!s || s.busy || (s.view.state !== 'ended' && s.view.state !== 'playing')) return;
       noteInteraction();
       const my = seq;
-      const id = s.view.next?.itemId ?? (s.view.isEpisode ? (await nextOf(s.view.itemId))?.id : undefined);
-      if (id && cur === s && my === seq) await swap(s, id, undefined, true);
+      const id = s.view.next?.itemId ?? s.queued?.it.id ?? (s.view.isEpisode ? (await nextOf(s.view.itemId))?.id : undefined);
+      if (!id) { if (cur === s && my === seq) deps.toast('info', tr('player.noNext')); return; }
+      if (cur === s && my === seq) await swap(s, id, undefined, true);
     },
     cancelNext() {
       const s = cur;
       if (!s?.view.next || s.view.next.startsAt === null) return;
+      noteInteraction();
       timers.clear(s.hide);
       s.hide = s.close ? timers.set(s.close, ENDED_IDLE_MS) : undefined;
+      s.noAuto = s.view.next.itemId;
+      dequeue(s); // the receiver must not move on by itself either
       patch(s, { next: { ...s.view.next, startsAt: null } });
+    },
+    skipSegment() {
+      const s = cur;
+      if (!s?.view.skip) return;
+      noteInteraction();
+      seek(s.view.skip.end);
     },
     async stop() {
       const s = cur;
@@ -619,7 +814,20 @@ export const castSession: Readable<CastSession | null> = { subscribe: session.su
 const browserDeps: EngineDeps = {
   api,
   item: async (id) => cachedItem(id) ?? (await api<ItemDetail>(`/api/items/${id}`)).item,
-  cast: { castState, onCastEvent, loadOnCast, castPlayPause, castSeek, castStop, castSetSubtitle },
+  cast: { castState, onCastEvent, loadOnCast, castPlayPause, castSeek, castStop, castSetSubtitle, queueOnCast, castQueueRemove, castQueueNext },
+  async segments(id) {
+    const caps = get(serverCaps);
+    if (!caps.segments.length) return [];
+    const r = await api<{ segments: Segment[] } | null>(`/api/items/${id}/segments`);
+    return (r?.segments ?? []).map((x) => ({ ...x, type: String(x.type).toLowerCase() })).filter((x) => segmentShown(caps, x.type));
+  },
+  hidden: () => document.visibilityState === 'hidden',
+  onWake(fn) {
+    const vis = () => { if (document.visibilityState === 'visible') fn(); };
+    document.addEventListener('visibilitychange', vis);
+    window.addEventListener('pageshow', fn);
+    return () => { document.removeEventListener('visibilitychange', vis); window.removeEventListener('pageshow', fn); };
+  },
   air: createAirPlay,
   body: () => document.body,
   onPageHide: (fn) => { window.addEventListener('pagehide', fn); return () => window.removeEventListener('pagehide', fn); },

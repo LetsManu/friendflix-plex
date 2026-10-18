@@ -52,6 +52,9 @@ const login = {
     passkeyText: 'Bestätige die Anmeldung mit deinem Passkey.',
   },
   notice: {
+    unavailableTimeout: 'Der Anmeldedienst hat zu lange nicht geantwortet. Versuch es gleich noch einmal.',
+    unavailableUnreachable: 'FriendFlix erreicht den Anmeldedienst gerade nicht. Versuch es gleich noch einmal.',
+    unavailableServiceToken: 'Der Anmeldedienst verweigert FriendFlix den Zugriff. Ein Admin kann das unter Admin → Status → Anmeldung reparieren.',
     classicTitle: 'Weiter auf der Anmeldeseite',
     classicText: 'Dieser Schritt geht nur auf der Anmeldeseite.',
     classic: 'Auf der Anmeldeseite fortfahren',
@@ -84,6 +87,35 @@ const login = {
   },
   /** account security and the e-mail change (Block 23 phase 3, Task 11) */
   sec: {
+    manageClassic: 'Auf der Anmeldeseite fortfahren',
+    refused: {
+      classic: 'Die Anmeldung in FriendFlix ist ausgeschaltet, deshalb änderst du das auf der Anmeldeseite.',
+      flow_not_configured: 'Das ist beim Anmeldedienst noch nicht eingerichtet. Ein Admin kann es unter Admin → Status → Anmeldung einrichten.',
+      authentik_user_not_found: 'Dein Konto wurde beim Anmeldedienst nicht gefunden. Frag einen Admin.',
+    },
+    problem: {
+      service_token: 'Deine Sicherheitseinstellungen lassen sich gerade nicht lesen: Der Anmeldedienst verweigert FriendFlix den Zugriff. Ein Admin kann das unter Admin → Status → Anmeldung reparieren.',
+      unreachable: 'Deine Sicherheitseinstellungen lassen sich gerade nicht lesen: Der Anmeldedienst antwortet nicht.',
+      error: 'Deine Sicherheitseinstellungen lassen sich gerade nicht lesen.',
+      not_configured: 'FriendFlix ist nicht mit der Schnittstelle des Anmeldedienstes verbunden, deshalb verwaltest du das auf der Anmeldeseite.',
+    },
+    username: {
+      title: 'Benutzername',
+      text: 'Mit diesem Namen oder deiner E-Mail-Adresse meldest du dich an.',
+      unknown: 'Gerade nicht lesbar',
+      change: 'Ändern',
+      label: 'Neuer Benutzername',
+      hint: 'Nur Buchstaben, Ziffern und @ . + - _, höchstens 150 Zeichen.',
+      save: 'Speichern',
+      cancel: 'Abbrechen',
+      done: 'Dein Benutzername ist jetzt „{name}“.',
+      fixed: 'Der Benutzername lässt sich hier nicht ändern: Der Anmeldedienst erkennt dein Konto daran.',
+      errors: {
+        username_invalid: 'Nur Buchstaben, Ziffern und @ . + - _ (höchstens 150 Zeichen).',
+        username_taken: 'Dieser Benutzername ist schon vergeben.',
+        rate_limited: 'Du hast deinen Benutzernamen zu oft geändert. Versuch es morgen wieder.',
+      },
+    },
     dialog: 'Erneut anmelden',
     close: 'Schließen',
     loading: 'Einen Moment …',

@@ -104,15 +104,30 @@ export interface LoginCheck {
   passkeys: 'in-app' | 'sign-in page';
   passkeysReason: string;
   unreachable: boolean;
-  /** codes: `unreachable`, `flow_missing:<kind>`, `flow_unsupported:<kind>`, `consent`, `auth_code_grant`, `issuer`, `passkeys:<reason>`,
+  /** the service token: accepted at all, and the read permissions Authentik refused */
+  serviceToken?: { token: 'ok' | 'invalid' | 'unreachable'; missing: string[] } | null;
+  /** one anonymous call of the login flow's executor from the server: ok, or the error class, upstream status and endpoint path */
+  executor?: { ok: true } | { ok: false; cls: string; status?: number; endpoint: string } | null;
+  /** the latest Authentik failure per area (executor, api) in the last 24 h */
+  lastFailures?: Array<{ area: 'executor' | 'api'; cls: string; status?: number; endpoint: string; at: string }>;
+  /** codes: `unreachable`, `token:invalid`, `permission:<perm>`, `executor:<class>`, `optional:change-email`, `flow_missing:<kind>`, `flow_unsupported:<kind>`, `consent`, `auth_code_grant`, `issuer`, `passkeys:<reason>`,
    *  `permission:provider|validate_stage` (the service account lacks a read permission) */
   warnings: string[];
 }
-export const loadLoginCheck = (): Promise<LoginCheck> => api<LoginCheck>('/api/admin/health/login');
+export const loadLoginCheck = (fresh = false): Promise<LoginCheck> => api<LoginCheck>(`/api/admin/health/login${fresh ? '?refresh=1' : ''}`);
+
+/** POST /api/admin/authentik/repair: the one-time admin token goes in the body only and is never kept */
+export interface RepairResult { ok: boolean; steps: Array<{ id: string; state: string; detail?: string }>; tokenSaved?: boolean; envKept?: string[]; check?: LoginCheck }
+export const repairAuthentik = (token: string): Promise<RepairResult> => api<RepairResult>('/api/admin/authentik/repair', { method: 'POST', body: { token } });
+
+/** an error class of the status card as text (unknown classes: the raw class, which is a fixed code word) */
+export const failClassText = (cls: string): string => (hasKey(`adminContent.login.failClass.${cls}`) ? trDynamic(`adminContent.login.failClass.${cls}`) : cls);
 
 /** The text of a check warning code (unknown codes get no text: the card shows nothing rather than a raw code). */
 export function loginWarningText(code: string, flowName: (kind: string) => string): string {
   const [head, arg = ''] = code.split(':');
-  const key = head === 'passkeys' || head === 'permission' ? `adminContent.login.warn.${head}_${arg}` : `adminContent.login.warn.${head}`;
+  if (head === 'permission' && arg.startsWith('view_')) return trDynamic('adminContent.login.warn.permission_missing', { perm: arg });
+  if (head === 'executor') return trDynamic('adminContent.login.warn.executor', { cls: failClassText(arg) });
+  const key = ['passkeys', 'permission', 'token', 'optional'].includes(head!) ? `adminContent.login.warn.${head}_${arg.replace(/-/g, '_')}` : `adminContent.login.warn.${head}`;
   return hasKey(key) ? trDynamic(key, { flow: flowName(arg) }) : '';
 }

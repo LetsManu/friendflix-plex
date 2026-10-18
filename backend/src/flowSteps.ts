@@ -38,6 +38,11 @@ export interface PasskeyCreate {
 }
 export type PromptFieldType = 'text' | 'username' | 'email' | 'password';
 export interface PromptField { key: string; type: PromptFieldType; label: string; required: boolean }
+/**
+ * why a flow is not possible right now (safe for everyone to see: no host, status or body): Authentik did not answer in time, could
+ * not be reached, refused FriendFlix's service token, or answered something the app cannot use
+ */
+export type UnavailableReason = 'timeout' | 'unreachable' | 'service_token' | 'error';
 export type ClassicReason = 'unsupported_stage' | 'external_redirect' | 'consent' | 'passkey_origin';
 
 export type FlowStep =
@@ -51,7 +56,7 @@ export type FlowStep =
   | { stage: 'recovery-codes'; step: string; codes: string[] }
   | { stage: 'denied' }
   | { stage: 'classic'; reason: ClassicReason }
-  | { stage: 'expired' } | { stage: 'unavailable' }
+  | { stage: 'expired' } | { stage: 'unavailable'; reason?: UnavailableReason }
   | { stage: 'locked' }
   | { stage: 'done'; next: string };
 

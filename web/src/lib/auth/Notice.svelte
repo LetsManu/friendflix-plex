@@ -13,6 +13,10 @@
 
   export let kind: 'denied' | 'locked' | 'expired' | 'unavailable' | 'classic';
   export let classicHref: string;
+  /** a more precise text than the kind's default (e.g. why the sign-in service is unavailable) */
+  export let text: TKey | null = null;
+  /** the label of the classic link (default: "continue on the sign-in page") */
+  export let classicLabel: TKey | null = null;
 
   const dispatch = createEventDispatcher<{ retry: void; restart: void }>();
   const TEXT: Record<typeof kind, { title: TKey; text: TKey; icon: string }> = {
@@ -29,12 +33,12 @@
 <div class="af-form af-center" role={kind === 'unavailable' ? 'alert' : undefined} data-notice={kind}>
   <div class="af-big" aria-hidden="true"><Icon name={TEXT[kind].icon} size={30} /></div>
   <h1 bind:this={heading} tabindex="-1">{$t(TEXT[kind].title)}</h1>
-  <p class="af-sub">{$t(TEXT[kind].text)}</p>
+  <p class="af-sub">{$t(text ?? TEXT[kind].text)}</p>
   {#if kind === 'classic'}
-    <a class="btn af-pri" href={classicHref}>{$t('login.notice.classic')}</a>
+    <a class="btn af-pri" href={classicHref}>{$t(classicLabel ?? 'login.notice.classic')}</a>
   {:else if kind === 'unavailable'}
     <button class="af-pri" type="button" on:click={() => dispatch('retry')}>{$t('login.notice.retry')}</button>
-    <a class="af-link" href={classicHref}>{$t('login.notice.classic')}</a>
+    <a class="af-link" href={classicHref}>{$t(classicLabel ?? 'login.notice.classic')}</a>
   {:else}
     <button class="af-pri" type="button" on:click={() => dispatch('restart')}>{$t('login.notice.restart')}</button>
     {#if kind === 'denied'}<a class="af-link" href={classicHref}>{$t('login.notice.classic')}</a>{/if}

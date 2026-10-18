@@ -6,6 +6,7 @@ import { isKidsProfile } from '../kids.js';
 import type { ItemDto } from '../media/types.js';
 import { homeGens } from '../homegen.js';
 import { nextUpItems, resumeItems } from '../resumeRows.js';
+import { countFallback, rankHomeRows, recoProfileOf, v2Active, type EngineName } from '../reco/engine.js';
 import { requireUser } from '../session.js';
 import type { JfUser } from '../types.js';
 import { friendsRatedFor, leavingRow, libraryBecause, libraryBecauseMore, recommendationsFor } from './discover.js';
@@ -37,7 +38,12 @@ export interface HomeParts {
   /** recommendations from friends + friends' ratings (social: empty for kids profiles) */
   recs: { items: ItemDto[]; recIds: number[]; friends: ItemDto[] };
   /** main "Because you watched" row plus the extra rows */
-  because: { because: { id: string; name: string; liked: boolean } | null; items: ItemDto[]; more: Array<{ because: { id: string; name: string }; items: ItemDto[] }> };
+  because: { because: { id: string; name: string; liked: boolean } | null; items: ItemDto[]; more: Array<{ because: { id: string; name: string }; items: ItemDto[]; engine?: EngineName }>; engine?: EngineName };
+  /**
+   * RECO_ENGINE=v2 only: the recommendation rows in the order the row ranker chose, as keys `friends`, `because`, `more:<n>` (n = index in
+   * `because.more`). A row that is not listed was dropped (too small, or only titles the profile has seen). Absent = the web's fixed layout.
+   */
+  order?: string[];
   hubs: unknown[];
   themed: unknown[];
 }
@@ -74,12 +80,34 @@ export function homeRoutes(app: FastifyInstance, ctx: Ctx, hubs: { viewerHubs: (
       }),
       part('because', async () => {
         const [main, more] = await Promise.all([libraryBecause(ctx, jf, profileId), libraryBecauseMore(ctx, jf, profileId).then((r) => r.rows)]);
-        parts.because = { because: main.because, items: main.items, more };
+        parts.because = { because: main.because, items: main.items, more, ...(main.engine ? { engine: main.engine } : {}) };
       }),
       part('hubs', async () => { parts.hubs = (await hubs.viewerHubs(jf)).hubs; }),
       part('themed', async () => { parts.themed = (await themedLists(ctx, jf, kids)).lists; }),
     ]);
+    if (v2Active(ctx.cfg) && !failed.includes('because') && !failed.includes('recs')) await orderRows(jf, profileId, parts);
     return { parts, failed: failed.sort() };
+  }
+
+  /** RECO_ENGINE=v2: the row ranker orders and cleans the recommendation rows; on any error the fixed layout stays (counted as a fallback). */
+  async function orderRows(jf: JfUser, profileId: string, parts: HomeParts): Promise<void> {
+    try {
+      const profile = await recoProfileOf(ctx, profileId);
+      if (!profile) return;
+      const more = parts.because.more;
+      const ranked = await rankHomeRows(ctx, jf, profile, [
+        { key: 'friends', kind: 'friends', items: parts.recs.friends },
+        { key: 'because', kind: 'because', items: parts.because.items },
+        ...more.map((r, n) => ({ key: `more:${n}`, kind: 'because_more' as const, items: r.items })),
+      ]);
+      const by = new Map(ranked.map((r) => [r.key, r.items]));
+      parts.recs.friends = by.get('friends') ?? [];
+      parts.because.items = by.get('because') ?? [];
+      parts.because.more = more.map((r, n) => ({ ...r, items: by.get(`more:${n}`) ?? [] }));
+      parts.order = ranked.map((r) => r.key);
+    } catch {
+      countFallback('home');
+    }
   }
 
   app.get('/api/home', pre, async (req) => {
