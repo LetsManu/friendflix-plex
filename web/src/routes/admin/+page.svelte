@@ -5,6 +5,7 @@
   import { onMount } from 'svelte';
   import { api } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
+  import RecoCard from '#lib/admin/RecoCard.svelte';
   import { fmtDateTime, fmtNumber, fmtRelative, t, tr } from '#lib/i18n';
   import { describeActivity, type AuditEntry } from '#lib/admin/activity';
   import { levelTone, loadHealth, serviceText, type HealthSnapshot, type ServiceId } from '#lib/admin/health';
@@ -224,6 +225,8 @@
     {/if}
   </section>
 </div>
+
+<RecoCard />
 
 <style>
   .sh, .card h2 { font-size: 1.05rem; font-weight: 700; margin: 0; }

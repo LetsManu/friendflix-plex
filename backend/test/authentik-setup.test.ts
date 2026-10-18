@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { AK_BLUEPRINT_DIR, AK_EXTRA_BLUEPRINTS, applyAuthentik, applyLockTtlS, IMPORT_TIMEOUT_MS, importBlueprint, planAuthentik, type AkStep } from '../src/setup/authentikSetup.js';
+import { AK_BLUEPRINT_DIR, AK_EXTRA_BLUEPRINTS, applyAuthentik, applyLockTtlS, IMPORT_TIMEOUT_MS, importBlueprint, planAuthentik, repairAuthentik, type AkStep } from '../src/setup/authentikSetup.js';
 import { issueSetupCode } from '../src/setup/code.js';
 import { makeEnv, type TestEnv } from './helpers.js';
 
@@ -24,6 +24,8 @@ interface FakeOpts {
   /** the service account token works for the authentik probe */
   serviceKey?: string;
   throwOn?: string;
+  /** the custom mail templates Authentik lists (its /templates folder) */
+  templates?: string[];
 }
 
 function fakeAuthentik(o: FakeOpts = {}) {
@@ -71,6 +73,9 @@ function fakeAuthentik(o: FakeOpts = {}) {
       const me = fixture('me');
       me.user.is_superuser = o.superuser ?? true;
       return json(me);
+    }
+    if (method === 'GET' && p === '/api/v3/stages/email/templates/') {
+      return json([{ name: 'email/password_reset.html' }, { name: 'email/account_confirmation.html' }, ...(o.templates ?? []).map((name) => ({ name }))]);
     }
     if (method === 'GET' && p === '/api/v3/admin/version/') return json({ ...fixture('version'), version_current: o.version ?? '2026.8.3' });
     if (method === 'GET' && p === '/api/v3/core/groups/') {
@@ -165,7 +170,7 @@ describe('planAuthentik', () => {
   it('plan on an empty Authentik → groups create, provider create, serviceAccount create, enrollment create, recovery create, brand create; plan makes only GET requests', async () => {
     const ak = fakeAuthentik();
     const steps = await planAuthentik(planInput, { fetchImpl: ak.fetchImpl });
-    expect(states(steps)).toEqual(['check:ok', 'groups:create', 'provider:create', 'serviceAccount:create', 'enrollment:create', 'recovery:create', 'brand:create', 'extraFlows:skip']);
+    expect(states(steps)).toEqual(['check:ok', 'groups:create', 'provider:create', 'serviceAccount:create', 'enrollment:create', 'recovery:create', 'brand:create', 'extraFlows:skip:template_missing']);
     expect(ak.calls.length).toBeGreaterThan(8);
     expect(new Set(ak.calls.map((c) => c.method))).toEqual(new Set(['GET']));
     for (const c of ak.calls.filter((x) => x.path.startsWith('/api/'))) expect(c.auth).toBe(`Bearer ${ADMIN_TOKEN}`);
@@ -178,7 +183,7 @@ describe('planAuthentik', () => {
   it('plan on a configured Authentik → exists / update; a provider with other settings → update', async () => {
     const done = { groups: ['friendflix-admins', 'friendflix-users'], provider: fixture('provider'), app: true, users: ['friendflix-invites'], flows: ['friendflix-enrollment', 'default-recovery-flow'], brandRecovery: 'flow-x', stageRecovery: 'flow-x' };
     const same = await planAuthentik({ ...planInput, publicUrl: 'https://tv.example.com' }, { fetchImpl: fakeAuthentik(done).fetchImpl });
-    expect(states(same)).toEqual(['check:ok', 'groups:exists', 'provider:exists', 'serviceAccount:update', 'enrollment:update', 'recovery:exists', 'brand:exists', 'extraFlows:skip']);
+    expect(states(same)).toEqual(['check:ok', 'groups:exists', 'provider:exists', 'serviceAccount:update', 'enrollment:update', 'recovery:exists', 'brand:exists', 'extraFlows:skip:template_missing']);
     // grant types missing (an API-created provider), another redirect URI, or no application: the blueprint updates it
     const noGrant = await planAuthentik(planInput, { fetchImpl: fakeAuthentik({ ...done, provider: { ...fixture('provider'), grant_types: [] } }).fetchImpl });
     expect(noGrant.find((s) => s.id === 'provider')?.state).toBe('update');
@@ -205,7 +210,7 @@ describe('applyAuthentik', () => {
   it('apply posts three blueprint files then the recovery path import; the friendflix-setup import has context {"public_url":"https://tv.example.com","admin_group":"friendflix-admins"}', async () => {
     const ak = fakeAuthentik();
     const r = await applyAuthentik(applyInput, deps(ak.fetchImpl));
-    expect(states(r.steps)).toEqual(['check:ok', 'groups:ok', 'provider:ok', 'serviceAccount:ok', 'enrollment:ok', 'recovery:ok', 'brand:ok', 'readback:ok', 'adminMember:skip', 'extraFlows:skip']);
+    expect(states(r.steps)).toEqual(['check:ok', 'groups:ok', 'provider:ok', 'serviceAccount:ok', 'enrollment:ok', 'recovery:ok', 'brand:ok', 'readback:ok', 'adminMember:skip', 'extraFlows:skip:template_missing']);
     expect(ak.imports.map((i) => i.file ?? `path:${i.path}`)).toEqual([
       'friendflix-setup.yaml', 'friendflix-service-account.yaml', 'friendflix-blueprint.yaml', 'path:example/flows-recovery-email-mfa-verification.yaml',
     ]);
@@ -299,17 +304,19 @@ describe('applyAuthentik', () => {
     // 3 file imports + 3 path attempts at 60 s, 2 pauses, about 13 other requests at 10 s, the probes after the save
     expect(applyLockTtlS()).toBeGreaterThanOrEqual((6 * IMPORT_TIMEOUT_MS + 6_000 + 13 * 10_000 + 60_000) / 1000);
     const base = applyLockTtlS();
+    const saved = [...AK_EXTRA_BLUEPRINTS];
     AK_EXTRA_BLUEPRINTS.push({ id: 'emailChange', file: 'friendflix-service-account.yaml' });
     try {
       expect(applyLockTtlS()).toBe(base + IMPORT_TIMEOUT_MS / 1000);
     } finally {
-      AK_EXTRA_BLUEPRINTS.length = 0;
+      AK_EXTRA_BLUEPRINTS.splice(0, AK_EXTRA_BLUEPRINTS.length, ...saved);
     }
   });
 
   it('extra blueprints (phase 3) are imported after the admin membership, with their context', async () => {
     const ak = fakeAuthentik();
-    AK_EXTRA_BLUEPRINTS.push({ id: 'emailChange', file: 'friendflix-service-account.yaml', context: (c) => ({ flow: c.AUTHENTIK_EMAIL_CHANGE_FLOW }) });
+    const saved = [...AK_EXTRA_BLUEPRINTS];
+    AK_EXTRA_BLUEPRINTS.splice(0, AK_EXTRA_BLUEPRINTS.length, { id: 'emailChange', file: 'friendflix-service-account.yaml', context: (c) => ({ flow: c.AUTHENTIK_EMAIL_CHANGE_FLOW }) });
     try {
       const plan = await planAuthentik(planInput, { fetchImpl: ak.fetchImpl });
       expect(states(plan).at(-1)).toBe('extraFlows:update');
@@ -317,8 +324,24 @@ describe('applyAuthentik', () => {
       expect(states(r.steps).at(-1)).toBe('extraFlows:ok');
       expect(ak.imports.at(-1)!.context).toEqual({ flow: 'friendflix-email-change' });
     } finally {
-      AK_EXTRA_BLUEPRINTS.length = 0;
+      AK_EXTRA_BLUEPRINTS.splice(0, AK_EXTRA_BLUEPRINTS.length, ...saved);
     }
+  });
+
+  it('the e-mail change flow: imported by the wizard once Authentik lists its mail template, else skipped with template_missing (nothing created)', async () => {
+    expect(AK_EXTRA_BLUEPRINTS.map((b) => [b.id, b.file, b.template])).toEqual([['emailChange', 'friendflix-email-change.yaml', 'friendflix-email-change.html']]);
+    const without = fakeAuthentik();
+    const r1 = await applyAuthentik(applyInput, deps(without.fetchImpl));
+    expect(states(r1.steps).at(-1)).toBe('extraFlows:skip:template_missing');
+    expect(without.imports.map((i) => i.file ?? i.path)).not.toContain('friendflix-email-change.yaml');
+    expect(r1.values).toBeDefined(); // a missing template never fails the setup
+    const withTpl = fakeAuthentik({ templates: ['friendflix-email-change.html'] });
+    expect(states(await planAuthentik(planInput, { fetchImpl: withTpl.fetchImpl })).at(-1)).toBe('extraFlows:update');
+    const r2 = await applyAuthentik(applyInput, deps(withTpl.fetchImpl));
+    expect(states(r2.steps).at(-1)).toBe('extraFlows:ok');
+    const email = withTpl.imports.find((i) => i.file === 'friendflix-email-change.yaml')!;
+    expect(email.content).toContain('slug: friendflix-email-change');
+    expect(email.content).toContain('template: friendflix-email-change.html');
   });
 });
 
@@ -451,7 +474,7 @@ describe('POST /api/setup/authentik/plan and /apply', () => {
     ak = fakeAuthentik();
     const r = await post('plan', planInput);
     expect(r.statusCode).toBe(200);
-    expect(states(r.json().steps)).toEqual(['check:ok', 'groups:create', 'provider:create', 'serviceAccount:create', 'enrollment:create', 'recovery:create', 'brand:create', 'extraFlows:skip']);
+    expect(states(r.json().steps)).toEqual(['check:ok', 'groups:create', 'provider:create', 'serviceAccount:create', 'enrollment:create', 'recovery:create', 'brand:create', 'extraFlows:skip:template_missing']);
     expect(new Set(ak.calls.map((c) => c.method))).toEqual(new Set(['GET']));
   });
 
@@ -630,5 +653,99 @@ describe('POST /api/setup/authentik/plan and /apply', () => {
     const keys = await env.kv.keys('');
     expect(keys.length).toBeGreaterThan(0);
     expect(JSON.stringify([keys, await env.kv.mget(keys)])).not.toContain(ADMIN_TOKEN);
+  });
+});
+
+describe('repairAuthentik (Admin → Status → Sign-in → Repair)', () => {
+  it('re-applies only the service account and the extra flows, then reads the service token back', async () => {
+    const ak = fakeAuthentik({ users: ['friendflix-invites'], templates: ['friendflix-email-change.html'] });
+    const r = await repairAuthentik({ url: AK, token: ADMIN_TOKEN }, deps(ak.fetchImpl));
+    expect(states(r.steps)).toEqual(['check:ok', 'serviceAccount:ok', 'extraFlows:ok', 'readback:ok']);
+    expect(ak.imports.map((i) => i.file)).toEqual(['friendflix-service-account.yaml', 'friendflix-email-change.yaml']);
+    // groups, provider, enrollment and recovery are never touched, nothing is patched
+    expect(ak.patches).toEqual([]);
+    expect(r.values).toEqual({ AUTHENTIK_API_TOKEN: SERVICE_KEY });
+    // the service account blueprint carries the phase 3 permissions
+    const sa = ak.imports[0]!.content!;
+    for (const perm of ['delete_totpdevice', 'delete_webauthndevice', 'delete_staticdevice', 'view_authenticatorvalidatestage', 'view_oauth2provider', 'view_user', 'change_user']) expect(sa).toContain(perm);
+  });
+
+  it('a missing template skips the e-mail change only; a non-superuser token stops at check; the admin token never leaves in an answer', async () => {
+    const ak = fakeAuthentik({ users: ['friendflix-invites'] });
+    const r = await repairAuthentik({ url: AK, token: ADMIN_TOKEN }, deps(ak.fetchImpl));
+    expect(states(r.steps)).toEqual(['check:ok', 'serviceAccount:ok', 'extraFlows:skip:template_missing', 'readback:ok']);
+    const weak = fakeAuthentik({ superuser: false });
+    const w = await repairAuthentik({ url: AK, token: ADMIN_TOKEN }, deps(weak.fetchImpl));
+    expect(states(w.steps)).toEqual(['check:failed:not_superuser']);
+    expect(w.values).toBeUndefined();
+    expect(JSON.stringify([r, w])).not.toContain(ADMIN_TOKEN);
+  });
+});
+
+describe('POST /api/admin/authentik/repair', () => {
+  const logs: string[] = [];
+  let env: TestEnv;
+  let ak: ReturnType<typeof fakeAuthentik>;
+  let admin: { cookies: Record<string, string>; csrf: string };
+  beforeAll(async () => {
+    env = await makeEnv({}, {
+      ctxPatch: (c) => { c.fetchImpl = ((u: RequestInfo | URL, i?: RequestInit) => ak.fetchImpl(u, i)) as typeof fetch; },
+      logger: { stream: { write: (l: string) => { logs.push(l); } }, level: 'trace' },
+    });
+    admin = await env.login();
+  });
+  afterAll(() => env.close());
+  const stamp = async (at: number) => {
+    const key = `sess:${admin.cookies.ff_sid}`;
+    await env.kv.set(key, JSON.stringify({ ...JSON.parse((await env.kv.get(key))!), reauthAt: at }), 600);
+  };
+  let ip = 0;
+  const post = (payload: unknown, s = admin) =>
+    env.app.inject({ method: 'POST', url: '/api/admin/authentik/repair', cookies: s.cookies, headers: { 'x-csrf-token': s.csrf }, payload: payload as object, remoteAddress: `10.95.0.${++ip}` });
+
+  it('needs an admin with a recent re-authentication; without AUTHENTIK_URL → 409', async () => {
+    ak = fakeAuthentik({ users: ['friendflix-invites'] });
+    expect((await post({ token: ADMIN_TOKEN }, { cookies: {}, csrf: '' })).statusCode).toBe(401);
+    expect((await post({ token: ADMIN_TOKEN })).json()).toEqual({ error: 'reauth_required' });
+    await stamp(Date.now());
+    env.ctx.cfg = { ...env.ctx.cfg, AUTHENTIK_URL: undefined, AUTHENTIK_API_TOKEN: undefined };
+    expect((await post({ token: ADMIN_TOKEN })).statusCode).toBe(409);
+    expect(ak.calls).toEqual([]);
+  });
+
+  it('saves a service token that changed (deleted and created anew), audits the run, never logs the admin token', async () => {
+    ak = fakeAuthentik({ users: ['friendflix-invites'] });
+    await stamp(Date.now());
+    // saved settings (not the environment): a changed service token is saved over the old one
+    await env.ctx.settings.save({ AUTHENTIK_URL: AK, AUTHENTIK_API_TOKEN: 'ff-old-deleted-token-placeholder' }, null);
+    logs.length = 0;
+    const r = await post({ token: ADMIN_TOKEN });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ ok: true, tokenSaved: true });
+    expect(states(r.json().steps)).toEqual(['check:ok', 'serviceAccount:ok', 'extraFlows:skip:template_missing', 'readback:ok']);
+    expect(r.json().check).toMatchObject({ mode: expect.any(String) });
+    await env.ctx.settings.reload();
+    expect(env.ctx.cfg.AUTHENTIK_API_TOKEN).toBe(SERVICE_KEY);
+    const a = await env.pool.query("select meta from audit_log where action = 'authentik.repair'");
+    expect(a.rows).toHaveLength(1);
+    expect(logs.join('\n')).not.toContain(ADMIN_TOKEN);
+    expect(logs.join('\n')).not.toContain(SERVICE_KEY);
+    expect(JSON.stringify(r.json())).not.toContain(ADMIN_TOKEN);
+    expect(await env.ctx.kv.get('setup:authentik:apply')).toBeNull();
+    // a token set in the environment is never overwritten: it is named instead
+    env.ctx.cfg = { ...env.ctx.cfg, AUTHENTIK_API_TOKEN: 'ff-env-token-placeholder' };
+    await stamp(Date.now());
+    const e = await post({ token: ADMIN_TOKEN });
+    expect(e.json()).toMatchObject({ ok: true, tokenSaved: false, envKept: ['AUTHENTIK_API_TOKEN'] });
+  });
+
+  it('a failed check answers ok false with the steps and saves nothing; a missing token → 400', async () => {
+    ak = fakeAuthentik({ superuser: false });
+    await stamp(Date.now());
+    const rev = env.ctx.settings.rev();
+    const r = await post({ token: ADMIN_TOKEN });
+    expect(r.json()).toEqual({ ok: false, steps: [{ id: 'check', state: 'failed', detail: 'not_superuser' }] });
+    expect(env.ctx.settings.rev()).toBe(rev);
+    expect((await post({})).statusCode).toBe(400);
   });
 });

@@ -131,6 +131,12 @@ export default {
     tvHint: 'Kein AirPlay oder Chromecast am Fernseher? Öffne {url} im Browser des Fernsehers und kopple dein Handy als Fernbedienung.',
   },
   /** the bar while a title plays on a TV (cast engine) */
+  /** the watch page as the TV's remote (device chip, short stop, next episode) */
+  castRemote: {
+    changeDevice: 'Gerät wechseln',
+    stopShort: 'Beenden',
+    playNow: 'Jetzt abspielen',
+  },
   castBar: {
     region: 'Jetzt auf dem Fernseher',
     failed: '„{title}“ kann auf {device} nicht abgespielt werden.',

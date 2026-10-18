@@ -15,6 +15,7 @@
   import { pageCount, pageIndex, INITIAL_EXTRA } from '#lib/home';
   import { t } from '#lib/i18n';
   import { recoTrack, type RecoTag } from '#lib/reco';
+  import ReasonCaption from '#lib/ReasonCaption.svelte';
 
   export let title: string;
   /** null = loading (skeleton) */
@@ -114,6 +115,7 @@
       <h2>{#if href}<a {href}>{title}<span class="more"> {$t('home.row.showAll')}</span><Icon name="chevron-right" size={18} /></a>{:else}{title}{/if}</h2>
       {#if pages > 1 && !$mobile}<ol class="dots" aria-hidden="true">{#each Array(pages) as _, i}<li class:on={i === current}></li>{/each}</ol>{/if}
     </div>
+    {#if items && reco}<ReasonCaption {items} />{/if}
     <div class="wrap">
       <button class="arrow left" class:hide={!canLeft} aria-label={$t('home.row.prev')} on:click={() => go(-1)}><Icon name="chevron-left" size={34} /></button>
       <div class="track" use:trackAction on:scroll={onScroll} role="list">

@@ -17,6 +17,8 @@ import { stat } from 'node:fs/promises';
 import { defaultLimit } from '../requestlimit.js';
 import { DEFAULT_ROLES, INVITABLE_ROLES, effectiveRole, invalidateRoles } from '../roles.js';
 import { requireGrownUp } from '../kids.js';
+import { recoIndexState } from '../reco/indexJob.js';
+import { recoStats } from '../reco/engine.js';
 import { requireAdmin, requireOwner } from '../session.js';
 import { portainerMode, triggerUpdate, updateInfo } from '../updates.js';
 import { MAX_FEATURED } from '../lists.js';
@@ -51,6 +53,9 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
   });
 
   // one cheap call for the admin shell (pending badges) and the overview: counts only, every source optional
+  /** R4: CTR and play rate per recommendation engine, from the Prometheus counters of this process (admin card on the dashboard). */
+  app.get('/api/admin/reco', admin, async () => recoStats(ctx.cfg));
+
   app.get('/api/admin/summary', admin, async () => {
     const { listLive } = await import('../live.js');
     const { parties } = await import('./party.js');
@@ -92,6 +97,8 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
       playbackCheck: check ? { finishedAt: check.finished_at.toISOString(), total: check.results.length, failed: check.results.filter((x) => !x.ok).length } : null,
       services: { jellyfin: Boolean(jellyfin), seerr: seerr !== null },
       live: { streams: live, partyRooms: parties.rooms.size },
+      // R1: size and age of the recommendation item index (counts and a timestamp only)
+      recoIndex: await recoIndexState(ctx).then((x) => ({ supported: x.supported, running: x.running, items: x.items, updatedAt: x.updatedAt }), () => null),
     };
   });
 

@@ -759,6 +759,44 @@ export const MIGRATIONS: string[] = [
   `
   update settings_meta set setup_completed_at = now() where setup_completed_at is null and exists (select 1 from users);
   `,
+  // 41: R1 recommendation index (reco/indexJob.ts): library metadata features per film / series, IDF weights and numeric statistics.
+  // Library facts only (no user data, no paths or URLs); rebuilt from the media server, so it can always be dropped and refilled.
+  `
+  create table item_features (
+    item_id text primary key,
+    type text not null check (type in ('Movie','Series')),
+    genres text[] not null default '{}',
+    tags text[] not null default '{}',
+    studios text[] not null default '{}',
+    people text[] not null default '{}',
+    year int,
+    runtime_min int,
+    community_rating real,
+    critic_rating real,
+    original_language text,
+    countries text[] not null default '{}',
+    collection_id text,
+    series_status text check (series_status in ('continuing','ended')),
+    overview_terms jsonb not null default '{}',
+    updated_at timestamptz not null default now()
+  );
+  create index item_features_collection on item_features(collection_id) where collection_id is not null;
+  create index item_features_genres on item_features using gin(genres);
+  create table item_feature_idf (
+    kind text not null check (kind in ('genre','tag','studio','person','term')),
+    value text not null,
+    df int not null,
+    idf real not null,
+    seen_at timestamptz not null default now(),
+    primary key (kind, value)
+  );
+  create table item_feature_stats (
+    name text primary key,
+    mean double precision not null,
+    std double precision not null,
+    n int not null
+  );
+  `,
 ];
 
 export async function migrate(pool: pg.Pool): Promise<void> {

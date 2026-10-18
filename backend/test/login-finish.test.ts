@@ -298,7 +298,7 @@ describe('finishing a sign-in', () => {
       env.ctx.oidc = p;
       useFake();
       const r = await appLogin(claims);
-      expect(r.body).toEqual({ stage: 'unavailable' });
+      expect(r.body).toMatchObject({ stage: 'unavailable' });
       expect(r.setCookies.find((c) => c.name === 'ff_sid')).toBeUndefined();
       expect(ak.calls.some((c) => c.path === INVALIDATION)).toBe(true);
     }
@@ -310,7 +310,7 @@ describe('finishing a sign-in', () => {
     jf.createIdentity = async () => { throw new HttpError(502, 'jellyfin_error'); };
     try {
       useFake();
-      expect((await appLogin(fresh)).body).toEqual({ stage: 'unavailable' });
+      expect((await appLogin(fresh)).body).toEqual({ stage: 'unavailable', reason: 'error' });
     } finally {
       jf.createIdentity = create;
     }

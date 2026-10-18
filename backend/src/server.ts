@@ -36,6 +36,7 @@ import { bootConfigEnv, bootstrapEnv, lazyBootstrap, nonEmptyEnv } from './setti
 import { jobFailed } from './errorlog.js';
 import { healthTick } from './health.js';
 import { hygieneDue, stopHygiene } from './hygiene/scan.js';
+import { recoIndexDue, startRecoIndexListener, stopRecoIndex } from './reco/indexJob.js';
 import { announceSetupCode } from './setup/code.js';
 import { isOperational, isSetupComplete } from './setup/state.js';
 
@@ -145,11 +146,19 @@ if (cfg.BACKGROUND_JOBS === 'true') {
     timers.push(setInterval(() => { if (op()) void hygieneDue(ctx); }, 60_000));
   }, 120_000);
   timers.push(hygieneStart); // clearInterval also clears a timeout
+  // recommendation item index (R1): incremental after library additions (media.event), a full pass on the first run and nightly; checked every minute from 90 s after start; never throws
+  startRecoIndexListener(ctx); // lives as long as the process
+  const recoStart = setTimeout(() => {
+    if (op()) void recoIndexDue(ctx);
+    timers.push(setInterval(() => { if (op()) void recoIndexDue(ctx); }, 60_000));
+  }, 90_000);
+  timers.push(recoStart);
 }
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
   process.on(sig, () => {
     timers.forEach(clearInterval);
     stopHygiene();
+    stopRecoIndex();
     offPush();
     void live.close().catch(() => undefined)
       .then(() => settings.close()).catch(() => undefined)

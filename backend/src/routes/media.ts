@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
 import { MediaError, type ItemDto, type TranscodeReason } from '../media/types.js';
 import { methodOf } from '../playstats.js';
-import { clearLive, countLive, getLive, listLive, setLive } from '../live.js';
+import { clearLive, clearStopped, countLive, getLive, listLive, markStopped, setLive } from '../live.js';
 import { isHomeRequest } from '../netaddr.js';
 import { effectiveLimits } from '../limits.js';
 import { remoteBitrateCap } from '../roles.js';
@@ -340,8 +340,8 @@ export function mediaRoutes(app: FastifyInstance, ctx: Ctx) {
         itemId: b.itemId, mediaSourceId: b.mediaSourceId, playSessionId: b.playSessionId, positionTicks: ticks, paused: b.isPaused,
         audioIndex: b.audioIndex, subtitleIndex: b.subtitleIndex, playMethod: b.playMethod,
       });
-      if (kind === 'Playing/Stopped') await clearLive(ctx, user.id, b.playSessionId);
-      else await setLive(ctx, live);
+      if (kind === 'Playing/Stopped') { await clearLive(ctx, user.id, b.playSessionId); await markStopped(ctx, user.id, b.playSessionId); }
+      else { if (kind === 'Playing') await clearStopped(ctx, user.id, b.playSessionId); await setLive(ctx, live); }
       await playbackHooks.run(ctx, { kind, user, live, elapsedMs: elapsed ? Math.min(Date.now() - prev, 30_000) : 0 });
       return { ok: true };
     });

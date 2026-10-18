@@ -54,6 +54,9 @@ const login: Translation<typeof de> = {
     passkeyText: 'Potwierdź logowanie swoim kluczem dostępu.',
   },
   notice: {
+    unavailableTimeout: 'Usługa logowania zbyt długo nie odpowiadała. Spróbuj ponownie za chwilę.',
+    unavailableUnreachable: 'FriendFlix nie może teraz połączyć się z usługą logowania. Spróbuj ponownie za chwilę.',
+    unavailableServiceToken: 'Usługa logowania odmawia FriendFlix dostępu. Administrator może to naprawić w Admin → Status → Logowanie.',
     classicTitle: 'Kontynuuj na stronie logowania',
     classicText: 'Ten krok działa tylko na stronie logowania.',
     classic: 'Kontynuuj na stronie logowania',
@@ -85,6 +88,35 @@ const login: Translation<typeof de> = {
   },
   /** account security and the e-mail change (Block 23 phase 3, Task 11) */
   sec: {
+    manageClassic: 'Kontynuuj na stronie logowania',
+    refused: {
+      classic: 'Logowanie w FriendFlix jest wyłączone, więc tę zmianę wprowadzasz na stronie logowania.',
+      flow_not_configured: 'To nie jest jeszcze skonfigurowane w usłudze logowania. Administrator może to skonfigurować w Admin → Status → Logowanie.',
+      authentik_user_not_found: 'Nie znaleziono twojego konta w usłudze logowania. Zapytaj administratora.',
+    },
+    problem: {
+      service_token: 'Nie można teraz odczytać twoich ustawień bezpieczeństwa: usługa logowania odmawia FriendFlix dostępu. Administrator może to naprawić w Admin → Status → Logowanie.',
+      unreachable: 'Nie można teraz odczytać twoich ustawień bezpieczeństwa: usługa logowania nie odpowiada.',
+      error: 'Nie można teraz odczytać twoich ustawień bezpieczeństwa.',
+      not_configured: 'FriendFlix nie jest połączony z API usługi logowania, więc tymi ustawieniami zarządzasz na stronie logowania.',
+    },
+    username: {
+      title: 'Nazwa użytkownika',
+      text: 'Logujesz się tą nazwą albo adresem e-mail.',
+      unknown: 'Nie można teraz odczytać',
+      change: 'Zmień',
+      label: 'Nowa nazwa użytkownika',
+      hint: 'Tylko litery, cyfry oraz @ . + - _, najwyżej 150 znaków.',
+      save: 'Zapisz',
+      cancel: 'Anuluj',
+      done: 'Twoja nazwa użytkownika to teraz „{name}”.',
+      fixed: 'Nazwy użytkownika nie można tu zmienić: usługa logowania rozpoznaje po niej twoje konto.',
+      errors: {
+        username_invalid: 'Tylko litery, cyfry oraz @ . + - _ (najwyżej 150 znaków).',
+        username_taken: 'Ta nazwa użytkownika jest już zajęta.',
+        rate_limited: 'Zbyt często zmieniałeś nazwę użytkownika. Spróbuj jutro.',
+      },
+    },
     dialog: 'Zaloguj się ponownie',
     close: 'Zamknij',
     loading: 'Chwileczkę …',

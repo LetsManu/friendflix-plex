@@ -16,6 +16,19 @@
  *            similar?: { [seedItemId]: string[] }   // recorded Jellyfin similar() answers, best first (optional)
  *          }
  * Engines implement { name, fit(train), recommend({ surface: 'home' | 'next', history, seed, k }) -> itemIds }: see ENGINES.
+ *
+ * Engine v2 (R2) is the real code of backend/src/reco (taste maths, item vectors, scoring, MMR) in its offline form, backend/src/reco/offline.ts.
+ * The script imports the compiled backend, so build it first:   npm run build -w backend
+ * (RECO_EVAL_DIST points at another compiled directory.) Without the build v2 is reported as not evaluated; asking for it with --engines fails.
+ * Item features beyond genres and year are optional in the dataset: tags, studios, people (arrays), runtime (min), rating (0-10), collection, added (ms).
+ * The run prints a v2-versus-baselines comparison and the spec 4.7 gate (v2 NDCG@10 must beat every baseline by --gate-margin, default 5 %);
+ * --gate makes a failed gate exit with code 1.
+ *
+ * R3: v2 also uses co-occurrence, transitions and trending built from the dataset's other profiles (minimum support of 2 profiles, as live).
+ * R3b: `--ipw` replays a logged exploration policy (v2 with RECO_EXPLORE-style exploration, seeded) and values other rankings from the log by
+ * inverse propensity weighting, next to their true value. `--ablation` prints one table: v2 with each score component switched off in turn, and what that does to NDCG@10 (home), HitRate@10 and
+ * transition accuracy (post-play). Context features, the friends signal and fresh labels need data a dataset does not have (time of day,
+ * device, friends, library dates) and are reported as not evaluable.
  */
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
@@ -178,8 +191,156 @@ export function cooccurrenceEngine({ minSupport = MIN_SUPPORT, decay = 0.85 } = 
   };
 }
 
-/** Name -> factory. v2 plugs in here (or through --plugin, a module exporting `engines` with more factories). */
+/** Name -> factory of the engines that need nothing built. v2 is added by main() when the compiled backend is there (loadV2), more through --plugin. */
 export const ENGINES = { popularity: popularityEngine, v1: v1Engine, cooccurrence: cooccurrenceEngine };
+
+export const DEFAULT_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'backend', 'dist');
+/** The compiled offline v2 module (backend/dist/reco/offline.js), or null when the backend is not built. */
+export async function loadV2(dist = DEFAULT_DIST) {
+  try {
+    const mod = await import(pathToFileURL(join(dist, 'reco', 'offline.js')).href);
+    return typeof mod.offlineEngine === 'function' ? mod : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * v2: backend/src/reco in its offline form. The dataset's items are the index (IDF over the dataset); similar() answers come from the
+ * recorded `similar` map (without one the seed's nearest neighbours stand in). 'home' = profile taste (surface home_rows, no seed),
+ * 'next' = post-play (surface postplay, seed = the last title).
+ */
+export function v2Engine(mod, { off = [] } = {}) {
+  let eng;
+  return {
+    name: 'v2',
+    fit(train, prep) {
+      const items = new Map([...prep.catalog].map((id) => [id, { id }]));
+      for (const [id, f] of prep.features) items.set(id, f);
+      // the other profiles feed co-occurrence, transitions and trending (the sequences carry the event times)
+      eng = mod.offlineEngine([...items.values()], prep.similar, undefined, { train: train?.profiles ?? [], off });
+    },
+    recommend({ surface, history, seed, k, disliked }) {
+      return eng.recommend({ surface, history, ...(seed ? { seed } : {}), k, disliked });
+    },
+    /** the ranked list and the scored pool (for exploration), R3b */
+    slate({ surface, history, seed, k, disliked }) {
+      return eng.slate({ surface, history, ...(seed ? { seed } : {}), k, disliked });
+    },
+  };
+}
+
+/** Spec 4.7 gate: v2 NDCG@10 beats every other engine by `margin` (relative). null when v2 or a baseline is missing. */
+export function gate(res, margin = 0.05) {
+  const v2 = res.engines.v2;
+  const others = Object.entries(res.engines).filter(([n]) => n !== 'v2');
+  if (!v2 || !others.length) return null;
+  const [bestName, best] = others.reduce((a, b) => (b[1].ndcg > a[1].ndcg ? b : a));
+  return { pass: v2.ndcg > best.ndcg * (1 + margin), margin, v2: v2.ndcg, best: best.ndcg, bestName };
+}
+
+/** The score components of the offline v2 that the ablation switches off one at a time (backend/src/reco/offline.ts OFFLINE_COMPONENTS). */
+export const ABLATION_COMPONENTS = ['affinity', 'seed', 'cooccurrence', 'transition', 'quality', 'fresh', 'trending', 'mmr'];
+/** Not evaluable on a dataset: they need data it does not have. */
+export const NOT_EVALUABLE = ['context features (time of day, device, language, runtime budget, series status)', 'friends signal', 'fresh labels of the media server'];
+/** The smallest change the table can resolve: one evaluated profile moving a hit in or out of the top 10 changes NDCG@10 by about 1 / profiles. */
+export const ablationEpsilon = (profiles) => (profiles > 0 ? 1 / profiles : 1);
+
+/**
+ * Ablation: v2 as is, and v2 with each component left out. `d*` = left-out minus full, so a negative NDCG delta means the component helps.
+ * verdict: "helps" (NDCG@10 or transition accuracy drops by more than one profile's worth without it), "hurts" (rises), "trade-off" (rises,
+ * but the diversity of the lists falls by more than 0.05: the component buys diversity with accuracy), else "no effect".
+ */
+export function ablation(data, mod, { minInteractions = MIN_INTERACTIONS, minProfiles = 1, excludeSeen = false } = {}) {
+  const prep = prepare(data);
+  const tr = split(prep, minInteractions);
+  if (tr.cases.length < minProfiles) throw new Error(`only ${tr.cases.length} profile(s) with >= ${minInteractions} interactions; need ${minProfiles} for aggregates`);
+  const full = runEngine(v2Engine(mod), prep, tr, { excludeSeen });
+  const eps = ablationEpsilon(tr.cases.length);
+  const rows = ABLATION_COMPONENTS.map((component) => {
+    const m = runEngine(v2Engine(mod, { off: [component] }), prep, tr, { excludeSeen });
+    const dNdcg = round(m.ndcg - full.ndcg), dTrans = round(m.transitionAccuracy - full.transitionAccuracy), dDiversity = round(m.diversity - full.diversity);
+    const helps = dNdcg < -eps || dTrans < -eps, hurts = dNdcg > eps || dTrans > eps;
+    const verdict = helps && !hurts ? 'helps' : hurts && !helps ? (dDiversity < -0.05 ? 'trade-off' : 'hurts') : helps && hurts ? 'mixed' : 'no effect';
+    return { component, ndcg: m.ndcg, hitRate: m.hitRate, transitionAccuracy: m.transitionAccuracy, diversity: m.diversity, dNdcg, dHitRate: round(m.hitRate - full.hitRate), dTrans, dDiversity, verdict };
+  });
+  return { meta: { k: K, evaluatedProfiles: tr.cases.length, epsilon: round(eps), notEvaluable: NOT_EVALUABLE }, full: { ndcg: full.ndcg, hitRate: full.hitRate, transitionAccuracy: full.transitionAccuracy, diversity: full.diversity }, rows };
+}
+
+export const IPW_DEFAULTS = { explore: 0.1, rounds: 200, seed: 1 };
+
+/**
+ * Inverse-propensity-weighted replay (spec 4.5, 4.7; R3b). The logging policy is engine v2 with exploration at rate `explore`: every case's
+ * slate is v2's top 10 with about one eligible slot in ten (the best 3 are never touched) replaced by a medium-score candidate, repeated
+ * for `rounds` rounds with a seeded generator. Each logged slot carries its propensity: 1 - explore for the ranked title, explore / band
+ * size for an explored one, 1 for the protected top. A target policy (any ranking) is then valued from the log alone:
+ *     value = mean over cases and rounds of  sum over slots j of  discount(j) * [logged_j = target_j = held-out title] / propensity_j
+ * (discount(j) = 1 / log2(j + 2), so this is NDCG@10), and compared with its true value on the same cases. The estimate is unbiased for
+ * every slot whose target title had a chance of being logged ("support"); the share of such slots is reported, because a target that wants
+ * titles the logging policy never shows cannot be valued from the log at all. With `explore` 0 only the logging policy itself is valued.
+ * Targets: v2 itself, v2 without co-occurrence / without taste affinity, popularity, co-occurrence.
+ */
+export function ipwReplay(data, mod, { explore = IPW_DEFAULTS.explore, rounds = IPW_DEFAULTS.rounds, seed = IPW_DEFAULTS.seed, minInteractions = MIN_INTERACTIONS, minProfiles = 1 } = {}) {
+  const prep = prepare(data);
+  const tr = split(prep, minInteractions);
+  if (tr.cases.length < minProfiles) throw new Error(`only ${tr.cases.length} profile(s) with >= ${minInteractions} interactions; need ${minProfiles} for aggregates`);
+  const logger = v2Engine(mod);
+  logger.fit({ profiles: tr.train }, prep);
+  const policies = {
+    v2: logger, 'v2 without cooccurrence': v2Engine(mod, { off: ['cooccurrence'] }), 'v2 without affinity': v2Engine(mod, { off: ['affinity'] }),
+    popularity: ENGINES.popularity(), cooccurrence: ENGINES.cooccurrence(),
+  };
+  for (const e of Object.values(policies)) if (e !== logger) e.fit({ profiles: tr.train }, prep);
+  const q = (c) => ({ surface: 'home', history: c.history, seed: c.history[c.history.length - 1]?.item, k: K, disliked: c.disliked });
+  const disc = (j) => 1 / Math.log2(j + 2);
+  const rng = mod.seededRng(seed);
+  // the logs: per case, `rounds` slates with their propensities
+  const logs = tr.cases.map((c) => {
+    const s = logger.slate(q(c));
+    return Array.from({ length: rounds }, () => mod.exploreSlate(s.ranked, s.pool, explore, rng));
+  });
+  const out = [];
+  for (const [name, eng] of Object.entries(policies)) {
+    let truth = 0, truthSupported = 0, est = 0, slots = 0, supported = 0, matches = 0, sumW = 0, sumW2 = 0;
+    tr.cases.forEach((c, n) => {
+      const target = eng.recommend(q(c)).slice(0, K);
+      const at = target.indexOf(c.target);
+      if (at >= 0) truth += disc(at);
+      const seen = target.map(() => false);
+      for (const l of logs[n]) {
+        target.forEach((id, j) => {
+          if (l.ids[j] === id) seen[j] = true;
+          if (j === at && l.ids[j] === id) {
+            const w = 1 / l.propensity[j];
+            est += disc(j) * w; matches++; sumW += w; sumW2 += w * w;
+          }
+        });
+      }
+      if (at >= 0 && seen[at]) truthSupported += disc(at);
+      slots += target.length;
+      supported += seen.filter(Boolean).length;
+    });
+    const cases = tr.cases.length;
+    out.push({
+      policy: name, direct: round(truth / cases), supported: round(truthSupported / cases), ipw: round(est / (cases * rounds)), support: round(slots ? supported / slots : null),
+      matches, effectiveSample: round(sumW2 ? (sumW * sumW) / sumW2 : 0, 1),
+    });
+  }
+  return { meta: { k: K, evaluatedProfiles: tr.cases.length, explore, rounds, seed }, rows: out };
+}
+
+export function formatIpw(res) {
+  const lines = [`inverse-propensity-weighted replay of the v2 logging policy with exploration ${res.meta.explore} (profiles: ${res.meta.evaluatedProfiles}, rounds: ${res.meta.rounds}, seed: ${res.meta.seed}, k=${res.meta.k})`, ''];
+  lines.push('target policy'.padEnd(26) + ['true NDCG@10', 'true, supported', 'IPW estimate', 'error', 'support', 'matches', 'eff. n'].map((h) => h.padStart(17)).join(''));
+  for (const r of res.rows) {
+    const err = r.ipw === null || r.supported === null ? null : r.ipw - r.supported;
+    lines.push(r.policy.padEnd(26) + [num(r.direct), num(r.supported), num(r.ipw), err === null ? '   n/a' : (err > 0 ? '+' : '') + err.toFixed(3), pct(r.support), String(r.matches), String(r.effectiveSample)].map((h) => h.padStart(17)).join(''));
+  }
+  lines.push('', 'support = share of the target slots whose title the logging policy showed there at least once. "true, supported" = the true value counting only supported slots;',
+    'the IPW estimate is unbiased for that (error = IPW minus it). Titles the log never showed cannot be valued, so for a target that differs from v2 the estimate is a lower bound of the true value.',
+    'A target is valued from the explored slots that happen to match: noisy (see eff. n).');
+  return lines.join('\n');
+}
 
 // -------------------------------------------------------------------------------------------------------------- metrics
 
@@ -312,6 +473,40 @@ export function format(res) {
   lines.push('metric'.padEnd(24) + names.map((n) => n.padStart(14)).join(''));
   for (const [label, key, f] of rows) lines.push(label.padEnd(24) + names.map((n) => f(res.engines[n][key]).padStart(14)).join(''));
   lines.push('cold-start cases'.padEnd(24) + names.map((n) => String(res.engines[n].coldCases).padStart(14)).join(''));
+  const v2 = res.engines.v2;
+  const base = names.filter((n) => n !== 'v2');
+  if (v2 && base.length) {
+    lines.push('', 'v2 against the baselines (percentage points; for "Already seen" lower is better)');
+    lines.push('metric'.padEnd(24) + base.map((n) => n.padStart(14)).join(''));
+    for (const [label, key] of rows) {
+      const seen = key === 'seenShare';
+      lines.push(label.padEnd(24) + base.map((n) => {
+        const a = v2[key], b = res.engines[n][key];
+        if (a === null || b === null) return '   n/a'.padStart(14);
+        const d = (a - b) * (['hitRate', 'coverage', 'seenShare', 'midPopularityShare', 'newTitleHitRate', 'transitionAccuracy'].includes(key) ? 100 : 1);
+        const unit = key === 'ndcg' || key === 'mrr' || key === 'diversity' ? '' : ' pp';
+        return ((d > 0 ? '+' : '') + d.toFixed(unit ? 1 : 3) + unit + (seen ? (d < 0 ? ' *' : '') : d > 0 ? ' *' : '')).padStart(14);
+      }).join(''));
+    }
+    lines.push('(* = v2 is better)');
+    const g = gate(res, res.meta.gateMargin);
+    if (g) lines.push(`gate (spec 4.7): v2 NDCG@10 ${g.v2.toFixed(3)} vs best baseline ${g.bestName} ${g.best.toFixed(3)}, needs +${(g.margin * 100).toFixed(0)} %: ${g.pass ? 'PASS' : 'FAIL'}`);
+  }
+  return lines.join('\n');
+}
+
+/** The ablation table as text. */
+export function formatAblation(res) {
+  const d4 = (x) => (x === null ? '   n/a' : ((x > 0 ? '+' : '') + x.toFixed(3)).padStart(6));
+  const lines = [`ablation of engine v2: each component switched off in turn (profiles evaluated: ${res.meta.evaluatedProfiles}, k=${res.meta.k})`, ''];
+  lines.push('left out'.padEnd(16) + ['NDCG@10', 'd NDCG', 'HitRate@10', 'd Hit', 'Transition', 'd Trans', 'Diversity', 'd Div'].map((h) => h.padStart(11)).join('') + '  verdict');
+  lines.push('(v2 as is)'.padEnd(16) + [num(res.full.ndcg), '', pct(res.full.hitRate), '', pct(res.full.transitionAccuracy), '', num(res.full.diversity), ''].map((h) => h.padStart(11)).join(''));
+  for (const r of res.rows) {
+    lines.push(r.component.padEnd(16) + [num(r.ndcg), d4(r.dNdcg), pct(r.hitRate), d4(r.dHitRate), pct(r.transitionAccuracy), d4(r.dTrans), num(r.diversity), d4(r.dDiversity)].map((h) => h.padStart(11)).join('') + '  ' + r.verdict);
+  }
+  lines.push('', `verdict: "helps" = NDCG@10 or transition accuracy falls by more than ${res.meta.epsilon} (one profile's worth) without the component, "hurts" = it rises,`,
+    '"trade-off" = it rises but the lists lose diversity (the component buys diversity), "mixed" = one up, one down, else "no effect"');
+  lines.push('not evaluable on a dataset: ' + res.meta.notEvaluable.join('; '));
   return lines.join('\n');
 }
 
@@ -322,6 +517,11 @@ export function parseArgs(argv) {
     if (a === '--db') o.db = true;
     else if (a === '--json') o.json = true;
     else if (a === '--exclude-seen') o.excludeSeen = true;
+    else if (a === '--ablation') o.ablation = true;
+    else if (a === '--ipw') o.ipw = true;
+    else if (a === '--explore') o.explore = Number(val());
+    else if (a === '--rounds') o.rounds = Number(val());
+    else if (a === '--seed') o.seed = Number(val());
     else if (a === '--data') o.data = val();
     else if (a === '--items') o.items = val();
     else if (a === '--similar') o.similar = val();
@@ -329,20 +529,27 @@ export function parseArgs(argv) {
     else if (a === '--engines') o.engines = val().split(',').filter(Boolean);
     else if (a === '--min-profiles') o.minProfiles = Number(val());
     else if (a === '--min-seconds') o.minSeconds = Number(val());
+    else if (a === '--gate') o.gate = true;
+    else if (a === '--gate-margin') o.gateMargin = Number(val());
     else if (a === '--help' || a === '-h') o.help = true;
     else throw new Error(`unknown argument ${a}`);
   }
   return o;
 }
 
-const HELP = `usage: node scripts/reco-eval.mjs [--data file.json | --db] [--engines popularity,v1,cooccurrence] [--exclude-seen] [--json]
+const HELP = `usage: node scripts/reco-eval.mjs [--data file.json | --db] [--engines popularity,v1,cooccurrence,v2] [--exclude-seen] [--json] [--ablation] [--ipw] [--ipw]
+  (v2 needs the compiled backend: npm run build -w backend; RECO_EVAL_DIST = another build directory)
+  --ablation        v2 with each score component left out in turn: which ones move NDCG@10 (needs the compiled backend)
+  --ipw             inverse-propensity-weighted replay of v2 with exploration (--explore 0.1, --rounds 200, --seed 1); needs the compiled backend
+  --gate            exit 1 when v2 does not beat every baseline on NDCG@10 by the margin (spec 4.7 gate)
+  --gate-margin X   relative margin of the gate (default 0.05 = 5 %)
   --db              read interactions from DATABASE_URL (read only); --items / --similar add features and recorded similar() answers
   --min-profiles N  refuse to print fewer than N evaluated profiles (default 5)
   --plugin file.mjs add engines (module exports { engines: { name: factory } })`;
 
 const out = new Console(process.stdout, process.stderr);
 
-export async function main(argv, env = process.env, log = (s) => out.log(s)) {
+export async function main(argv, env = process.env, log = (s) => out.log(s), warn = (s) => out.error(s)) {
   const o = parseArgs(argv);
   if (o.help) { log(HELP); return 0; }
   let data;
@@ -355,10 +562,30 @@ export async function main(argv, env = process.env, log = (s) => out.log(s)) {
     data = JSON.parse(readFileSync(o.data ?? DEFAULT_FIXTURE, 'utf8'));
   }
   let registry = ENGINES;
-  if (o.plugin) registry = { ...ENGINES, ...(await import(pathToFileURL(o.plugin).href)).engines };
+  const v2 = await loadV2(env.RECO_EVAL_DIST || DEFAULT_DIST);
+  if (v2) registry = { ...registry, v2: () => v2Engine(v2) };
+  if (o.plugin) registry = { ...registry, ...(await import(pathToFileURL(o.plugin).href)).engines };
+  if (!v2 && o.engines?.includes('v2') && !registry.v2) throw new Error('engine v2 needs the compiled backend: run `npm run build -w backend` (or set RECO_EVAL_DIST)');
+  if (!v2 && !o.engines && !registry.v2) warn('reco-eval: v2 not evaluated, the backend is not built (npm run build -w backend)');
+  if (o.ipw) {
+    if (!v2) throw new Error('--ipw needs the compiled backend: run `npm run build -w backend` (or set RECO_EVAL_DIST)');
+    const rep = ipwReplay(data, v2, { ...(Number.isFinite(o.explore) ? { explore: o.explore } : {}), ...(Number.isFinite(o.rounds) ? { rounds: o.rounds } : {}), ...(Number.isFinite(o.seed) ? { seed: o.seed } : {}), minProfiles: o.minProfiles ?? 5 });
+    log(o.json ? JSON.stringify(rep, null, 2) : formatIpw(rep));
+    return 0;
+  }
+  if (o.ablation) {
+    if (!v2) throw new Error('--ablation needs the compiled backend: run `npm run build -w backend` (or set RECO_EVAL_DIST)');
+    const abl = ablation(data, v2, { minProfiles: o.minProfiles ?? 5, excludeSeen: o.excludeSeen });
+    log(o.json ? JSON.stringify(abl, null, 2) : formatAblation(abl));
+    return 0;
+  }
+  const gateMargin = Number.isFinite(o.gateMargin) ? o.gateMargin : 0.05;
   const res = evaluate(data, { engines: o.engines ?? Object.keys(registry), registry, minProfiles: o.minProfiles ?? 5, excludeSeen: o.excludeSeen });
+  res.meta.gateMargin = gateMargin;
+  const g = gate(res, gateMargin);
+  if (g) res.meta.gate = g;
   log(o.json ? JSON.stringify(res, null, 2) : format(res));
-  return 0;
+  return o.gate && g && !g.pass ? 1 : 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

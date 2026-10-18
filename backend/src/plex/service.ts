@@ -21,12 +21,14 @@ import type {
   SubtitleHit, TrackList, TrickplayDto,
 } from '../media/types.js';
 import type { HygieneFacts, ServerSession } from '../media/types.js'; // Block 22
+import type { ItemFeatures, SeriesStatus } from '../media/types.js'; // fork: 1.1 engine v2 + post-play
 import { tmdbGuids, tmdbIdOf, toPlexAbout, type AboutRow } from './about.js';
 import { plexHygienePage, plexServerSessions, toPlexHygieneFacts } from './care.js'; // Block 22
 import { loadPolicy, paramList, refreshAges, resolveAccess, visibleSql, type Access, type Param } from './access.js';
 import { PlexError, type PlexClient } from './client.js';
 import { chapterDtos, plexTraits, type MirrorChapter } from './depth.js';
 import { plexTypes, sectionDto, toItemDto, type ItemRow } from './dto.js';
+import { toPlexFeatures, type FeatureRow, type FeatureTag } from './features.js'; // fork: 1.1 engine v2
 import { decodePlexId, encodePlexId, plexKey } from './ids.js';
 import { sessionIdentities } from './limits.js';
 import { plexLoginArtIds, plexPosterThumb } from './loginart.js'; // fork: Block 23 phase 3 cover wall
@@ -79,6 +81,8 @@ const SORT: Record<string, string> = {
   sortname: 'lower(coalesce(i.title_sort, i.title))',
   name: 'lower(coalesce(i.title_sort, i.title))',
   datecreated: 'i.added_at',
+  // fork (1.1): a show sorts by its newest episode's addition (Jellyfin DateLastContentAdded), a film by its own
+  datelastcontentadded: `coalesce((select max(e.added_at) from plex_items e where e.grandparent_key = i.rating_key and e.type = 'episode'), i.added_at)`,
   premieredate: 'i.originally_available',
   productionyear: 'i.year',
   communityrating: 'coalesce(i.audience_rating, i.critic_rating)',
@@ -139,6 +143,7 @@ export class PlexMediaServer implements MediaServer {
       segments: new Set<SegmentType>(this.flags.markers ? ['intro', 'outro'] : []),
       trickplay: this.flags.bif, upcoming: false, subtitleSearch: false, webhooks: false, changeFeed: true, planB: false, subtitleExtract: true,
       chapters: this.flags.chapters,
+      libraryFeatures: true, // fork (1.1): the recommendation index reads the mirror (libraryFeatures)
       // POST /api/playback/info starts the Plex transcode (preparePlayback): no prefetch on hover / focus
       playbackPrefetch: false,
     };
@@ -978,6 +983,76 @@ export class PlexMediaServer implements MediaServer {
         audio: langs(2), subtitles: langs(3),
       };
     });
+  }
+
+  // ---------------------------------------------------------------- 1.1: recommendation engine v2, post-play (fork)
+
+  /**
+   * One page of the neutral features of every film and show of the mirror (library-wide, no viewer; R1 index job), in rating key
+   * order: stable while a sync runs (new items get higher keys and append), a short page = the end. `opts.ids` = only these films /
+   * shows (episodes, seasons, foreign or unknown ids are left out), `opts.savedSince` = only rows Plex or the detail sync changed since.
+   * Genres, labels (as tags), studios, countries and up to 8 credited people (2 directors, 2 writers, then actors in billing order)
+   * come from plex_tags, the collection from plex_collection_items, ratings through the Block 21 rating mapping. Plex has no series
+   * status and no original language: both stay unset (unknown). Nothing here carries a path, URL, image path or the token.
+   */
+  async libraryFeatures(start: number, limit: number, opts: { ids?: string[]; savedSince?: string } = {}): Promise<ItemFeatures[]> {
+    const keys = opts.ids?.map((x) => plexKey(String(x).toLowerCase())).filter((x): x is string => x !== null);
+    if (opts.ids && !keys?.length) return [];
+    const since = opts.savedSince ? Date.parse(opts.savedSince) : NaN;
+    const { params, p } = paramList();
+    const where = [`i.type in ('movie', 'show')`];
+    if (keys) where.push(`i.rating_key = any(${p(keys)}::bigint[])`);
+    if (Number.isFinite(since)) {
+      const sp = p(new Date(since).toISOString());
+      where.push(`(i.detail_at >= ${sp}::timestamptz or i.plex_updated_at >= extract(epoch from ${sp}::timestamptz))`);
+    }
+    const rows = await this.q<FeatureRow>(
+      `select i.rating_key, i.type, i.year, i.duration_ms, i.summary, i.tagline, i.studio, i.audience_rating, i.critic_rating, i.rating_image,
+              i.audience_rating_image,
+              (select min(ci.collection_key) from plex_collection_items ci join plex_items c on c.rating_key = ci.collection_key and c.type = 'collection'
+                where ci.item_key = i.rating_key) collection_key
+         from plex_items i where ${where.join(' and ')}
+        order by i.rating_key offset ${p(Math.max(0, Math.floor(start) || 0))} limit ${p(Math.max(0, Math.min(Math.floor(limit) || 0, 1000)))}`, params);
+    if (!rows.length) return [];
+    const tags = await this.q<FeatureTag & { rating_key: string }>(
+      `select rating_key, kind, tag, tag_id, pos from plex_tags
+        where rating_key = any($1::bigint[]) and kind in ('genre', 'label', 'studio', 'country', 'director', 'writer', 'actor')`,
+      [rows.map((r) => String(r.rating_key))]);
+    const byKey = new Map<string, FeatureTag[]>();
+    for (const t of tags) {
+      const k = String(t.rating_key);
+      (byKey.get(k) ?? byKey.set(k, []).get(k)!).push({ kind: t.kind, tag: t.tag, tag_id: t.tag_id === null ? null : String(t.tag_id), pos: t.pos });
+    }
+    return rows.map((r) => toPlexFeatures(r, byKey.get(String(r.rating_key)) ?? []));
+  }
+
+  /** The film or show behind each id, library-wide (an episode -> its show, a film / show -> itself); unknown ids are absent. */
+  async libraryRoots(ids: string[]): Promise<Map<string, string>> {
+    const want = new Map<string, string>(); // rating key -> the id as asked
+    for (const id of ids) {
+      const k = plexKey(String(id));
+      if (k !== null && !want.has(k)) want.set(k, String(id));
+    }
+    const out = new Map<string, string>();
+    if (!want.size) return out;
+    const r = await this.q<{ rating_key: string; type: string; grandparent_key: string | null }>(
+      `select rating_key, type, grandparent_key from plex_items where rating_key = any($1::bigint[]) and type in ('movie', 'show', 'episode')`, [[...want.keys()]]);
+    for (const x of r) {
+      const id = want.get(String(x.rating_key))!;
+      if (x.type === 'episode') { if (x.grandparent_key) out.set(id, encodePlexId('item', x.grandparent_key)); }
+      else out.set(id, id);
+    }
+    return out;
+  }
+
+  /**
+   * Post-play: Plex keeps no airing status for a series, so it is unknown (null) for every series the viewer can see; the post-play
+   * screen then says "You're caught up" and never "finished" (absent from libraryContinuingSeriesIds is not "ended" either). 404 when
+   * the series is not visible.
+   */
+  async seriesStatus(user: MediaUser, seriesId: string): Promise<SeriesStatus> {
+    await this.mustSee(user, seriesId, ['show']);
+    return null;
   }
 
   // ---------------------------------------------------------------- Block 22: admin care (library hygiene, metadata refresh)

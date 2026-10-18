@@ -122,6 +122,7 @@
         <li>{$t('setup.signin.leftovers.smtp')}</li>
         <li>{$t('setup.signin.leftovers.mfa')}</li>
         <li>{$t('setup.signin.leftovers.templates')}</li>
+        {#if result.steps.some((s) => s.detail === 'template_missing')}<li>{$t('setup.signin.leftovers.emailChange')}</li>{/if}
       </ul>
       <div class="acts"><Button icon="chevron-right" on:click={() => dispatch('done')}>{$t('setup.next')}</Button></div>
     {:else}

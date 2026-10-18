@@ -124,6 +124,7 @@ Skip intro and credits (where Plex has markers, see [limits](#plex-vs-jellyfin-w
 - **Themed lists** – any list can become an editorial page with a title, a colour and an emoji; the admin pins a few of them as rows on everyone's home page ("Friday movie night", "Cosy autumn").
 - **A fuller detail page** – ratings in one line (community, critics, friends; IMDb, Rotten Tomatoes and Metacritic with an optional OMDb key), a collection row with "Part 2 of 3" and watched ticks, and a *Details* tab with facts and links to TMDB, IMDb, TVDB and Trakt. On phones the tabs stay in reach while you scroll.
 - **Because you watched …** – several rows, each based on a different recent title, spread between the other rows.
+- **What's next, after the last episode** – when a film or the last available episode ends, a calm screen says *You finished …* or *You're caught up* (with the next air date and *Remind me*), points to the next part, a sequel or an episode you skipped, offers a wish for a missing season, and suggests titles from the same universe, *Because you watched …*, from friends and for your taste. A small *Done? See what's next* card appears when the credits start. Nothing starts by itself, Esc or Back keeps you on the title, and *Settings → Show suggestions after the last episode* turns the suggestions off.
 - **Search and browse** find people, genres, titles and episodes; filter by decade, rating, language and **picture quality** (4K, HDR, Dolby Vision, Atmos). "Tonight" suggests three titles by mood and time.
 - **Simulcast** (linked from the calendar) lists the series that are airing right now, grouped by weekday and season, with an "Anime only" filter (on Plex it relies on Plex air dates; limited, not verified yet).
 
@@ -235,6 +236,8 @@ The FriendFlix interface is the same; what differs is what Plex can deliver. Sta
 | TV mode, watch parties, recommendations, notifications | Works | FriendFlix features, independent of the media server |
 | "Upcoming episodes" | Not available | Plex does not offer it |
 | In-app sign-in, password recovery, account security, cover wall | Works | Between FriendFlix and Authentik; Plex is not involved. The cover wall shows Plex posters only for titles whose own Plex age rating is on the allow-list (up to 12, nothing unrated), see [docs/plex.md](docs/plex.md#sign-in-and-account-security-on-plex) |
+| Post-play screen, recommendation engine v2 | Limited | The item index reads FriendFlix's mirror of the Plex library. Plex has no series status and no announced episodes, so after the last episode it says *You're caught up*, never *finished*, and offers no air date; see [docs/plex.md](docs/plex.md#recommendation-engine-v2-and-post-play-on-plex) |
+| Next episode on the TV (Chromecast queue), cast remote screen | Works | The queued episode overlaps only the cast it follows, also in Plex's own stream count; see [docs/plex.md](docs/plex.md#casting-the-next-episode-on-plex) |
 | Wishes / request service | Works | Each FriendFlix account gets its own local request-service user (request permission only), created on the first wish |
 | nginx "Plan B" media path | Not available | Not supported with Plex |
 
@@ -281,6 +284,7 @@ A new install needs none of this: the setup wizard and *Admin → Settings* stor
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | empty, empty, `PUBLIC_URL` | Web push; active only when both keys are set |
 | `DIGEST_DAY`, `DIGEST_HOUR` | `0` (Sunday), `18` | Weekly digest schedule; `-1` = off; can be changed in the admin area |
 | `CAST_ENABLED` | `true` | Chromecast and AirPlay (needs an https `PUBLIC_URL`); `false` with Plan B |
+| `POSTPLAY_ENABLED` | `true` | The post-play screen after a film or the last episode ("You're caught up", suggestions); `false` turns it off for everyone. See [docs/discovery.md](docs/discovery.md) |
 | `DOWNLOADS_ENABLED` | `true` | Offline downloads; `false` with Plan B |
 | `DOWNLOADS_PATH`, `PREVIEWS_PATH` | named volumes `downloads`, `previews` | Host folder (absolute path, writable by uid 1000) for prepared downloads and preview clips |
 | `DOWNLOAD_CACHE_MAX_GB`, `DOWNLOAD_MIN_FREE_GB` | `50`, `2` | Size cap for prepared downloads; minimum free space to keep |
@@ -288,6 +292,11 @@ A new install needs none of this: the setup wizard and *Admin → Settings* stor
 | `DOWNLOAD_FILE_TTL_HOURS`, `DOWNLOAD_OFFLINE_GRACE_DAYS`, `DOWNLOAD_CREATE_PER_HOUR` | `48`, `7`, `20` | Cleanup of unused files, offline grace period, licence rate limit |
 | `DIRECT_PLAY_REQUIRES_DOWNLOAD` | `false` | `true`: roles without download permission also lose direct play |
 | `PREVIEW_WARM` | `true` | Background job that pre-generates hover/billboard preview clips |
+| `RECO_W_GENRES`, `RECO_W_TAGS`, `RECO_W_STUDIOS`, `RECO_W_PEOPLE`, `RECO_W_TEXT`, `RECO_W_NUMERIC`, `RECO_W_COLLECTION` | `1`, `0.6`, `0.4`, `0.8`, `1`, `0.3`, `1.5` | Weight (0–10, `0` = off) of each feature group of the recommendation item index: genres, tags, studios, people, overview text, numbers (year, runtime, ratings), collection. The recommendation engine v2 reads it (see `RECO_ENGINE`) |
+| `RECO_ENGINE` | `v1` | Engine behind "Because you watched": `v1` = the media server's similar titles (as before), `shadow` = also compute engine v2 and record how much the two agree (metrics only, viewers still get v1), `v2` = answer with v2 (taste profile per profile, item index, MMR re-ranking). With `v2` the home rows, the post-play rows (incl. "What people watch after X") and the reason caption come from the new engine; it falls back to v1 on any error. Leave on `v1` until `scripts/reco-eval.mjs` and the shadow metrics look good; see [docs/discovery.md](docs/discovery.md) |
+| `RECO_HALF_LIFE_DAYS` | `120` | Half-life (days) of the recency decay of taste signals: a thumbs-up counts half as much after this many days |
+| `RECO_COEFFS` | – | JSON object that overrides scoring coefficients by dotted name, e.g. `{"signal.thumbUp2":4,"rank.lambda":0.8}`; unknown names are ignored. The names are listed in docs/discovery.md |
+| `RECO_EXPLORE` | `0` | Exploration of engine v2: the share (0–0.5) of the slots of a row that are filled with a medium-score title instead of the ranked one, so that offline replay can later weigh other rankings. `0` = off; `0.1` = about 1 in 10. Only counters by row kind (`friendflix_reco_explore_*`) are logged, never titles or users |
 | `PLAYBACK_CHECK_HOUR` | `4` | Nightly playback check with admin alert; `-1` = off |
 | `BACKGROUND_JOBS` | `true` | Download preparation/cleanup, language and picture-quality index, leaving-soon reminders, Plex library sync (keep `true` on the single backend) |
 | `API_COMPRESSION` | `true` | gzip/brotli for JSON responses ≥ 1 KB; `false` if the proxy already compresses `/api` |

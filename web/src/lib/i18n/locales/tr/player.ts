@@ -129,6 +129,12 @@ const tr: Translation<typeof de> = {
     tvHint: 'Televizyonda AirPlay veya Chromecast yok mu? TV tarayıcısında {url} adresini aç ve telefonunu kumanda olarak eşleştir.',
   },
   /** the bar while a title plays on a TV (cast engine) */
+  /** the watch page as the TV's remote (device chip, short stop, next episode) */
+  castRemote: {
+    changeDevice: 'Cihazı değiştir',
+    stopShort: 'Durdur',
+    playNow: 'Şimdi oynat',
+  },
   castBar: {
     region: 'Şu an televizyonda',
     failed: '“{title}” {device} üzerinde oynatılamıyor.',

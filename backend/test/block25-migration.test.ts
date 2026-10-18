@@ -16,7 +16,7 @@ const rewind = () => pool.query('drop table settings, settings_meta; delete from
 
 describe('block25 migration', () => {
   it('is migration 39, followed by 40 (setup completed for installs with users)', () => {
-    expect(MIGRATIONS.length).toBe(40);
+    expect(MIGRATIONS.length).toBeGreaterThanOrEqual(40); // later migrations are appended
     expect(MIGRATIONS[38]).toContain('create table settings (');
     expect(MIGRATIONS[39]).toContain('setup_completed_at = now()');
   });

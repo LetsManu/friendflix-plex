@@ -5,6 +5,9 @@ import { z } from 'zod';
 import type { Ctx } from '../ctx.js';
 import { requireUser } from '../session.js';
 import { LANGUAGES } from '../i18n.js';
+import { bumpHome } from '../homegen.js';
+import { resetTaste } from '../reco/profile.js';
+import { resetRowStats } from '../reco/rows.js';
 
 export const prefsSchema = z.object({
   autoplayNext: z.boolean().default(true),
@@ -40,6 +43,8 @@ export const prefsSchema = z.object({
    * audio/subtitle preference (GET /api/series/:id/langpref). Per profile.
    */
   animeOriginal: z.boolean().default(false),
+  /** 1.1 post-play: "Show suggestions after the last episode" (caught-up screen and the "Done? See what's next" card) */
+  postplay: z.boolean().default(true),
   /** blur thumbnails and hide descriptions of unwatched episodes */
   spoilerProtection: z.boolean().default(false),
   /** weekly "Wochenrückblick" (in-app + personal ntfy), account level */
@@ -154,6 +159,17 @@ export function prefsRoutes(app: FastifyInstance, ctx: Ctx) {
       [req.profile!.id, audioFx],
     );
     return { audioFx };
+  });
+  /**
+   * "Reset my recommendations" (profile settings, spec 4.8): forgets the profile's cached taste vector and its per-row click / play statistics.
+   * Nothing else is touched (thumbs, ratings, watch history and the watchlist stay); the next request rebuilds the taste from what remains,
+   * and the home / post-play caches of the profile are dropped so the change shows at once. Kids profiles may reset their own too.
+   */
+  app.post('/api/prefs/reco/reset', { ...pre, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    const id = req.profile!.id;
+    await Promise.all([resetTaste(ctx, id), resetRowStats(ctx, id)]);
+    await bumpHome(ctx, id);
+    return { ok: true };
   });
   /** /welcome finished or skipped: the onboarding never shows again for this profile (kids profiles included). */
   app.put('/api/prefs/onboarded', { ...pre, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {

@@ -54,6 +54,8 @@ const openQuality = async (page: Page) => {
 };
 
 test.describe('player: adaptive quality', () => {
+  // the short test streams end during these tests: the 1.1 post-play screen would cover the player controls (tested in postplay.spec.ts)
+  test.beforeEach(({ api }) => { api.features = { requests: true, postplay: false }; });
   test('playback/info called with maxBitrate 4_000_000 when no stored estimate', async ({ page, api: _api }) => {
     const calls = await mockAbr(page);
     await page.goto('/watch/' + MOVIE.id);

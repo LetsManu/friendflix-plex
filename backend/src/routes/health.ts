@@ -38,7 +38,15 @@ export function healthRoutes(app: FastifyInstance, ctx: Ctx) {
   });
 
   // Block 23 phase 3: the sign-in card on Admin → Status (cached 10 min; a failing check is a warning, never a mode switch)
-  app.get('/api/admin/health/login', admin, async () => checkLoginFlows(ctx));
+  app.get('/api/admin/health/login', admin, async (req, reply) => {
+    // `?fresh=1` (the card's "Check again", after a repair): the cached result is skipped, at most a few times a minute
+    const fresh = healthQuery.parse(req.query).refresh;
+    if (fresh === '1' || fresh === 'true') {
+      if ((await ctx.kv.incr(`health:login:${req.sid}`, 60)) > REFRESH_PER_MIN) return reply.code(429).send({ error: 'rate_limited' });
+      return checkLoginFlows(ctx, { fresh: true });
+    }
+    return checkLoginFlows(ctx);
+  });
 
   app.post('/api/admin/health/dismiss', admin, async (req) => {
     const b = dismissBody.parse(req.body);

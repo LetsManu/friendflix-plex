@@ -94,7 +94,10 @@ export interface Item {
   lastAdded?: string; childCount?: number; unplayedCount?: number;
   /** only on /api/library/trending: number of distinct viewers this week */
   viewers?: number;
+  /** recommendation engine v2: why the title is in a row (seed + up to two shared traits); see lib/reason.ts */
+  reason?: Reason;
 }
+export interface Reason { seed: { id: string; name: string } | null; traits: string[] }
 export interface Me { id: string; name: string; role: string; roleLabel: string; isAdmin: boolean; csrfToken: string; deviceApproved: boolean; tv: boolean; profile?: MeProfile | null; profileRequired?: boolean; profileCount?: number; profileChosen?: boolean; downloads?: { allowed: boolean; max: number };
   /** effective UI language (profile → instance default → 'de'); see docs/i18n.md */ language?: string;
   /** false = the active profile never chose a language (first-login picker); absent on older servers */ languageChosen?: boolean;
@@ -104,7 +107,7 @@ export interface Me { id: string; name: string; role: string; roleLabel: string;
   /** the active profile is a kids profile (kids home, no social features); absent on older servers */ kids?: boolean;
   /** false = the active profile never finished /welcome (absent = onboarded) */ onboarded?: boolean;
   /** media server kind + capabilities (see lib/capabilities.ts); absent on older servers = everything supported */ server?: { kind: string; capabilities?: unknown };
-  /** optional services of this instance (lib/capabilities.ts featuresFrom); absent on older servers = everything on */ features?: { requests?: boolean } }
+  /** optional services of this instance (lib/capabilities.ts featuresFrom); absent on older servers = everything on */ features?: { requests?: boolean; postplay?: boolean } }
 /** GET /api/account (owner profile only): the person's own account for /me/account */
 export interface Account {
   name: string;
@@ -129,6 +132,11 @@ export interface AccountSecurity {
   /** the e-mail change flow exists in Authentik */
   emailChange: boolean;
   emailChangePending: string | null;
+  /** the Authentik username (null: not readable right now) and whether it can be changed here */
+  username?: string | null;
+  usernameChange?: boolean;
+  /** why Authentik could not be read: the service token was refused, no answer, something else, or no Authentik API at all */
+  problem?: 'service_token' | 'unreachable' | 'error' | 'not_configured' | null;
 }
 /** GET /api/devices: the account's own devices */
 export interface OwnDevice { id: string; label: string; approved: boolean; current: boolean; created_at: string; last_seen: string }

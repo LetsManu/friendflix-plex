@@ -1,15 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { lastAkFailures } from '../src/akdiag.js';
 import { loadJar } from '../src/akflow.js';
 import { akFlowCacheKey } from '../src/authentik.js';
 import { sha256 } from '../src/crypto.js';
 import type { OidcProvider } from '../src/oidc.js';
 import type { Session } from '../src/session.js';
-import { type FakeStage, fixture } from './akflow-fake.js';
+import { type AkCall, type FakeStage, fixture } from './akflow-fake.js';
 import { makeEnv, type TestEnv } from './helpers.js';
 import {
-  AK_CFG, ANNA, BEN, browser, executorPosts, installWorld, LOGIN, loginStages, RIGHT, STATIC_TYPE, TOTP_TYPE, type World, WEBAUTHN_TYPE,
+  AK_CFG, ANNA, BEN, browser, executorPosts, freshIp, installWorld, jsonResponse, LOGIN, loginStages, RIGHT, STATIC_TYPE, TOTP_TYPE, type World, WEBAUTHN_TYPE,
 } from './reauth-fake.js';
 
 // Block 23 phase 3, Task 10: in-app re-authentication (reauth → then), the security setup flows and the account's device routes.
@@ -254,12 +255,147 @@ describe('re-authentication, security actions', () => {
     expect(r.json()).toEqual({
       mfa: { totp: true, webauthn: true, static: false },
       devices: [{ id: '11', type: 'totp', name: 'Phone', lastUsed: null }, { id: '31', type: 'webauthn', name: 'Key', lastUsed: null }],
-      passkeySetup: 'in-app', emailChange: true, emailChangePending: null,
+      passkeySetup: 'in-app', emailChange: true, emailChangePending: null, username: 'anna', usernameChange: true, problem: null,
     });
     expect(r.body).not.toContain('auth.example.com');
     env.ctx.cfg = { ...env.ctx.cfg, PASSKEYS_IN_APP: 'off' };
     expect((await env.app.inject({ url: '/api/account/security', cookies: s.cookies })).json().passkeySetup).toBe('sign-in page');
     expect((await env.app.inject({ url: '/api/account/security' })).statusCode).toBe(401);
+  });
+
+  it('root cause of "POST /auth/flow/start 502": a service token Authentik refuses no longer blocks the re-authentication', async () => {
+    // before the fix the reauth start looked the Authentik username up with the service token and answered 502
+    // authentik_token_rejected when Authentik refused the token (deleted, expired, another one in .env, or no view_user);
+    // now it identifies with the account's e-mail address, and the end of the flow still checks the person by sub
+    const s = await env.login();
+    const users = w.fakes.base!;
+    users.override = (c) => (c.path.startsWith('/api/v3/core/users/') ? jsonResponse({ detail: 'Token invalid/expired' }, 403) : undefined);
+    const b = browser(env, s);
+    await b.config();
+    const start = await b.post('start', { kind: 'reauth', then: 'change-password' });
+    expect(start.statusCode).toBe(200);
+    expect(start.json()).toMatchObject({ stage: 'password', identity: 'admin@example.com' });
+    expect(executorPosts(w, LOGIN)[0]!.body).toEqual({ uid_field: 'admin@example.com' });
+    // the refusal is logged as class + status + endpoint path, never with the token, and kept for the status card
+    const line = logs.find((l) => l.includes('reauth user lookup failed'))!;
+    expect(JSON.parse(line)).toMatchObject({ code: 'authentik_token_rejected', area: 'api', cls: 'token_invalid', status: 403, endpoint: 'api/v3/core/users/' });
+    expect(logs.join('\n')).not.toContain('api-token-placeholder');
+    expect(await lastAkFailures(env.ctx)).toEqual([expect.objectContaining({ area: 'api', cls: 'token_invalid', status: 403 })]);
+    // GET /api/account/security names the problem instead of an empty list
+    const sec = (await env.app.inject({ url: '/api/account/security', cookies: s.cookies })).json();
+    expect(sec).toMatchObject({ problem: 'service_token', username: null, usernameChange: false, devices: [] });
+    users.override = undefined;
+    await env.kv.del('akdiag:last:api');
+  });
+
+  it('an executor failure answers unavailable with a reason the dialog can show (timeout, unreachable, error)', async () => {
+    const s = await env.login();
+    const b = browser(env, s);
+    await b.config();
+    const exec = (fn: (c: AkCall) => Response | undefined) => { for (const f of Object.values(w.fakes)) f.override = fn; w.fakes.base!.override = fn; };
+    // installWorld creates the executor fake lazily: a first start makes it exist
+    await b.post('start', { kind: 'reauth', then: 'change-password' });
+    w.fakes[LOGIN]!.override = () => { throw Object.assign(new Error('t'), { name: 'TimeoutError' }); };
+    expect((await b.post('start', { kind: 'reauth', then: 'change-password' })).json()).toEqual({ stage: 'unavailable', reason: 'timeout' });
+    w.fakes[LOGIN]!.override = () => new Response('<html>proxy</html>', { status: 200, headers: { 'content-type': 'text/html' } });
+    expect((await b.post('start', { kind: 'reauth', then: 'change-password' })).json()).toEqual({ stage: 'unavailable', reason: 'error' });
+    const line = logs.filter((l) => l.includes('flow request refused')).at(-1)!;
+    expect(JSON.parse(line)).toMatchObject({ area: 'executor', cls: 'non_json', status: 200, endpoint: `api/v3/flows/executor/${LOGIN}/` });
+    w.fakes[LOGIN]!.override = () => { throw new TypeError('fetch failed'); };
+    expect((await b.post('start', { kind: 'reauth', then: 'change-password' })).json()).toEqual({ stage: 'unavailable', reason: 'unreachable' });
+    exec(() => undefined);
+    for (const k of await env.kv.keys('akdiag:')) await env.kv.del(k);
+  });
+
+  describe('username change', () => {
+    const put = (s: { cookies: Record<string, string>; csrf: string }, username: unknown) =>
+      env.app.inject({ method: 'PUT', url: '/api/account/security/username', cookies: s.cookies, headers: { 'x-csrf-token': s.csrf }, payload: { username }, remoteAddress: freshIp() });
+    const patches: unknown[] = [];
+    beforeEach(async () => {
+      patches.length = 0;
+      for (const k of await env.kv.keys('usernamechange:')) await env.kv.del(k);
+      w.fakes.base!.override = (c) => {
+        if (c.method === 'PATCH' && c.path === `/api/v3/core/users/${ANNA.pk}/`) {
+          patches.push(c.body);
+          ANNA.username = (c.body as { username: string }).username;
+          return jsonResponse({ pk: ANNA.pk, username: ANNA.username });
+        }
+        return undefined;
+      };
+    });
+    afterAll(() => { ANNA.username = 'anna'; });
+
+    it('needs a recent re-authentication', async () => {
+      const s = await env.login();
+      await setReauthAt(s, undefined);
+      const r = await put(s, 'anna2');
+      expect([r.statusCode, r.json()]).toEqual([401, { error: 'reauth_required' }]);
+      await setReauthAt(s, Date.now() - 11 * 60_000);
+      expect((await put(s, 'anna2')).statusCode).toBe(401);
+      expect(patches).toEqual([]);
+    });
+
+    it("validates with Authentik's rules (letters, digits, @ . + - _; at most 150) before anything reaches Authentik", async () => {
+      const s = await env.login();
+      await setReauthAtNow(s);
+      for (const bad of ['', '   ', 'anna smith', 'anna/x', '<b>', 'a'.repeat(151), 'anna;drop']) {
+        const r = await put(s, bad);
+        expect([r.statusCode, r.json()], bad).toEqual([400, { error: 'username_invalid' }]);
+      }
+      expect((await put(s, 42)).statusCode).toBe(400);
+      expect(patches).toEqual([]);
+      for (const good of ['Änne.Müller', 'anna+tv@home', 'a'.repeat(150)]) expect((await put(s, good)).statusCode, good).toBe(200);
+      await env.kv.del('usernamechange:' + (await env.pool.query("select id from users where authentik_sub='sub-admin'")).rows[0].id);
+    });
+
+    it('refuses a name another Authentik user has (case-insensitive), changes it, audits without the names, and the login mapping (sub) stays', async () => {
+      const s = await env.login();
+      await setReauthAtNow(s);
+      ANNA.username = 'anna';
+      const taken = await put(s, 'BEN');
+      expect([taken.statusCode, taken.json()]).toEqual([409, { error: 'username_taken' }]);
+      const same = await put(s, 'anna');
+      expect([same.statusCode, same.json()]).toEqual([200, { ok: true, username: 'anna' }]);
+      expect(patches).toEqual([]);
+      const r = await put(s, '  anna.neu  ');
+      expect([r.statusCode, r.json()]).toEqual([200, { ok: true, username: 'anna.neu' }]);
+      expect(patches).toEqual([{ username: 'anna.neu' }]);
+      const audit = await audits('account.username');
+      expect(audit).toHaveLength(1);
+      expect(audit[0]!.meta).toEqual({ fields: ['username'] });
+      expect(JSON.stringify(audit)).not.toContain('anna.neu');
+      // FriendFlix keys the account by sub: a sign-in after the rename is the same account, nothing else changed
+      const before = (await env.pool.query("select id, jellyfin_username from users where authentik_sub='sub-admin'")).rows[0];
+      const again = await env.login();
+      const me = (await env.app.inject({ url: '/api/me', cookies: again.cookies })).json();
+      expect(me.id).toBe(before.id);
+      expect((await env.pool.query("select id, jellyfin_username from users where authentik_sub='sub-admin'")).rows[0]).toEqual(before);
+      // the security section reads the new name (the cached lookup was dropped)
+      expect((await env.app.inject({ url: '/api/account/security', cookies: again.cookies })).json().username).toBe('anna.neu');
+    });
+
+    it('is limited to 3 changes a day per account; a refusal by Authentik gives the slot back', async () => {
+      const s = await env.login();
+      await setReauthAtNow(s);
+      w.fakes.base!.override = (c) => (c.method === 'PATCH' ? jsonResponse({ username: ['This field must be unique.'] }, 400) : undefined);
+      expect((await put(s, 'race1')).json()).toEqual({ error: 'username_taken' });
+      w.fakes.base!.override = (c) => {
+        if (c.method !== 'PATCH') return undefined;
+        ANNA.username = (c.body as { username: string }).username;
+        return jsonResponse({ pk: ANNA.pk });
+      };
+      for (const n of ['n1', 'n2', 'n3']) expect((await put(s, n)).statusCode, n).toBe(200);
+      const limited = await put(s, 'n4');
+      expect([limited.statusCode, limited.json()]).toEqual([429, { error: 'rate_limited' }]);
+    });
+
+    it('is refused where the OIDC subject is the username (a rename would become another account)', async () => {
+      const s = await env.login();
+      await setReauthAtNow(s);
+      w.fakes.base!.override = (c) => (c.path === '/api/v3/providers/oauth2/' ? jsonResponse({ results: [{ sub_mode: 'user_username', grant_types: [] }] }) : undefined);
+      expect((await put(s, 'other')).json()).toEqual({ error: 'username_is_subject' });
+      expect((await env.app.inject({ url: '/api/account/security', cookies: s.cookies })).json().usernameChange).toBe(false);
+    });
   });
 
   it('delete a device of another user → 404; an unknown id or type → 404 / 400', async () => {

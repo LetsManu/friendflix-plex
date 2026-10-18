@@ -54,6 +54,9 @@ const login: Translation<typeof de> = {
     passkeyText: 'Girişi geçiş anahtarınla onayla.',
   },
   notice: {
+    unavailableTimeout: 'Oturum açma hizmeti çok geç yanıt verdi. Birazdan tekrar dene.',
+    unavailableUnreachable: 'FriendFlix şu anda oturum açma hizmetine ulaşamıyor. Birazdan tekrar dene.',
+    unavailableServiceToken: 'Oturum açma hizmeti FriendFlix\'in erişimini reddediyor. Bir yönetici bunu Yönetim → Durum → Oturum açma altında onarabilir.',
     classicTitle: 'Giriş sayfasında devam et',
     classicText: 'Bu adım yalnızca giriş sayfasında çalışır.',
     classic: 'Giriş sayfasında devam et',
@@ -85,6 +88,35 @@ const login: Translation<typeof de> = {
   },
   /** account security and the e-mail change (Block 23 phase 3, Task 11) */
   sec: {
+    manageClassic: 'Oturum açma sayfasında devam et',
+    refused: {
+      classic: 'FriendFlix içinde oturum açma kapalı; bu yüzden bu değişikliği oturum açma sayfasında yaparsın.',
+      flow_not_configured: 'Bu, oturum açma hizmetinde henüz ayarlanmadı. Bir yönetici bunu Yönetim → Durum → Oturum açma altında ayarlayabilir.',
+      authentik_user_not_found: 'Hesabın oturum açma hizmetinde bulunamadı. Bir yöneticiye sor.',
+    },
+    problem: {
+      service_token: 'Güvenlik ayarların şu anda okunamıyor: oturum açma hizmeti FriendFlix\'in erişimini reddediyor. Bir yönetici bunu Yönetim → Durum → Oturum açma altında onarabilir.',
+      unreachable: 'Güvenlik ayarların şu anda okunamıyor: oturum açma hizmeti yanıt vermiyor.',
+      error: 'Güvenlik ayarların şu anda okunamıyor.',
+      not_configured: 'FriendFlix, oturum açma hizmetinin API\'sine bağlı değil; bu ayarlar oturum açma sayfasında yönetilir.',
+    },
+    username: {
+      title: 'Kullanıcı adı',
+      text: 'Bu adla ya da e-posta adresinle oturum açarsın.',
+      unknown: 'Şu anda okunamıyor',
+      change: 'Değiştir',
+      label: 'Yeni kullanıcı adı',
+      hint: 'Yalnızca harf, rakam ve @ . + - _, en fazla 150 karakter.',
+      save: 'Kaydet',
+      cancel: 'İptal',
+      done: 'Kullanıcı adın artık "{name}".',
+      fixed: 'Kullanıcı adı burada değiştirilemez: oturum açma hizmeti hesabını onunla tanır.',
+      errors: {
+        username_invalid: 'Yalnızca harf, rakam ve @ . + - _ kullan (en fazla 150 karakter).',
+        username_taken: 'Bu kullanıcı adı zaten alınmış.',
+        rate_limited: 'Kullanıcı adını çok sık değiştirdin. Yarın tekrar dene.',
+      },
+    },
     dialog: 'Yeniden oturum aç',
     close: 'Kapat',
     loading: 'Bir saniye …',

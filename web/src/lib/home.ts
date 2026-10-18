@@ -75,7 +75,9 @@ export interface HomeResponse<I = unknown> {
     hero: I | null;
     resume: I[]; nextup: I[]; leaving: I[];
     recs: { items: I[]; recIds: number[]; friends: I[] };
-    because: { because: { id: string; name: string; liked?: boolean } | null; items: I[]; more: Array<{ because: { id: string; name: string }; items: I[] }> };
+    because: { because: { id: string; name: string; liked?: boolean } | null; items: I[]; more: Array<{ because: { id: string; name: string }; items: I[]; engine?: 'v1' | 'v2' }>; engine?: 'v1' | 'v2' };
+    /** engine v2: the row ranker's order of the recommendation rows (`friends`, `because`, `more:<n>`); absent = the fixed layout */
+    order?: string[];
     hubs: unknown[]; themed: unknown[];
   };
   failed: string[];

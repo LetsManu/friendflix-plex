@@ -28,7 +28,7 @@ describe('request service optional', () => {
   it('/api/me features.requests is true with URL and key', async () => {
     expect(env.ctx.seerr).toBeInstanceOf(SeerrClient);
     expect(requestsEnabled(env.ctx)).toBe(true);
-    expect(await features()).toEqual({ requests: true });
+    expect(await features()).toEqual({ requests: true, postplay: true });
   });
 
   it('either key empty: ctx.seerr is null and /api/me features.requests is false; saving both again brings it back', async () => {
@@ -36,7 +36,7 @@ describe('request service optional', () => {
       await disable();
       expect(env.ctx.seerr).toBeNull();
       expect(requestsEnabled(env.ctx)).toBe(false);
-      expect(await features()).toEqual({ requests: false });
+      expect(await features()).toEqual({ requests: false, postplay: true });
       await restore();
       expect(requestsEnabled(env.ctx)).toBe(true);
       await disable({ REQUESTS_API_KEY: null });

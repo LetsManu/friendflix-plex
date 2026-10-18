@@ -54,6 +54,9 @@ const login: Translation<typeof de> = {
     passkeyText: 'Confirm the sign-in with your passkey.',
   },
   notice: {
+    unavailableTimeout: 'The sign-in service took too long to answer. Try again in a moment.',
+    unavailableUnreachable: 'FriendFlix cannot reach the sign-in service right now. Try again in a moment.',
+    unavailableServiceToken: 'The sign-in service refuses FriendFlix\'s access. An admin can repair it under Admin → Status → Sign-in.',
     classicTitle: 'Continue on the sign-in page',
     classicText: 'This step only works on the sign-in page.',
     classic: 'Continue on the sign-in page',
@@ -85,6 +88,35 @@ const login: Translation<typeof de> = {
   },
   /** account security and the e-mail change (Block 23 phase 3, Task 11) */
   sec: {
+    manageClassic: 'Continue on the sign-in page',
+    refused: {
+      classic: 'Sign-in inside FriendFlix is switched off, so this change happens on the sign-in page.',
+      flow_not_configured: 'This is not set up at the sign-in service yet. An admin can set it up under Admin → Status → Sign-in.',
+      authentik_user_not_found: 'Your account was not found at the sign-in service. Ask an admin.',
+    },
+    problem: {
+      service_token: 'Your security settings cannot be read right now: the sign-in service refuses FriendFlix\'s access. An admin can repair it under Admin → Status → Sign-in.',
+      unreachable: 'Your security settings cannot be read right now: the sign-in service is not answering.',
+      error: 'Your security settings cannot be read right now.',
+      not_configured: 'FriendFlix is not connected to the sign-in service\'s API, so these settings are managed on the sign-in page.',
+    },
+    username: {
+      title: 'Username',
+      text: 'You sign in with this name or your e-mail address.',
+      unknown: 'Cannot be read right now',
+      change: 'Change',
+      label: 'New username',
+      hint: 'Letters, digits and @ . + - _ only, up to 150 characters.',
+      save: 'Save',
+      cancel: 'Cancel',
+      done: 'Your username is now "{name}".',
+      fixed: 'The username cannot be changed here: the sign-in service identifies your account by it.',
+      errors: {
+        username_invalid: 'Use letters, digits and @ . + - _ only (up to 150 characters).',
+        username_taken: 'This username is already taken.',
+        rate_limited: 'You changed your username too often. Try again tomorrow.',
+      },
+    },
     dialog: 'Sign in again',
     close: 'Close',
     loading: 'One moment …',

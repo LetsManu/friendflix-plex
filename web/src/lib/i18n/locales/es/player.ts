@@ -129,6 +129,12 @@ const es: Translation<typeof de> = {
     tvHint: '¿Tu tele no tiene AirPlay ni Chromecast? Abre {url} en el navegador de la tele y vincula tu móvil como mando.',
   },
   /** the bar while a title plays on a TV (cast engine) */
+  /** the watch page as the TV's remote (device chip, short stop, next episode) */
+  castRemote: {
+    changeDevice: 'Cambiar dispositivo',
+    stopShort: 'Detener',
+    playNow: 'Reproducir ahora',
+  },
   castBar: {
     region: 'Ahora en la tele',
     failed: 'No se puede reproducir «{title}» en {device}.',

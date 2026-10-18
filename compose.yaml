@@ -145,6 +145,19 @@ services:
       PORTAINER_ENDPOINT_ID: ${PORTAINER_ENDPOINT_ID:-}
       PLAYBACK_CHECK_HOUR: ${PLAYBACK_CHECK_HOUR:-}
       PREVIEW_WARM: ${PREVIEW_WARM:-}
+      # recommendation index (docs/discovery.md): weight of each feature group (0-10; 0 = off)
+      RECO_W_GENRES: ${RECO_W_GENRES:-}
+      RECO_W_TAGS: ${RECO_W_TAGS:-}
+      RECO_W_STUDIOS: ${RECO_W_STUDIOS:-}
+      RECO_W_PEOPLE: ${RECO_W_PEOPLE:-}
+      RECO_W_TEXT: ${RECO_W_TEXT:-}
+      RECO_W_NUMERIC: ${RECO_W_NUMERIC:-}
+      RECO_W_COLLECTION: ${RECO_W_COLLECTION:-}
+      # recommendation engine v2: v1 | shadow | v2, decay half-life in days, JSON overrides of the scoring coefficients
+      RECO_ENGINE: ${RECO_ENGINE:-}
+      RECO_HALF_LIFE_DAYS: ${RECO_HALF_LIFE_DAYS:-}
+      RECO_COEFFS: ${RECO_COEFFS:-}
+      RECO_EXPLORE: ${RECO_EXPLORE:-}
       # download preparation + cleanup, audio/subtitle language index, Jellyfin session polling; false only for extra replicas
       BACKGROUND_JOBS: ${BACKGROUND_JOBS:-true}
       # gzip/brotli for JSON API responses >= 1 KB; false when the reverse proxy already compresses
@@ -155,6 +168,7 @@ services:
       HEALTH_DISK_CRIT_PCT: ${HEALTH_DISK_CRIT_PCT:-}
       HEALTH_DB_WARN_GB: ${HEALTH_DB_WARN_GB:-}
       CAST_ENABLED: ${CAST_ENABLED:-}
+      POSTPLAY_ENABLED: ${POSTPLAY_ENABLED:-}
       DOWNLOADS_ENABLED: ${DOWNLOADS_ENABLED:-}
       DIRECT_PLAY_REQUIRES_DOWNLOAD: ${DIRECT_PLAY_REQUIRES_DOWNLOAD:-}
       DOWNLOAD_DIR: /data/downloads

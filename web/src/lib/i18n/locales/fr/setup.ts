@@ -82,6 +82,7 @@ const setup: Translation<typeof de> = {
     retry: 'Réessayer',
     leftoversTitle: 'Reste à faire à la main',
     leftovers: {
+      emailChange: 'Changement d\'e-mail : monte son modèle de mail dans /templates d\'Authentik, puis utilise « Réparer la configuration d\'Authentik » dans Admin → État.',
       smtp: 'Configurer l’envoi d’e-mails dans Authentik (SMTP) pour que les invitations et les e-mails de mot de passe arrivent.',
       mfa: 'Activer la connexion à deux facteurs dans le flux d’authentification d’Authentik (guide : docs/authentik.md, section 6).',
       templates: 'Placer les modèles d’e-mail de FriendFlix dans /templates sur le serveur Authentik (montage de fichiers).',

@@ -26,6 +26,13 @@ test.describe('admin health page (phone)', () => {
     const media = await page.getByRole('region', { name: 'Systemzustand' }).getByRole('link', { name: /Medienserver/ }).boundingBox();
     expect(media!.height).toBeGreaterThanOrEqual(44);
   });
+  test('recommendation index tile fits on a phone', async ({ page }) => {
+    await page.goto('/admin/status');
+    const tile = page.getByText('Empfehlungs-Index').locator('xpath=ancestor::*[contains(@class,"tile")][1]');
+    await expect(tile).toContainText('1.234');
+    await page.waitForLoadState('networkidle');
+    await expect.poll(() => noHorizontalOverflow(page)).toBe(true);
+  });
   test('sign-in card fits: long warnings wrap, the switch is at least 44 px', async ({ page, api }) => {
     api.admin.loginCheck = {
       mode: 'app', implicitConsent: false, authCodeGrant: false, issuerMatches: false, passkeys: 'sign-in page', passkeysReason: 'forwarded_host_ignored', unreachable: false,

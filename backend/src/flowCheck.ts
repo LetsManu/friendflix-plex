@@ -9,8 +9,9 @@
  * Flow stages are classified by `stage_obj.meta_model_name` (authentik.ts `akFlowStages`), never by the admin form's component name.
  * The result is cached for 10 minutes in kv under a hash of its inputs.
  */
-import { akFlowStages, akOauthProvider, type FlowStages } from './authentik.js';
-import { loginUi, flowSlug, passkeysStatus, type FlowKind, type PasskeysReason } from './akflow.js';
+import { type AkFailure, type AkFailureSeen, AkUpstreamError, lastAkFailures } from './akdiag.js';
+import { akFlowStages, akOauthProvider, akServiceCheck, type FlowStages, type ServiceCheck } from './authentik.js';
+import { akExec, createJar, endAkSession, loginUi, flowSlug, passkeysStatus, type FlowKind, type PasskeysReason } from './akflow.js';
 import type { Ctx } from './ctx.js';
 import { secretTag } from './crypto.js';
 
@@ -39,6 +40,15 @@ export interface LoginCheck {
   passkeysReason: PasskeysReason;
   /** Authentik did not answer (some rows are unknown); the card says so instead of calling flows missing */
   unreachable: boolean;
+  /** the service token: accepted at all, and the read permissions Authentik refused (null: no API configured) */
+  serviceToken: ServiceCheck | null;
+  /**
+   * one anonymous call of the login flow's executor exactly as a sign-in makes it (headers, forwarded host): ok, or why it failed
+   * (class, upstream status, endpoint path). Null without the API.
+   */
+  executor: ({ ok: true } | ({ ok: false } & Omit<AkFailure, 'area'>)) | null;
+  /** the latest Authentik failure per area in the last 24 h (executor, admin API), read fresh on every call */
+  lastFailures: AkFailureSeen[];
   /** codes of everything to look at; empty = all good */
   warnings: string[];
 }
@@ -59,19 +69,39 @@ const originOf = (url: string | undefined): string | null => {
   }
 };
 
-export async function checkLoginFlows(ctx: CheckCtx): Promise<LoginCheck> {
+export async function checkLoginFlows(ctx: CheckCtx, opts: { fresh?: boolean } = {}): Promise<LoginCheck> {
   const cfg = ctx.cfg;
   const slugs = KINDS.map((k) => slugOf(cfg, k) ?? '');
   const key = `flowcheck:${secretTag(cfg.AUTHENTIK_API_TOKEN)}:${[cfg.AUTHENTIK_URL, cfg.OIDC_CLIENT_ID, cfg.OIDC_ISSUER, cfg.PUBLIC_URL, cfg.PASSKEYS_IN_APP, cfg.LOGIN_UI, ...slugs].map((v) => encodeURIComponent(v ?? '')).join('|')}`;
-  const hit = await ctx.kv.get(key);
+  const hit = opts.fresh ? null : await ctx.kv.get(key);
   if (hit) {
     try {
-      return JSON.parse(hit) as LoginCheck;
+      return { ...(JSON.parse(hit) as LoginCheck), lastFailures: await lastAkFailures(ctx) };
     } catch { /* a damaged entry: check again */ }
   }
   const result = await run(ctx);
-  await ctx.kv.set(key, JSON.stringify(result), result.unreachable ? UNREACHABLE_TTL_S : TTL_S);
-  return result;
+  const failing = result.unreachable || result.serviceToken?.token !== 'ok' || result.executor?.ok === false;
+  await ctx.kv.set(key, JSON.stringify(result), failing ? UNREACHABLE_TTL_S : TTL_S);
+  return { ...result, lastFailures: await lastAkFailures(ctx) };
+}
+
+/**
+ * The login flow's first executor call, made the way a sign-in makes it (createJar: the same slug and the same forwarded-host decision),
+ * then the Authentik session it opened is ended. Nothing is answered: it shows only whether Authentik serves the flow to this backend.
+ */
+async function executorCheck(ctx: CheckCtx): Promise<LoginCheck['executor']> {
+  try {
+    const jar = await createJar(ctx, 'login');
+    await akExec(ctx, jar, 'GET');
+    await endAkSession(ctx, jar);
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof AkUpstreamError) {
+      const { cls, status, endpoint } = e.failure;
+      return { ok: false, cls, endpoint, ...(status !== undefined ? { status } : {}) };
+    }
+    return { ok: false, cls: 'network', endpoint: 'api/v3/flows/executor/' };
+  }
 }
 
 async function run(ctx: CheckCtx): Promise<LoginCheck> {
@@ -86,8 +116,10 @@ async function run(ctx: CheckCtx): Promise<LoginCheck> {
   };
   // no Authentik API: nothing to read, the classic sign-in page is the only mode
   if (!cfg.AUTHENTIK_URL || !cfg.AUTHENTIK_API_TOKEN) {
-    return { ...base, mode: 'authentik', flows: [], implicitConsent: null, authCodeGrant: null, unreachable: false, warnings: [] };
+    return { ...base, mode: 'authentik', flows: [], implicitConsent: null, authCodeGrant: null, unreachable: false, serviceToken: null, executor: null, lastFailures: [], warnings: [] };
   }
+  const serviceToken = await akServiceCheck(ctx);
+  const executor = await executorCheck(ctx);
   let unreachable = false;
   const flows: FlowCheckRow[] = [];
   for (const kind of KINDS) {
@@ -109,22 +141,34 @@ async function run(ctx: CheckCtx): Promise<LoginCheck> {
   const authCodeGrant = provider?.grantTypes ? provider.grantTypes.includes('authorization_code') : null;
 
   const warnings: string[] = [];
-  if (unreachable) warnings.push('unreachable');
+  const tokenBad = serviceToken?.token === 'invalid';
+  // a refused token makes the flow and provider reads fail as well: that is the token, not an unreachable Authentik
+  if (tokenBad) {
+    warnings.push('token:invalid');
+    unreachable = false;
+  } else if (serviceToken?.token === 'unreachable' || (unreachable && !serviceToken?.missing.some((p) => p === 'view_flow' || p === 'view_flowstagebinding'))) {
+    unreachable = true;
+    warnings.push('unreachable');
+  } else unreachable = false; // the flow reads failed for a missing permission, which the permission warnings name
+  for (const p of serviceToken?.missing ?? []) {
+    if (p !== 'view_oauth2provider' && p !== 'view_authenticatorvalidatestage') warnings.push(`permission:${p}`);
+  }
+  if (executor && !executor.ok) warnings.push(`executor:${executor.cls}`);
   for (const r of flows) {
     // an optional flow that is not there only matters when the app would use it (login and recovery are always used in app mode)
     // the e-mail change flow is imported by hand (optional): without it the account page just hides "Change"
-    if (r.state === 'missing' && !unreachable && r.kind !== 'change-email') warnings.push(`flow_missing:${r.kind}`);
+    if (r.state === 'missing' && !unreachable && !tokenBad && !serviceToken?.missing.includes('view_flow')) warnings.push(r.kind === 'change-email' ? 'optional:change-email' : `flow_missing:${r.kind}`);
     if (r.state === 'unsupported') warnings.push(`flow_unsupported:${r.kind}`);
   }
   // a permission the token lacks: the checks behind it cannot run, which must not look like a pass
-  if (providerDenied) warnings.push('permission:provider');
+  if (providerDenied && !tokenBad) warnings.push('permission:provider');
   const loginRow = flows.find((r) => r.kind === 'login');
-  if (loginRow && (await akFlowStages(ctx, loginRow.slug)).stageDenied) warnings.push('permission:validate_stage');
+  if (!tokenBad && loginRow && (await akFlowStages(ctx, loginRow.slug)).stageDenied) warnings.push('permission:validate_stage');
   if (implicitConsent === false) warnings.push('consent');
   if (authCodeGrant === false) warnings.push('auth_code_grant');
   if (!base.issuerMatches) warnings.push('issuer');
   if (base.passkeys === 'sign-in page' && passkeys.reason !== 'disabled') warnings.push(`passkeys:${passkeys.reason}`);
-  return { ...base, flows, implicitConsent, authCodeGrant, unreachable, warnings };
+  return { ...base, flows, implicitConsent, authCodeGrant, unreachable, serviceToken, executor, lastFailures: [], warnings };
 }
 
 function row(kind: CheckedKind, slug: string, f: FlowStages): FlowCheckRow {

@@ -8,6 +8,8 @@ import { done, emailSent, installLogin, loginState, password, prompt, recoveryCo
 // The account page's security section (Block 23 phase 3 Task 11): in-app re-authentication in a dialog with the follow-up flow's steps
 // inline, device removal, the e-mail change and the /confirm-email link page. The flow behind /auth/flow/* is scripted (mocks/login.ts).
 const security = (page: Page) => page.getByRole('region', { name: 'Sicherheit' });
+/** the e-mail row's "Ändern" (the username row has one too) */
+const emailChangeButton = (page: Page) => security(page).locator('button[aria-describedby="sec-email"]');
 const dialog = (page: Page) => page.getByRole('dialog', { name: 'Erneut anmelden' });
 const startBodies = (st: LoginMock) => st.calls.filter((c) => c.path === '/auth/flow/start').map((c) => c.body);
 const answerBodies = (st: LoginMock) => st.calls.filter((c) => c.path === '/auth/flow/answer').map((c) => { const { step: _s, ...rest } = c.body; return rest; });
@@ -133,7 +135,7 @@ test.describe('security section (/me/account)', () => {
       answers: [{ body: ask }, { body: { ...ask, step: 'mock-step-again', errors: ['email_in_use'] } }, { body: emailSent('n•••@example.com') }],
     });
     await open(page, st);
-    await security(page).getByRole('button', { name: 'Ändern', exact: true }).click();
+    await emailChangeButton(page).click();
     await typePassword(page);
     await expect(dialog(page).getByRole('heading', { name: 'E-Mail-Adresse ändern' })).toBeVisible();
     await dialog(page).getByLabel('Neue E-Mail-Adresse').fill('taken@example.com');
@@ -154,7 +156,7 @@ test.describe('security section (/me/account)', () => {
   test('e-mail change hidden when the flow is not set up; admins are told', async ({ page, api }) => {
     api.security.emailChange = false;
     await open(page, loginState());
-    await expect(security(page).getByRole('button', { name: 'Ändern', exact: true })).toHaveCount(0);
+    await expect(emailChangeButton(page)).toHaveCount(0);
     await expect(security(page).getByText('E-Mail ändern ist nicht eingerichtet.')).toHaveCount(0); // not an admin
   });
 
@@ -264,5 +266,86 @@ test.describe('/confirm-email', () => {
     await page.goto('/confirm-email');
     await expect(page.getByRole('heading', { level: 1, name: 'Link abgelaufen oder schon benutzt' })).toBeVisible();
     expect(st.calls).toHaveLength(0);
+  });
+});
+
+// The account-security fix: the username row, a clear message for every failing case, and the reason an action is not possible.
+test.describe('security section: username and clear failures', () => {
+  const userRow = (page: Page) => security(page).locator('[data-row="username"]');
+
+  test('username: shown, changed inline (trimmed), the new name listed', async ({ page, api }) => {
+    await open(page, loginState());
+    await expect(userRow(page).getByRole('heading', { name: 'Benutzername' })).toBeVisible();
+    await expect(userRow(page)).toContainText('anna');
+    await userRow(page).getByRole('button', { name: 'Ändern' }).click();
+    const input = userRow(page).getByLabel('Neuer Benutzername');
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue('anna');
+    await input.fill('  anna.neu ');
+    await userRow(page).getByRole('button', { name: 'Speichern' }).click();
+    await expect(page.getByText('Dein Benutzername ist jetzt „anna.neu“.')).toBeVisible();
+    await expect(userRow(page).getByLabel('Neuer Benutzername')).toHaveCount(0);
+    await expect(userRow(page)).toContainText('anna.neu');
+    expect(api.usernamePuts).toEqual(['anna.neu']);
+  });
+
+  test.describe('refusals', () => {
+    test.use({ allowedConsole: /status of (409|400)/ });
+    test('username: a taken or invalid name shows why, the form stays open', async ({ page, api }) => {
+      api.usernameError = 'username_taken';
+      await open(page, loginState());
+      await userRow(page).getByRole('button', { name: 'Ändern' }).click();
+      await userRow(page).getByLabel('Neuer Benutzername').fill('ben');
+      await userRow(page).getByRole('button', { name: 'Speichern' }).click();
+      await expect(userRow(page).getByRole('alert')).toHaveText('Dieser Benutzername ist schon vergeben.');
+      await expect(userRow(page).getByLabel('Neuer Benutzername')).toHaveAttribute('aria-invalid', 'true');
+      api.usernameError = 'username_invalid';
+      await userRow(page).getByRole('button', { name: 'Speichern' }).click();
+      await expect(userRow(page).getByRole('alert')).toContainText('Nur Buchstaben, Ziffern und @ . + - _');
+      api.usernameError = 'username_is_subject';
+      await userRow(page).getByRole('button', { name: 'Speichern' }).click();
+      await expect(userRow(page).getByRole('alert')).toContainText('erkennt dein Konto daran');
+    });
+  });
+
+  test('username: where the sign-in service identifies the account by it, no change button and a note', async ({ page, api }) => {
+    api.security = { ...api.security, usernameChange: false };
+    await open(page, loginState());
+    await expect(userRow(page).getByRole('button', { name: 'Ändern' })).toHaveCount(0);
+    await expect(userRow(page)).toContainText('Der Benutzername lässt sich hier nicht ändern');
+  });
+
+  test('a refused service token: the section says so instead of showing empty lists', async ({ page, api }) => {
+    api.security = { ...api.security, devices: [], mfa: null, username: null, usernameChange: false, problem: 'service_token' };
+    await open(page, loginState());
+    await expect(security(page).getByRole('status').filter({ hasText: 'verweigert FriendFlix den Zugriff' })).toBeVisible();
+    await expect(userRow(page)).toContainText('Gerade nicht lesbar');
+  });
+
+  test('change password while the sign-in service refuses the service token: the precise reason and Authentik\'s settings page', async ({ page }) => {
+    const st = loginState({ starts: [{ body: { stage: 'unavailable', reason: 'service_token' } }] });
+    await open(page, st);
+    await security(page).getByRole('button', { name: 'Passwort ändern' }).click();
+    await expect(dialog(page).getByText('Der Anmeldedienst verweigert FriendFlix den Zugriff. Ein Admin kann das unter Admin → Status → Anmeldung reparieren.')).toBeVisible();
+    await expect(dialog(page).getByRole('link', { name: 'Auf der Anmeldeseite fortfahren' })).toHaveAttribute('href', 'https://login.example.com/if/user/#/settings');
+    await expect(dialog(page).getByRole('button', { name: 'Erneut versuchen' })).toBeVisible();
+  });
+
+  test('the sign-in service answers too slowly: says so', async ({ page }) => {
+    const st = loginState({ starts: [{ body: { stage: 'unavailable', reason: 'timeout' } }] });
+    await open(page, st);
+    await security(page).getByRole('button', { name: 'Passwort ändern' }).click();
+    await expect(dialog(page).getByText('Der Anmeldedienst hat zu lange nicht geantwortet. Versuch es gleich noch einmal.')).toBeVisible();
+  });
+
+  test.describe('refused starts', () => {
+    test.use({ allowedConsole: /status of (409|404)/ });
+    test('sign-in inside FriendFlix switched off (409 classic): explained, continues on Authentik\'s settings page', async ({ page }) => {
+      const st = loginState({ starts: [{ status: 409, body: { error: 'classic' } }] });
+      await open(page, st);
+      await security(page).getByRole('button', { name: 'Passwort ändern' }).click();
+      await expect(dialog(page).getByText('Die Anmeldung in FriendFlix ist ausgeschaltet, deshalb änderst du das auf der Anmeldeseite.')).toBeVisible();
+      await expect(dialog(page).getByRole('link', { name: 'Auf der Anmeldeseite fortfahren' })).toHaveAttribute('href', 'https://login.example.com/if/user/#/settings');
+    });
   });
 });

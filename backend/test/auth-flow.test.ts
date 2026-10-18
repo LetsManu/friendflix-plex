@@ -319,7 +319,7 @@ describe('/auth/flow', () => {
     const done = await other.b.post('answer', { step: pw.step, stage: 'password', password: RIGHT });
     // the end of the flow: this suite's OIDC fake authorizes on a host that is not Authentik's, so completeFlow answers unavailable
     // without a session (login-finish.test.ts covers the silent authorize); the Authentik session is ended either way
-    expect([done.statusCode, done.json()]).toEqual([200, { stage: 'unavailable' }]);
+    expect([done.statusCode, done.json()]).toEqual([200, { stage: 'unavailable', reason: 'error' }]);
     expect(done.cookies.find((c) => c.name === 'ff_sid')).toBeUndefined();
     expect(ak.calls.some((c) => c.path === '/api/v3/flows/executor/default-invalidation-flow/')).toBe(true);
     expect(other.b.cookies.ff_flow).toBeUndefined();
@@ -393,11 +393,11 @@ describe('/auth/flow', () => {
     expect(await env.kv.get(flowFailKey('gina'))).toBe('4');
     const down = await atPassword();
     env.ctx.fetchImpl = (async () => { throw new TypeError('fetch failed'); }) as typeof fetch;
-    expect((await down.b.post('answer', { step: down.step, stage: 'password', password: PASSWORD })).json()).toEqual({ stage: 'unavailable' });
+    expect((await down.b.post('answer', { step: down.step, stage: 'password', password: PASSWORD })).json()).toEqual({ stage: 'unavailable', reason: 'unreachable' });
     expect(await env.kv.get(flowFailKey('gina'))).toBe('4');
     env.ctx.fetchImpl = fake.fetchImpl;
     const right = await atPassword();
-    expect((await right.b.post('answer', { step: right.step, stage: 'password', password: RIGHT })).json()).toEqual({ stage: 'unavailable' }); // the end (no silent authorize in this suite)
+    expect((await right.b.post('answer', { step: right.step, stage: 'password', password: RIGHT })).json()).toEqual({ stage: 'unavailable', reason: 'error' }); // the end (no silent authorize in this suite)
     expect(await env.kv.get(flowFailKey('gina'))).toBe('4');
   });
 
@@ -474,14 +474,14 @@ describe('/auth/flow', () => {
     await b.config();
     ak.override = () => { throw new TypeError('fetch failed'); };
     const r = await b.post('start', { kind: 'login' });
-    expect([r.statusCode, r.json()]).toEqual([200, { stage: 'unavailable' }]);
+    expect([r.statusCode, r.json()]).toEqual([200, { stage: 'unavailable', reason: 'unreachable' }]);
     expect(b.cookies.ff_flow).toBeUndefined();
     // mid-flow: a 5xx page from Authentik
     ak.override = undefined;
     const { b: b2, step } = await started();
     ak.override = (c) => (c.method === 'POST' ? new Response('<html>oops</html>', { status: 500, headers: { 'content-type': 'text/html' } }) : undefined);
     const mid = await b2.post('answer', { step: step.step, stage: 'identify', identifier: 'anna' });
-    expect([mid.statusCode, mid.json()]).toEqual([200, { stage: 'unavailable' }]);
+    expect([mid.statusCode, mid.json()]).toEqual([200, { stage: 'unavailable', reason: 'error' }]);
   });
 
   it('a password in the body never appears in captured log lines', async () => {
@@ -491,7 +491,7 @@ describe('/auth/flow', () => {
     // the fake throws an error that quotes the request
     ak.override = (c) => { if (c.method === 'POST') throw new Error(`connect failed: ${JSON.stringify(c.body)}`); return undefined; };
     const down = await b.post('answer', { step: pw.step, stage: 'password', password: PASSWORD });
-    expect(down.json()).toEqual({ stage: 'unavailable' });
+    expect(down.json()).toEqual({ stage: 'unavailable', reason: 'unreachable' });
     // an unexpected error inside the handler that quotes the body
     useFake(loginStages());
     const { b: b2, step: s2 } = await started();
@@ -867,9 +867,9 @@ describe('/auth/flow recovery (Task 5)', () => {
     expect(ak.calls).toHaveLength(0);
     logs.length = 0;
     ak.override = (c) => { throw new Error(`connect failed ${c.url.toString()}`); };
-    expect((await b.post('resume', { token: TOKEN })).json()).toEqual({ stage: 'unavailable' });
+    expect((await b.post('resume', { token: TOKEN })).json()).toEqual({ stage: 'unavailable', reason: 'unreachable' });
     ak.override = () => new Response(`<html>${TOKEN}</html>`, { status: 500, headers: { 'content-type': 'text/html' } });
-    expect((await b.post('resume', { token: TOKEN })).json()).toEqual({ stage: 'unavailable' });
+    expect((await b.post('resume', { token: TOKEN })).json()).toEqual({ stage: 'unavailable', reason: 'error' });
     ak.override = undefined;
     vi.spyOn(env.kv, 'set').mockRejectedValueOnce(new Error(`kv failed ${TOKEN}`));
     useFake(resumeStages());

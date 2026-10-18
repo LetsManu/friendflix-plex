@@ -28,14 +28,16 @@
   $: thumb = s ? barThumb(s) : null;
   $: progress = s ? Math.round(barProgress(s)) : 0;
 
-  /** the next-episode countdown ticks once a second while it runs */
+  /** the next-episode countdown (from the credits on, or after the end) ticks once a second while it runs */
   let now = Date.now(), tick: ReturnType<typeof setInterval> | undefined;
-  $: startsAt = state === 'ended' ? s?.next?.startsAt ?? null : null;
+  $: startsAt = state === 'ended' || live ? s?.next?.startsAt ?? null : null;
   $: if (startsAt !== null && tick === undefined) { now = Date.now(); tick = setInterval(() => (now = Date.now()), 1000); }
   $: if (startsAt === null && tick !== undefined) { clearInterval(tick); tick = undefined; }
   onDestroy(() => clearInterval(tick));
   $: secs = nextSecondsLeft(startsAt, now);
-  $: next = state === 'ended' ? s?.next ?? null : null;
+  $: next = state === 'ended' || live ? s?.next ?? null : null;
+  /** intro / recap on the TV: skip it from here */
+  $: skip = live ? s?.skip ?? null : null;
 
   let region: HTMLDivElement | undefined;
   /**
@@ -101,8 +103,11 @@
         {:else if state === 'failed'}
           <button type="button" class="here" on:click={open}>{$t('player.castBar.playHere')}</button>
         {:else if next}
+          {#if secs !== null}<button type="button" class="act" aria-label={$t('common.cancel')} title={$t('common.cancel')} on:click={() => castEngine.cancelNext()}><Icon name="x" size={22} /></button>{/if}
           <button type="button" class="act" aria-label={$t('player.castBar.next', { label: next.label })} on:click={() => void castEngine.next()}><Icon name="skip-next" size={24} /></button>
         {:else}
+          {#if skip}<button type="button" class="skipb" on:click={() => castEngine.skipSegment()}>{$t(skip.type === 'recap' ? 'player.skip.recap' : 'player.skip.intro')}</button>{/if}
+          {#if live && s.isEpisode}<button type="button" class="act" aria-label={$t('player.controls.next')} title={$t('player.controls.next')} on:click={() => void castEngine.next()}><Icon name="skip-next" size={24} /></button>{/if}
           <button type="button" class="act pp" aria-disabled={live ? undefined : 'true'} aria-label={$t(s.paused ? 'player.controls.play' : 'player.controls.pause')} on:click={playPause}>
             <Icon name={s.paused ? 'play' : 'pause'} size={24} />
           </button>
@@ -121,6 +126,7 @@
   .line span { display: block; height: 100%; background: var(--acc); transition: width .4s linear; }
   button { color: inherit; background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
   div.main { cursor: default; }
+  .skipb { flex: none; min-height: 40px; padding: 0 .7rem; border: 1px solid var(--line, #3b444e); border-radius: var(--radius); font-size: .85rem; white-space: nowrap; }
   .main { flex: 1 1 auto; min-width: 0; height: 100%; cursor: pointer; min-height: 48px; display: flex; align-items: center; gap: .7rem; padding-left: var(--pad-x); text-align: left; }
   .thumb { flex: none; height: 44px; width: auto; object-fit: cover; border-radius: var(--radius); }
   .txt { min-width: 0; display: flex; flex-direction: column; }

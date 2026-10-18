@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { encrypt } from '../src/crypto.js';
 import { digestTick, resetDigestState, slotFor, weekKey } from '../src/digest.js';
 import { cfg, ENC_KEY, makeEnv, type TestEnv } from './helpers.js';
@@ -270,15 +270,23 @@ describe('admin settings', () => {
     expect((await call(user, 'POST', '/api/admin/digest/test')).statusCode).toBe(403);
   });
 
-  it('test endpoint sends a fresh digest to the caller without storing a row', async () => {
-    await setPrefs(adminId, { ntfyTopic: 'testing' });
-    const a = (await call(admin, 'POST', '/api/admin/digest/test')).json();
-    expect(a.sent).toBe(true);
-    expect(a.data).not.toBeNull();
-    expect(sent.map((s) => s.url)).toContain('https://ntfy.example.com/testing');
-    expect((await env.pool.query('select count(*) n from digests')).rows[0].n).toBe('0');
-    const b = (await call(admin, 'POST', '/api/admin/digest/test')).json();
-    expect(b.sent).toBe(true); // unique dedupe per test
+  describe('test endpoint', () => {
+    // the endpoint looks back 7 days from the real clock, while the fixture titles are dated relative to the fixed `now` above:
+    // pin Date to `now` (only Date, timers stay real), and move it on between calls because the dedupe key carries Date.now()
+    beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(now); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('sends a fresh digest to the caller without storing a row', async () => {
+      await setPrefs(adminId, { ntfyTopic: 'testing' });
+      const a = (await call(admin, 'POST', '/api/admin/digest/test')).json();
+      expect(a.sent).toBe(true);
+      expect(a.data).not.toBeNull();
+      expect(sent.map((s) => s.url)).toContain('https://ntfy.example.com/testing');
+      expect((await env.pool.query('select count(*) n from digests')).rows[0].n).toBe('0');
+      vi.setSystemTime(now.getTime() + 1000);
+      const b = (await call(admin, 'POST', '/api/admin/digest/test')).json();
+      expect(b.sent).toBe(true); // unique dedupe per test
+    });
   });
 });
 

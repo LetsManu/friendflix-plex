@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { AIRPLAY_PIN2_WINDOW_MS, CAST_IDLE_TTL, castKeyTtl, hashToken } from '../src/cast.js';
+import { AIRPLAY_PIN2_WINDOW_MS, CAST_IDLE_TTL, castKeyTtl, hashToken, NEXT_OVERLAP_MS } from '../src/cast.js';
 import { revokeSessions } from '../src/devices.js';
-import { countLive, getLive, setLive } from '../src/live.js';
+import { countLive, DRAIN_MS, getLive, setLive } from '../src/live.js';
 import { cfg, makeEnv, type TestEnv } from './helpers.js';
 
 const ID = 'a'.repeat(32);
@@ -16,14 +16,19 @@ afterEach(() => { vi.useRealTimers(); });
 let env: TestEnv;
 let admin: Sess;
 let visible = true;
+/** the play session id the fake server gives the next PlaybackInfo (default: one fixed id) */
+let psNext: string | null = null;
 const runtime = 7200 * 10_000_000;
 
 beforeAll(async () => {
   env = await makeEnv({
     'GET /Users/[^/]+/Items/[^/]+': () => (visible ? { json: { Id: ID, Name: 'Film', Type: 'Movie', ImageTags: { Primary: 'x' }, UserData: { PlaybackPositionTicks: 600_000_000 } } } : { status: 404 }),
+    'POST /Sessions/Playing': () => ({ status: 204 }),
+    'POST /Sessions/Playing/Progress': () => ({ status: 204 }),
+    'POST /Sessions/Playing/Stopped': () => ({ status: 204 }),
     'POST /Items/[^/]+/PlaybackInfo': () => ({
       json: {
-        PlaySessionId: 'ps-12345678',
+        PlaySessionId: psNext ?? 'ps-12345678',
         MediaSources: [{ Id: MS, Container: 'mkv', SupportsDirectPlay: true, Bitrate: 4_000_000, RunTimeTicks: runtime, MediaStreams: [{ Index: 0, Type: 'Video', Height: 2160 }, { Index: 1, Type: 'Audio' }, { Index: 2, Type: 'Subtitle', Codec: 'srt', Language: 'ger' }] }],
       },
     }),
@@ -362,6 +367,190 @@ describe('cast token hardening', () => {
     const l = (await getLive(env.ctx, me, 'ps-12345678'))!;
     expect(l.positionTicks).toBe(5);
     expect(l.updatedAt).toBeGreaterThan(1);
+  });
+});
+
+describe('cast session: stop report and the queued next episode', () => {
+  const me = async () => (await call(admin, 'GET', '/api/me')).json().id as string;
+  const stale = async (ct: string) => env.kv.set(`cast:${hashToken(ct)}`, JSON.stringify({ ...JSON.parse((await env.kv.get(`cast:${hashToken(ct)}`))!), seen: 0 }), 600);
+
+  it('a segment fetch after the stop report does not bring the stopped stream back (no ghost stream for maxStreams)', async () => {
+    const uid = await me();
+    for (const k of await env.kv.keys(`play:${uid}:`)) await env.kv.del(k);
+    const { ct, j } = await create();
+    const body = { itemId: ID, playSessionId: j.playSessionId, mediaSourceId: MS, positionTicks: 0, isPaused: false, playMethod: 'Transcode' };
+    expect((await call(admin, 'POST', '/api/playback/start', body)).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(1);
+    expect((await call(admin, 'POST', '/api/playback/stop', body)).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(0);
+    // the receiver still fetches the old token's segments until the new one is loaded (its sliding refresh is due)
+    await stale(ct);
+    skipClock(5100);
+    expect((await authz({ ct })).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(0);
+    // a new start of that play session counts again
+    expect((await call(admin, 'POST', '/api/playback/start', body)).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(1);
+    await call(admin, 'POST', '/api/playback/stop', body);
+  });
+
+  it('revoking a token whose stream never reported `start` (a dropped queued episode the receiver preloaded) frees its stream slot', async () => {
+    const uid = await me();
+    for (const k of await env.kv.keys(`play:${uid}:`)) await env.kv.del(k);
+    for (const k of await env.kv.keys(`pstop:${uid}:`)) await env.kv.del(k); // the fake server reuses one play session id
+    const { ct, j } = await create();
+    await stale(ct);
+    skipClock(5100);
+    expect((await authz({ ct })).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(1); // counted from its segment fetches
+    expect((await call(admin, 'DELETE', `/api/cast/session/${j.castId}`)).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(0);
+    // a reported stream stays until its own stop
+    const b = await create();
+    const body = { itemId: ID, playSessionId: b.j.playSessionId, mediaSourceId: MS, positionTicks: 0, isPaused: false, playMethod: 'Transcode' };
+    await call(admin, 'POST', '/api/playback/start', body);
+    expect((await call(admin, 'DELETE', `/api/cast/session/${b.j.castId}`)).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(1);
+    await call(admin, 'POST', '/api/playback/stop', body);
+  });
+
+  /** clean slate for this device: no tokens, no live streams, no stop marks; maxStreams 1 */
+  const fresh = async () => {
+    const uid = await me();
+    await revokeSessions(env.ctx, uid);
+    admin = await env.login();
+    for (const k of [...await env.kv.keys(`play:${uid}:`), ...await env.kv.keys(`pstop:${uid}:`)]) await env.kv.del(k);
+    env.ctx.roles.admin!.maxStreams = 1;
+    return uid;
+  };
+  const report = (kind: 'start' | 'stop', ps: string) => call(admin, 'POST', `/api/playback/${kind}`, { itemId: ID, playSessionId: ps, mediaSourceId: MS, positionTicks: 0, isPaused: false, playMethod: 'Transcode' });
+  /** the playing cast (reported `start`), then its queued next episode's token */
+  const playingThenNext = async () => {
+    psNext = null;
+    const cur = await create();
+    await report('start', cur.j.playSessionId);
+    psNext = 'ps-next-0001';
+    const nx = await create(admin, { next: true, after: cur.j.castId });
+    psNext = null;
+    return { cur, nx };
+  };
+  const role0 = { max: 0 };
+  beforeAll(() => { role0.max = env.ctx.roles.admin!.maxStreams; });
+  afterEach(() => { env.ctx.roles.admin!.maxStreams = role0.max; psNext = null; });
+
+  it('next: no predecessor (no cast token of this device) is 429, whatever the stream count', async () => {
+    await fresh();
+    env.ctx.roles.admin!.maxStreams = 5;
+    const r = await call(admin, 'POST', '/api/cast/session', { itemId: ID, next: true });
+    expect(r.statusCode).toBe(429);
+  });
+
+  it('next: issued while the playing cast fills the limit; a wrong predecessor is refused; never beyond the limit', async () => {
+    const uid = await fresh();
+    const { cur, nx } = await playingThenNext();
+    expect(nx.r.statusCode).toBe(200);
+    expect((await call(admin, 'POST', '/api/cast/session', { itemId: ID })).statusCode).toBe(429);
+    expect((await call(admin, 'POST', '/api/cast/session', { itemId: ID, next: true, after: 'f'.repeat(32) })).statusCode).toBe(409);
+    expect(cur.r.statusCode).toBe(200);
+    await setLive(env.ctx, { userId: uid, userName: 'a', itemId: ID, title: 't', positionTicks: 0, isPaused: false, playSessionId: 'other-ps-2', updatedAt: Date.now(), source: 'portal' });
+    expect((await call(admin, 'POST', '/api/cast/session', { itemId: ID, next: true, after: cur.j.castId })).statusCode).toBe(429);
+  });
+
+  it('next: repeated requests keep one queued token (the older one is revoked), the playing one stays', async () => {
+    await fresh();
+    const { cur, nx } = await playingThenNext();
+    psNext = 'ps-next-0002';
+    const nx2 = await create(admin, { next: true, after: cur.j.castId });
+    expect(nx2.r.statusCode).toBe(200);
+    expect((await authz({ ct: nx.ct })).statusCode).toBe(401);
+    expect((await authz({ ct: cur.ct })).statusCode).toBe(200);
+    expect((await authz({ ct: nx2.ct })).statusCode).toBe(200);
+    const media = (await env.kv.keys('cast:')).length;
+    psNext = 'ps-next-0003';
+    await create(admin, { next: true, after: cur.j.castId });
+    expect((await env.kv.keys('cast:')).length).toBe(media); // one in, one out
+  });
+
+  it('next: the receiver\'s preload overlap is served and counted once (the playing stream); after its stop the next one counts', async () => {
+    const uid = await fresh();
+    const { cur, nx } = await playingThenNext();
+    expect((await authz({ ct: nx.ct })).statusCode).toBe(200);
+    await stale(nx.ct);
+    skipClock(5100);
+    expect((await authz({ ct: nx.ct })).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(1);
+    expect(await getLive(env.ctx, uid, 'ps-next-0001')).toBeNull();
+    await report('stop', cur.j.playSessionId);
+    skipClock(400_000); // long past the overlap window: the predecessor is over, the token behaves normally
+    expect((await authz({ ct: nx.ct })).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(1);
+    expect(await getLive(env.ctx, uid, 'ps-next-0001')).not.toBeNull();
+  });
+
+  it('next: once it plays (its predecessor stopped) it is the predecessor of the following one and is not replaced', async () => {
+    await fresh();
+    const { cur, nx } = await playingThenNext();
+    await report('stop', cur.j.playSessionId);
+    await report('start', 'ps-next-0001');
+    psNext = 'ps-next-0009';
+    expect((await call(admin, 'POST', '/api/cast/session', { itemId: ID, next: true, after: cur.j.castId })).statusCode).toBe(409);
+    const nx2 = await create(admin, { next: true, after: nx.j.castId });
+    expect(nx2.r.statusCode).toBe(200);
+    expect((await authz({ ct: nx.ct })).statusCode).toBe(200);
+    await report('stop', 'ps-next-0001');
+  });
+
+  it('next: re-minting does not renew the overlap: the window belongs to the play session it follows', async () => {
+    const uid = await fresh();
+    const { cur, nx } = await playingThenNext();
+    const progress = () => call(admin, 'POST', '/api/playback/progress', { itemId: ID, playSessionId: cur.j.playSessionId, mediaSourceId: MS, positionTicks: 0, isPaused: false, playMethod: 'Transcode' });
+    const elsewhere = '203.0.113.78';
+    expect((await authz({ ct: nx.ct, client: elsewhere })).statusCode).toBe(200);
+    skipClock(170_000);
+    await progress();
+    psNext = 'ps-next-0004';
+    const nx2 = await create(admin, { next: true, after: cur.j.castId });
+    expect(nx2.r.statusCode).toBe(200);
+    expect((await authz({ ct: nx2.ct, client: elsewhere })).statusCode).toBe(200);
+    skipClock(11_000); // 181 s after the first overlap fetch
+    await progress();
+    expect((await authz({ ct: nx2.ct, client: elsewhere })).statusCode).toBe(401);
+    expect(await countLive(env.ctx, uid)).toBe(1);
+  });
+
+  it('a stop report only excuses a short drain: fetches of the stopped token count again after DRAIN_MS', async () => {
+    const uid = await fresh();
+    psNext = null;
+    for (const k of await env.kv.keys(`pstop:${uid}:`)) await env.kv.del(k);
+    const { ct, j } = await create();
+    await report('start', j.playSessionId);
+    await report('stop', j.playSessionId);
+    skipClock(60_000);
+    await stale(ct);
+    expect((await authz({ ct })).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(0);
+    skipClock(70_000); // 130 s after the stop
+    await stale(ct);
+    expect((await authz({ ct })).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(1);
+    expect(DRAIN_MS).toBe(120_000);
+  });
+
+  it('next: used concurrently while the predecessor plays: refused once the 180 s overlap is over, never counted twice', async () => {
+    const uid = await fresh();
+    const { cur, nx } = await playingThenNext();
+    const elsewhere = { ct: nx.ct, client: '203.0.113.77' };
+    const progress = () => call(admin, 'POST', '/api/playback/progress', { itemId: ID, playSessionId: cur.j.playSessionId, mediaSourceId: MS, positionTicks: 0, isPaused: false, playMethod: 'Transcode' });
+    expect((await authz(elsewhere)).statusCode).toBe(200);
+    skipClock(NEXT_OVERLAP_MS - 10_000);
+    await progress(); // the playing cast keeps reporting
+    expect((await authz(elsewhere)).statusCode).toBe(200);
+    expect(await countLive(env.ctx, uid)).toBe(1);
+    skipClock(20_000);
+    await progress();
+    expect((await authz(elsewhere)).statusCode).toBe(401);
+    expect(await countLive(env.ctx, uid)).toBe(1);
+    expect(await getLive(env.ctx, uid, 'ps-next-0001')).toBeNull();
   });
 });
 

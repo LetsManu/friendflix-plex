@@ -10,10 +10,17 @@ const CHROME_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, li
 function fakeSdk() {
   const ctxListeners = new Map<string, (e: { castState?: string; sessionState?: string }) => void>();
   let anyChange: () => void = () => undefined;
-  const player = { isConnected: false, isPaused: true, isMediaLoaded: false, currentTime: 0, duration: 0, volumeLevel: 1, isMuted: false, playerState: null as string | null, mediaInfo: null };
+  const player = { isConnected: false, isPaused: true, isMediaLoaded: false, currentTime: 0, duration: 0, volumeLevel: 1, isMuted: false, playerState: null as string | null, mediaInfo: null as { contentId: string } | null };
   const controller = { playOrPause: vi.fn(), stop: vi.fn(), seek: vi.fn(), setVolumeLevel: vi.fn(), muteOrUnmute: vi.fn(), addEventListener: (_t: string, fn: () => void) => { anyChange = fn; } };
-  const mediaSession = { editTracksInfo: vi.fn((_r: unknown, ok: () => void) => ok()) };
-  const session = { getCastDevice: () => ({ friendlyName: 'Living Room TV' }), loadMedia: vi.fn(async (_r: any): Promise<string | undefined> => undefined), getMediaSession: () => mediaSession };
+  const mediaSession = {
+    editTracksInfo: vi.fn((_r: unknown, ok: () => void) => ok()),
+    idleReason: null as string | null,
+    items: [] as Array<{ itemId: number; media: { contentId: string } }>,
+    queueInsertItems: vi.fn((r: any, ok: () => void, _err: (e: unknown) => void) => { for (const q of r.args[0]) mediaSession.items.push({ itemId: 100 + mediaSession.items.length, media: { contentId: q.args[0].args[0] } }); ok(); }),
+    queueRemoveItems: vi.fn((_r: unknown, ok: () => void) => ok()),
+    queueNext: vi.fn((ok: () => void) => ok()),
+  };
+  const session = { getCastDevice: () => ({ friendlyName: 'Living Room TV' }), loadMedia: vi.fn(async (_r: any): Promise<string | undefined> => undefined), media: mediaSession as typeof mediaSession | null, getMediaSession() { return this.media; } };
   const context = {
     setOptions: vi.fn(),
     addEventListener: (t: string, fn: (e: { castState?: string; sessionState?: string }) => void) => ctxListeners.set(t, fn),
@@ -38,6 +45,7 @@ function fakeSdk() {
       DEFAULT_MEDIA_RECEIVER_APP_ID: 'CC1AD845',
       MediaInfo: class extends Rec {}, LoadRequest: class extends Rec {}, MovieMediaMetadata: class extends Rec {}, TvShowMediaMetadata: class extends Rec {},
       Track: class extends Rec {}, EditTracksInfoRequest: class extends Rec {},
+      QueueItem: class extends Rec {}, QueueInsertItemsRequest: class extends Rec {}, QueueRemoveItemsRequest: class extends Rec {},
       StreamType: { BUFFERED: 'BUFFERED' }, HlsSegmentFormat: { TS: 'ts' }, MetadataType: { MOVIE: 1, TV_SHOW: 2 }, TrackType: { TEXT: 'TEXT' }, TextTrackType: { SUBTITLES: 'SUBTITLES' },
     },
   };
@@ -220,6 +228,24 @@ describe('session and player state', () => {
     expect(get(C.castState)).toMatchObject({ connected: false, deviceName: '', state: 'idle' });
   });
 
+  it('the receiver\'s idle reason comes with media-end, also when the SDK already dropped its media session', async () => {
+    const sdk = await connectSdk();
+    const seen: Array<string | null> = [];
+    C.onCastEvent((e) => { if (e === 'media-end') seen.push(get(C.castState).idleReason); });
+    sdk.context.current = sdk.session;
+    sdk.change({ isConnected: true, isMediaLoaded: true, playerState: 'PLAYING', mediaInfo: { contentId: 'https://p/a.m3u8' } });
+    expect(get(C.castState)).toMatchObject({ contentId: 'https://p/a.m3u8', idleReason: null });
+    // the SDK updates the media object in place (IDLE / FINISHED), then forgets it
+    sdk.mediaSession.idleReason = 'FINISHED';
+    sdk.session.media = null;
+    sdk.change({ isMediaLoaded: false, playerState: 'IDLE', mediaInfo: null });
+    expect(seen).toEqual(['FINISHED']);
+    // a new media: the old reason is gone
+    sdk.session.media = { ...sdk.mediaSession, idleReason: null };
+    sdk.change({ isMediaLoaded: true, playerState: 'PLAYING' });
+    expect(get(C.castState).idleReason).toBeNull();
+  });
+
   it('requestCastSession: true on success, false on cancel or error, false before the SDK is ready', async () => {
     expect(await C.requestCastSession()).toBe(false);
     const sdk = await connectSdk();
@@ -281,6 +307,50 @@ describe('loadOnCast', () => {
     expect(await C.loadOnCast(movie)).toBe(false);
     sdk.session.loadMedia.mockRejectedValueOnce(new Error('x'));
     expect(await C.loadOnCast(movie)).toBe(false);
+  });
+});
+
+describe('receiver queue (next episode)', () => {
+  const next: CastInfo = {
+    castId: 'n', expiresAt: 0, playSessionId: 'ps2', mediaSourceId: 'ms2', runtimeTicks: 18_000_000_000, startTime: 30,
+    contentUrl: 'https://p/media/c/NEXT/Videos/y/master.m3u8', contentType: 'application/x-mpegURL', hlsSegmentFormat: 'ts',
+    title: 'Second', seriesName: 'Show', subtitles: [{ index: 5, language: 'eng', title: 'English', url: 'https://p/s5.vtt' }],
+  };
+
+  it('is null without a session or when the receiver refuses', async () => {
+    expect(await C.queueOnCast(next)).toBeNull();
+    const sdk = await connectSdk();
+    sdk.context.current = sdk.session;
+    sdk.mediaSession.queueInsertItems.mockImplementationOnce((_r: unknown, _ok: () => void, err: (e: unknown) => void) => err(new Error('INVALID_REQUEST')));
+    expect(await C.queueOnCast(next)).toBeNull();
+    // an SDK without the queue API (older sender, test fakes): null, never a page error
+    delete (sdk.chromeCast.media as Record<string, unknown>).QueueItem;
+    await expect(C.queueOnCast(next)).resolves.toBeNull();
+  });
+
+  it('queues the next title after the playing one (autoplay, preload, its resume position) and returns its queue item id', async () => {
+    const sdk = await connectSdk();
+    sdk.context.current = sdk.session;
+    expect(await C.queueOnCast(next)).toBe(100);
+    const req = sdk.mediaSession.queueInsertItems.mock.calls[0]![0];
+    const item = req.args[0][0];
+    expect(item).toMatchObject({ autoplay: true, startTime: 30, preloadTime: C.QUEUE_PRELOAD_S });
+    expect(item.args[0].args).toEqual([next.contentUrl, next.contentType]);
+    expect(item.args[0].metadata).toMatchObject({ title: 'Second', seriesTitle: 'Show' });
+    C.castQueueNext();
+    expect(sdk.mediaSession.queueNext).toHaveBeenCalledTimes(1);
+    C.castQueueRemove(100);
+    expect((sdk.mediaSession.queueRemoveItems.mock.calls[0] as any[])[0].args[0]).toEqual([100]);
+  });
+
+  it('subtitles follow the title the receiver plays (after it moved on to the queued one)', async () => {
+    const sdk = await connectSdk();
+    sdk.context.current = sdk.session;
+    await C.loadOnCast({ ...next, contentUrl: 'https://p/first.m3u8', subtitles: [{ index: 5, title: 'X', url: 'x.vtt' }, { index: 6, title: 'Y', url: 'y.vtt' }] });
+    await C.queueOnCast({ ...next, subtitles: [{ index: 9, title: 'Z', url: 'z.vtt' }, { index: 6, title: 'Y', url: 'y2.vtt' }] });
+    sdk.change({ isConnected: true, isMediaLoaded: true, playerState: 'PLAYING', mediaInfo: { contentId: next.contentUrl } });
+    C.castSetSubtitle(6);
+    expect((sdk.mediaSession.editTracksInfo.mock.calls.at(-1) as any[])[0].args[0]).toEqual([2]);
   });
 });
 

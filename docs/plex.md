@@ -302,6 +302,10 @@ What the preview implements (checked by the test suite against the fake Plex ser
 | Scrub preview thumbnails | Limited | Single frames from Plex's BIF index, only if preview thumbnails are generated |
 | Offline downloads | Works | Original file when it is already MP4/H.264/AAC, otherwise transcoded by Plex and remuxed by FriendFlix |
 | Chromecast | Works | HLS; text subtitles through signed FriendFlix subtitle URLs |
+| Next episode on the TV (Chromecast queue, cast bar countdown, *Next episode*, lock-screen controls) | Works | The queued episode's token is bound to the cast it follows, as upstream; Plex's own stream count lets it overlap exactly that one cast, and its Plex session is reachable through the cast token only. See [Casting the next episode on Plex](#casting-the-next-episode-on-plex) |
+| Cast remote screen (artwork, episode card, device) | Works | Artwork through FriendFlix's own image paths and the Plex photo transcoder; no Plex address or token in any image URL |
+| Post-play screen (*You finished …*, *You're caught up*, *Episode N is still unwatched*) | Limited | Plex has no series status and no announced episodes: after the last available episode the screen always says *You're caught up* (never *You finished the series*), without a next air date or *Remind me*. See [Recommendation engine v2 and post-play on Plex](#recommendation-engine-v2-and-post-play-on-plex) |
+| Recommendation engine v2 (`RECO_ENGINE`, item index, crowd signals, explanations) | Works | The item index reads FriendFlix's mirror of the Plex library (genres, labels, studios, countries, people, year, runtime, ratings, collections, overview). Plex lacks original language and series status; those signals stay neutral |
 | TV mode, watch parties, recommendations, notifications, hubs | Works | FriendFlix features |
 | "Upcoming episodes" / calendar | Not available | Plex does not offer it |
 | Account page (*My space → Account*) | Works | Main profile only. Shows the account and its devices; nothing on the page comes from Plex |
@@ -354,6 +358,35 @@ The in-app sign-in, password recovery, the account page's *Security* section and
   | empty, `NR`, `Not Rated`, `Unrated` | – | no, never |
 
   As a second check FriendFlix's own rating table ([Age ratings](#5-age-ratings)) must place the value at age 0 to 12, so a plain `U` (no country) is not shown either. Episodes and seasons are never on the wall, and a show counts with the show's own rating. A rating edited in Plex counts after the next sync. With an empty mirror (right after setup) or no qualifying title the sign-in shows generated art instead.
+
+### Recommendation engine v2 and post-play on Plex
+
+FriendFlix 1.1's engine v2 and the post-play screen use three optional media-server hooks; the Plex implementation answers all of them from FriendFlix's mirror of the Plex library (`backend/src/plex/service.ts`, `features.ts`), never with a Plex request per title:
+
+- **`libraryFeatures`** (the item index, `item_features`): every movie and show of the mirror, paged in rating key order. Genres, Plex **labels** as tags, studios, countries, up to 8 credited people (2 directors, 2 writers, then actors in billing order; ids are FriendFlix person ids, never Plex URLs), year, runtime (`duration`), the community and critics scores of the detail page (`audienceRating` / `rating`), the Plex collection, summary and tagline. A sync that adds or removes a title announces it to the index (removals with their type, so the row goes at once).
+- **`libraryRoots`**: an episode maps to its show (the mirror's `grandparentRatingKey`), a film or show to itself. The "What people watch after …" and co-occurrence aggregates use it.
+- **`seriesStatus`**: Plex keeps no status, so it answers "unknown" for every series the viewer can see (`404` otherwise).
+
+Next episode, *Episode N is still unwatched*, collections and the visibility of every row come from the same Plex implementation as the rest of the app, so library access, age caps and kids profiles apply exactly as in browse (the post-play and index code never reads the mirror directly). Kids profiles never get the friends, co-watch or transition rows (upstream rule).
+
+**Known limits on Plex**
+
+- **Never "You finished the series":** without a series status the screen after the last available episode says *You're caught up*. Plex lists no announced episodes either, so there is no next air date and no *Remind me* there.
+- **Original language is unknown:** Plex has no original-language field, so the engine's language preference stays neutral (as with Jellyfin, which does not report it either).
+- **Tags are Plex labels:** Plex has no keyword tags; labels are usually set by hand, so on most libraries the tag signal is empty and genres, people and the overview carry the similarity.
+- **No "Creator" credit:** for shows Plex usually only lists actors; directors and writers count when Plex has them.
+- **Critics score** only when Plex marks `rating` as Rotten Tomatoes (as on the detail page).
+- **v1 stays FriendFlix's own similar titles** (shared genres and cast) on Plex, not Jellyfin's. The admin's engine card calls it "v1 (classic)".
+
+### Casting the next episode on Plex
+
+Upstream 1.1 queues the next episode on the Chromecast: from the credits on the sender asks for the next episode's cast token (`POST /api/cast/session` with `next`), bound to the running cast it follows (`castPredecessor`, resolved on the server, never taken from the client). The gateway serves it while that cast still plays only within the 180 s preload window (`NEXT_OVERLAP_MS`) and never counts it as a second stream; a stop report excuses the old token for 120 s at most (`DRAIN_MS`). All of that runs unchanged on Plex. Plex adds its own stream count (running Plex transcodes per profile, [Role limits](#role-limits)), so the fork binds it the same way:
+
+- The queued episode's Plex transcode may start next to exactly its predecessor (`PlaybackOptions.after`); every other running session still counts, and from its start it counts itself, so no third stream starts.
+- Its Plex session has its own signature (`hlsq`): the gateway accepts it **only through its cast token**, never with the browser's cookie, so the token's 180 s window cannot be bypassed.
+- One queued episode per predecessor: asking again (another episode, or the same one again) ends the earlier queued Plex transcode first.
+
+Known limit: the sender queues the next episode up to 40 minutes before the end (`QUEUE_WITHIN_S`), and its Plex transcode starts with the token (Plex has no lazy start FriendFlix could use). Plex ends a transcode nobody fetches after a while; if it has ended the waiting one when the receiver preloads it, the receiver cannot move on by itself and the sender loads the next episode itself after about 20 seconds (`ADVANCE_WAIT_MS`), as before 1.1. Not verified against a real Plex server: how long Plex keeps an idle queued transcode.
 
 ### Recommendation measurement on Plex
 

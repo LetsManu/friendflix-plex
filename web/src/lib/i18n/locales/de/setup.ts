@@ -80,6 +80,7 @@ const setup = {
     retry: 'Noch einmal versuchen',
     leftoversTitle: 'Noch von Hand zu erledigen',
     leftovers: {
+      emailChange: 'E-Mail-Änderung: Mail-Vorlage unter /templates in Authentik einbinden, dann „Authentik-Einrichtung reparieren“ unter Admin → Status.',
       smtp: 'E-Mail-Versand in Authentik einrichten (SMTP), damit Einladungen und Passwort-Mails ankommen.',
       mfa: 'Zwei-Faktor-Anmeldung im Anmelde-Flow von Authentik einschalten (Anleitung: docs/authentik.md, Abschnitt 6).',
       templates: 'Die E-Mail-Vorlagen von FriendFlix nach /templates auf dem Authentik-Server legen (Datei-Mount).',

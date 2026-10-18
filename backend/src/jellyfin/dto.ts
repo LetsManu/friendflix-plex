@@ -3,6 +3,7 @@
 /** Jellyfin JSON -> the server-neutral DTOs of ../media/types.ts (re-exported here for existing imports). */
 import { DOWNLOAD_PRESETS, maxWidthFor, type DownloadQuality, type DownloadSourceDto, type ImageTags, type ItemDto, type MediaTraits, type PlaybackDto, type TranscodeReason, type TrickplayDto } from '../media/types.js';
 import type { ChapterDto, ItemAboutDto, ItemCreditsDto, ProviderIds } from '../media/types.js'; // Block 17 P1
+import type { ItemFeatures } from '../media/types.js'; // R1
 import type { HygieneFacts, HygieneSource, HygieneStream, ServerSession } from '../media/types.js'; // Block 22
 
 export { DOWNLOAD_PRESETS, maxWidthFor };
@@ -449,5 +450,53 @@ export function toHygieneFacts(raw: Record<string, any>, type: HygieneFacts['typ
     runtimeTicks: num(raw.RunTimeTicks),
     virtual: raw.LocationType === 'Virtual',
     sources: Array.isArray(raw.MediaSources) ? raw.MediaSources.map(hygieneSource) : [],
+  });
+}
+
+// ---- R1: item feature index ----------------------------------------------------------------------------------------------------
+const FEATURE_PEOPLE_MAX = 8;
+/** how many of the 8 people slots each credit type may take before actors fill the rest */
+const FEATURE_PEOPLE_QUOTA: Record<string, number> = { Director: 2, Creator: 2, Writer: 2 };
+const FEATURE_PEOPLE_ORDER = ['Director', 'Creator', 'Writer', 'Actor'];
+
+/** ids of the top 8 credited people: up to 2 directors, 2 creators, 2 writers, then actors in billing order (Jellyfin lists them that way). */
+export function featurePeople(people: ItemCreditsDto['people']): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const take = (type: string, cap: number) => {
+    let n = 0;
+    for (const p of people) {
+      if (out.length >= FEATURE_PEOPLE_MAX || n >= cap) return;
+      const id = String(p.id).replace(/-/g, '').toLowerCase();
+      if (p.type !== type || seen.has(id)) continue;
+      seen.add(id); out.push(id); n++;
+    }
+  };
+  for (const t of FEATURE_PEOPLE_ORDER) take(t, FEATURE_PEOPLE_QUOTA[t] ?? FEATURE_PEOPLE_MAX);
+  return out;
+}
+
+/**
+ * Jellyfin film / series (fields=Overview,Taglines,Genres,Tags,Studios,People,ProductionLocations,...) -> ItemFeatures. Reuses toCredits()
+ * and toItemAbout(), the mappers behind credits() and itemAbout(). Whitelisted fields only: no paths, URLs, image tags or user data.
+ * `collectionId` comes from the box set index (the caller knows it, the item JSON does not).
+ */
+export function toItemFeatures(raw: Record<string, any>, type: 'Movie' | 'Series', collectionId?: string): ItemFeatures {
+  const credits = toCredits(raw);
+  const about = toItemAbout(raw);
+  const premiere = typeof raw.PremiereDate === 'string' ? Number(raw.PremiereDate.slice(0, 4)) : NaN;
+  const year = num(raw.ProductionYear) ?? (Number.isFinite(premiere) && premiere > 0 ? premiere : undefined);
+  const ticks = num(raw.RunTimeTicks);
+  const strs = (a: unknown) => (Array.isArray(a) ? a : []).filter((x: unknown): x is string => typeof x === 'string' && Boolean(x.trim()));
+  const status = typeof raw.Status === 'string' ? raw.Status.toLowerCase() : '';
+  return dropUndef({
+    id: String(raw.Id).replace(/-/g, '').toLowerCase(), type,
+    genres: strs(raw.Genres), tags: about.tags, studios: credits.studios, people: featurePeople(credits.people), countries: about.countries,
+    year: year !== undefined && year > 0 && year < 10000 ? year : undefined,
+    runtimeMin: ticks !== undefined && ticks > 0 ? Math.round(ticks / 600_000_000) : undefined,
+    communityRating: about.communityRating, criticRating: about.criticRating,
+    collectionId,
+    seriesStatus: type === 'Series' ? (status === 'continuing' ? ('continuing' as const) : status === 'ended' ? ('ended' as const) : undefined) : undefined,
+    overview: str(raw.Overview, 4000), tagline: about.tagline?.slice(0, 500),
   });
 }

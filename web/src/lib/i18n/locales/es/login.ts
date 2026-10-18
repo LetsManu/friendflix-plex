@@ -54,6 +54,9 @@ const login: Translation<typeof de> = {
     passkeyText: 'Confirma el inicio de sesión con tu llave de acceso.',
   },
   notice: {
+    unavailableTimeout: 'El servicio de inicio de sesión tardó demasiado en responder. Inténtalo de nuevo en un momento.',
+    unavailableUnreachable: 'FriendFlix no puede contactar ahora con el servicio de inicio de sesión. Inténtalo de nuevo en un momento.',
+    unavailableServiceToken: 'El servicio de inicio de sesión rechaza el acceso de FriendFlix. Un administrador puede repararlo en Admin → Estado → Inicio de sesión.',
     classicTitle: 'Continuar en la página de inicio de sesión',
     classicText: 'Este paso solo funciona en la página de inicio de sesión.',
     classic: 'Continuar en la página de inicio de sesión',
@@ -85,6 +88,35 @@ const login: Translation<typeof de> = {
   },
   /** account security and the e-mail change (Block 23 phase 3, Task 11) */
   sec: {
+    manageClassic: 'Continuar en la página de inicio de sesión',
+    refused: {
+      classic: 'El inicio de sesión dentro de FriendFlix está desactivado, así que este cambio se hace en la página de inicio de sesión.',
+      flow_not_configured: 'Esto aún no está configurado en el servicio de inicio de sesión. Un administrador puede configurarlo en Admin → Estado → Inicio de sesión.',
+      authentik_user_not_found: 'Tu cuenta no se encontró en el servicio de inicio de sesión. Pregunta a un administrador.',
+    },
+    problem: {
+      service_token: 'Ahora no se pueden leer tus ajustes de seguridad: el servicio de inicio de sesión rechaza el acceso de FriendFlix. Un administrador puede repararlo en Admin → Estado → Inicio de sesión.',
+      unreachable: 'Ahora no se pueden leer tus ajustes de seguridad: el servicio de inicio de sesión no responde.',
+      error: 'Ahora no se pueden leer tus ajustes de seguridad.',
+      not_configured: 'FriendFlix no está conectado a la API del servicio de inicio de sesión, así que estos ajustes se gestionan en la página de inicio de sesión.',
+    },
+    username: {
+      title: 'Nombre de usuario',
+      text: 'Inicias sesión con este nombre o con tu correo electrónico.',
+      unknown: 'No se puede leer ahora',
+      change: 'Cambiar',
+      label: 'Nuevo nombre de usuario',
+      hint: 'Solo letras, números y @ . + - _, hasta 150 caracteres.',
+      save: 'Guardar',
+      cancel: 'Cancelar',
+      done: 'Tu nombre de usuario ahora es «{name}».',
+      fixed: 'El nombre de usuario no se puede cambiar aquí: el servicio de inicio de sesión identifica tu cuenta con él.',
+      errors: {
+        username_invalid: 'Usa solo letras, números y @ . + - _ (hasta 150 caracteres).',
+        username_taken: 'Este nombre de usuario ya está en uso.',
+        rate_limited: 'Has cambiado tu nombre de usuario demasiadas veces. Inténtalo mañana.',
+      },
+    },
     dialog: 'Volver a iniciar sesión',
     close: 'Cerrar',
     loading: 'Un momento …',

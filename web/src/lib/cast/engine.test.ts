@@ -7,7 +7,7 @@ import type { CastInfo, CastState } from '#lib/cast';
 import { COUNTDOWN_SECONDS } from '#lib/player/nextup';
 import { consumeAutoplay, noteAutoplay, noteInteraction, shouldAsk } from '#lib/stillwatching';
 import { DEFAULT_PREFS, type Prefs } from '#lib/stores';
-import { createCastEngine, ENDED_HIDE_MS, ENDED_IDLE_MS, PROGRESS_MS, RENEW_BEFORE_MS, type CastSession, type EngineDeps, type PlayerHandoff } from './engine';
+import { ADVANCE_WAIT_MS, createCastEngine, ENDED_HIDE_MS, ENDED_IDLE_MS, PROGRESS_MS, RENEW_BEFORE_MS, type CastSession, type EngineDeps, type PlayerHandoff } from './engine';
 
 const T0 = 1_000_000;
 const ci = (castId: string, over: Partial<CastInfo> = {}): CastInfo => ({
@@ -24,7 +24,7 @@ const items: Record<string, Partial<Item>> = {
 };
 /** GET /api/items/{id}/next: the episode after ep1 is ep2 (others: none) */
 const nexts: Record<string, string> = { ep1: 'ep2', ep2: 'ep3', ep5: 'sp1' };
-const idle: CastState = { available: true, connected: true, deviceName: 'Wohnzimmer-TV', state: 'idle', currentTime: 0, duration: 0, paused: true, volume: 1, muted: false, loaded: false };
+const idle: CastState = { available: true, connected: true, deviceName: 'Wohnzimmer-TV', state: 'idle', currentTime: 0, duration: 0, paused: true, volume: 1, muted: false, loaded: false, contentId: '', idleReason: null };
 const playing = (over: Partial<CastState> = {}): CastState => ({ ...idle, state: 'playing', loaded: true, paused: false, currentTime: 60, duration: 1800, ...over });
 
 function deferred<T>() {
@@ -38,12 +38,13 @@ const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve()
 function setup(o: { prefs?: Partial<Prefs> } = {}) {
   const calls: Array<{ path: string; init: { method?: string; body?: any; keepalive?: boolean } }> = [];
   const order: string[] = [];
-  let n = 0;
+  let n = 0, qn = 0;
   /** answers of POST /api/cast/session (default: a fresh token c<n>) */
   const posts: Array<() => Promise<CastInfo>> = [];
   const api = vi.fn(async (path: string, init: { method?: string; body?: any; keepalive?: boolean } = {}) => {
     calls.push({ path, init });
     order.push(`${init.method ?? 'GET'} ${path}`);
+    if (path === '/api/cast/session' && init.body?.next) return ci(`q${++qn}`); // the receiver queue's token (own ids)
     if (path === '/api/cast/session') { const next = posts.shift(); return next ? next() : ci(`n${++n}`); }
     const nx = /^\/api\/items\/([^/]+)\/next$/.exec(path);
     if (nx) return { item: nexts[nx[1]!] ? items[nexts[nx[1]!]!] : null };
@@ -55,11 +56,15 @@ function setup(o: { prefs?: Partial<Prefs> } = {}) {
   const events = new Set<(e: 'session-start' | 'session-end' | 'media-end') => void>();
   const loads: Array<{ info: CastInfo; sub: number }> = [];
   let loadImpl: (info: CastInfo) => Promise<boolean> = async () => true;
+  /** the receiver's queue: refused (null) unless a test accepts it */
+  const queued: CastInfo[] = [];
+  let queueImpl: (info: CastInfo) => number | null = () => null;
   const cast = {
     castState,
     onCastEvent: vi.fn((fn: (e: 'session-start' | 'session-end' | 'media-end') => void) => { events.add(fn); return () => { events.delete(fn); }; }),
     loadOnCast: vi.fn(async (info: CastInfo, sub = -1) => { loads.push({ info, sub }); return loadImpl(info); }),
     castPlayPause: vi.fn(), castSeek: vi.fn(), castStop: vi.fn(), castSetSubtitle: vi.fn(),
+    queueOnCast: vi.fn(async (info: CastInfo): Promise<number | null> => { queued.push(info); return queueImpl(info); }), castQueueRemove: vi.fn(), castQueueNext: vi.fn(),
   };
   let now = T0;
   let timers: Array<{ fn: () => void; at: number; id: number }> = [];
@@ -82,24 +87,32 @@ function setup(o: { prefs?: Partial<Prefs> } = {}) {
     now = end;
   };
   const hides = new Set<() => void>();
+  const wakes = new Set<() => void>();
+  /** the title's segments (GET /api/items/{id}/segments as the engine gets them) */
+  const segs: Record<string, Array<{ type: string; start: number; end: number }>> = {};
+  let hiddenNow = false;
   const toast = vi.fn();
   const item = vi.fn(async (id: string) => { const it = items[id]; if (!it) throw new Error('404'); return it as Item; });
   const deps: EngineDeps = {
     api: api as unknown as EngineDeps['api'], item, cast: cast as unknown as EngineDeps['cast'], air: vi.fn() as unknown as EngineDeps['air'],
     body: () => ({}) as HTMLElement,
     onPageHide: vi.fn((fn: () => void) => { hides.add(fn); return () => { hides.delete(fn); }; }),
+    segments: vi.fn(async (id: string) => segs[id] ?? []), hidden: () => hiddenNow, onWake: vi.fn((fn: () => void) => { wakes.add(fn); return () => { wakes.delete(fn); }; }),
     toast, prefs: () => ({ ...DEFAULT_PREFS, ...o.prefs }), timers: timerDeps,
   };
   const out = writable<CastSession | null>(null);
   const engine = createCastEngine(deps, out);
   return {
     engine, out, deps, calls, order, posts, api, state, cast, events, loads, toast, timers: timerDeps, hides, item,
-    advance, subs: () => subs, pending: () => timers.length,
+    advance, segs, wakes, hide: (on: boolean) => { hiddenNow = on; }, wake: () => wakes.forEach((fn) => fn()), subs: () => subs, pending: () => timers.length,
     setLoad: (f: (info: CastInfo) => Promise<boolean>) => { loadImpl = f; },
+    setQueue: (f: (info: CastInfo) => number | null) => { queueImpl = f; }, queued,
     emit: (e: 'session-start' | 'session-end' | 'media-end') => events.forEach((fn) => fn(e)),
     reports: () => calls.filter((c) => c.path.startsWith('/api/playback/')).map((c) => c.path.slice('/api/playback/'.length)),
     deletes: () => calls.filter((c) => c.init.method === 'DELETE').map((c) => c.path.slice('/api/cast/session/'.length)),
-    tokenPosts: () => calls.filter((c) => c.path === '/api/cast/session'),
+    tokenPosts: () => calls.filter((c) => c.path === '/api/cast/session' && !c.init.body?.next),
+    queuePosts: () => calls.filter((c) => c.path === '/api/cast/session' && c.init.body?.next),
+    lastReport: () => calls.filter((c) => c.path.startsWith('/api/playback/')).at(-1),
   };
 }
 type Env = ReturnType<typeof setup>;
@@ -221,7 +234,7 @@ describe('cast engine: playOnTv (Chromecast)', () => {
     // the receiver still reports the old title until it is loaded: no start yet, then start for the new token
     env.state.set(playing({ currentTime: 1 }));
     expect(env.reports()).toEqual(['stop', 'start']);
-    expect(env.calls.at(-1)!.init.body).toEqual({ itemId: 'ep2', playSessionId: 'ps-n1', mediaSourceId: 'ms-n1', positionTicks: secToTicks(1), isPaused: false, audioIndex: undefined, playMethod: 'Transcode' });
+    expect(env.lastReport()!.init.body).toEqual({ itemId: 'ep2', playSessionId: 'ps-n1', mediaSourceId: 'ms-n1', positionTicks: secToTicks(1), isPaused: false, audioIndex: undefined, playMethod: 'Transcode' });
     expect(get(env.out)?.state).toBe('playing');
   });
 
@@ -648,6 +661,7 @@ describe('castEngine (browser wiring)', () => {
     const removed: Array<() => void> = [];
     vi.stubGlobal('window', { addEventListener: (_t: string, fn: () => void) => added.push(fn), removeEventListener: (_t: string, fn: () => void) => removed.push(fn) });
     vi.stubGlobal('location', { pathname: '/', href: '/' });
+    vi.stubGlobal('document', { visibilityState: 'visible', addEventListener: vi.fn(), removeEventListener: vi.fn() });
     const paths: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (path: string) => {
       paths.push(path);
@@ -658,7 +672,7 @@ describe('castEngine (browser wiring)', () => {
     const { toasts } = await import('#lib/ui/toast');
     primeItem({ ...items.film, id: 'film' } as Item);
     castEngine.adopt(handoff());
-    expect(added).toHaveLength(1);
+    expect(added).toHaveLength(2); // pagehide, pageshow (wake)
     expect(get(castSession)?.itemId).toBe('film');
     await castEngine.playOnTv('film', 0); // no Cast SDK here: the receiver cannot load it
     expect(get(castSession)).toMatchObject({ title: 'Film', state: 'failed' });
@@ -668,7 +682,7 @@ describe('castEngine (browser wiring)', () => {
     await castEngine.playOnTv('ep9', 0);
     expect(get(castSession)?.title).toBe('Fetched');
     added[0]!();
-    expect(removed).toEqual([added[0]]);
+    expect(removed).toEqual(added);
     expect(get(castSession)).toBeNull();
     expect(paths).toContain('/api/items/ep9');
   });
@@ -739,7 +753,8 @@ describe('cast engine: next episode on the TV', () => {
   it('ended episode with autoplay: countdown 10 s then the next episode starts at its resume position', async () => {
     const env = setup();
     await episodeEnds(env);
-    expect(env.order).toEqual(['POST /api/playback/stop', 'GET /api/items/ep1/next', 'DELETE /api/cast/session/c1']);
+    // queue refused by the receiver (q1 revoked), the credits' lookup, then the end
+    expect(env.order).toEqual(['GET /api/items/ep1/next', 'POST /api/cast/session', 'DELETE /api/cast/session/q1', 'GET /api/items/ep1/next', 'POST /api/playback/stop', 'GET /api/items/ep1/next', 'DELETE /api/cast/session/c1']);
     expect(get(env.out)).toMatchObject({ state: 'ended', next: { itemId: 'ep2', label: 'S1:E2 · Second', startsAt: T0 + COUNTDOWN_MS } });
     await env.advance(COUNTDOWN_MS - 1);
     expect(env.tokenPosts()).toHaveLength(0);
@@ -869,10 +884,12 @@ describe('cast engine: next episode on the TV', () => {
     await playingSession(film);
     await film.engine.next();
     expect(film.calls).toEqual([]);
+    expect(film.toast).toHaveBeenCalledWith('info', 'Keine weitere Folge');
     const env = setup();
     await playingSession(env, { itemId: 'ep1', isEpisode: true });
     await env.engine.next();
-    expect(env.order).toEqual(['GET /api/items/ep1/next', 'POST /api/playback/stop', 'DELETE /api/cast/session/c1', 'POST /api/cast/session']);
+    // the first lookup and the refused queue token come from the receiver queue (the end is within QUEUE_WITHIN_S)
+    expect(env.order).toEqual(['GET /api/items/ep1/next', 'POST /api/cast/session', 'DELETE /api/cast/session/q1', 'GET /api/items/ep1/next', 'POST /api/playback/stop', 'DELETE /api/cast/session/c1', 'POST /api/cast/session']);
     expect(get(env.out)).toMatchObject({ itemId: 'ep2' });
   });
 
@@ -954,5 +971,178 @@ describe('cast engine: next episode on the TV', () => {
     expect(get(env.out)?.next).toBeUndefined();
     await env.advance(COUNTDOWN_MS);
     expect(env.tokenPosts()).toHaveLength(1);
+  });
+});
+
+describe('cast engine: Netflix-like next episode (credits, receiver queue, skip)', () => {
+  beforeEach(() => { noteInteraction(T0); consumeAutoplay(); });
+  const COUNTDOWN_MS = COUNTDOWN_SECONDS * 1000;
+  const ep1 = { itemId: 'ep1', seriesId: 's1', title: 'Bright Valley', subtitle: 'S1:E1 First', isEpisode: true };
+  /** the receiver accepts the queue item (id 7) */
+  const accepting = (env: Env) => env.setQueue(() => 7);
+
+  it('FINISHED from the receiver is the end even when the SDK reset the time to 0 first (root cause: no next episode)', async () => {
+    const env = setup();
+    await playingSession(env, ep1);
+    env.state.set(playing({ currentTime: 1790 }));
+    env.state.set(playing({ currentTime: 0 })); // the SDK's reset around the end, while the media still counts as loaded
+    env.state.set({ ...playing({ currentTime: 0, duration: 0 }), loaded: false, state: 'idle', idleReason: 'FINISHED' });
+    env.emit('media-end');
+    await flush();
+    expect(get(env.out)).toMatchObject({ state: 'ended', next: { itemId: 'ep2' } });
+  });
+
+  it('an idle receiver\'s time is no position; CANCELLED near the end is no finish', async () => {
+    const env = setup();
+    await playingSession(env, ep1);
+    env.state.set(playing({ currentTime: 1795 }));
+    env.state.set(playing({ currentTime: 0, state: 'idle' }));
+    expect(get(env.out)?.position).toBe(1795);
+    env.state.set({ ...playing({ currentTime: 0 }), loaded: false, state: 'idle', idleReason: 'CANCELLED' });
+    env.emit('media-end');
+    await flush();
+    expect(get(env.out)).toBeNull();
+  });
+
+  it('credits: the next episode is offered while the TV plays, the countdown starts it (no receiver queue)', async () => {
+    const env = setup();
+    env.segs.ep1 = [{ type: 'outro', start: 1700, end: 1800 }];
+    await playingSession(env, ep1);
+    env.state.set(playing({ currentTime: 1699 }));
+    await flush();
+    expect(get(env.out)?.next).toBeUndefined();
+    env.state.set(playing({ currentTime: 1701 }));
+    await flush();
+    expect(get(env.out)).toMatchObject({ state: 'playing', next: { itemId: 'ep2', label: 'S1:E2 · Second', startsAt: T0 + COUNTDOWN_MS } });
+    await env.advance(COUNTDOWN_MS);
+    expect(env.tokenPosts().at(-1)!.init.body).toMatchObject({ itemId: 'ep2', startTicks: undefined });
+    expect(get(env.out)).toMatchObject({ itemId: 'ep2', state: 'connecting' });
+    expect(get(env.out)?.next).toBeUndefined();
+  });
+
+  it('credits: seeking back out of them withdraws the offer and its countdown', async () => {
+    const env = setup();
+    await playingSession(env, ep1);
+    env.state.set(playing({ currentTime: 1780 })); // no segments: the last 25 s
+    await flush();
+    expect(get(env.out)?.next?.itemId).toBe('ep2');
+    env.state.set(playing({ currentTime: 1500 }));
+    expect(get(env.out)?.next).toBeUndefined();
+    await env.advance(COUNTDOWN_MS * 2);
+    expect(env.tokenPosts()).toHaveLength(0);
+  });
+
+  it('receiver queue: the next episode gets its own token (`next: true`) and the receiver moves on by itself (phone asleep)', async () => {
+    const env = setup();
+    accepting(env);
+    await playingSession(env, ep1);
+    await flush();
+    expect(env.queuePosts()).toHaveLength(1);
+    expect(env.queuePosts()[0]!.init.body).toEqual({ itemId: 'ep2', maxBitrate: 8_000_000, next: true, after: 'c1' });
+    expect(env.queued.map((q) => q.castId)).toEqual(['q1']);
+    // no countdown ran (the page slept): the receiver reports the queued title
+    env.state.set(playing({ currentTime: 30, contentId: '/media/c/q1/master.m3u8' }));
+    await flush();
+    expect(env.reports()).toEqual(['stop', 'start']);
+    expect(env.calls.find((c) => c.path === '/api/playback/stop')!.init.body).toMatchObject({ itemId: 'ep1', playSessionId: 'ps-c1', positionTicks: secToTicks(1800) });
+    expect(env.lastReport()!.init.body).toMatchObject({ itemId: 'ep2', playSessionId: 'ps-q1' });
+    expect(env.deletes()).toEqual(['c1']);
+    expect(get(env.out)).toMatchObject({ itemId: 'ep2', title: 'Bright Valley', state: 'playing', position: 30 });
+    expect(env.tokenPosts()).toHaveLength(0); // nothing loaded from the phone
+    // an autoplay all the same (still-watching chain)
+    noteAutoplay(); // one more makes two in a row
+    expect(shouldAsk(T0, { stillWatching: true, stillWatchingEpisodes: 2 })).toBe(true);
+  });
+
+  it('receiver queue: the countdown makes the receiver jump to the queued episode; it is loaded from here if it does not', async () => {
+    const env = setup();
+    accepting(env);
+    await playingSession(env, ep1);
+    env.state.set(playing({ currentTime: 1780 }));
+    await flush();
+    await env.advance(COUNTDOWN_MS);
+    expect(env.cast.castQueueNext).toHaveBeenCalledTimes(1);
+    expect(env.tokenPosts()).toHaveLength(0);
+    await env.advance(ADVANCE_WAIT_MS);
+    expect(env.tokenPosts().at(-1)!.init.body).toMatchObject({ itemId: 'ep2' });
+    expect(env.deletes()).toContain('q1'); // the queued token went with the queue
+  });
+
+  it('receiver queue: FINISHED with an episode queued follows the receiver; it is loaded if the receiver idles', async () => {
+    const env = setup();
+    accepting(env);
+    await playingSession(env, ep1);
+    env.state.set({ ...playing({ currentTime: 0 }), loaded: false, state: 'idle', idleReason: 'FINISHED' });
+    env.emit('media-end');
+    await flush();
+    expect(get(env.out)).toMatchObject({ itemId: 'ep2', state: 'connecting' });
+    expect(env.reports()).toEqual(['stop']);
+    await env.advance(ADVANCE_WAIT_MS);
+    expect(env.loads.map((l) => l.info.castId)).toEqual(['q1']);
+  });
+
+  it('cancelNext() during the credits: the queued episode leaves the receiver and its token is revoked; the end only offers it', async () => {
+    const env = setup();
+    accepting(env);
+    await playingSession(env, ep1);
+    env.state.set(playing({ currentTime: 1780 }));
+    await flush();
+    env.engine.cancelNext();
+    expect(env.cast.castQueueRemove).toHaveBeenCalledWith(7);
+    expect(env.deletes()).toEqual(['q1']);
+    expect(get(env.out)?.next?.startsAt).toBeNull();
+    await env.advance(COUNTDOWN_MS);
+    env.emit('media-end');
+    await flush();
+    expect(get(env.out)).toMatchObject({ state: 'ended', next: { itemId: 'ep2', startsAt: null } });
+    await env.advance(COUNTDOWN_MS);
+    expect(env.tokenPosts()).toHaveLength(0);
+    expect(env.cast.castQueueNext).not.toHaveBeenCalled();
+  });
+
+  it('the queue keeps the profile rules: autoplay off, sleep after the episode, still-watching due at the end time', async () => {
+    for (const [o, h] of [[{ prefs: { autoplayNext: false } }, {}], [{}, { sleepAfterEpisode: true }]] as const) {
+      const env = setup(o);
+      accepting(env);
+      await playingSession(env, { ...ep1, ...h });
+      await flush();
+      expect(env.queuePosts()).toHaveLength(0);
+    }
+    // nobody touched anything for 80 min: by the end (29 min later) the still-watching ask is due
+    noteInteraction(T0 - 80 * 60_000);
+    const env = setup();
+    accepting(env);
+    await playingSession(env, ep1);
+    await flush();
+    expect(env.queuePosts()).toHaveLength(0);
+  });
+
+  it('stop() and another title drop the queued episode (token revoked)', async () => {
+    const env = setup();
+    accepting(env);
+    await playingSession(env, ep1);
+    await flush();
+    await env.engine.playOnTv('film', 0);
+    expect(env.deletes()).toEqual(['q1', 'c1']);
+    const env2 = setup();
+    accepting(env2);
+    await playingSession(env2, ep1);
+    await flush();
+    await env2.engine.stop();
+    expect(env2.deletes().sort()).toEqual(['c1', 'q1']);
+  });
+
+  it('skip: inside an intro / recap the session offers it; skipSegment() seeks past it', async () => {
+    const env = setup();
+    env.segs.ep1 = [{ type: 'recap', start: 0, end: 40 }, { type: 'intro', start: 60, end: 150 }];
+    await playingSession(env, ep1);
+    env.state.set(playing({ currentTime: 10 }));
+    expect(get(env.out)?.skip).toEqual({ type: 'recap', end: 40 });
+    env.state.set(playing({ currentTime: 61 }));
+    expect(get(env.out)?.skip).toEqual({ type: 'intro', end: 150 });
+    env.engine.skipSegment();
+    expect(env.cast.castSeek).toHaveBeenCalledWith(150);
+    env.state.set(playing({ currentTime: 150 }));
+    expect(get(env.out)?.skip).toBeUndefined();
   });
 });

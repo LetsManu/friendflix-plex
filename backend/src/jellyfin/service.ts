@@ -12,9 +12,12 @@ import { jellyfinWebhookEvents } from './webhook.js';
 import { bestTraits, maxWidthFor, toDownloadSource, toItemDto, toMediaTraits, toPlaybackDto, toTrickplayDto, type DownloadQuality, type DownloadSourceDto } from './dto.js';
 import { toChapters, toCredits, toItemAbout, toProviderIds } from './dto.js'; // Block 17 P1, Block 21
 import { toHygieneFacts, toServerSession } from './dto.js'; // Block 22
+import { toItemFeatures } from './dto.js'; // R1
 import { MediaError } from '../media/types.js';
 import type { ChapterDto, ItemAboutDto, ItemCreditsDto, MediaCollection } from '../media/types.js'; // Block 17 P1, Block 21
 import type { HygieneFacts, ServerSession } from '../media/types.js'; // Block 22
+import type { ItemFeatures } from '../media/types.js'; // R1
+import type { SeriesStatus } from '../media/types.js'; // 1.1 post-play
 
 const TOKEN_TTL = 6 * 3600;
 const BOXSET_INDEX_KEY = 'jf:boxsets:v1';
@@ -40,6 +43,7 @@ export const JELLYFIN_CAPABILITIES: MediaCapabilities = {
   segments: new Set<SegmentType>(['intro', 'outro', 'recap', 'preview']),
   trickplay: true, upcoming: true, subtitleSearch: true, webhooks: true, changeFeed: false, planB: true, subtitleExtract: false,
   chapters: true, // Block 17 P1
+  libraryFeatures: true, // R1
   requestUsers: 'jellyfin-import',
 };
 
@@ -674,6 +678,54 @@ export class JellyfinService implements MediaServer {
     });
   }
 
+  // ---- R1: recommendation index ----
+  /**
+   * One page of films and series for the item feature index (admin key, sorted SortName,Id). Episodes are not listed: their series
+   * carries the metadata. Credits, studios, tags, countries, ratings and taglines come from the same mappers credits() / itemAbout() use,
+   * so no per-item call is needed. Whitelisted fields only (no paths, URLs, tokens).
+   */
+  async libraryFeatures(start: number, limit: number, opts: { ids?: string[]; savedSince?: string } = {}): Promise<ItemFeatures[]> {
+    const ids = opts.ids?.map(normId).filter((i) => /^[0-9a-f]{32}$/.test(i));
+    if (opts.ids && !ids?.length) return [];
+    const p = new URLSearchParams({
+      recursive: 'true', includeItemTypes: 'Movie,Series', sortBy: 'SortName,Id', sortOrder: 'Ascending',
+      fields: 'Overview,Taglines,Genres,Tags,Studios,People,ProductionLocations,ProductionYear,PremiereDate,RunTimeTicks,CommunityRating,CriticRating,Status',
+      enableImages: 'false', enableUserData: 'false', enableTotalRecordCount: 'false', startIndex: String(start), limit: String(limit),
+    });
+    if (ids) p.set('ids', ids.join(','));
+    if (opts.savedSince) p.set('minDateLastSaved', opts.savedSince);
+    const r = await this.client.adminJson<{ Items?: any[] }>(`/Items?${p}`);
+    const items = (r?.Items ?? []).filter((i) => i?.Id && (i.Type === 'Movie' || i.Type === 'Series'));
+    let collection = new Map<string, string>();
+    if (items.length) {
+      try {
+        const idx = await this.boxsetIndex();
+        for (const [box, kids] of Object.entries(idx)) for (const k of kids) if (!collection.has(k)) collection.set(k, nid(box));
+      } catch { collection = new Map(); } // collections are a bonus: a failing box set lookup never fails the page
+    }
+    return items.map((i) => toItemFeatures(i, i.Type, collection.get(nid(i.Id))));
+  }
+
+  /** Film / series behind each id (episode -> SeriesId), admin key, library-wide; unknown ids are absent. */
+  async libraryRoots(ids: string[]): Promise<Map<string, string>> {
+    const want = [...new Set(ids.map(normId).filter((i) => /^[0-9a-f]{32}$/.test(i)))];
+    const out = new Map<string, string>();
+    for (let i = 0; i < want.length; i += 100) {
+      const batch = want.slice(i, i + 100);
+      const p = new URLSearchParams({
+        ids: batch.join(','), recursive: 'true', includeItemTypes: 'Movie,Series,Episode', fields: 'SeriesId',
+        enableImages: 'false', enableUserData: 'false', enableTotalRecordCount: 'false', limit: String(batch.length),
+      });
+      const r = await this.client.adminJson<{ Items?: any[] }>(`/Items?${p}`);
+      for (const it of r?.Items ?? []) {
+        if (!it?.Id) continue;
+        if (it.Type === 'Episode') { if (it.SeriesId) out.set(nid(it.Id), nid(it.SeriesId)); }
+        else if (it.Type === 'Movie' || it.Type === 'Series') out.set(nid(it.Id), nid(it.Id));
+      }
+    }
+    return out;
+  }
+
   // ---- Block 22: admin care (library hygiene, metadata refresh) ----
   /** One page of hygiene facts of the whole library (admin key), stable order; `savedSince` -> minDateLastSaved (incremental scans). */
   async libraryHygiene(type: 'Movie' | 'Series' | 'Episode', page: { start: number; limit: number; savedSince?: string }): Promise<HygieneFacts[]> {
@@ -732,6 +784,15 @@ export class JellyfinService implements MediaServer {
     });
     const r = await this.client.adminJson<{ Items?: Array<{ Id?: string }> }>(`/Items?${p}`);
     return (r?.Items ?? []).flatMap((i) => (i?.Id ? [nid(i.Id)] : []));
+  }
+
+  /** Status of one series as the viewer sees it: Jellyfin's `Status` "Continuing" / "Ended"; anything else (unset) = null (unknown). */
+  async seriesStatus(user: JfUser, seriesId: string): Promise<SeriesStatus> {
+    const p = new URLSearchParams({ userId: user.jellyfin_user_id, ids: seriesId, includeItemTypes: 'Series', recursive: 'true', enableImages: 'false', enableUserData: 'false' });
+    const r = await this.json<{ Items?: any[] }>(user, `/Items?${p}`);
+    const it = (r.Items ?? []).find((x) => nid(x.Id) === nid(seriesId));
+    if (!it) throw new JellyfinError(404, 'Jellyfin: series not visible');
+    return it.Status === 'Continuing' ? 'continuing' : it.Status === 'Ended' ? 'ended' : null;
   }
 
   // ---- Block 17 P1: chapters + credits (player "Szenen" panel, "Besetzung & Infos") ----

@@ -82,6 +82,7 @@ const setup: Translation<typeof de> = {
     retry: 'Volver a intentarlo',
     leftoversTitle: 'Pendiente a mano',
     leftovers: {
+      emailChange: 'Cambio de correo: monta su plantilla en /templates de Authentik y usa «Reparar la configuración de Authentik» en Admin → Estado.',
       smtp: 'Configurar el envío de correo en Authentik (SMTP) para que lleguen las invitaciones y los correos de contraseña.',
       mfa: 'Activar el inicio de sesión en dos pasos en el flujo de autenticación de Authentik (guía: docs/authentik.md, sección 6).',
       templates: 'Colocar las plantillas de correo de FriendFlix en /templates del servidor de Authentik (montaje de archivos).',

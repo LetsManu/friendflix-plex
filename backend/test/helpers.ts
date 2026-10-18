@@ -30,6 +30,8 @@ export const cfg: Config = {
   MEDIA_SERVER: 'jellyfin', JELLYFIN_URL: 'http://jellyfin:8096', JELLYFIN_ADMIN_API_KEY: 'adminkey', PLEX_URL: undefined, PLEX_TOKEN: undefined /* fork */, REQUESTS_URL: 'http://requests:5055', REQUESTS_API_KEY: 'seerrkey',
   NTFY_URL: undefined, DISCORD_WEBHOOK_URL: undefined, METRICS_TOKEN: undefined, TMDB_API_KEY: undefined, OMDB_API_KEY: undefined, AUTHENTIK_URL: undefined, AUTHENTIK_API_TOKEN: undefined,
   AUTHENTIK_ENROLL_FLOW: undefined, AUTHENTIK_RECOVERY_FLOW: undefined, AUTHENTIK_TOTP_SETUP_FLOW: undefined, ROLE_TEMPLATES: undefined, OIDC_ALLOW_INSECURE: 'false', BACKGROUND_JOBS: 'false',
+  RECO_W_GENRES: 1, RECO_W_TAGS: 0.6, RECO_W_STUDIOS: 0.4, RECO_W_PEOPLE: 0.8, RECO_W_TEXT: 1, RECO_W_NUMERIC: 0.3, RECO_W_COLLECTION: 1.5,
+  RECO_ENGINE: 'v1', RECO_HALF_LIFE_DAYS: 120, RECO_COEFFS: undefined, RECO_EXPLORE: 0,
   PREVIEW_DIR: '/tmp/ff-test-previews', PREVIEW_WARM: 'false',
   DOWNLOADS_ENABLED: 'true', DIRECT_PLAY_REQUIRES_DOWNLOAD: 'false', DOWNLOAD_DIR: '/tmp/ff-test-downloads', DOWNLOAD_CACHE_MAX_GB: 50, DOWNLOAD_MIN_FREE_GB: 0, DOWNLOAD_PREP_CONCURRENCY: 1, DOWNLOAD_PAUSE_STREAMS: 2, DOWNLOAD_FILE_TTL_HOURS: 48, DOWNLOAD_OFFLINE_GRACE_DAYS: 7, DOWNLOAD_CREATE_PER_HOUR: 10_000,
   PLAYBACK_CHECK_HOUR: 4, NTFY_BASE_URL: undefined, VAPID_PUBLIC_KEY: undefined, VAPID_PRIVATE_KEY: undefined, VAPID_SUBJECT: undefined, DIGEST_DAY: 0, DIGEST_HOUR: 18,
@@ -38,7 +40,7 @@ export const cfg: Config = {
   GATEWAY_URL: 'http://gateway:4000', HEALTH_DISK_WARN_PCT: 85, HEALTH_DISK_CRIT_PCT: 95, HEALTH_DB_WARN_GB: 10,
   LOGIN_UI: undefined, AUTHENTIK_LOGIN_FLOW: 'default-authentication-flow', AUTHENTIK_STATIC_SETUP_FLOW: 'default-authenticator-static-setup',
   AUTHENTIK_WEBAUTHN_SETUP_FLOW: 'default-authenticator-webauthn-setup', AUTHENTIK_PASSWORD_CHANGE_FLOW: 'default-password-change',
-  AUTHENTIK_INVALIDATION_FLOW: 'default-invalidation-flow', AUTHENTIK_EMAIL_CHANGE_FLOW: 'friendflix-email-change', PASSKEYS_IN_APP: 'auto', LOGIN_COVER_WALL: 'true',
+  AUTHENTIK_INVALIDATION_FLOW: 'default-invalidation-flow', AUTHENTIK_EMAIL_CHANGE_FLOW: 'friendflix-email-change', PASSKEYS_IN_APP: 'auto', LOGIN_COVER_WALL: 'true', POSTPLAY_ENABLED: 'true',
 };
 
 export type Handler = (url: URL, init: RequestInit, body: any) => { status?: number; json?: unknown; raw?: string | Uint8Array; type?: string } | undefined;

@@ -54,12 +54,14 @@ export const segmentShown = (c: ServerCaps, type: string) => c.segments.includes
 export interface Features {
   /** a request service is set up: wishes, upcoming titles (the /requests page keeps its reminders without it) */
   requests: boolean;
+  /** 1.1 post-play screen (POSTPLAY_ENABLED): the "Done? See what's next" card, the end-of-title overlay and /postplay/:id */
+  postplay: boolean;
 }
-export const ALL_FEATURES: Features = { requests: true };
+export const ALL_FEATURES: Features = { requests: true, postplay: true };
 /** Lenient parse: only an explicit false turns a feature off. */
 export function featuresFrom(raw: unknown): Features {
   const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  return { requests: r.requests !== false };
+  return { requests: r.requests !== false, postplay: r.postplay !== false };
 }
 export const features = writable<Features>(featuresFrom(undefined));
 

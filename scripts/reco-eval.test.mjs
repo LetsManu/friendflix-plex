@@ -5,7 +5,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { URL } from 'node:url';
-import { ENGINES, K, cooccurrenceEngine, evaluate, format, listDiversity, main, parseArgs, popularityTiers, prepare, split, v1Engine, DEFAULT_FIXTURE } from './reco-eval.mjs';
+import { execFileSync } from 'node:child_process';
+import process from 'node:process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ABLATION_COMPONENTS, DEFAULT_DIST, ENGINES, K, ablation, ablationEpsilon, cooccurrenceEngine, evaluate, format, formatAblation, formatIpw, gate, ipwReplay, listDiversity, loadV2, main, parseArgs, popularityTiers, prepare, runEngine, split, v1Engine, v2Engine, DEFAULT_FIXTURE } from './reco-eval.mjs';
 
 const fixture = JSON.parse(readFileSync(DEFAULT_FIXTURE, 'utf8'));
 const near = (a, b, eps = 1e-3) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
@@ -181,4 +187,156 @@ test('CLI: argument handling', async () => {
   assert.match(help[0], /usage/);
   // the default gate: the fixture has far more than 5 evaluable profiles, a dataset with 2 does not pass
   await assert.rejects(main(['--data', new URL('./fixtures/reco-eval.json', import.meta.url).pathname, '--min-profiles', '1000'], {}, () => {}), /need 1000/);
+});
+
+// ---------------------------------------------------------------------------------------------------------------- engine v2 (R2)
+
+// v2 is the compiled backend (backend/src/reco/offline.ts). Use the build that is there, else compile one into a temp directory.
+const root = fileURLToPath(new URL('..', import.meta.url));
+let dist = process.env.RECO_EVAL_DIST || DEFAULT_DIST;
+let v2mod = await loadV2(dist);
+if (!v2mod) {
+  dist = mkdtempSync(join(tmpdir(), 'ff-reco-dist-'));
+  execFileSync(process.execPath, [join(root, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', join(root, 'backend', 'tsconfig.json'), '--outDir', dist], { stdio: 'inherit' });
+  v2mod = await loadV2(dist);
+}
+const registry = { ...ENGINES, v2: () => v2Engine(v2mod) };
+
+test('v2: evaluated next to every baseline, deterministic, beats popularity and v1 on the fixture', () => {
+  const a = evaluate(fixture, { registry, engines: Object.keys(registry) });
+  assert.deepEqual(Object.keys(a.engines), ['popularity', 'v1', 'cooccurrence', 'v2']);
+  assert.deepEqual(a, evaluate(fixture, { registry, engines: Object.keys(registry) }));
+  const { v2, popularity, v1, cooccurrence } = a.engines;
+  assert.ok(v2.ndcg > popularity.ndcg && v2.ndcg > v1.ndcg && v2.ndcg > cooccurrence.ndcg, JSON.stringify(a.engines));
+  assert.ok(v2.hitRate > 0.5);
+  assert.ok(v2.newTitleHitRate > cooccurrence.newTitleHitRate, 'content features reach titles nobody has watched');
+});
+
+test('v2: never recommends a disliked title; --exclude-seen leaves the already-seen share at zero', () => {
+  const data = { items: ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => ({ id, genres: ['g'] })), profiles: [{ id: 'p', events: [ev('a', 1), ev('b', 2, { kind: 'dislike' }), ev('c', 3), ev('e', 4), ev('f', 5), ev('g', 6)] }] };
+  const prep = prepare(data);
+  const eng = v2Engine(v2mod);
+  eng.fit({ profiles: [] }, prep);
+  const list = eng.recommend({ surface: 'home', history: prep.profiles[0].seq, seed: 'c', k: 10, disliked: prep.profiles[0].disliked });
+  assert.ok(!list.includes('b'));
+  assert.deepEqual(list, ['d']); // neighbours of the profile are unseen titles only; the dislike is out
+  const r = evaluate(fixture, { registry, engines: ['v2'], excludeSeen: true });
+  assert.equal(r.engines.v2.seenShare, 0);
+});
+
+test('v2: the comparison table and the 4.7 gate', async () => {
+  const lines = [];
+  assert.equal(await main([], { RECO_EVAL_DIST: dist }, (s) => lines.push(s)), 0);
+  const out = lines.join('\n');
+  assert.match(out, /v2 against the baselines/);
+  assert.match(out, /gate \(spec 4\.7\): .*PASS/);
+  const gated = [];
+  assert.equal(await main(['--gate', '--gate-margin', '50'], { RECO_EVAL_DIST: dist }, (s) => gated.push(s)), 1); // +5000 % is out of reach
+  assert.match(gated.join('\n'), /FAIL/);
+  assert.equal(await main(['--gate'], { RECO_EVAL_DIST: dist }, () => {}), 0);
+  const r = evaluate(fixture, { registry, engines: Object.keys(registry) });
+  assert.equal(gate({ engines: { v1: r.engines.v1 } }), null); // no v2, no gate
+  assert.equal(gate(r, 0.05).bestName, 'cooccurrence');
+  // aggregates only, also with v2
+  const json = [];
+  await main(['--json'], { RECO_EVAL_DIST: dist }, (s) => json.push(s));
+  for (const id of [...fixture.items.map((i) => i.id), ...fixture.profiles.map((p) => p.id)]) assert.ok(!new RegExp(`\\b${id}\\b`).test(out + json.join('\n')), `leaked ${id}`);
+});
+
+test('v2: without the compiled backend it is reported, and asking for it explicitly fails', async () => {
+  const lines = [], warns = [];
+  assert.equal(await main([], { RECO_EVAL_DIST: join(tmpdir(), 'ff-no-such-dist') }, (s) => lines.push(s), (s) => warns.push(s)), 0);
+  assert.match(warns.join('\n'), /v2 not evaluated/);
+  assert.doesNotMatch(lines.join('\n'), /v2 against/);
+  await assert.rejects(main(['--engines', 'v2'], { RECO_EVAL_DIST: join(tmpdir(), 'ff-no-such-dist') }, () => {}), /compiled backend/);
+});
+
+// ------------------------------------------------------------------------------------------------------------- ablation (R3)
+
+/** 12 evaluated profiles (+ 8 short ones that only train) that walk the same two chains (a1 -> a2 -> a3 -> a4, b1 -> ... -> b4) on consecutive days after the same filler titles; 40 other titles nobody watched. */
+function chainData() {
+  // ids of the chains sort after the unwatched titles: when nothing else knows better, ties in the neighbour search favour the unwatched ones
+  const chains = ['x-a1', 'x-a2', 'x-a3', 'x-a4', 'x-b1', 'x-b2', 'x-b3', 'x-b4'], filler = ['x-c1', 'x-c2', 'x-c3', 'x-c4'];
+  const ids = [...chains, ...filler, ...Array.from({ length: 40 }, (_, i) => `d-${String(i).padStart(2, '0')}`)];
+  const items = ids.map((id) => ({ id, genres: [`g-${id}`] }));
+  const walk = (p, withFiller) => {
+    const chain = chains.slice(p % 2 ? 4 : 0, p % 2 ? 8 : 4);
+    return { id: `${withFiller ? 'p' : 'q'}${p}`, events: [...(withFiller ? filler : []).map((x, i) => ({ item: x, ts: 86_400_000 * (i + 1) })), ...chain.map((x, i) => ({ item: x, ts: 86_400_000 * (i + 5) }))] };
+  };
+  // 12 profiles with 8 titles are evaluated (the last title is held out); 8 short ones (4 titles) are skipped as cases but still train: so the held-out titles are known to others
+  return { items, profiles: [...Array.from({ length: 12 }, (_, p) => walk(p, true)), ...Array.from({ length: 8 }, (_, p) => walk(p, false))] };
+}
+
+test('ablation: every component is switched off in turn and the table says what moved', () => {
+  const abl = ablation(fixture, v2mod, { minProfiles: 5 });
+  assert.deepEqual(abl.rows.map((r) => r.component), ABLATION_COMPONENTS);
+  assert.equal(abl.meta.evaluatedProfiles, 36);
+  near(abl.meta.epsilon, ablationEpsilon(36), 1e-3);
+  const by = Object.fromEntries(abl.rows.map((r) => [r.component, r]));
+  assert.equal(abl.full.ndcg, evaluate(fixture, { registry, engines: ['v2'] }).engines.v2.ndcg); // "v2 as is" is the v2 column of the main table
+  assert.equal(by.affinity.verdict, 'helps'); // without the taste profile the ranking collapses (NDCG@10 -0.2)
+  assert.ok(by.affinity.dNdcg < -0.1);
+  assert.equal(by.mmr.verdict, 'trade-off'); // re-ranking costs accuracy and buys diversity
+  assert.ok(by.mmr.dDiversity < -0.05);
+  for (const r of abl.rows) assert.ok(['helps', 'hurts', 'trade-off', 'mixed', 'no effect'].includes(r.verdict));
+  assert.deepEqual(abl, ablation(fixture, v2mod, { minProfiles: 5 })); // deterministic
+});
+
+test('v2: transitions and co-occurrence of the other profiles predict the next title on sequential data', () => {
+  const data = chainData();
+  const prep = prepare(data), tr = split(prep, 8);
+  const acc = (off) => runEngine(v2Engine(v2mod, { off }), prep, tr).transitionAccuracy;
+  assert.equal(acc([]), 1);
+  assert.equal(acc(['transition', 'cooccurrence']), 0); // nothing else knows what follows what
+  assert.equal(acc(['cooccurrence']), 1); // the transition alone is enough
+  const abl = ablation(data, v2mod, { minProfiles: 5, minInteractions: 8 });
+  assert.equal(abl.rows.find((r) => r.component === 'transition').component, 'transition');
+});
+
+test('ablation: needs enough profiles, prints aggregates only, CLI --ablation', async () => {
+  assert.throws(() => ablation(fixture, v2mod, { minProfiles: 1000 }), /need 1000/);
+  const lines = [];
+  assert.equal(await main(['--ablation'], { RECO_EVAL_DIST: dist }, (x) => lines.push(x)), 0);
+  const out = lines.join('\n');
+  assert.match(out, /ablation of engine v2/);
+  assert.match(out, /not evaluable on a dataset: context features/);
+  assert.match(formatAblation(ablation(fixture, v2mod)), /verdict/);
+  for (const id of [...fixture.items.map((i) => i.id), ...fixture.profiles.map((p) => p.id)]) assert.ok(!new RegExp(`\\b${id}\\b`).test(out), `leaked ${id}`);
+  await assert.rejects(main(['--ablation'], { RECO_EVAL_DIST: join(tmpdir(), 'ff-no-such-dist') }, () => {}), /compiled backend/);
+  const json = [];
+  await main(['--ablation', '--json'], { RECO_EVAL_DIST: dist }, (x) => json.push(x));
+  assert.equal(JSON.parse(json[0]).rows.length, ABLATION_COMPONENTS.length);
+});
+
+// ----------------------------------------------------------------------------------------------------- IPW replay (R3b)
+
+test('IPW replay: the logging policy is valued exactly without exploration and without bias with it', () => {
+  const none = ipwReplay(fixture, v2mod, { explore: 0, rounds: 3, minProfiles: 5 });
+  const v2row = (r) => r.rows.find((x) => x.policy === 'v2');
+  assert.equal(v2row(none).ipw, v2row(none).direct); // propensity 1 everywhere: the log is the policy
+  assert.equal(v2row(none).support, 1);
+  assert.equal(v2row(none).direct, evaluate(fixture, { registry, engines: ['v2'] }).engines.v2.ndcg);
+  const some = ipwReplay(fixture, v2mod, { explore: 0.3, rounds: 1500, seed: 7, minProfiles: 5 });
+  assert.deepEqual(some.rows.map((r) => r.policy), ['v2', 'v2 without cooccurrence', 'v2 without affinity', 'popularity', 'cooccurrence']);
+  for (const r of some.rows) {
+    if (r.matches) near(r.ipw, r.supported, 0.03); // unbiased for the supported part of the target's slots
+    assert.ok(r.supported <= r.direct + 1e-9 && r.support <= 1);
+  }
+  near(v2row(some).ipw, v2row(some).direct, 0.02);
+  assert.ok(some.rows.find((r) => r.policy === 'popularity').support < 0.5, 'a policy far from v2 is mostly out of support');
+  assert.ok(some.rows.find((r) => r.policy === 'v2 without cooccurrence').effectiveSample > 0);
+  assert.deepEqual(some, ipwReplay(fixture, v2mod, { explore: 0.3, rounds: 1500, seed: 7, minProfiles: 5 })); // seeded: reproducible
+  assert.notDeepEqual(some.rows[1], ipwReplay(fixture, v2mod, { explore: 0.3, rounds: 1500, seed: 8, minProfiles: 5 }).rows[1]);
+  assert.throws(() => ipwReplay(fixture, v2mod, { minProfiles: 1000 }), /need 1000/);
+});
+
+test('IPW replay: CLI, aggregates only', async () => {
+  const lines = [];
+  assert.equal(await main(['--ipw', '--rounds', '20', '--explore', '0.2'], { RECO_EVAL_DIST: dist }, (x) => lines.push(x)), 0);
+  const out = lines.join('\n');
+  assert.match(out, /inverse-propensity-weighted replay/);
+  assert.match(out, /exploration 0\.2/);
+  assert.match(formatIpw(ipwReplay(fixture, v2mod, { rounds: 5, minProfiles: 5 })), /support/);
+  for (const id of [...fixture.items.map((i) => i.id), ...fixture.profiles.map((p) => p.id)]) assert.ok(!new RegExp(`\\b${id}\\b`).test(out), `leaked ${id}`);
+  await assert.rejects(main(['--ipw'], { RECO_EVAL_DIST: join(tmpdir(), 'ff-no-such-dist') }, () => {}), /compiled backend/);
 });

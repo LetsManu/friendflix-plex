@@ -17,7 +17,7 @@ import {
   type PlaybackDto, type PlaybackOptions, type TrickplayDto, DOWNLOAD_PRESETS,
 } from '../media/types.js';
 import { encodePlexId, plexKey } from './ids.js';
-import { directUrl, hlsUrl, SESSION_FILE_RE, sessionFor, sessionPath, subtitleUrl, verifySession } from './mediapaths.js';
+import { directUrl, hlsUrl, queuedSessionFor, SESSION_FILE_RE, sessionFor, sessionPath, subtitleUrl, verifyQueuedSession, verifySession } from './mediapaths.js';
 import { fmp4Playlist, spawnFfmpeg, splitFmp4, TS_TO_FMP4_ARGS, VIRTUAL_RE, virtualMaster, type PlexFfmpeg } from './downloads.js';
 import { extractEmbedded, sidecarToVtt, TEXT_SUB_CODECS, VttCache } from './subtitles.js';
 import { BifLookup, trickplayDto } from './trickplay.js';
@@ -196,7 +196,8 @@ export class PlexPlayback {
     const limit = cast || srcBps === 0 || srcBps > opts.maxBitrate || !videoOk;
     const boxH = Math.min(limit ? rungHeight(opts.maxBitrate) : Infinity, opts.maxHeight || Infinity);
 
-    const session = sessionFor(this.d.secret, itemId);
+    // fork (1.1): a queued next episode's cast gets a cast-only session (mediapaths.ts verifyQueuedSession)
+    const session = cast && opts.after ? queuedSessionFor(this.d.secret, itemId) : sessionFor(this.d.secret, itemId);
     const rec: SessionRec = {
       owner: ownerOf(user), itemId, rk: r.rk, part: r.partKey,
       audio: audioIndex !== undefined ? this.audioId(r.streams, audioIndex) : this.defaultAudio(r.streams),
@@ -404,7 +405,7 @@ export class PlexPlayback {
     } catch {
       return null;
     }
-    if (rec.owner !== ownerOf(user) || !verifySession(this.d.secret, rec.itemId, session)) return null;
+    if (rec.owner !== ownerOf(user) || !(verifySession(this.d.secret, rec.itemId, session) || verifyQueuedSession(this.d.secret, rec.itemId, session))) return null;
     return rec;
   }
 

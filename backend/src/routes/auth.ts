@@ -27,6 +27,7 @@ import { pendingNoticeKey } from '../pending.js';
 import { profileOnboarded } from './prefs.js';
 import { publicCapabilities } from '../media/types.js';
 import { requestsEnabled } from '../seerr/client.js';
+import { postplayEnabled } from './postplay.js';
 import { isSetupSession, setupSessionHash } from '../setup/code.js';
 import { claimSetup, isSetupComplete, SETUP_EXPIRED } from '../setup/state.js';
 import type { UserRow } from '../types.js';
@@ -310,7 +311,7 @@ export function authRoutes(app: FastifyInstance, ctx: Ctx) {
       /** media server kind + what it supports: the client hides UI for anything missing (see media/types.ts) */
       server: { kind: ctx.jf.kind, capabilities: publicCapabilities(ctx.jf.capabilities) },
       /** optional services of this instance: requests = a request service is set up (else the client hides wishes and requests) */
-      features: { requests: requestsEnabled(ctx) },
+      features: { requests: requestsEnabled(ctx), postplay: postplayEnabled(ctx) },
     };
   });
 
