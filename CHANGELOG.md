@@ -4,6 +4,8 @@ All notable changes, grouped by what you notice. Each release has its own sectio
 
 ## [Unreleased]
 
+## [2.0.0] – Brezel – 2026-10-19
+
 ### Moved to FriendFlix 2.0
 - **FriendFlix for Plex has moved:** FriendFlix 2.0 ([LetsManu/friendflix](https://github.com/LetsManu/friendflix)) supports Plex directly (`MEDIA_SERVER=plex`, `compose.plex.yaml`, images `ghcr.io/letsmanu/friendflix-*`; same database and volumes). This fork gets no more features. Admins on the owner profile now see a notice with a *How to switch* link (German guide in the German interface) under the app bar, which can be hidden for 7 days per admin (this browser), and a fixed one at the top of *Admin → Update*; never for normal users or kids profiles. The same note leads README.md and README.de.md. Strings in all 7 languages.
 
