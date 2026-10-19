@@ -41,7 +41,9 @@
   import { flushDeferred } from '#lib/ui/action';
   import ConfirmHost from '#lib/ui/ConfirmHost.svelte';
   import HealthBanner from '#lib/admin/HealthBanner.svelte';
-  import { startBanner } from '#lib/admin/banner';
+  import { banner, startBanner } from '#lib/admin/banner';
+  import MoveNotice from '#lib/admin/MoveNotice.svelte';
+  import { moveNoticeAudience } from '#lib/admin/moveNotice';
   import { saveLanguage } from '#lib/stores';
   import { PLAY_ART_NAME, playTransition, takePlayArt } from '#lib/player/transition';
 
@@ -563,6 +565,7 @@
       <!-- a language switch made by the person re-renders the page once, so texts computed in scripts (tr(), fmtDate() …)
            follow it too; the language /api/me reports is applied before the page mounts and never re-renders it -->
       {#if showBanner}<HealthBanner hero={heroPage} />{/if}
+      {#if showBanner && path !== '/admin/update' && moveNoticeAudience(me)}<MoveNotice uid={me?.id ?? ''} hero={heroPage} afterBanner={Boolean($banner?.issues?.length)} />{/if}
       {#key $pageEpoch}<slot />{/key}
     {/if}
   </main>

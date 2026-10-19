@@ -19,6 +19,7 @@
   import { CHANNELS, PULL_COMMAND, VERSION_RE, envLineFor, isUpToDate, showSnippet, snippetReason, stepChannel, type ChannelInfo, type SelectedChannel } from '#lib/admin/updateChannel';
   import { statusOf, type UpdaterView } from '#lib/admin/updater';
   import UpdaterCard from '#lib/admin/UpdaterCard.svelte';
+  import MoveNotice from '#lib/admin/MoveNotice.svelte';
   import Field from '#lib/ui/Field.svelte';
   import CopyField from '#lib/ui/CopyField.svelte';
   import { toast } from '#lib/ui/toast';
@@ -198,6 +199,8 @@
     { key: 'date', label: $t('adminContent.update.date'), value: (c) => c.date, sortable: false },
   ] as Column<Commit>[];
 </script>
+
+<MoveNotice hideable={false} />
 
 <p class="intro muted">{$t('admin.update.intro')}</p>
 

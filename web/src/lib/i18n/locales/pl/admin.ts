@@ -561,6 +561,7 @@ const pl: Translation<typeof de> = {
       download: '{actor} pobrał(a) napisy',
     },
   },
+  move: { text: 'FriendFlix dla Plex przeniósł się: FriendFlix 2.0 obsługuje Plex bezpośrednio. Przejdź na niego, aby nadal dostawać aktualizacje.', link: 'Jak przejść', label: 'Informacja o przeprowadzce', hide: 'Ukryj na 7 dni' },
   banner: {
     label: 'Uwagi dla administratorów',
     more: { one: '+{n} kolejna', few: '+{n} kolejne', many: '+{n} kolejnych', other: '+{n} kolejnej' },

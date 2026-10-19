@@ -532,6 +532,7 @@ const es: Translation<typeof de> = {
       download: '{actor} descargó subtítulos',
     },
   },
+  move: { text: 'FriendFlix para Plex se ha mudado: FriendFlix 2.0 ya es compatible con Plex directamente. Cambia para seguir recibiendo actualizaciones.', link: 'Cómo cambiar', label: 'Aviso de traslado', hide: 'Ocultar durante 7 días' },
   banner: {
     label: 'Avisos para admins',
     more: { one: '+{n} más', many: '+{n} más', other: '+{n} más' },
