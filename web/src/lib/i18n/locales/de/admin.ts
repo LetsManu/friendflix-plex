@@ -427,6 +427,7 @@ export default {
     subtitle: { download: '{actor} hat Untertitel heruntergeladen' },
   },
   /** Block 22: warning banner for admins (one sentence per issue) */
+  move: { text: 'FriendFlix für Plex ist umgezogen: FriendFlix 2.0 unterstützt Plex jetzt direkt. Wechsle, um weiter Updates zu bekommen.', link: 'So wechselst du', label: 'Hinweis zum Umzug', hide: 'Für 7 Tage ausblenden' },
   banner: {
     label: 'Hinweise für Admins',
     more: { one: '+{n} weitere', other: '+{n} weitere' },

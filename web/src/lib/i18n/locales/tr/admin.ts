@@ -523,6 +523,7 @@ const tr: Translation<typeof de> = {
       download: '{actor} altyazı indirdi',
     },
   },
+  move: { text: 'FriendFlix for Plex taşındı: FriendFlix 2.0 artık Plex\'i doğrudan destekliyor. Güncelleme almaya devam etmek için geçiş yap.', link: 'Nasıl geçilir', label: 'Taşınma bildirimi', hide: '7 gün gizle' },
   banner: {
     label: 'Yöneticiler için uyarılar',
     more: { one: '+{n} tane daha', other: '+{n} tane daha' },

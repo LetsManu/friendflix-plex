@@ -532,6 +532,7 @@ const fr: Translation<typeof de> = {
       download: '{actor} a téléchargé des sous-titres',
     },
   },
+  move: { text: 'FriendFlix pour Plex a déménagé : FriendFlix 2.0 prend désormais Plex en charge directement. Passez-y pour continuer à recevoir des mises à jour.', link: 'Comment migrer', label: 'Avis de migration', hide: 'Masquer pendant 7 jours' },
   banner: {
     label: 'Remarques pour les admins',
     more: { one: '+{n} autre', many: '+{n} autres', other: '+{n} autres' },

@@ -1,3 +1,5 @@
+> **FriendFlix für Plex ist umgezogen:** FriendFlix 2.0 unterstützt Plex jetzt direkt. Wechsle, um weiter Updates zu bekommen. Dieser Fork bekommt keine neuen Funktionen mehr. [So wechselst du](https://github.com/LetsManu/friendflix/blob/main/docs/de/plex.md#umstieg-von-friendflix-plex-auf-friendflix-20) · [In English](https://github.com/LetsManu/friendflix/blob/main/docs/plex.md#migrating-from-friendflix-plex-to-friendflix-20)
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">

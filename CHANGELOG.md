@@ -4,6 +4,9 @@ All notable changes, grouped by what you notice. Each release has its own sectio
 
 ## [Unreleased]
 
+### Moved to FriendFlix 2.0
+- **FriendFlix for Plex has moved:** FriendFlix 2.0 ([LetsManu/friendflix](https://github.com/LetsManu/friendflix)) supports Plex directly (`MEDIA_SERVER=plex`, `compose.plex.yaml`, images `ghcr.io/letsmanu/friendflix-*`; same database and volumes). This fork gets no more features. Admins on the owner profile now see a notice with a *How to switch* link (German guide in the German interface) under the app bar, which can be hidden for 7 days per admin (this browser), and a fixed one at the top of *Admin → Update*; never for normal users or kids profiles. The same note leads README.md and README.de.md. Strings in all 7 languages.
+
 ### FriendFlix for Plex (this fork)
 - **Opt-in updater on Plex:** the updater below runs the fork's images and signer. `UPDATE_REPO` defaults to `LetsManu/friendflix-plex` (backend, updater, `compose.prod.yaml`, `compose.plex.yaml`), so the updater expects `ghcr.io/<owner>/friendflix-plex-*` (its own image is `friendflix-plex-updater`, built, scanned, signed and attested by the fork's CI and `publish.yml`) and cosign accepts only this fork's `publish.yml` on main or a release tag. `compose.plex.yaml` sets `UPDATER_COMPOSE_FILES=compose.prod.yaml,compose.plex.yaml`, so the updater recreates the stack with the Plex settings; it only touches bootstrap, backend, gateway and web, never the Plex server. CI renders `compose.prod.yaml` + `compose.plex.yaml` with and without `--profile updater`.
 
