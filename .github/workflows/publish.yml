@@ -27,7 +27,7 @@ jobs:
       id-token: write # cosign keyless + attestation signing (Sigstore)
       attestations: write # GitHub attestation store (gh attestation verify)
     strategy:
-      matrix: { service: [backend, gateway, web] }
+      matrix: { service: [backend, gateway, web, updater] }
     steps:
       # tags: decides whether this version is the highest release (only then it may move `latest`)
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

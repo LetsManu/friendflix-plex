@@ -181,8 +181,18 @@ export const configSchema = z.object({
   APP_CODENAME: opt,
   /** GitHub repo checked for newer versions (Admin -> Update) */
   UPDATE_REPO: z.string().regex(/^[\w.-]+\/[\w.-]+$/).default('LetsManu/friendflix-plex'),
-  /** update channel shown in Admin -> Update: stable (releases) or nightly (main); it never switches images (FF_TAG does) */
-  UPDATE_CHANNEL: z.preprocess(emptyAsUnset, z.enum(['stable', 'nightly']).default('stable')),
+  /**
+   * update channel (Admin -> Update): stable (releases), nightly (main) or pinned (UPDATE_VERSION). Without the updater it only
+   * chooses the comparison and the suggested FF_TAG line; with the opt-in updater it is the tag the updater installs.
+   */
+  UPDATE_CHANNEL: z.preprocess(emptyAsUnset, z.enum(['stable', 'nightly', 'pinned']).default('stable')),
+  /** the fixed version of the `pinned` channel (X.Y.Z) */
+  UPDATE_VERSION: z.preprocess(emptyAsUnset, z.string().regex(/^(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})$/).optional()),
+  /** the opt-in updater (compose profile `updater`): internal http URL; unset or unreachable = Admin -> Update shows the manual steps */
+  UPDATER_URL: z.preprocess(emptyAsUnset, z.string().regex(/^http:\/\/[a-z0-9][a-z0-9.-]{0,62}(:[0-9]{2,5})?$/).optional()),
+  /** automatic updates through the updater: off (default) or once a night at AUTO_UPDATE_TIME (server time zone TZ) */
+  AUTO_UPDATE: z.preprocess(emptyAsUnset, z.enum(['off', 'nightly-window']).default('off')),
+  AUTO_UPDATE_TIME: z.preprocess(emptyAsUnset, z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/).default('04:00')),
   GITHUB_TOKEN: opt,
   /** one-click update: Portainer stack webhook, or API (URL + key + stack id) */
   PORTAINER_WEBHOOK_URL: opt,

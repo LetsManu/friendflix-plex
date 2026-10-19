@@ -16,9 +16,14 @@ async function leaveWatch(page: Page) {
   await page.getByRole('button', { name: 'Zurück', exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
 }
-/** a Chromecast cast started on the watch page (client-side navigation); the page stays open as the TV's remote */
-async function castOnWatch(page: Page, o: { id?: string; fail?: () => boolean } = {}) {
+/**
+ * a Chromecast cast started on the watch page (client-side navigation); the page stays open as the TV's remote.
+ * `next`: episode 2 follows episode 1 from the start (`nextAfterFirst` before the cast, so the engine's receiver-queue request at
+ * the first position update always sees it; installed after the cast, whether it does depends on which round trip wins).
+ */
+async function castOnWatch(page: Page, o: { id?: string; fail?: () => boolean; next?: boolean } = {}) {
   await mockPlayer(page);
+  if (o.next) await nextAfterFirst(page); // after mockPlayer, whose `/next` answers null (the newest route wins)
   await castOn(page);
   const sdk = await fakeCastSdk(page);
   const { sessions, deleted } = await castSessions(page, { fail: o.fail });
@@ -135,10 +140,11 @@ test('credits on the TV: the bar counts down to the next episode while the TV pl
 
 test('episode end on the TV while the watch page is open: its next card counts down, then the page follows the TV', async ({ page, api: _api }) => {
   test.setTimeout(45_000);
-  const { sdk, sessions } = await castOnWatch(page, { id: episodes[0]!.id });
-  await nextAfterFirst(page);
+  const { sdk, sessions } = await castOnWatch(page, { id: episodes[0]!.id, next: true });
   let infos = 0;
   page.on('request', (r) => { if (r.url().endsWith('/api/playback/info')) infos++; });
+  // the engine asks for the receiver-queue token of episode 2 at the first position update (the fake SDK refuses the queue)
+  await expect.poll(() => sessions.filter((b) => b.next).map((b) => b.itemId)).toEqual([episodes[1]!.id]);
   await sdk.nearEnd();
   await expect.poll(() => page.locator('.track[role=slider]').evaluate((el) => Number(el.getAttribute('aria-valuemax')) - Number(el.getAttribute('aria-valuenow')))).toBeLessThan(10);
   await sdk.finish();
@@ -149,8 +155,9 @@ test('episode end on the TV while the watch page is open: its next card counts d
   await expect(page.locator('.castov')).toContainText('Wird auf Wohnzimmer-TV abgespielt');
   await expect(card).toHaveCount(0);
   await page.waitForTimeout(500);
-  expect(sessions.filter((b) => b.itemId === episodes[1]!.id)).toHaveLength(1);
-  expect(sessions).toHaveLength(2);
+  // one token per episode for playback: episode 1's, then the countdown's switch to episode 2 (plus the refused queue token)
+  expect(sessions.filter((b) => !b.next).map((b) => b.itemId)).toEqual([episodes[0]!.id, episodes[1]!.id]);
+  expect(sessions.filter((b) => b.next)).toHaveLength(1);
   expect(infos).toBe(0);
 });
 

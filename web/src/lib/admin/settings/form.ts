@@ -141,6 +141,8 @@ export function takePending(now = Date.now()): Pending | null {
 /** The setting's label (the key itself for a key this version has no text for). */
 export const keyLabel = (key: string): string => (hasKey(`settings.keys.${key}.label`) ? trDynamic(`settings.keys.${key}.label`) : key);
 export const keyHelp = (key: string): string => (hasKey(`settings.keys.${key}.help`) ? trDynamic(`settings.keys.${key}.help`) : '');
+/** a group's note under its title (`settings.groupHelp.<group>`), '' when it has none */
+export const groupHelp = (group: string): string => (hasKey(`settings.groupHelp.${group}`) ? trDynamic(`settings.groupHelp.${group}`) : '');
 
 /** The env names to remove after a move; legacy names of an old product are summarised, not named. */
 export function moveHint(names: readonly string[]): string {

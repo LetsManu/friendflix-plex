@@ -8,8 +8,10 @@ const settings: Translation<typeof de> = {
   loadFailed: 'Could not load the settings.',
   groups: {
     general: 'General', signin: 'Sign-in', media: 'Media server', requests: 'Requests', notifications: 'Notifications', push: 'Push notifications',
-    sources: 'Data sources', downloads: 'Downloads', playback: 'Playback', updates: 'Updates', health: 'System health', sessions: 'Sessions', server: 'Server',
+    sources: 'Data sources', downloads: 'Downloads', playback: 'Playback', recommendations: 'Recommendations', updates: 'Updates', health: 'System health', sessions: 'Sessions', server: 'Server',
   },
+  /** a group's note under its title (Admin → Settings) */
+  groupHelp: { recommendations: 'Changes apply at once, without a restart. Expert tuning (RECO_COEFFS and the item index weights RECO_W_*) is set in .env only.' },
   serverHelp: 'Values from the container environment. Read-only; credentials are never shown.',
   source: { env: 'From environment', db: 'Saved', default: 'Default', bootstrap: 'From startup file', unset: 'Not set' },
   locked: 'Comes from the environment (.env) and cannot be changed here.',
@@ -103,7 +105,7 @@ const settings: Translation<typeof de> = {
     PLEX_URL: { invalid_url: 'Please enter only the server address: starting with http:// or https://, without user name and password, and nothing after ? or #. The token goes in the Plex token field.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Automatic', UPDATE_CHANNEL: { stable: 'Stable', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatic', off: 'Off' } },
+  options: { auto: 'Automatic', RECO_ENGINE: { v1: 'v1 (classic)', v2: 'v2 (own taste model)', shadow: 'Shadow (v2 beside v1)' }, UPDATE_CHANNEL: { stable: 'Stable', nightly: 'Nightly', pinned: 'Fixed version' }, AUTO_UPDATE: { off: 'Off', 'nightly-window': 'Nightly window' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatic', off: 'Off' } },
   keys: {
     PUBLIC_URL: { label: 'Public address', help: 'The address everyone uses to reach FriendFlix, e.g. https://friend.example.com. Links, sign-in and streaming are built on it.' },
     WEBHOOK_SECRET: { label: 'Webhook secret', help: 'Shared secret for the webhooks of the media server and the request service.' },
@@ -158,13 +160,20 @@ const settings: Translation<typeof de> = {
     PORTAINER_API_KEY: { label: 'Portainer API key', help: 'API key of a Portainer account allowed to update the stack.' },
     PORTAINER_STACK_ID: { label: 'Portainer stack ID', help: 'ID of the FriendFlix stack in Portainer.' },
     PORTAINER_ENDPOINT_ID: { label: 'Portainer environment ID', help: 'ID of the Portainer environment the stack runs in (usually 1).' },
-    UPDATE_CHANNEL: { label: 'Update channel', help: 'What Admin → Update compares with: Stable (releases) or Nightly (main). The images themselves follow FF_TAG in .env.' },
+    UPDATE_CHANNEL: { label: 'Update channel', help: 'What Admin → Update compares with and what the updater installs: Stable, Nightly or a fixed version. Without the updater the images follow FF_TAG in .env.' },
+    UPDATE_VERSION: { label: 'Fixed version', help: 'Version X.Y.Z for the "Fixed version" channel.' },
+    AUTO_UPDATE: { label: 'Automatic updates', help: 'Needs the updater. Nightly window: once a night at the time below.' },
+    AUTO_UPDATE_TIME: { label: 'Time of the automatic update', help: 'HH:MM in the server\'s time zone. The update starts within 30 minutes from this time.' },
     PLAYBACK_CHECK_HOUR: { label: 'Playback check time', help: 'Hour (0–23, server time) of the nightly playback check. -1 = off.' },
     HEALTH_DISK_WARN_PCT: { label: 'Storage warning from (%)', help: 'From this usage the system health shows a warning.' },
     HEALTH_DISK_CRIT_PCT: { label: 'Storage critical from (%)', help: 'From this usage the system health shows an error. Must be above the warning level.' },
     HEALTH_DB_WARN_GB: { label: 'Database warning from (GB)', help: 'From this database size the system health shows a warning.' },
     SESSION_TTL_SECONDS: { label: 'Maximum session length (seconds)', help: 'After this, everyone signs in again, however active.' },
     SESSION_IDLE_SECONDS: { label: 'Session ends after inactivity (seconds)', help: 'Without activity the session ends after this time.' },
+    RECO_ENGINE: { label: 'Recommendation engine', help: 'v1: the media server’s “similar titles” lists. v2: FriendFlix’s own taste model, per profile. Shadow: v2 is computed beside v1 for comparison while everyone still sees v1. Watch the comparison on the recommendation card of the admin overview and switch to v2 once its numbers are at least as good.' },
+    RECO_EXPLORE: { label: 'Exploration share', help: 'Share of a row’s slots (0–0.5) that engine v2 fills with a medium-score title to learn more about tastes. 0 = off; 0.1 = about 1 title in 10.' },
+    RECO_HALF_LIFE_DAYS: { label: 'Taste half-life (days)', help: 'After this many days a taste signal (e.g. a thumbs-up) counts only half. Engine v2 only.' },
+    POSTPLAY_ENABLED: { label: 'Screen after the end', help: 'After a film or the last episode: “You’re caught up”, what comes next, and suggestions. Off turns it off for everyone.' },
   },
 };
 export default settings;

@@ -40,11 +40,17 @@ describe('channel logic', () => {
     expect(channelUpdate('nightly', { releaseNewer: false, behind: 3 })).toBe(true);
     expect(channelUpdate('nightly', { releaseNewer: true, behind: 0 })).toBe(false);
     expect(channelUpdate('nightly', { releaseNewer: null, behind: null })).toBeNull();
+    // pinned: a different version than the installed one
+    expect(channelUpdate('pinned', { releaseNewer: true, behind: 3, pinnedDiffers: false })).toBe(false);
+    expect(channelUpdate('pinned', { releaseNewer: false, behind: 0, pinnedDiffers: true })).toBe(true);
+    expect(channelUpdate('pinned', { releaseNewer: true, behind: 3 })).toBeNull();
   });
 
   it('the .env line per channel', () => {
     expect(envLine('stable')).toBe('FF_TAG=latest');
     expect(envLine('nightly')).toBe('FF_TAG=nightly');
+    expect(envLine('pinned', '1.2.3')).toBe('FF_TAG=1.2.3');
+    expect(envLine('pinned', null)).toBe('FF_TAG=latest');
   });
 });
 
@@ -83,7 +89,7 @@ describe('admin update + /api/version with channels', () => {
     reset(); behind = 4;
     const get = await setup({ GIT_SHA: TAG });
     const b = await get();
-    expect(b.channel).toEqual({ selected: 'stable', running: 'stable', build: 'release', label: '1.1.0', locked: false, envLine: 'FF_TAG=latest' });
+    expect(b.channel).toEqual({ selected: 'stable', version: null, running: 'stable', build: 'release', label: '1.1.0', locked: false, envLine: 'FF_TAG=latest' });
     expect(b.updateAvailable).toBe(false);
     expect(b.behind).toBe(4); // secondary info only
     expect((await env.app.inject('/api/version')).json()).toMatchObject({ build: 'release', channel: 'stable', label: '1.1.0' });

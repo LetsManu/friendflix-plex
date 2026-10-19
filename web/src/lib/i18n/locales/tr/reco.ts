@@ -30,6 +30,9 @@ const dict: Translation<typeof de> = {
     since: '{date} tarihinden beri sayılıyor',
     empty: '–',
     loadFailed: 'Sayılar yüklenemedi.',
+    change: 'Motoru değiştir',
+    activeLine: 'Etkin: {engine} · {source}',
+    source: { env: '.env içinde ayarlı (RECO_ENGINE), ayarlarda kilitli', db: 'Yönetici → Ayarlar’dan değiştirilebilir' },
   },
 };
 

@@ -30,6 +30,9 @@ const dict: Translation<typeof de> = {
     since: 'Liczone od {date}',
     empty: '–',
     loadFailed: 'Nie udało się wczytać liczb.',
+    change: 'Zmień silnik',
+    activeLine: 'Aktywny: {engine} · {source}',
+    source: { env: 'ustawiony w .env (RECO_ENGINE), zablokowany w ustawieniach', db: 'można zmienić w Admin → Ustawienia' },
   },
 };
 

@@ -22,7 +22,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 /** codename list in alphabetical order (shared with backend/src/version.ts and web/src/lib/version/codenames.ts) */
 export const CODENAMES = JSON.parse(readFileSync(new URL('../codenames.json', import.meta.url), 'utf8')).map((c) => c.name);
 /** package.json files whose "version" follows version.json (missing ones are skipped, e.g. e2e has none today) */
-export const PACKAGES = ['package.json', 'backend/package.json', 'web/package.json', 'gateway/package.json', 'e2e/package.json'];
+export const PACKAGES = ['package.json', 'backend/package.json', 'web/package.json', 'gateway/package.json', 'updater/package.json', 'e2e/package.json'];
 /** `none` releases the version already in version.json (the first release, 1.0.0) as long as its tag does not exist */
 const KINDS = ['patch', 'minor', 'major', 'none'];
 

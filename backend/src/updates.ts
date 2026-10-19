@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Manuel Weißböck
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { buildInfo, channelUpdate, envLine, type BuildKind, type Channel } from './channel.js';
+import { buildInfo, channelUpdate, envLine, type BuildKind, type Channel, type RunningChannel } from './channel.js';
 import type { Ctx } from './ctx.js';
 import { appVersion, codenameFor, compareSemver, parseSemver } from './version.js';
 
@@ -21,7 +21,9 @@ export interface UpdateInfo {
   /** the selected channel (setting UPDATE_CHANNEL) and the one this build runs (derived from its commit, see channel.ts) */
   channel: {
     selected: Channel;
-    running: Channel | null;
+    /** the fixed version of the pinned channel (UPDATE_VERSION) */
+    version: string | null;
+    running: RunningChannel | null;
     build: BuildKind | null;
     /** "1.1.0" or "1.1.0-nightly · abc1234" */
     label: string;
@@ -100,14 +102,15 @@ export async function updateInfo(ctx: Ctx, refresh = false): Promise<UpdateInfo>
   const mode = portainerMode(ctx);
   const ver = appVersion(ctx.cfg);
   const base = { current: { sha: ctx.cfg.GIT_SHA, builtAt: ctx.cfg.BUILD_TIME ?? null, ...ver }, portainer: { configured: mode !== null, mode }, autoUpdateNote: true as const };
-  const selected: Channel = ctx.cfg.UPDATE_CHANNEL === 'nightly' ? 'nightly' : 'stable';
+  const selected: Channel = ctx.cfg.UPDATE_CHANNEL;
+  const pinned = selected === 'pinned' ? (ctx.cfg.UPDATE_VERSION ?? null) : null;
   let locked = false;
   try { locked = ctx.settings.sources().UPDATE_CHANNEL === 'env'; } catch { /* no store (tests): not locked */ }
   const b = await buildInfo(ctx, { refresh });
-  const channel = { selected, running: b.channel, build: b.build, label: b.label, locked, envLine: envLine(selected) };
+  const channel = { selected, version: pinned, running: b.channel, build: b.build, label: b.label, locked, envLine: envLine(selected, pinned) };
   const withState = (f: Fetched): UpdateInfo => ({
     ...base, ...f, channel,
-    updateAvailable: channelUpdate(selected, { releaseNewer: f.release ? compareSemver(f.release.version, ver.version) > 0 : null, behind: f.behind }),
+    updateAvailable: channelUpdate(selected, { releaseNewer: f.release ? compareSemver(f.release.version, ver.version) > 0 : null, behind: f.behind, pinnedDiffers: pinned ? pinned !== ver.version : null }),
   });
   const key = `${CACHE_MS}${ctx.cfg.UPDATE_REPO}:${ctx.cfg.GIT_SHA}:${ver.version}`;
   if (!refresh) {

@@ -8,8 +8,10 @@ const settings: Translation<typeof de> = {
   loadFailed: 'Impossibile caricare le impostazioni.',
   groups: {
     general: 'Generale', signin: 'Accesso', media: 'Media server', requests: 'Richieste', notifications: 'Notifiche', push: 'Notifiche push',
-    sources: 'Fonti di dati', downloads: 'Download', playback: 'Riproduzione', updates: 'Aggiornamenti', health: 'Stato del sistema', sessions: 'Sessioni', server: 'Server',
+    sources: 'Fonti di dati', downloads: 'Download', playback: 'Riproduzione', recommendations: 'Consigli', updates: 'Aggiornamenti', health: 'Stato del sistema', sessions: 'Sessioni', server: 'Server',
   },
+  /** a group's note under its title (Admin → Settings) */
+  groupHelp: { recommendations: 'Le modifiche valgono subito, senza riavvio. La regolazione fine per esperti (RECO_COEFFS e i pesi dell’indice RECO_W_*) si imposta solo nel file .env.' },
   serverHelp: 'Valori dall’ambiente del container. Sola lettura; le credenziali non vengono mai mostrate.',
   source: { env: 'Dall’ambiente', db: 'Salvato', default: 'Predefinito', bootstrap: 'Dal file di avvio', unset: 'Non impostato' },
   locked: 'Viene dall’ambiente (.env) e qui non si può modificare.',
@@ -107,7 +109,7 @@ const settings: Translation<typeof de> = {
     PLEX_URL: { invalid_url: 'Inserisci solo l’indirizzo del server: che inizi con http:// o https://, senza nome utente e password e senza nulla dopo ? o #. Il token va nel campo Token Plex.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Automatico', UPDATE_CHANNEL: { stable: 'Stabile', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatico', off: 'Disattivato' } },
+  options: { auto: 'Automatico', RECO_ENGINE: { v1: 'v1 (classico)', v2: 'v2 (modello dei gusti proprio)', shadow: 'Shadow (v2 accanto a v1)' }, UPDATE_CHANNEL: { stable: 'Stabile', nightly: 'Nightly', pinned: 'Versione fissa' }, AUTO_UPDATE: { off: 'Disattivati', 'nightly-window': 'Finestra notturna' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Automatico', off: 'Disattivato' } },
   keys: {
     PUBLIC_URL: { label: 'Indirizzo pubblico', help: 'L’indirizzo con cui tutti raggiungono FriendFlix, ad es. https://friend.example.com. Link, accesso e streaming si basano su di esso.' },
     WEBHOOK_SECRET: { label: 'Segreto webhook', help: 'Segreto condiviso per i webhook del media server e del servizio richieste.' },
@@ -162,13 +164,20 @@ const settings: Translation<typeof de> = {
     PORTAINER_API_KEY: { label: 'Chiave API di Portainer', help: 'Chiave API di un account Portainer autorizzato ad aggiornare lo stack.' },
     PORTAINER_STACK_ID: { label: 'ID dello stack Portainer', help: 'ID dello stack FriendFlix in Portainer.' },
     PORTAINER_ENDPOINT_ID: { label: 'ID dell’ambiente Portainer', help: 'ID dell’ambiente Portainer in cui gira lo stack (di solito 1).' },
-    UPDATE_CHANNEL: { label: 'Canale di aggiornamento', help: 'Con cosa confronta Admin → Aggiornamento: Stabile (release) o Nightly (main). Le immagini seguono FF_TAG nel .env.' },
+    UPDATE_CHANNEL: { label: 'Canale di aggiornamento', help: 'Con cosa confronta Admin → Aggiornamento e cosa installa l’updater: Stabile, Nightly o una versione fissa. Senza updater le immagini seguono FF_TAG nel .env.' },
+    UPDATE_VERSION: { label: 'Versione fissa', help: 'Versione X.Y.Z per il canale «Versione fissa».' },
+    AUTO_UPDATE: { label: 'Aggiornamenti automatici', help: 'Richiede l’updater. Finestra notturna: una volta per notte all’orario qui sotto.' },
+    AUTO_UPDATE_TIME: { label: 'Orario dell’aggiornamento automatico', help: 'HH:MM nel fuso orario del server. L’aggiornamento parte entro 30 minuti da questo orario.' },
     PLAYBACK_CHECK_HOUR: { label: 'Ora del test di riproduzione', help: 'Ora (0–23, ora del server) del test di riproduzione notturno. -1 = disattivato.' },
     HEALTH_DISK_WARN_PCT: { label: 'Avviso spazio da (%)', help: 'Da questo utilizzo lo stato del sistema mostra un avviso.' },
     HEALTH_DISK_CRIT_PCT: { label: 'Spazio critico da (%)', help: 'Da questo utilizzo lo stato del sistema mostra un errore. Deve essere sopra il livello di avviso.' },
     HEALTH_DB_WARN_GB: { label: 'Avviso database da (GB)', help: 'Da questa dimensione del database lo stato del sistema mostra un avviso.' },
     SESSION_TTL_SECONDS: { label: 'Durata massima della sessione (secondi)', help: 'Dopo bisogna accedere di nuovo, anche se attivi.' },
     SESSION_IDLE_SECONDS: { label: 'La sessione termina dopo inattività (secondi)', help: 'Senza attività la sessione termina dopo questo tempo.' },
+    RECO_ENGINE: { label: 'Motore dei consigli', help: 'v1: le liste di “titoli simili” del media server. v2: il modello dei gusti di FriendFlix, per profilo. Shadow: v2 viene calcolato accanto a v1 per confronto mentre tutti vedono ancora v1. Segui il confronto nella scheda dei consigli della panoramica admin e passa a v2 quando i suoi numeri sono almeno altrettanto buoni.' },
+    RECO_EXPLORE: { label: 'Quota di esplorazione', help: 'Quota dei posti di una riga (0–0,5) che il motore v2 riempie con un titolo di punteggio medio per conoscere meglio i gusti. 0 = disattivata; 0.1 = circa 1 titolo su 10.' },
+    RECO_HALF_LIFE_DAYS: { label: 'Emivita dei gusti (giorni)', help: 'Dopo questi giorni un segnale di gusto (ad es. un pollice in su) conta solo la metà. Solo motore v2.' },
+    POSTPLAY_ENABLED: { label: 'Schermata dopo la fine', help: 'Dopo un film o l’ultimo episodio: “Sei in pari”, cosa viene dopo e suggerimenti. Disattivata, sparisce per tutti.' },
   },
 };
 export default settings;

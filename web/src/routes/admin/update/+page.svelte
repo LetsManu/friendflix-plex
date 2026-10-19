@@ -2,11 +2,13 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script lang="ts">
   /**
-   * Admin → Update: version card, update channel (stable / nightly switch, the .env line to switch), check, update with
-   * confirm + progress steps (Portainer redeploy), changelog. The channel switch only saves UPDATE_CHANNEL: FriendFlix never
-   * touches Docker, the images follow FF_TAG.
+   * Admin → Update: version card, update channel (stable / nightly / fixed version, the .env line to switch), check, update with
+   * confirm + progress steps (Portainer redeploy), changelog. Without the opt-in updater the channel switch only saves
+   * UPDATE_CHANNEL (the images follow FF_TAG); with it (GET /api/admin/updater answers present) the updater card replaces the
+   * Portainer card and installs the selected channel itself (UpdaterCard.svelte). The backend never touches Docker.
    */
   import { onDestroy, onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { api } from '#lib/api';
   import Icon from '#lib/Icon.svelte';
   import { fmtDateTime, fmtRelative, hasKey, t, tr, trDynamic } from '#lib/i18n';
@@ -14,8 +16,10 @@
   import AdminCard from '#lib/adminContent/AdminCard.svelte';
   import { busyKeys, errorText, runAction } from '#lib/ui/action';
   import { saveSettings } from '#lib/admin/settings/api';
-  import { CHANNELS, PULL_COMMAND, envLineFor, isUpToDate, showSnippet, snippetReason, stepChannel, type ChannelInfo } from '#lib/admin/updateChannel';
-  import type { Channel } from '#lib/version/build';
+  import { CHANNELS, PULL_COMMAND, VERSION_RE, envLineFor, isUpToDate, showSnippet, snippetReason, stepChannel, type ChannelInfo, type SelectedChannel } from '#lib/admin/updateChannel';
+  import { statusOf, type UpdaterView } from '#lib/admin/updater';
+  import UpdaterCard from '#lib/admin/UpdaterCard.svelte';
+  import Field from '#lib/ui/Field.svelte';
   import CopyField from '#lib/ui/CopyField.svelte';
   import { toast } from '#lib/ui/toast';
   import { confirm } from '#lib/ui/confirm';
@@ -73,11 +77,18 @@
   $: sel = u?.channel?.selected ?? 'stable';
   $: nightly = sel === 'nightly';
   $: notes = u?.release?.notes && !nightly ? parseNotes(u.release.notes) : [];
-  $: snippet = u ? showSnippet(u) : false;
+  /** the opt-in updater answers: it installs the channel itself, no .env line needed */
+  let up: UpdaterView | null = null, reauthBack = false;
+  $: updater = statusOf(up) !== null;
+  $: snippet = u && !updater ? showSnippet(u) : false;
+  /** the fixed-version form: open while "Fixed version" is selected, or picked without a saved version yet */
+  let pinOpen = false, pinDraft = '', pinErr = '';
+  $: pinShown = sel === 'pinned' || pinOpen;
   /** a save in flight ignores further picks; the buttons stay enabled so arrow-key focus is never lost */
   let savingChannel = false;
   let segBtns: Record<string, HTMLButtonElement> = {};
-  const channelName = (c: Channel) => tr(c === 'nightly' ? 'admin.update.channel.nightly' : 'admin.update.channel.stable');
+  const channelName = (c: SelectedChannel) => tr(c === 'nightly' ? 'admin.update.channel.nightly' : c === 'pinned' ? 'admin.update.channel.pinned' : 'admin.update.channel.stable');
+  const channelHint = (c: SelectedChannel) => tr(c === 'nightly' ? 'admin.update.channel.nightlyHint' : c === 'pinned' ? 'admin.update.channel.pinnedHint' : 'admin.update.channel.stableHint');
   function runningText(ch: ChannelInfo, cur: Info['current']): string {
     if (ch.build === 'dev') return tr('admin.update.channel.runningDev');
     if (ch.running === 'stable') return tr('admin.update.channel.runningStable', { version: cur.version ?? '' });
@@ -85,19 +96,35 @@
     return tr('admin.update.channel.runningUnknown');
   }
   /** saves UPDATE_CHANNEL (same store, audit and environment lock as Admin → Settings), then re-reads the comparison */
-  async function pick(c: Channel) {
-    if (!u?.channel || u.channel.locked || savingChannel || c === u.channel.selected) return;
+  async function pick(c: SelectedChannel, version?: string) {
+    if (!u?.channel || u.channel.locked || savingChannel) return;
+    if (c === u.channel.selected && (c !== 'pinned' || !version || version === u.channel.version)) return;
+    pinOpen = c === 'pinned';
+    // a fixed version needs its number first: the form opens, nothing is saved yet
+    const v = c === 'pinned' ? (version ?? u.channel.version ?? null) : null;
+    if (c === 'pinned' && !v) { pinDraft ||= u.current.version ?? ''; return; }
     const before = u.channel;
     savingChannel = true;
     try {
-      await saveSettings({ UPDATE_CHANNEL: c });
-      u = { ...u, channel: { ...before, selected: c, envLine: envLineFor(c) } };
-      toast.success(tr('admin.update.channel.saved', { channel: channelName(c) }));
+      await saveSettings(c === 'pinned' ? { UPDATE_CHANNEL: c, UPDATE_VERSION: v } : { UPDATE_CHANNEL: c });
+      u = { ...u, channel: { ...before, selected: c, version: v, envLine: envLineFor(c, v) } };
+      toast.success(tr('admin.update.channel.saved', { channel: c === 'pinned' ? `${channelName(c)} ${v}` : channelName(c) }));
       try { u = await api<Info>('/api/admin/update'); } catch { /* the saved selection stays shown */ }
+      // the backend hands the channel to the updater: show its new target
+      if (up?.present) setTimeout(() => { void loadUpdater(); }, 600);
     } catch (e) {
       toast.error(errorText(e));
     }
     savingChannel = false;
+  }
+  function savePin() {
+    pinErr = '';
+    const v = pinDraft.trim();
+    if (!VERSION_RE.test(v)) { pinErr = tr('admin.update.channel.versionInvalid'); return; }
+    void pick('pinned', v);
+  }
+  async function loadUpdater() {
+    try { up = await api<UpdaterView>('/api/admin/updater'); } catch { up = up ?? { present: false }; }
   }
   function segKey(e: KeyboardEvent) {
     const next = stepChannel(sel, e.key);
@@ -112,7 +139,10 @@
 
   async function load() {
     loadErr = false;
+    const upd = loadUpdater();
     try { u = await api<Info>('/api/admin/update'); } catch { loadErr = true; }
+    await upd;
+    pinDraft = u?.channel?.version ?? pinDraft;
   }
   function check() {
     void runAction({
@@ -146,7 +176,16 @@
     }, 3000);
   }
   function stop() { clearInterval(timer); timer = undefined; }
-  onMount(load);
+  onMount(() => {
+    // back from the sign-in a start needed (UpdaterCard): say so once; the job is started again by the person, never on its own
+    const url = new URL(location.href);
+    if (url.searchParams.get('reauth') === '1') {
+      reauthBack = true;
+      url.searchParams.delete('reauth');
+      void goto(url.pathname + url.search + url.hash, { shallow: true, replace: true });
+    }
+    void load();
+  });
   onDestroy(stop);
 
   const STEPS = ['started', 'restarting', 'newversion', 'done'] as const;
@@ -222,8 +261,15 @@
             disabled={u.channel.locked} aria-busy={savingChannel && sel !== c ? 'true' : undefined} on:click={() => pick(c)} on:keydown={segKey}>{channelName(c)}</button>
         {/each}
       </div>
-      <p class="muted small">{nightly ? $t('admin.update.channel.nightlyHint') : $t('admin.update.channel.stableHint')}</p>
+      <p class="muted small">{channelHint(pinOpen ? 'pinned' : sel)}</p>
+      {#if pinShown && !u.channel.locked}
+        <form class="pin" on:submit|preventDefault={savePin}>
+          <Field label={$t('admin.update.channel.versionLabel')} bind:value={pinDraft} placeholder="1.2.3" maxlength={14} width="9rem" error={pinErr} />
+          <Button type="submit" variant="secondary" pending={savingChannel}>{$t('admin.update.channel.versionSave')}</Button>
+        </form>
+      {/if}
       {#if u.channel.locked}<p class="muted small" role="note">{$t('admin.update.channel.locked')}</p>{/if}
+      {#if updater}<p class="muted small" role="note" data-updater-note>{$t('admin.update.channel.updaterNote')}</p>{/if}
       {#if snippet}
         <div class="snippet" data-snippet>
           <p class="lead">{snippetReason(u) === 'switch' ? $t('admin.update.channel.switchLead', { channel: channelName(sel) }) : $t('admin.update.channel.updateLead')}</p>
@@ -235,6 +281,9 @@
     </AdminCard>
   {/if}
 
+  {#if up?.present}
+    <UpdaterCard view={up} {reauthBack} on:finished={() => { void load(); }} />
+  {:else}
   <AdminCard title={$t('adminContent.update.applyTitle')}>
     {#if !u.portainer.configured}
       <p class="muted"><Rich text={$t('admin.update.setup')} /></p>
@@ -264,6 +313,7 @@
       </div>
     {/if}
   </AdminCard>
+  {/if}
 
   {#if u.commits.length}
     <AdminCard title={$t('admin.update.changes')}>
@@ -309,5 +359,6 @@
   .snippet { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .9rem; display: grid; gap: .8rem; min-width: 0; max-width: 40rem; }
   .snippet .lead { margin: 0; }
   .snippet .small { margin: 0; }
+  .pin { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-end; margin-top: .8rem; }
   @media (max-width: 560px) { .ver > div { grid-template-columns: minmax(0, 1fr); gap: .2rem; } }
 </style>

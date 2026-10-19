@@ -54,7 +54,7 @@ export function adminRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // one cheap call for the admin shell (pending badges) and the overview: counts only, every source optional
   /** R4: CTR and play rate per recommendation engine, from the Prometheus counters of this process (admin card on the dashboard). */
-  app.get('/api/admin/reco', admin, async () => recoStats(ctx.cfg));
+  app.get('/api/admin/reco', admin, async () => recoStats(ctx.cfg, { locked: ctx.settings.sources().RECO_ENGINE === 'env' }));
 
   app.get('/api/admin/summary', admin, async () => {
     const { listLive } = await import('../live.js');

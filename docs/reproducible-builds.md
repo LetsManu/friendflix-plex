@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # Reproducible builds
 
-The container images (`ghcr.io/letsmanu/friendflix-{backend,gateway,web}`) are built so that building the same commit
+The container images (`ghcr.io/letsmanu/friendflix-{backend,gateway,web,updater}`) are built so that building the same commit
 again – on another machine, at another time, with an empty cache – gives **the same bytes**: the same image manifest
 digest. Anyone can rebuild a release and check that the published image contains exactly what the source says, and
 nothing an attacker slipped into the build machine. CI checks it for every pull request and every image it publishes

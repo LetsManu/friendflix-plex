@@ -39,6 +39,7 @@ import { hygieneDue, stopHygiene } from './hygiene/scan.js';
 import { recoIndexDue, startRecoIndexListener, stopRecoIndex } from './reco/indexJob.js';
 import { announceSetupCode } from './setup/code.js';
 import { isOperational, isSetupComplete } from './setup/state.js';
+import { autoUpdateTick, syncChannel } from './updater.js';
 
 // the bootstrap keys open the database: env (incl. VAR_FILE) wins, else the bootstrap volume written by the init container (a missing
 // file stops the start, naming the file); the settings store then layers the saved settings over env
@@ -87,6 +88,9 @@ await live.startMedia({ dispatch: (e) => dispatchMediaEvent(ctx, e), log: app.lo
 if (isOperational(ctx)) void reapplyPoliciesOnce(ctx).catch(jobFailed(ctx, app.log, 'role-reapply', 'role policy re-apply failed'));
 pushEnabled(cfg); // validates the VAPID pair once (warns and disables push when invalid)
 const offPush = settings.onChange(['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT', 'PUBLIC_URL'], () => { pushEnabled(settings.current()); });
+// the opt-in updater installs the selected channel: tell it on every change (and once now); a missed call is repeated before each job
+const offUpdater = settings.onChange(['UPDATE_CHANNEL', 'UPDATE_VERSION'], () => { void syncChannel(ctx).catch(() => undefined); });
+void syncChannel(ctx).catch(() => undefined);
 const akMissing = authentikConfigProblem(cfg);
 if (akMissing) app.log.warn({ missing: akMissing }, `Authentik invitations disabled: ${akMissing.join(', ')} not set (see docs/integrations.md)`);
 else if (!cfg.AUTHENTIK_URL) app.log.info('Authentik invitations off: invited people need an existing Authentik account');
@@ -133,6 +137,8 @@ if (cfg.BACKGROUND_JOBS === 'true') {
   }, 600_000));
   if (downloadsOn()) void startPreparerTick(ctx).catch(jobFailed(ctx, app.log, 'download-prep', 'download prep start failed'));
   timers.push(setInterval(() => { if (op()) void healthTick(ctx); }, 60_000)); // admin health snapshot (kv health:snap); never throws
+  // AUTO_UPDATE=nightly-window through the opt-in updater (one start per day across instances) + the result audit of updater jobs
+  timers.push(setInterval(() => { if (op()) void autoUpdateTick(ctx).catch(jobFailed(ctx, app.log, 'auto-update', 'auto update tick failed')); }, 60_000));
   if (op()) void healthTick(ctx);
   timers.push(setInterval(() => { if (op()) void langIndexTick(ctx); }, 1800_000)); // self-limits to every 12 h, never throws
   if (op()) void langIndexTick(ctx);
@@ -160,6 +166,7 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
     stopHygiene();
     stopRecoIndex();
     offPush();
+    offUpdater();
     void live.close().catch(() => undefined)
       .then(() => settings.close()).catch(() => undefined)
       .then(() => app.close()).then(() => process.exit(0));

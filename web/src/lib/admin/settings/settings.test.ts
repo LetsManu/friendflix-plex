@@ -7,20 +7,22 @@ import { describeActivity } from '../activity';
 import { activeItem } from '../nav';
 import { fieldErrors, generate, importEnv, loadSettings, probeFailure, saveSettings, testGroup, type SettingView } from './api';
 import {
-  changedValues, clearPending, enumOptions, errorText, isChange, keepable, keyHelp, keyLabel, moveHint, probeText, redactedKeys, shownDraft, stashPending, stillRedacted,
+  changedValues, clearPending, enumOptions, errorText, groupHelp, isChange, keepable, keyHelp, keyLabel, moveHint, probeText, redactedKeys, shownDraft, stashPending, stillRedacted,
   submitValue, takePending,
 } from './form';
 
-/** every visible setting of the registry (spec Part A: 48, plus the nine of phase 3, plus UPDATE_CHANNEL) */
+/** every visible setting of the registry (spec Part A: 48, plus the nine of phase 3, plus UPDATE_CHANNEL, plus the four recommendation settings, plus the three updater settings) */
 const KEYS = ['PUBLIC_URL', 'WEBHOOK_SECRET', 'API_COMPRESSION', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'ADMIN_GROUP', 'AUTHENTIK_URL',
   'AUTHENTIK_API_TOKEN', 'AUTHENTIK_ENROLL_FLOW', 'AUTHENTIK_RECOVERY_FLOW', 'AUTHENTIK_TOTP_SETUP_FLOW', 'JELLYFIN_URL', 'JELLYFIN_ADMIN_API_KEY', 'REQUESTS_URL',
   'REQUESTS_API_KEY', 'NTFY_URL', 'NTFY_BASE_URL', 'DISCORD_WEBHOOK_URL', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT', 'TMDB_API_KEY', 'OMDB_API_KEY',
   'DOWNLOADS_ENABLED', 'DIRECT_PLAY_REQUIRES_DOWNLOAD', 'DOWNLOAD_CACHE_MAX_GB', 'DOWNLOAD_MIN_FREE_GB', 'DOWNLOAD_PREP_CONCURRENCY', 'DOWNLOAD_PAUSE_STREAMS',
   'DOWNLOAD_FILE_TTL_HOURS', 'DOWNLOAD_OFFLINE_GRACE_DAYS', 'DOWNLOAD_CREATE_PER_HOUR', 'CAST_ENABLED', 'PREVIEW_WARM', 'HOME_NETWORKS', 'GITHUB_TOKEN', 'UPDATE_CHANNEL',
+  'UPDATE_VERSION', 'AUTO_UPDATE', 'AUTO_UPDATE_TIME',
   'PORTAINER_WEBHOOK_URL', 'PORTAINER_URL', 'PORTAINER_API_KEY', 'PORTAINER_STACK_ID', 'PORTAINER_ENDPOINT_ID', 'PLAYBACK_CHECK_HOUR', 'HEALTH_DISK_WARN_PCT',
   'HEALTH_DISK_CRIT_PCT', 'HEALTH_DB_WARN_GB', 'SESSION_TTL_SECONDS', 'SESSION_IDLE_SECONDS',
   'LOGIN_UI', 'AUTHENTIK_LOGIN_FLOW', 'AUTHENTIK_INVALIDATION_FLOW', 'PASSKEYS_IN_APP', 'LOGIN_COVER_WALL',
-  'AUTHENTIK_STATIC_SETUP_FLOW', 'AUTHENTIK_WEBAUTHN_SETUP_FLOW', 'AUTHENTIK_PASSWORD_CHANGE_FLOW', 'AUTHENTIK_EMAIL_CHANGE_FLOW'];
+  'AUTHENTIK_STATIC_SETUP_FLOW', 'AUTHENTIK_WEBAUTHN_SETUP_FLOW', 'AUTHENTIK_PASSWORD_CHANGE_FLOW', 'AUTHENTIK_EMAIL_CHANGE_FLOW',
+  'RECO_ENGINE', 'RECO_EXPLORE', 'RECO_HALF_LIFE_DAYS', 'POSTPLAY_ENABLED'];
 
 const view = (over: Partial<SettingView> & Pick<SettingView, 'key' | 'kind'>): SettingView => ({
   source: 'db', value: null, set: false, apply: 'live', restartPending: false, invalid: false, envNames: [over.key, `${over.key}_FILE`], updatedAt: null, ...over,
@@ -30,7 +32,7 @@ afterEach(async () => { vi.unstubAllGlobals(); await setLocale('de'); });
 
 describe('settings texts', () => {
   it('every visible setting has a label and a help text; the request service is never named after a product', async () => {
-    expect(KEYS).toHaveLength(58);
+    expect(KEYS).toHaveLength(65);
     for (const k of KEYS) {
       expect(hasKey(`settings.keys.${k}.label`), k).toBe(true);
       expect(hasKey(`settings.keys.${k}.help`), k).toBe(true);
@@ -86,6 +88,25 @@ describe('settings texts', () => {
     expect(errorText('invalid_url', 'PLEX_URL')).toContain('Bitte nur die Serveradresse eingeben');
     expect(errorText('invalid_url', 'plex_url')).toBe(errorText('invalid_url'));
     expect(errorText('<b>', 'PLEX_URL')).toBe('Ungültiger Wert.');
+  });
+
+  it('recommendations group: a title, a note that the expert keys stay in .env, engine option labels, in every language', async () => {
+    for (const l of ['de', 'en', 'es', 'fr', 'it', 'pl', 'tr']) {
+      await setLocale(l);
+      expect(tr('settings.groups.recommendations'), l).not.toBe('settings.groups.recommendations');
+      expect(groupHelp('recommendations'), l).toMatch(/RECO_COEFFS/);
+      expect(groupHelp('recommendations'), l).toMatch(/RECO_W_\*/);
+      expect(groupHelp('recommendations'), l).toMatch(/\.env/);
+      const opts = enumOptions(view({ key: 'RECO_ENGINE', kind: 'enum', options: ['v1', 'v2', 'shadow'] }));
+      expect(opts.map((o) => o.value), l).toEqual(['v1', 'v2', 'shadow']);
+      expect(opts.every((o) => o.label !== o.value), l).toBe(true);
+      // the engine help explains all three choices and points to the comparison card
+      const help = keyHelp('RECO_ENGINE');
+      for (const e of ['v1', 'v2', 'Shadow']) expect(help, `${l} ${e}`).toContain(e);
+      expect(keyHelp('RECO_EXPLORE'), l).toMatch(/0 =/);
+      expect(tr('reco.admin.activeLine', { engine: 'X', source: 'Y' }), l).toMatch(/X.*Y/);
+    }
+    expect(groupHelp('general')).toBe('');
   });
 
   it('moveHint names KEY and KEY_FILE and only summarises legacy names', () => {

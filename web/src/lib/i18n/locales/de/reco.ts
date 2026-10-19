@@ -28,5 +28,8 @@ export default {
     since: 'Gezählt seit {date}',
     empty: '–',
     loadFailed: 'Die Zahlen konnten nicht geladen werden.',
+    change: 'Engine ändern',
+    activeLine: '{engine} ist aktiv · {source}',
+    source: { env: 'in der .env festgelegt (RECO_ENGINE), in den Einstellungen gesperrt', db: 'in Admin → Einstellungen änderbar' },
   },
 } as const;

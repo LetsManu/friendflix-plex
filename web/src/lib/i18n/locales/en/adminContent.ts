@@ -382,7 +382,7 @@ const dict: Translation<typeof de> = {
       'change-password': 'Change password',
       'change-email': 'Change e-mail address',
     },
-    states: { ok: 'OK', missing: 'Missing', unsupported: 'Not supported' },
+    states: { ok: 'OK', missing: 'Missing', unsupported: 'Not supported', optional: 'Optional' },
     steps: 'Steps: {list}',
     passkeys: 'Passkeys',
     passkeysIn: 'In FriendFlix',

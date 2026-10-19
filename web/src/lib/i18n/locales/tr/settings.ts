@@ -8,8 +8,10 @@ const settings: Translation<typeof de> = {
   loadFailed: 'Ayarlar yüklenemedi.',
   groups: {
     general: 'Genel', signin: 'Oturum açma', media: 'Medya sunucusu', requests: 'İstekler', notifications: 'Bildirimler', push: 'Anlık bildirimler',
-    sources: 'Veri kaynakları', downloads: 'İndirmeler', playback: 'Oynatma', updates: 'Güncellemeler', health: 'Sistem durumu', sessions: 'Oturumlar', server: 'Sunucu',
+    sources: 'Veri kaynakları', downloads: 'İndirmeler', playback: 'Oynatma', recommendations: 'Öneriler', updates: 'Güncellemeler', health: 'Sistem durumu', sessions: 'Oturumlar', server: 'Sunucu',
   },
+  /** a group's note under its title (Admin → Settings) */
+  groupHelp: { recommendations: 'Değişiklikler yeniden başlatmadan hemen geçerli olur. Uzman ayarları (RECO_COEFFS ve dizin ağırlıkları RECO_W_*) yalnızca .env dosyasında yapılır.' },
   serverHelp: 'Konteyner ortamından gelen değerler. Salt okunur; kimlik bilgileri asla gösterilmez.',
   source: { env: 'Ortamdan', db: 'Kayıtlı', default: 'Varsayılan', bootstrap: 'Başlangıç dosyasından', unset: 'Ayarlanmamış' },
   locked: 'Ortamdan (.env) gelir ve burada değiştirilemez.',
@@ -106,7 +108,7 @@ const settings: Translation<typeof de> = {
     PLEX_URL: { invalid_url: 'Lütfen yalnızca sunucu adresini gir: http:// veya https:// ile başlayan, kullanıcı adı ve parola içermeyen, ? veya # işaretinden sonra hiçbir şey olmayan bir adres. Token, Plex token’ı alanına girilir.' },
   },
   /** option labels of the enum settings (an unset LOGIN_UI is "Automatic") */
-  options: { auto: 'Otomatik', UPDATE_CHANNEL: { stable: 'Kararlı', nightly: 'Nightly' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Otomatik', off: 'Kapalı' } },
+  options: { auto: 'Otomatik', RECO_ENGINE: { v1: 'v1 (klasik)', v2: 'v2 (kendi zevk modeli)', shadow: 'Shadow (v2, v1’in yanında)' }, UPDATE_CHANNEL: { stable: 'Kararlı', nightly: 'Nightly', pinned: 'Sabit sürüm' }, AUTO_UPDATE: { off: 'Kapalı', 'nightly-window': 'Gece penceresi' }, LOGIN_UI: { app: 'FriendFlix', authentik: 'Authentik' }, PASSKEYS_IN_APP: { auto: 'Otomatik', off: 'Kapalı' } },
   keys: {
     PUBLIC_URL: { label: 'Genel adres', help: 'Herkesin FriendFlix’e ulaştığı adres, ör. https://friend.example.com. Bağlantılar, oturum açma ve yayın buna dayanır.' },
     WEBHOOK_SECRET: { label: 'Webhook sırrı', help: 'Medya sunucusu ve istek hizmetinin webhook’ları için ortak sır.' },
@@ -161,13 +163,20 @@ const settings: Translation<typeof de> = {
     PORTAINER_API_KEY: { label: 'Portainer API anahtarı', help: 'Stack’i güncelleyebilen bir Portainer hesabının API anahtarı.' },
     PORTAINER_STACK_ID: { label: 'Portainer stack kimliği', help: 'Portainer’daki FriendFlix stack’inin kimliği.' },
     PORTAINER_ENDPOINT_ID: { label: 'Portainer ortam kimliği', help: 'Stack’in çalıştığı Portainer ortamının kimliği (genellikle 1).' },
-    UPDATE_CHANNEL: { label: 'Güncelleme kanalı', help: 'Admin → Güncelleme neyle karşılaştırır: Kararlı (sürümler) veya Nightly (main). İmajlar .env içindeki FF_TAG’i izler.' },
+    UPDATE_CHANNEL: { label: 'Güncelleme kanalı', help: 'Admin → Güncelleme neyle karşılaştırır ve güncelleyici neyi kurar: Kararlı, Nightly veya sabit bir sürüm. Güncelleyici olmadan imajlar .env içindeki FF_TAG’i izler.' },
+    UPDATE_VERSION: { label: 'Sabit sürüm', help: '„Sabit sürüm” kanalı için X.Y.Z sürümü.' },
+    AUTO_UPDATE: { label: 'Otomatik güncellemeler', help: 'Güncelleyici gerekir. Gece penceresi: her gece aşağıdaki saatte bir kez.' },
+    AUTO_UPDATE_TIME: { label: 'Otomatik güncelleme saati', help: 'Sunucunun saat diliminde SS:DD. Güncelleme bu saatten itibaren 30 dakika içinde başlar.' },
     PLAYBACK_CHECK_HOUR: { label: 'Oynatma denetimi saati', help: 'Gece oynatma denetiminin saati (0–23, sunucu saati). -1 = kapalı.' },
     HEALTH_DISK_WARN_PCT: { label: 'Depolama uyarısı (%)', help: 'Bu doluluktan itibaren sistem durumu uyarı gösterir.' },
     HEALTH_DISK_CRIT_PCT: { label: 'Depolama kritik (%)', help: 'Bu doluluktan itibaren sistem durumu hata gösterir. Uyarı düzeyinin üstünde olmalı.' },
     HEALTH_DB_WARN_GB: { label: 'Veritabanı uyarısı (GB)', help: 'Veritabanı bu boyuta ulaşınca sistem durumu uyarı gösterir.' },
     SESSION_TTL_SECONDS: { label: 'En uzun oturum süresi (saniye)', help: 'Bundan sonra ne kadar etkin olunursa olunsun yeniden oturum açılır.' },
     SESSION_IDLE_SECONDS: { label: 'Hareketsizlikte oturum sonu (saniye)', help: 'Etkinlik olmadan oturum bu süreden sonra sona erer.' },
+    RECO_ENGINE: { label: 'Öneri motoru', help: 'v1: medya sunucusunun “benzer içerikler” listeleri. v2: FriendFlix’in profil başına kendi zevk modeli. Shadow: herkes hâlâ v1’i görürken v2 karşılaştırma için v1’in yanında hesaplanır. Karşılaştırmayı yönetici özetindeki öneri kartında izle ve sayıları en az aynı iyilikte olduğunda v2’ye geç.' },
+    RECO_EXPLORE: { label: 'Keşif payı', help: 'Motor v2’nin zevkleri daha iyi öğrenmek için orta puanlı bir içerikle doldurduğu satır yerlerinin payı (0–0,5). 0 = kapalı; 0.1 = yaklaşık 10 içerikte 1.' },
+    RECO_HALF_LIFE_DAYS: { label: 'Zevk yarı ömrü (gün)', help: 'Bu kadar gün sonra bir zevk sinyali (ör. beğeni) yalnızca yarı ağırlıkta sayılır. Yalnızca motor v2.' },
+    POSTPLAY_ENABLED: { label: 'Bitiş sonrası ekran', help: 'Bir filmden veya son bölümden sonra: “Her şeyi izledin”, sıradaki ve öneriler. Kapalıysa herkes için gizlenir.' },
   },
 };
 export default settings;

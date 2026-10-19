@@ -4,6 +4,8 @@
 # Images come from .github/workflows/publish.yml. Private packages: docker login ghcr.io -u <user> (PAT with read:packages).
 # Channel / version with FF_TAG in .env: latest = stable releases (default), nightly = every green commit on main, 1 / 1.1 / 1.1.0
 # or a short sha to pin; other owner with FF_REGISTRY=ghcr.io/<owner> (both optional). Admin -> Update shows the line to set.
+# Opt-in updater (`--profile updater`, with compose.plex.yaml; docs/operations.md "Updater"): Admin -> Update then pulls, verifies (cosign) and restarts
+# the FriendFlix services itself and FF_TAG is no longer needed; only the `docker-proxy` service sees the Docker socket.
 # FriendFlix portal stack. A new install needs no .env: `up -d`, then the setup code from the backend log
 # (`logs backend | grep "setup code"`) opens the setup wizard (docs/setup.md); every setting lives in the database (Admin -> Settings).
 # The `bootstrap` service generates the internal secrets into the `bootstrap` volume (back it up, scripts/backup-bootstrap.sh).
@@ -24,6 +26,13 @@ networks:
   media:
     internal: true
   egress: {} # outbound internet for Jellyfin/request service metadata only; nothing is published
+  # updater profile: backend <-> updater (signed requests), updater <-> socket proxy, updater -> ghcr.io / Sigstore (cosign).
+  # Defined always (backend joins `updater`), empty without the profile.
+  updater:
+    internal: true
+  updater-docker:
+    internal: true
+  updater-egress: {}
 
 services:
   # Init container (runs once per `up`, then exits): writes every secret needed before the database can be read into the
@@ -167,6 +176,8 @@ services:
       API_COMPRESSION: ${API_COMPRESSION:-}
       # admin health page: gateway address (only /health is called) and disk / database warning levels
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:4000}
+      # opt-in updater (profile `updater`); without the profile the name does not resolve and Admin -> Update shows the manual steps
+      UPDATER_URL: ${UPDATER_URL:-http://updater:7070}
       HEALTH_DISK_WARN_PCT: ${HEALTH_DISK_WARN_PCT:-}
       HEALTH_DISK_CRIT_PCT: ${HEALTH_DISK_CRIT_PCT:-}
       HEALTH_DB_WARN_GB: ${HEALTH_DB_WARN_GB:-}
@@ -193,7 +204,7 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
     ports: ["${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-3081}:3000"]
-    networks: [front, db, media, egress] # egress: OIDC discovery + ntfy/Discord
+    networks: [front, db, media, egress, updater] # egress: OIDC discovery + ntfy/Discord; updater: the opt-in updater only
 
   gateway:
     image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-plex-gateway:${FF_TAG:-latest}
@@ -299,6 +310,94 @@ services:
       postgres: { condition: service_healthy }
     networks: [db]
 
+  # ---- Opt-in updater: `docker compose -f compose.prod.yaml -f compose.plex.yaml --profile updater up -d` (docs/operations.md "Updater") ----
+  # The ONLY service with the Docker socket, read-only, on an internal network that only the updater shares. It forwards the
+  # API sections `compose pull` + `up -d --no-deps` need (containers, images, networks, volumes, info); exec, build, commit,
+  # swarm, services, secrets, configs, plugins, system, session, distribution, auth and the container archive/export/logs/
+  # top/changes endpoints are refused (403). Third-party image pinned by digest (Dependabot does not see it: bump by hand).
+  # haproxy runs as root inside (`user root` + `chroot /` in its config): it keeps only the three capabilities for that.
+  docker-proxy:
+    profiles: [updater]
+    image: ghcr.io/linuxserver/socket-proxy:3.4.7@sha256:e5d819de59b343c01b2fe7adc7fad3c7a60e5dba08e45f1ac317352bc08599b5
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/run]
+    cap_drop: [ALL]
+    cap_add: [SETGID, SETUID, SYS_CHROOT]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      # read: what compose inspects (containers, images, networks, volumes) plus ping/version/info
+      CONTAINERS: 1
+      IMAGES: 1
+      NETWORKS: 1
+      VOLUMES: 1
+      INFO: 1
+      PING: 1
+      VERSION: 1
+      EVENTS: 0
+      # write (POST/DELETE) in the sections above: pull, create/recreate, start/stop/remove of containers. Note: with
+      # CONTAINERS + POST the proxy also lets kill/restart/pause through; ALLOW_* only add allows, they never deny.
+      POST: 1
+      ALLOW_START: 1
+      ALLOW_STOP: 1
+      ALLOW_RESTARTS: 0
+      # everything else stays denied
+      EXEC: 0
+      BUILD: 0
+      COMMIT: 0
+      ALLOW_ARCHIVE: 0
+      ALLOW_EXPORT: 0
+      ALLOW_LOGS: 0
+      ALLOW_PAUSE: 0
+      ALLOW_UNPAUSE: 0
+      ALLOW_TOP: 0
+      ALLOW_CHANGES: 0
+      AUTH: 0
+      CONFIGS: 0
+      DISTRIBUTION: 0
+      NODES: 0
+      PLUGINS: 0
+      SECRETS: 0
+      SERVICES: 0
+      SESSION: 0
+      SWARM: 0
+      SYSTEM: 0
+      TASKS: 0
+      DISABLE_IPV6: 0
+      LOG_LEVEL: warning
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
+    networks: [updater-docker]
+
+  # Pulls + cosign-verifies + recreates the FriendFlix services (bootstrap, backend, gateway, web) on signed requests from the
+  # backend only (INTERNAL_SECRET). No published port. Reads the stack directory read-only at its host path (relative bind paths
+  # resolve the same) and needs it plus .env readable by uid 1000. Never touches the database, Redis, Jellyfin, the request
+  # service or Authentik.
+  updater:
+    profiles: [updater]
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-plex-updater:${FF_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    group_add: ["10001"] # reads bootstrap-gateway (internal_secret only)
+    environment:
+      DOCKER_HOST: tcp://docker-proxy:2375
+      UPDATER_PROJECT_DIR: ${PWD:-/project}
+      # extra compose files of this stack (comma-separated names in the stack directory), e.g. compose.prod.yaml,compose.authentik.yaml
+      UPDATER_COMPOSE_FILES: ${UPDATER_COMPOSE_FILES:-compose.prod.yaml}
+      UPDATE_REPO: ${UPDATE_REPO:-LetsManu/friendflix-plex} # expected images ghcr.io/<owner>/friendflix-plex-* + cosign signer
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-} # unset: the copy in the bootstrap-gateway volume
+    volumes:
+      - .:${PWD:-/project}:ro
+      - updater-state:/state
+      - bootstrap-gateway:/run/friendflix-gateway:ro
+    depends_on:
+      bootstrap: { condition: service_completed_successfully }
+      docker-proxy: { condition: service_started }
+    networks: [updater, updater-docker, updater-egress]
+
   # Optional bundled media services. Remove this profile if you already run them;
   # then attach your existing containers to the `friendflix_media` network instead.
   jellyfin:
@@ -327,6 +426,7 @@ volumes:
   bootstrap:
   bootstrap-gateway:
   pgdata:
+  updater-state: # channel, installed + previous tag, last job (profile updater)
   previews:
   downloads:
   jellyfin-config:

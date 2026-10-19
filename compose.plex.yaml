@@ -6,6 +6,7 @@
 #
 #   docker compose -f compose.prod.yaml -f compose.plex.yaml config      # check
 #   docker compose -f compose.prod.yaml -f compose.plex.yaml up -d
+#   docker compose -f compose.prod.yaml -f compose.plex.yaml --profile updater up -d   # with the opt-in updater (see the end)
 #   (or put COMPOSE_FILE=compose.prod.yaml:compose.plex.yaml into .env and use plain `docker compose up -d`)
 #
 # Setup: nothing is required in .env. `up -d`, open the setup wizard with the setup code from the backend log
@@ -56,6 +57,19 @@ services:
 
   web:
     image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-plex-web:${FF_TAG:-latest}
+
+  # Opt-in updater (profile `updater`; the docker-proxy service, the networks updater / updater-docker / updater-egress, the
+  # volume updater-state, the backend's `updater` network and UPDATER_URL come from compose.prod.yaml):
+  #   docker compose -f compose.prod.yaml -f compose.plex.yaml --profile updater up -d
+  # It recreates only bootstrap, backend, gateway and web (never the Plex server), expects the images
+  # ghcr.io/<owner>/friendflix-plex-* and verifies them against this fork's publish.yml (UPDATE_REPO). It runs compose with
+  # both files of this stack; list any further ones too, e.g. compose.prod.yaml,compose.plex.yaml,compose.authentik.yaml.
+  updater:
+    profiles: [updater]
+    image: ${FF_REGISTRY:-ghcr.io/letsmanu}/friendflix-plex-updater:${FF_TAG:-latest}
+    environment:
+      UPDATER_COMPOSE_FILES: ${UPDATER_COMPOSE_FILES:-compose.prod.yaml,compose.plex.yaml}
+      UPDATE_REPO: ${UPDATE_REPO:-LetsManu/friendflix-plex}
 
 # Token as a Docker secret instead of PLEX_TOKEN (optional):
 #   printf '%s' 'your-plex-token' > secrets/plex_token && chmod 600 secrets/plex_token

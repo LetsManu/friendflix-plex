@@ -8,7 +8,7 @@
 #
 #   scripts/reproduce-image.sh SERVICE [--ref REF] [--compare IMAGE] [--out FILE]
 #   scripts/reproduce-image.sh --diff A.oci.tar B.oci.tar   (explains a mismatch: config + per-layer file listings)
-#     SERVICE    backend | gateway | web
+#     SERVICE    backend | gateway | web | updater
 #     --ref      commit / tag to build (default HEAD). The build context is `git archive REF`, so local changes,
 #                untracked files, file mtimes and the umask of your checkout cannot leak into the image.
 #     --compare  published image to compare with. Its labels and the build-arg ENVs (GIT_SHA, BUILD_TIME, APP_VERSION,
@@ -47,7 +47,7 @@ if [ "${1:-}" = --diff ]; then
   exit 0
 fi
 SERVICE="${1:-}"; [ -n "$SERVICE" ] || usage; shift
-case "$SERVICE" in backend|gateway|web) ;; *) usage ;; esac
+case "$SERVICE" in backend|gateway|web|updater) ;; *) usage ;; esac
 REF=HEAD COMPARE='' OUT=''
 while [ $# -gt 0 ]; do
   case "$1" in

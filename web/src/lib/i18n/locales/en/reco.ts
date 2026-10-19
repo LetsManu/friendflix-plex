@@ -30,6 +30,9 @@ const dict: Translation<typeof de> = {
     since: 'Counted since {date}',
     empty: '–',
     loadFailed: 'The numbers could not be loaded.',
+    change: 'Change engine',
+    activeLine: '{engine} is active · {source}',
+    source: { env: 'set in .env (RECO_ENGINE), locked in the settings', db: 'can be changed in Admin → Settings' },
   },
 };
 

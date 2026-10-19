@@ -9,7 +9,7 @@ import { api, ApiError } from '#lib/api';
 
 export type SettingKind = 'string' | 'url' | 'secret' | 'int' | 'number' | 'bool' | 'enum' | 'cidrList' | 'json';
 export type SettingGroup = 'general' | 'signin' | 'media' | 'requests' | 'notifications' | 'push' | 'sources'
-  | 'downloads' | 'playback' | 'updates' | 'health' | 'sessions';
+  | 'downloads' | 'playback' | 'recommendations' | 'updates' | 'health' | 'sessions';
 export type Source = 'env' | 'db' | 'bootstrap' | 'default' | 'unset';
 export type ProbeCode = 'ok' | 'unreachable' | 'timeout' | 'unauthorized' | 'invalid' | 'not_admin' | 'issuer_mismatch' | 'wizard_pending' | 'warning';
 export type Generate = 'webhookSecret' | 'vapidPair';

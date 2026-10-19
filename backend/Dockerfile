@@ -7,6 +7,7 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY backend/package.json backend/
 COPY gateway/package.json gateway/
 COPY web/package.json web/
+COPY updater/package.json updater/
 RUN npm ci
 COPY backend backend
 RUN npm run build -w backend
@@ -17,6 +18,7 @@ COPY package.json package-lock.json ./
 COPY backend/package.json backend/
 COPY gateway/package.json gateway/
 COPY web/package.json web/
+COPY updater/package.json updater/
 RUN npm ci --omit=dev -w backend
 
 FROM node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a

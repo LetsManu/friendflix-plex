@@ -21,12 +21,12 @@ const def = (key: string) => {
 describe('key classification', () => {
   it('every key of the config schema is in exactly one of SETTINGS, ENV_ONLY_KEYS, BOOTSTRAP_KEYS, BUILD_KEYS', () => {
     const keys = Object.keys(configSchema.shape);
-    expect(keys).toHaveLength(92); // fork: + PLEX_URL, PLEX_TOKEN
+    expect(keys).toHaveLength(96); // fork: + PLEX_URL, PLEX_TOKEN
     const classes = [SETTINGS.map((s) => s.key), ENV_ONLY_KEYS, BOOTSTRAP_KEYS, BUILD_KEYS];
     for (const k of keys) expect(classes.filter((c) => c.includes(k)), k).toHaveLength(1);
     expect(classes.flat().sort()).toEqual([...keys].sort()); // nothing outside the schema, no duplicates
-    expect([BOOTSTRAP_KEYS.length, ENV_ONLY_KEYS.length, BUILD_KEYS.length, SETTINGS.length]).toEqual([4, 24, 4, 60]); // fork: + PLEX_URL, PLEX_TOKEN
-    expect(SETTINGS.filter((s) => s.visible !== false)).toHaveLength(60);
+    expect([BOOTSTRAP_KEYS.length, ENV_ONLY_KEYS.length, BUILD_KEYS.length, SETTINGS.length]).toEqual([4, 21, 4, 67]); // fork: + PLEX_URL, PLEX_TOKEN
+    expect(SETTINGS.filter((s) => s.visible !== false)).toHaveLength(67);
     expect(SETTINGS.filter((s) => s.visible === false).map((s) => s.key)).toEqual([]);
   });
   it('each setting parses with the config schema field of the same key', () => {
@@ -92,13 +92,31 @@ describe('key classification', () => {
     expect(def('TMDB_API_KEY')).toMatchObject({ group: 'sources', probe: 'tmdb' });
     expect(settingDef('MEDIA_SERVER')).toBeUndefined();
   });
-  it('UPDATE_CHANNEL: a database setting in group updates, stable by default, stable | nightly', () => {
-    expect(def('UPDATE_CHANNEL')).toMatchObject({ kind: 'enum', group: 'updates', apply: 'live', default: 'stable', options: ['stable', 'nightly'] });
+  it('UPDATE_CHANNEL: a database setting in group updates, stable by default, stable | nightly | pinned', () => {
+    expect(def('UPDATE_CHANNEL')).toMatchObject({ kind: 'enum', group: 'updates', apply: 'live', default: 'stable', options: ['stable', 'nightly', 'pinned'] });
     expect(def('UPDATE_CHANNEL').secret).toBeUndefined();
     expect(loadConfig(BOOT).UPDATE_CHANNEL).toBe('stable');
     expect(loadConfig({ ...BOOT, UPDATE_CHANNEL: '' }).UPDATE_CHANNEL).toBe('stable');
     expect(parseEnvValue(def('UPDATE_CHANNEL'), 'nightly')).toEqual({ ok: true, value: 'nightly' });
     expect(parseEnvValue(def('UPDATE_CHANNEL'), 'latest')).toEqual({ ok: false, code: 'invalid_option' });
+  });
+  it('recommendations: engine, exploration, half-life and post-play are database settings; coefficients and weights stay env-only', () => {
+    expect(SETTINGS.filter((s) => s.group === 'recommendations').map((s) => s.key)).toEqual(['RECO_ENGINE', 'RECO_EXPLORE', 'RECO_HALF_LIFE_DAYS', 'POSTPLAY_ENABLED']);
+    expect(def('RECO_ENGINE')).toMatchObject({ kind: 'enum', apply: 'live', default: 'v1', options: ['v1', 'v2', 'shadow'] });
+    expect(def('RECO_EXPLORE')).toMatchObject({ kind: 'number', apply: 'live', default: 0, min: 0, max: 0.5 });
+    expect(def('RECO_EXPLORE').default).toBe(0);
+    expect(def('RECO_HALF_LIFE_DAYS')).toMatchObject({ kind: 'number', apply: 'live', default: 120, min: 1, max: 3650 });
+    expect(def('RECO_HALF_LIFE_DAYS').schema).toBe(configSchema.shape.RECO_HALF_LIFE_DAYS);
+    expect(def('POSTPLAY_ENABLED')).toMatchObject({ kind: 'bool', apply: 'live', default: 'true' });
+    expect(def('POSTPLAY_ENABLED').options).toBeUndefined();
+    for (const k of ['RECO_COEFFS', 'RECO_W_GENRES', 'RECO_W_TAGS', 'RECO_W_STUDIOS', 'RECO_W_PEOPLE', 'RECO_W_TEXT', 'RECO_W_NUMERIC', 'RECO_W_COLLECTION']) {
+      expect(ENV_ONLY_KEYS, k).toContain(k);
+      expect(settingDef(k), k).toBeUndefined();
+    }
+    expect(parseEnvValue(def('RECO_ENGINE'), 'shadow')).toEqual({ ok: true, value: 'shadow' });
+    expect(parseEnvValue(def('RECO_ENGINE'), 'v3')).toEqual({ ok: false, code: 'invalid_option' });
+    expect(parseEnvValue(def('RECO_EXPLORE'), '0.6')).toEqual({ ok: false, code: 'too_big' });
+    expect(parseEnvValue(def('RECO_EXPLORE'), '0.1')).toEqual({ ok: true, value: 0.1 });
   });
 });
 

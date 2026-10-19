@@ -432,7 +432,7 @@ export function adminRoute(st: AdminState, m: string, p: string, sp: URLSearchPa
 
   // R4: CTR and play rate per recommendation engine (the server's counters)
   if (p === '/api/admin/reco') return J({
-    engine: 'shadow', fallbacks: 3, since: '2026-10-18T08:00:00.000Z',
+    engine: 'shadow', locked: false, fallbacks: 3, since: '2026-10-18T08:00:00.000Z',
     engines: {
       v1: { impressions: 400, clicks: 40, plays: 20, dismisses: 4, ctr: 0.1, playRate: 0.05 },
       v2: { impressions: 0, clicks: 0, plays: 0, dismisses: 0, ctr: null, playRate: null },

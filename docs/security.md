@@ -37,6 +37,7 @@ Internet --TLS--> reverse proxy (yours, :443)
 backend --> postgres, redis    (db network, internal: no egress, no host access)
 backend, gateway --> media server (media network, internal)
 backend --> OIDC provider, notification services (egress)
+backend --> updater (updater network, internal; optional profile)  --> docker-proxy (internal) --> Docker socket (read-only)
 ```
 
 Networks and ports are defined in [compose.yaml](../compose.yaml); the diagram and the "press play" flow are in [architecture.md](architecture.md).
@@ -52,6 +53,7 @@ Networks and ports are defined in [compose.yaml](../compose.yaml); the diagram a
 | FriendFlix to identity provider | OIDC discovery and code exchange | Authorization code flow with PKCE (S256), `state` and `nonce`, and a cookie binding the flow to the browser. The IdP is trusted to authenticate users and enforce MFA. |
 | Cast and AirPlay receivers | TV or speaker on the viewer's network to the gateway | The receiver cannot send cookies, so it gets a short-lived, revocable cast token in the URL path. See [cast.md](cast.md). A receiver is untrusted: it only ever holds that token. |
 | Web Push and notification services | Backend to push services, ntfy, Discord | Outbound only; keys and webhook URLs are admin-configured secrets. |
+| Backend to updater (optional) | App to the only component that can change containers | Five fixed actions, HMAC-signed (timestamp + nonce, replays refused); only the updater reaches the socket proxy ([Updater](#updater)). |
 
 ## Threat model
 
@@ -63,7 +65,8 @@ Networks and ports are defined in [compose.yaml](../compose.yaml); the diagram a
 | Holder of a leaked URL or cast token | Replay a stream URL | Cast tokens are random, hashed at rest, bound to the first client address, expire, are revocable and limited to two per account. |
 | Malicious web page or injected script | Act as the user (CSRF/XSS), read tokens | CSRF token, `SameSite=Lax`, `HttpOnly` cookies, strict CSP, `nosniff`, `X-Frame-Options: DENY`. No media token reaches the browser. |
 | Attacker with a stolen database or Redis dump | Read credentials | Media-server passwords and API keys are AES-256-GCM encrypted; PINs are scrypt hashes; Redis holds only SHA-256 hashes of cast tokens; sessions are not persisted. |
-| Compromised dependency or CI | Ship malicious images | Pinned actions and base images, lockfile with `npm ci`, dependency audit, Trivy gate, signed and attested images. |
+| Compromised dependency or CI | Ship malicious images | Pinned actions and base images, lockfile with `npm ci`, dependency audit, Trivy gate, signed and attested images; the optional updater refuses any image whose cosign signature is not this repository's publish workflow. |
+| Attacker with code execution in the backend | Take over the Docker host | The backend never gets the Docker socket; with the optional updater it can only send five fixed, signed actions that install signed images of this repository ([Updater](#updater)). |
 | Malicious or buggy receiver or media server | Abuse the gateway, SSRF-style fetches | Gateway only forwards allowlisted, server-relative paths; absolute and protocol-relative URLs are refused. |
 
 Out of scope for the model: physical access to the host, a malicious admin, and attacks on the media server or IdP themselves.
@@ -261,11 +264,38 @@ A new install has no admin and no sign-in yet, so the first run is protected by 
 
 `APP_ENC_KEY` lives in the `bootstrap` volume (or in `.env` / a Docker secret on installs that set it). Back the volume up apart from the database dumps (`scripts/backup-bootstrap.sh`): losing it makes encrypted values unreadable (the app treats them as unset and flags them for re-entry), leaking it together with a database dump exposes them. Docker secrets are supported through [compose.secrets.yaml](../compose.secrets.yaml).
 
+## Updater
+
+The optional updater (compose profile `updater`, [setup.md](setup.md#updater-optional)) is the only part of FriendFlix that can change what runs. It is built so that the services an attacker can reach from the internet still cannot.
+
+```
+backend --signed request--> updater --(internal net)--> docker-proxy --ro--> /var/run/docker.sock
+   (updater net, internal)     |  (updater-egress: GHCR + Sigstore for cosign only)
+```
+
+**Controls.**
+- **No socket in the app:** backend, web and gateway never mount the Docker socket. Only `docker-proxy` (linuxserver/socket-proxy, pinned by digest) mounts it, read-only, on `updater-docker`, an internal network shared with the updater alone. The backend is not on that network and cannot reach the proxy.
+- **Proxy allowlist:** the API sections containers, images, networks and volumes, plus ping, version and info, with write methods (`POST`/`DELETE`) because `compose pull` / `up -d` need them. Exec, build, commit, swarm, services, tasks, nodes, secrets, configs, plugins, system, session, distribution and auth, and the container archive, export, logs, top and changes endpoints are refused with 403.
+- **Fixed actions:** the updater serves five routes: `GET /v1/status`, `POST /v1/channel`, `/v1/update`, `/v1/rollback`, `/v1/self-update`. The job routes take no body; the channel body must be exactly `{channel}` or `{channel: "pinned", version: "X.Y.Z"}`. No request can name an image, a service, a tag, a command or an argument.
+- **Signed requests:** HMAC-SHA256 with a key derived from `INTERNAL_SECRET` (`HMAC(INTERNAL_SECRET, "friendflix-updater/v1")`, so the raw shared secret never signs anything), over method, path, timestamp, nonce and body hash; compared in constant time; 60 s window; every nonce once (bounded replay cache that fails closed); nothing signed before the updater process started (the cache cannot be replayed across a restart). Body limit 1 KB, checked before the signature.
+- **Constants and regexes:** the service list is a constant (`bootstrap`, `backend`, `gateway`, `web`; `updater` only for the explicit self-update). Tags match `latest | nightly | X.Y.Z | sha-<7 hex>` only; the state file is re-validated field by field on every load. Every image compose resolves must be exactly `ghcr.io/<owner>/<repo>-<service>:<tag>` of `UPDATE_REPO`. Commands run with `execFile` (no shell) and a minimal environment (never the updater's own, which holds the secret).
+- **Signature before restart:** each pulled digest is verified with `cosign verify` (identity `https://github.com/<UPDATE_REPO>/.github/workflows/publish.yml@refs/heads/main` or `@refs/tags/vX.Y.Z`, issuer `https://token.actions.githubusercontent.com`). Any failure aborts before anything restarts, and `up` runs with `--pull never`, so only the verified local images start.
+- **Container:** non-root (uid 1000), read-only root file system, `cap_drop: ALL`, `no-new-privileges`, no published port. It reads only `internal_secret` (from the `bootstrap-gateway` volume) and the stack directory, read-only.
+- **Backend side:** admin only, a re-authentication within 10 minutes, three starts per two minutes for the whole portal (counted after the admin check), audit entries for start (who, from, to) and result. Status answers are parsed field by field before they reach the browser. Logs carry fixed messages, tags and error codes, never command output or secrets.
+
+**What an attacker with code execution in the backend can do.** Everything the backend could already do (data, sessions, media tokens), plus: send the five signed requests. That means starting an update to `latest` / `nightly` / any published `X.Y.Z` of this repository, a rollback to the recorded previous build, or a self-update, and reading the status (tags, job log). Every image that can start is a CI-built, cosign-signed release or nightly of this repository: the attacker can force an old, still-signed version with known bugs (a downgrade), restart the portal repeatedly (rate limited to three per two minutes, audited), or change the channel. They cannot run a chosen image, mount host paths, start a container with other options, exec into containers or reach the Docker API: the backend has no socket, is not on the proxy's network, and the updater accepts nothing but the fixed actions. Residual risk: downgrade to an older signed build, and denial of service through restarts.
+
+**What an attacker with code execution in the updater can do.** A lot: this is the trusted component. Through the proxy they can create and start containers with any configuration (including privileged ones with host mounts), which on a Docker host amounts to root on the host; read every container's configuration and environment (`docker inspect`), the stack directory and `.env`, and `INTERNAL_SECRET`; stop or replace any container. They cannot exec into running containers, build images, or touch swarm, secrets, plugins or system endpoints, but container creation alone is enough for a host takeover. That is why the updater is opt-in, has no port, is reachable only from the backend over an internal network, takes no free-form input, and runs only code from its own signed image. Residual risk: a vulnerability in the updater's tiny HTTP surface or in the docker/cosign binaries it ships, reachable only from the backend container.
+
+**What the proxy blocks.** Requests to `/exec` (so an exec created under `/containers/<id>/exec` can never be started), `/build`, `/commit`, `/swarm`, `/services`, `/tasks`, `/nodes`, `/secrets`, `/configs`, `/plugins`, `/system` (`df`, prune of everything), `/session`, `/distribution`, `/auth` and `/grpc`, and `/containers/<id>/archive`, `/export`, `/logs`, `/top` and `/changes` answer 403; every path outside the allowlist does too. The socket is mounted read-only into the proxy and the proxy has no published port. What it does **not** block: inside the allowed sections it filters by path and method only, never by body, so `POST /containers/create` with a dangerous body (privileged, host binds), kill / restart / pause of any container, image removal and volume or network changes all pass. That is why the proxy is reachable from the updater alone.
+
+**Disable** by stopping and removing `updater` and `docker-proxy` and starting without the profile; nothing else depends on them.
+
 ## Hardening
 
 What the shipped [compose.yaml](../compose.yaml) and images do:
 
-- **Containers:** `read_only: true` root file system with a `tmpfs` for `/tmp`, `cap_drop: [ALL]`, `security_opt: no-new-privileges:true` on backend, gateway, web and the backup sidecar; Redis runs read-only as its own user. The app images run as the unprivileged `node` user. The one-shot `bootstrap` service runs as root, but read-only, without network and with `CHOWN` as its only capability ([Settings and generated secrets](#settings-and-generated-secrets)).
+- **Containers:** `read_only: true` root file system with a `tmpfs` for `/tmp`, `cap_drop: [ALL]`, `security_opt: no-new-privileges:true` on backend, gateway, web, the updater and the backup sidecar; Redis runs read-only as its own user. The app images run as the unprivileged `node` user. The one-shot `bootstrap` service runs as root, but read-only, without network and with `CHOWN` as its only capability ([Settings and generated secrets](#settings-and-generated-secrets)).
 - **Images:** base images pinned by digest; `npm`, `npx` and `yarn` are removed from the runtime images; production dependencies only; Alpine security updates applied at build; health checks.
 - **Network:** only the three app ports are published, bound to `127.0.0.1`; `db` and `media` networks are `internal`; Redis requires a password and keeps no data on disk.
 - **API headers:** `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`, `Cross-Origin-Resource-Policy: same-origin` (relaxed only for the Chromecast subtitle route) and `Cache-Control: no-store` unless a route sets its own.

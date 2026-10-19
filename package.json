@@ -5,7 +5,7 @@
   "version": "1.1.0",
   "license": "AGPL-3.0-or-later",
   "engines": { "node": ">=22" },
-  "workspaces": ["backend", "gateway", "web"],
+  "workspaces": ["backend", "gateway", "web", "updater"],
   "scripts": {
     "build": "npm run build --workspaces",
     "lint": "eslint .",

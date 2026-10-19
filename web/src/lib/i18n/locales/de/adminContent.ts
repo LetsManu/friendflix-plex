@@ -381,7 +381,7 @@ export default {
       'change-password': 'Passwort ändern',
       'change-email': 'E-Mail-Adresse ändern',
     },
-    states: { ok: 'In Ordnung', missing: 'Fehlt', unsupported: 'Nicht unterstützt' },
+    states: { ok: 'In Ordnung', missing: 'Fehlt', unsupported: 'Nicht unterstützt', optional: 'Optional' },
     steps: 'Schritte: {list}',
     passkeys: 'Passkeys',
     passkeysIn: 'In FriendFlix',

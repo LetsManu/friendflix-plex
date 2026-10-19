@@ -158,6 +158,8 @@ docker compose logs backend | grep "setup code"                           # der 
 
 Tipp: Mit `COMPOSE_FILE=compose.prod.yaml:compose.plex.yaml` in `.env` reicht `docker compose up -d` / `ps` / `logs`.
 
+Optionaler Updater: Mit `docker compose -f compose.prod.yaml -f compose.plex.yaml --profile updater up -d` aktualisiert *Admin → Update* den Stack selbst ([setup.md, Updater](setup.md#updater-optional)). `compose.plex.yaml` richtet ihn auf diesen Fork aus: Images `friendflix-plex-*` (auch `friendflix-plex-updater`), Signaturen aus `publish.yml` dieses Repos und beide Compose-Dateien (`UPDATER_COMPOSE_FILES=compose.prod.yaml,compose.plex.yaml`). Er erstellt nur bootstrap, backend, gateway und web neu und fasst den Plex-Server nie an.
+
 ### Einrichtungsassistent mit Plex
 
 Öffne deine FriendFlix-Adresse; solange die Einrichtung offen ist, führt jede Seite nach `/setup` (allgemeine Schritte: [setup.md](setup.md)). Im **Mediaserver-Schritt** trägst du ein:
@@ -305,7 +307,7 @@ Was die Preview umsetzt (von der Testsuite gegen den Fake-Plex-Server geprüft; 
 | Nächste Folge auf dem TV (Chromecast-Warteschlange, Countdown in der Cast-Leiste, *Nächste Folge*, Sperrbildschirm-Steuerung) | Funktioniert | Das Token der vorgemerkten Folge ist wie im Original an den Cast gebunden, dem es folgt; Plex' eigene Stream-Zählung lässt es genau diesen einen Cast überlappen, und seine Plex-Sitzung ist nur über das Cast-Token erreichbar. Siehe [Nächste Folge casten unter Plex](#nächste-folge-casten-unter-plex) |
 | Cast-Fernbedienung (Bild, Folgenkarte, Gerät) | Funktioniert | Bilder über FriendFlix' eigene Bildpfade und Plex' Foto-Transcoder; keine Plex-Adresse und kein Token in einer Bild-URL |
 | Bildschirm nach dem Ende (*Du hast … beendet*, *Du bist auf dem neuesten Stand*, *Folge N ist noch ungesehen*) | Eingeschränkt | Plex kennt keinen Serienstatus und keine angekündigten Folgen: Nach der letzten vorhandenen Folge heißt es immer *Du bist auf dem neuesten Stand* (nie *Serie beendet*), ohne Ausstrahlungstermin und ohne *Erinnere mich*. Siehe [Empfehlungs-Engine v2 und Nach-dem-Ende-Bildschirm unter Plex](#empfehlungs-engine-v2-und-nach-dem-ende-bildschirm-unter-plex) |
-| Empfehlungs-Engine v2 (`RECO_ENGINE`, Titel-Index, Signale anderer Konten, Begründungen) | Funktioniert | Der Titel-Index liest FriendFlix' Spiegel der Plex-Bibliothek (Genres, Labels, Studios, Länder, Personen, Jahr, Laufzeit, Bewertungen, Sammlungen, Inhaltsangabe). Originalsprache und Serienstatus fehlen in Plex; diese Signale bleiben neutral |
+| Empfehlungs-Engine v2 (`RECO_ENGINE`, Titel-Index, Signale anderer Konten, Begründungen) | Funktioniert | Umschaltbar unter *Admin → Einstellungen → Empfehlungen* (sofort; die `.env` hat Vorrang). Der Titel-Index liest FriendFlix' Spiegel der Plex-Bibliothek (Genres, Labels, Studios, Länder, Personen, Jahr, Laufzeit, Bewertungen, Sammlungen, Inhaltsangabe). Originalsprache und Serienstatus fehlen in Plex; diese Signale bleiben neutral |
 | TV-Modus, Watch-Partys, Empfehlungen, Benachrichtigungen, Hubs | Funktioniert | FriendFlix-Funktionen |
 | „Kommende Folgen“ / Kalender | Nicht verfügbar | Plex bietet das nicht |
 | Kontoseite (*Mein Bereich → Konto*) | Funktioniert | Nur das Hauptprofil. Zeigt Konto und Geräte; nichts auf der Seite stammt von Plex |
@@ -377,6 +379,7 @@ Nächste Folge, *Folge N ist noch ungesehen*, Sammlungen und die Sichtbarkeit je
 - **Keine „Creator“-Angabe:** Bei Serien listet Plex meist nur Darsteller; Regie und Drehbuch zählen, wenn Plex sie hat.
 - **Kritiker-Wertung** nur, wenn Plex `rating` als Rotten Tomatoes kennzeichnet (wie auf der Detailseite).
 - **v1 bleibt unter Plex FriendFlix' eigene Ähnlichkeit** (gemeinsame Genres und Besetzung), nicht die von Jellyfin. Die Engine-Karte im Admin nennt sie „v1 (klassisch)“.
+- **Wo man umschaltet:** `RECO_ENGINE` (v1, v2, Shadow), `RECO_EXPLORE`, `RECO_HALF_LIFE_DAYS` und `POSTPLAY_ENABLED` lassen sich auch unter *Admin → Einstellungen → Empfehlungen* ändern und gelten sofort, ohne Neustart. Ein Wert in der `.env` hat Vorrang und sperrt das Feld; die Empfehlungskarte im Admin verlinkt die Gruppe. `RECO_COEFFS` und `RECO_W_*` bleiben nur in der `.env`.
 
 ### Nächste Folge casten unter Plex
 

@@ -13,7 +13,7 @@ export { publicUrlSchema };
  */
 export type SettingKind = 'string' | 'url' | 'secret' | 'int' | 'number' | 'bool' | 'enum' | 'cidrList' | 'json';
 export type SettingGroup = 'general' | 'signin' | 'media' | 'requests' | 'notifications' | 'push' | 'sources'
-  | 'downloads' | 'playback' | 'updates' | 'health' | 'sessions';
+  | 'downloads' | 'playback' | 'recommendations' | 'updates' | 'health' | 'sessions';
 export type ProbeId = 'publicUrl' | 'media' | 'oidc' | 'authentik' | 'requests' | 'tmdb' | 'omdb' | 'portainer' | 'github';
 
 export interface SettingDef {
@@ -138,10 +138,21 @@ export const SETTINGS: readonly SettingDef[] = [
   setting('CAST_ENABLED', { kind: 'bool', group: 'playback' }),
   setting('PREVIEW_WARM', { kind: 'bool', group: 'playback' }),
   setting('HOME_NETWORKS', { kind: 'cidrList', group: 'playback' }),
+  // recommendations: read per request from ctx.cfg (reco/engine.ts, recommend.ts, postplay.ts, routes/discover.ts, home.ts), so a save
+  // applies at once; RECO_COEFFS and the RECO_W_* item index weights stay env-only (expert tuning)
+  setting('RECO_ENGINE', { kind: 'enum', group: 'recommendations' }),
+  setting('RECO_EXPLORE', { kind: 'number', group: 'recommendations' }),
+  setting('RECO_HALF_LIFE_DAYS', { kind: 'number', group: 'recommendations' }),
+  setting('POSTPLAY_ENABLED', { kind: 'bool', group: 'recommendations' }),
   // updates
   setting('GITHUB_TOKEN', { kind: 'secret', group: 'updates', probe: 'github' }),
-  // the channel Admin -> Update compares against (stable | nightly); a database setting, the images still follow FF_TAG
+  // the channel Admin -> Update compares against (stable | nightly | pinned + UPDATE_VERSION); without the opt-in updater the images
+  // still follow FF_TAG, with it this is what the updater installs
   setting('UPDATE_CHANNEL', { kind: 'enum', group: 'updates' }),
+  setting('UPDATE_VERSION', { kind: 'string', group: 'updates' }),
+  // automatic updates through the updater (backend scheduler, updater.ts autoUpdateTick)
+  setting('AUTO_UPDATE', { kind: 'enum', group: 'updates' }),
+  setting('AUTO_UPDATE_TIME', { kind: 'string', group: 'updates' }),
   setting('PORTAINER_WEBHOOK_URL', { kind: 'secret', ...portainer }), // the URL is the credential
   setting('PORTAINER_URL', { kind: 'url', ...portainer }),
   setting('PORTAINER_API_KEY', { kind: 'secret', ...portainer }),
@@ -171,10 +182,9 @@ export const SETTINGS: readonly SettingDef[] = [
 
 /** Per container or per deployment, or shared with a container that reads env only: env > default, read-only in Admin -> Settings. */
 export const ENV_ONLY_KEYS: readonly string[] = ['PORT', 'DIGEST_DAY', 'DIGEST_HOUR', 'MEDIA_SERVER', 'METRICS_TOKEN', 'ROLE_TEMPLATES',
-  'OIDC_ALLOW_INSECURE', 'PREVIEW_DIR', 'UPDATE_REPO', 'DOWNLOAD_DIR', 'BACKGROUND_JOBS', 'GATEWAY_URL',
-  'RECO_W_GENRES', 'RECO_W_TAGS', 'RECO_W_STUDIOS', 'RECO_W_PEOPLE', 'RECO_W_TEXT', 'RECO_W_NUMERIC', 'RECO_W_COLLECTION',
-  'RECO_ENGINE', 'RECO_HALF_LIFE_DAYS', 'RECO_COEFFS', 'RECO_EXPLORE',
-  'POSTPLAY_ENABLED'];
+  'OIDC_ALLOW_INSECURE', 'PREVIEW_DIR', 'UPDATE_REPO', 'DOWNLOAD_DIR', 'BACKGROUND_JOBS', 'GATEWAY_URL', 'UPDATER_URL',
+  // expert tuning of the recommendation engine v2 (Admin -> Settings, group recommendations, says they are set in .env)
+  'RECO_W_GENRES', 'RECO_W_TAGS', 'RECO_W_STUDIOS', 'RECO_W_PEOPLE', 'RECO_W_TEXT', 'RECO_W_NUMERIC', 'RECO_W_COLLECTION', 'RECO_COEFFS'];
 /** Needed before the database can be read: env (incl. _FILE) > bootstrap volume file > default; never stored in the database. */
 export const BOOTSTRAP_KEYS: readonly string[] = ['DATABASE_URL', 'REDIS_URL', 'APP_ENC_KEY', 'INTERNAL_SECRET'];
 /** Baked into the image at build time. */
